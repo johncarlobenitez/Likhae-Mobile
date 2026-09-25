@@ -786,7 +786,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   GestureDetector(
                     onTap: widget.onRegister,
                     child: const Text(
-                      'Create one â€” it\'s free',
+                      'Create Account',
                       style: TextStyle(
                         color: _primary,
                         fontSize: 12.5,

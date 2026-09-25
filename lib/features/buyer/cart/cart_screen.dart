@@ -1212,7 +1212,7 @@ class _CartScreenState
                   style:
                       TextStyle(
                     color: _text,
-                    fontSize: 19,
+                    fontSize: 22,
                     height: 1.1,
                     fontWeight:
                         FontWeight.w800,
@@ -1230,7 +1230,7 @@ class _CartScreenState
                   style:
                       TextStyle(
                     color: _muted,
-                    fontSize: 9.5,
+                    fontSize: 12.5,
                   ),
                 ),
               ],
@@ -1247,7 +1247,7 @@ class _CartScreenState
               style:
                   TextStyle(
                 color: _maroon,
-                fontSize: 11,
+                fontSize: 13.5,
                 fontWeight:
                     FontWeight.w800,
               ),
@@ -1307,7 +1307,7 @@ class _CartScreenState
           style:
               TextStyle(
             color: _text,
-            fontSize: 21,
+            fontSize: 24,
             fontWeight:
                 FontWeight.w900,
           ),
@@ -1324,7 +1324,7 @@ class _CartScreenState
           style:
               TextStyle(
             color: _muted,
-            fontSize: 12,
+            fontSize: 14,
             height: 1.55,
           ),
         ),
@@ -1335,7 +1335,7 @@ class _CartScreenState
 
         Center(
           child: SizedBox(
-            height: 48,
+            height: 52,
             child:
                 ElevatedButton.icon(
               onPressed:
@@ -1374,7 +1374,7 @@ class _CartScreenState
                 'Browse Products',
                 style:
                     TextStyle(
-                  fontSize: 11.5,
+                  fontSize: 14,
                   fontWeight:
                       FontWeight.w800,
                 ),
@@ -1382,7 +1382,214 @@ class _CartScreenState
             ),
           ),
         ),
+
+        const SizedBox(
+          height: 34,
+        ),
+
+        const Text(
+          'Items you add will appear here',
+          textAlign:
+              TextAlign.center,
+          style:
+              TextStyle(
+            color: _text,
+            fontSize: 16,
+            fontWeight:
+                FontWeight.w900,
+          ),
+        ),
+
+        const SizedBox(
+          height: 6,
+        ),
+
+        const Text(
+          'Your selected product image, name, variant, seller, price, quantity, and subtotal will be shown in this section.',
+          textAlign:
+              TextAlign.center,
+          style:
+              TextStyle(
+            color: _muted,
+            fontSize: 13,
+            height: 1.5,
+          ),
+        ),
+
+        const SizedBox(
+          height: 18,
+        ),
+
+        _buildCartItemPlaceholder(),
+
+        const SizedBox(
+          height: 10,
+        ),
+
+        _buildCartItemPlaceholder(),
       ],
+    );
+  }
+
+  Widget _buildCartItemPlaceholder() {
+    return Container(
+      width:
+          double.infinity,
+      padding:
+          const EdgeInsets.all(
+        14,
+      ),
+      decoration:
+          BoxDecoration(
+        color: _surface,
+        borderRadius:
+            BorderRadius.circular(
+          17,
+        ),
+        border:
+            Border.all(
+          color: _border,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 86,
+            height: 86,
+            decoration:
+                BoxDecoration(
+              color: _soft,
+              borderRadius:
+                  BorderRadius.circular(
+                13,
+              ),
+              border:
+                  Border.all(
+                color: _border,
+              ),
+            ),
+            alignment:
+                Alignment.center,
+            child:
+                const Icon(
+              Icons
+                  .image_outlined,
+              color:
+                  _muted,
+              size: 32,
+            ),
+          ),
+
+          const SizedBox(
+            width: 12,
+          ),
+
+          Expanded(
+            child:
+                Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 13,
+                  width: 92,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        _soft,
+                    borderRadius:
+                        BorderRadius.circular(
+                      100,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                  height: 10,
+                ),
+
+                Container(
+                  height: 16,
+                  width:
+                      double.infinity,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        _soft,
+                    borderRadius:
+                        BorderRadius.circular(
+                      100,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                  height: 8,
+                ),
+
+                Container(
+                  height: 13,
+                  width: 150,
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        _soft,
+                    borderRadius:
+                        BorderRadius.circular(
+                      100,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                  height: 14,
+                ),
+
+                Row(
+                  children: [
+                    Container(
+                      height: 16,
+                      width: 82,
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            _soft,
+                        borderRadius:
+                            BorderRadius.circular(
+                          100,
+                        ),
+                      ),
+                    ),
+
+                    const Spacer(),
+
+                    Container(
+                      height: 32,
+                      width: 92,
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            _soft,
+                        borderRadius:
+                            BorderRadius.circular(
+                          10,
+                        ),
+                        border:
+                            Border.all(
+                          color:
+                              _border,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1566,7 +1773,7 @@ class _CartScreenState
                 style:
                     TextStyle(
                   color: _maroon,
-                  fontSize: 8.5,
+                  fontSize: 12,
                   letterSpacing:
                       1.6,
                   fontWeight:
@@ -1583,7 +1790,7 @@ class _CartScreenState
                 style:
                     TextStyle(
                   color: _text,
-                  fontSize: 27,
+                  fontSize: 30,
                   height: 1,
                   letterSpacing:
                       -0.7,
@@ -1601,8 +1808,8 @@ class _CartScreenState
                 style:
                     TextStyle(
                   color: _muted,
-                  fontSize: 10.5,
-                  height: 1.45,
+                  fontSize: 13,
+                  height: 1.55,
                 ),
               ),
             ],
@@ -1618,7 +1825,7 @@ class _CartScreenState
           style:
               const TextStyle(
             color: _brown,
-            fontSize: 10.5,
+            fontSize: 13,
             fontWeight:
                 FontWeight.w800,
           ),
@@ -1687,7 +1894,7 @@ class _CartScreenState
               style:
                   TextStyle(
                 color: _text,
-                fontSize: 11,
+                fontSize: 13.5,
                 fontWeight:
                     FontWeight.w800,
               ),
@@ -1723,7 +1930,7 @@ class _CartScreenState
                             color:
                                 _danger,
                             fontSize:
-                                10,
+                                13,
                             fontWeight:
                                 FontWeight
                                     .w800,
@@ -1782,8 +1989,8 @@ class _CartScreenState
               style:
                   const TextStyle(
                 color: _brown,
-                fontSize: 9.5,
-                height: 1.45,
+                fontSize: 12.5,
+                height: 1.55,
               ),
             ),
           ),
@@ -1812,7 +2019,7 @@ class _CartScreenState
           style:
               const TextStyle(
             color: _maroon,
-            fontSize: 10.5,
+            fontSize: 13,
             fontWeight:
                 FontWeight.w800,
           ),
@@ -1868,7 +2075,7 @@ class _CartScreenState
                             color:
                                 _text,
                             fontSize:
-                                10.5,
+                                13,
                             height:
                                 1.4,
                             fontWeight:
@@ -1957,7 +2164,7 @@ class _CartScreenState
                                     color:
                                         _text,
                                     fontSize:
-                                        11.5,
+                                        14,
                                     fontWeight:
                                         FontWeight.w800,
                                   ),
@@ -1975,7 +2182,7 @@ class _CartScreenState
                                       color:
                                           _muted,
                                       fontSize:
-                                          9.5,
+                                          12.5,
                                     ),
                                   ),
 
@@ -2008,7 +2215,7 @@ class _CartScreenState
                                         color:
                                             _maroon,
                                         fontSize:
-                                            7,
+                                            11,
                                         letterSpacing:
                                             0.5,
                                         fontWeight:
@@ -2031,7 +2238,7 @@ class _CartScreenState
                                 color:
                                     _muted,
                                 fontSize:
-                                    10.5,
+                                    13,
                                 height:
                                     1.45,
                               ),
@@ -2092,7 +2299,7 @@ class _CartScreenState
                   style:
                       TextStyle(
                     color: _text,
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight:
                         FontWeight.w800,
                   ),
@@ -2106,7 +2313,7 @@ class _CartScreenState
                 style:
                     const TextStyle(
                   color: _maroon,
-                  fontSize: 19,
+                  fontSize: 22,
                   fontWeight:
                       FontWeight.w900,
                   letterSpacing:
@@ -2141,8 +2348,8 @@ class _CartScreenState
               style:
                   TextStyle(
                 color: _muted,
-                fontSize: 9,
-                height: 1.45,
+                fontSize: 12,
+                height: 1.55,
               ),
             ),
           ),
@@ -2207,7 +2414,7 @@ class _CartScreenState
                       color:
                           _muted,
                       fontSize:
-                          9,
+                          12,
                       fontWeight:
                           FontWeight.w600,
                     ),
@@ -2226,7 +2433,7 @@ class _CartScreenState
                       color:
                           _maroon,
                       fontSize:
-                          19,
+                          22,
                       fontWeight:
                           FontWeight.w900,
                     ),
@@ -2240,7 +2447,7 @@ class _CartScreenState
             ),
 
             SizedBox(
-              height: 50,
+              height: 54,
               child:
                   ElevatedButton(
                 onPressed:
@@ -2293,7 +2500,7 @@ class _CartScreenState
                                 style:
                                     TextStyle(
                                   fontSize:
-                                      12,
+                                      14,
                                   fontWeight:
                                       FontWeight.w800,
                                 ),
@@ -2495,7 +2702,7 @@ class _CartItemCard
                                 color:
                                     Colors.white,
                                 fontSize:
-                                    7.5,
+                                    11.5,
                                 height:
                                     1.2,
                                 fontWeight:
@@ -2548,7 +2755,7 @@ class _CartItemCard
                                           0xFF6C4936,
                                         ),
                                         fontSize:
-                                            7.5,
+                                            11.5,
                                         letterSpacing:
                                             0.7,
                                         fontWeight:
@@ -2575,7 +2782,7 @@ class _CartItemCard
                                         0xFF3B211B,
                                       ),
                                       fontSize:
-                                          11.5,
+                                          14,
                                       height:
                                           1.25,
                                       fontWeight:
@@ -2657,7 +2864,7 @@ class _CartItemCard
                               0xFF987865,
                             ),
                             fontSize:
-                                8.5,
+                                12,
                           ),
                         ),
                       ],
@@ -2683,7 +2890,7 @@ class _CartItemCard
                               0xFFA99386,
                             ),
                             fontSize:
-                                8.5,
+                                12,
                           ),
                         ),
                       ],
@@ -2702,7 +2909,7 @@ class _CartItemCard
                               0xFFB42318,
                             ),
                             fontSize:
-                                8,
+                                11.5,
                             fontWeight:
                                 FontWeight.w800,
                           ),
@@ -2754,7 +2961,7 @@ class _CartItemCard
                                 0xFF561C17,
                               ),
                               fontSize:
-                                  12.5,
+                                  15,
                               fontWeight:
                                   FontWeight.w900,
                             ),
@@ -2775,7 +2982,7 @@ class _CartItemCard
                                   0xFFA99386,
                                 ),
                                 fontSize:
-                                    8,
+                                    11.5,
                                 decoration:
                                     TextDecoration.lineThrough,
                               ),
@@ -2802,7 +3009,7 @@ class _CartItemCard
                                       0xFFA99386,
                                     ),
                           fontSize:
-                              8,
+                              11.5,
                           fontWeight:
                               unavailable
                                   ? FontWeight.w700
@@ -2849,7 +3056,7 @@ class _CartItemCard
                       0xFF987865,
                     ),
                     fontSize:
-                        9,
+                        12,
                   ),
                 ),
 
@@ -2866,7 +3073,7 @@ class _CartItemCard
                       0xFF3B211B,
                     ),
                     fontSize:
-                        11.5,
+                        14,
                     fontWeight:
                         FontWeight.w800,
                   ),
@@ -2991,7 +3198,7 @@ class _QuantityControl
                             0xFF3B211B,
                           ),
                           fontSize:
-                              10,
+                              13,
                           fontWeight:
                               FontWeight.w800,
                         ),
@@ -3107,7 +3314,7 @@ class _SectionCard
                             0xFF3B211B,
                           ),
                           fontSize:
-                              12.5,
+                              15,
                           fontWeight:
                               FontWeight.w800,
                         ),
@@ -3126,7 +3333,7 @@ class _SectionCard
                             0xFF987865,
                           ),
                           fontSize:
-                              9.5,
+                              12.5,
                           height:
                               1.35,
                         ),
@@ -3187,7 +3394,7 @@ class _SummaryRow
                 0xFF987865,
               ),
               fontSize:
-                  10.5,
+                  13,
             ),
           ),
         ),
@@ -3201,7 +3408,7 @@ class _SummaryRow
               0xFF3B211B,
             ),
             fontSize:
-                10.5,
+                13,
             fontWeight:
                 FontWeight.w700,
           ),

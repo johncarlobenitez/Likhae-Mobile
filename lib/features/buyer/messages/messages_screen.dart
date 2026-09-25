@@ -322,6 +322,8 @@ class _MessagesScreenState
 
   String? _messageError;
 
+  int? _demoConversationIndex;
+
   @override
   void initState() {
     super.initState();
@@ -1602,10 +1604,18 @@ class _MessagesScreenState
 
                   Expanded(
                     child:
-                        _buildChatPanel(
-                      mobile:
-                          false,
-                    ),
+                        _conversations.isEmpty &&
+                                _demoConversationIndex != null
+                            ? _buildDemoChatPanel(
+                                _demoConversations[
+                                    _demoConversationIndex!],
+                                mobile:
+                                    false,
+                              )
+                            : _buildChatPanel(
+                                mobile:
+                                    false,
+                              ),
                   ),
                 ],
               ),
@@ -1617,6 +1627,16 @@ class _MessagesScreenState
   }
 
   Widget _buildMobileLayout() {
+    if (_conversations.isEmpty &&
+        _demoConversationIndex != null) {
+      return _buildDemoChatPanel(
+        _demoConversations[
+            _demoConversationIndex!],
+        mobile:
+            true,
+      );
+    }
+
     if (_mobileShowingChat &&
         _activeSeller != null) {
       return _buildChatPanel(
@@ -1637,16 +1657,34 @@ class _MessagesScreenState
   }
 
   Widget _buildPageHeader() {
+    final bool showingPreview =
+        _conversations.isEmpty;
+
+    final int displayConversationCount =
+        showingPreview
+            ? _demoConversations.length
+            : _conversations.length;
+
     final int unreadCount =
-        _conversations.fold<int>(
-      0,
-      (
-        int total,
-        BuyerConversationData conversation,
-      ) =>
-          total +
-          conversation.unread,
-    );
+        showingPreview
+            ? _demoConversations.fold<int>(
+                0,
+                (
+                  int total,
+                  _DemoConversation conversation,
+                ) =>
+                    total +
+                    conversation.unread,
+              )
+            : _conversations.fold<int>(
+                0,
+                (
+                  int total,
+                  BuyerConversationData conversation,
+                ) =>
+                    total +
+                    conversation.unread,
+              );
 
     return Container(
       padding:
@@ -1710,7 +1748,7 @@ class _MessagesScreenState
                     color:
                         _text,
                     fontSize:
-                        19,
+                        21,
                     height:
                         1.1,
                     letterSpacing:
@@ -1736,7 +1774,7 @@ class _MessagesScreenState
                     color:
                         _muted,
                     fontSize:
-                        9.5,
+                        12,
                   ),
                 ),
               ],
@@ -1783,13 +1821,13 @@ class _MessagesScreenState
                 ),
 
                 Text(
-                  '${_conversations.length}',
+                  '$displayConversationCount',
                   style:
                       const TextStyle(
                     color:
                         _maroon,
                     fontSize:
-                        9,
+                        11.5,
                     fontWeight:
                         FontWeight.w800,
                   ),
@@ -1835,7 +1873,7 @@ class _MessagesScreenState
                         color:
                             Colors.white,
                         fontSize:
-                            7,
+                            10,
                         fontWeight:
                             FontWeight.w900,
                       ),
@@ -1896,7 +1934,7 @@ class _MessagesScreenState
                           color:
                               _maroon,
                           fontSize:
-                              7.5,
+                              10.5,
                           letterSpacing:
                               1.4,
                           fontWeight:
@@ -1916,7 +1954,7 @@ class _MessagesScreenState
                           color:
                               _text,
                           fontSize:
-                              15,
+                              17,
                           fontWeight:
                               FontWeight.w900,
                         ),
@@ -1941,13 +1979,13 @@ class _MessagesScreenState
                   )
                 else
                   Text(
-                    '${_conversations.length}',
+                    '${_conversations.isEmpty ? _demoConversations.length : _conversations.length}',
                     style:
                         const TextStyle(
                       color:
                           _muted,
                       fontSize:
-                          10,
+                          12,
                       fontWeight:
                           FontWeight.w800,
                     ),
@@ -1965,7 +2003,7 @@ class _MessagesScreenState
                   _refreshConversations,
               child:
                   _conversations.isEmpty
-                      ? _buildNoConversations()
+                      ? _buildDemoConversationList()
                       : ListView.separated(
                           physics:
                               const AlwaysScrollableScrollPhysics(),
@@ -2024,70 +2062,625 @@ class _MessagesScreenState
     );
   }
 
-  Widget _buildNoConversations() {
-    return ListView(
+  static const List<_DemoConversation> _demoConversations =
+      <_DemoConversation>[
+    _DemoConversation(
+      name: 'Aurelia Jewelry',
+      initials: 'AJ',
+      lastMessage:
+          'Yes, the pearl necklace is still available.',
+      time: '2m',
+      unread: 2,
+      status: 'Seller • Preview conversation',
+      messages: <_DemoMessage>[
+        _DemoMessage(
+          body:
+              'Hi! Is the Gold-Plated Pearl Pendant Necklace still available?',
+          time: '7:02 PM',
+          fromBuyer: true,
+        ),
+        _DemoMessage(
+          body:
+              'Hello! Yes, it is still available. The Gold finish is currently in stock.',
+          time: '7:03 PM',
+          fromBuyer: false,
+        ),
+        _DemoMessage(
+          body:
+              'Nice. How many pieces are available right now?',
+          time: '7:04 PM',
+          fromBuyer: true,
+        ),
+        _DemoMessage(
+          body:
+              'We currently have 8 pieces available. You can choose the quantity on the product page before adding it to your cart.',
+          time: '7:05 PM',
+          fromBuyer: false,
+        ),
+        _DemoMessage(
+          body:
+              'Okay, thank you! I will check out the product.',
+          time: '7:06 PM',
+          fromBuyer: true,
+        ),
+      ],
+    ),
+    _DemoConversation(
+      name: 'Mira Studio',
+      initials: 'MS',
+      lastMessage:
+          'We can prepare the item today.',
+      time: '18m',
+      unread: 1,
+      status: 'Seller • Preview conversation',
+      messages: <_DemoMessage>[
+        _DemoMessage(
+          body:
+              'Hello, is this item available in the selected variation?',
+          time: '6:41 PM',
+          fromBuyer: true,
+        ),
+        _DemoMessage(
+          body:
+              'Yes, that variation is available.',
+          time: '6:43 PM',
+          fromBuyer: false,
+        ),
+        _DemoMessage(
+          body:
+              'If I order today, when can it be prepared?',
+          time: '6:45 PM',
+          fromBuyer: true,
+        ),
+        _DemoMessage(
+          body:
+              'We can prepare the item today. Once the order is confirmed, it will follow the normal pickup and delivery process.',
+          time: '6:46 PM',
+          fromBuyer: false,
+        ),
+      ],
+    ),
+    _DemoConversation(
+      name: 'Page & Pixel Books',
+      initials: 'PP',
+      lastMessage:
+          'Softcover is available.',
+      time: '1h',
+      unread: 0,
+      status: 'Seller • Preview conversation',
+      messages: <_DemoMessage>[
+        _DemoMessage(
+          body:
+              'Hi, do you still have the Creative Journaling Workbook in softcover?',
+          time: '6:03 PM',
+          fromBuyer: true,
+        ),
+        _DemoMessage(
+          body:
+              'Hi! Yes, softcover is available.',
+          time: '6:05 PM',
+          fromBuyer: false,
+        ),
+        _DemoMessage(
+          body:
+              'Thank you. I will add it to my cart.',
+          time: '6:06 PM',
+          fromBuyer: true,
+        ),
+      ],
+    ),
+    _DemoConversation(
+      name: 'Craft & Clay Studio',
+      initials: 'CC',
+      lastMessage:
+          'Thank you for your message.',
+      time: 'Yesterday',
+      unread: 0,
+      status: 'Seller • Preview conversation',
+      messages: <_DemoMessage>[
+        _DemoMessage(
+          body:
+              'Hello! Can I ask about the material used for this product?',
+          time: 'Yesterday • 4:21 PM',
+          fromBuyer: true,
+        ),
+        _DemoMessage(
+          body:
+              'Of course. Please send the product you are asking about and we will confirm the listed specifications.',
+          time: 'Yesterday • 4:24 PM',
+          fromBuyer: false,
+        ),
+        _DemoMessage(
+          body:
+              'Got it. Thank you for your message.',
+          time: 'Yesterday • 4:25 PM',
+          fromBuyer: true,
+        ),
+      ],
+    ),
+  ];
+
+  Widget _buildDemoConversationList() {
+    return ListView.separated(
       physics:
           const AlwaysScrollableScrollPhysics(),
       padding:
-          const EdgeInsets.all(
-        28,
+          const EdgeInsets.only(
+        bottom:
+            24,
       ),
-      children:
-          const <Widget>[
-        SizedBox(
-          height:
-              70,
-        ),
+      itemCount:
+          _demoConversations.length + 1,
+      separatorBuilder:
+          (
+        BuildContext context,
+        int index,
+      ) {
+        if (index == 0) {
+          return const SizedBox.shrink();
+        }
 
-        Icon(
-          Icons
-              .chat_bubble_outline_rounded,
+        return const Divider(
+          height:
+              1,
+          thickness:
+              1,
           color:
-              _tan,
-          size:
-              48,
-        ),
-
-        SizedBox(
-          height:
-              15,
-        ),
-
-        Text(
-          'No conversations yet',
-          textAlign:
-              TextAlign.center,
-          style:
-              TextStyle(
-            color:
-                _text,
-            fontSize:
-                17,
-            fontWeight:
-                FontWeight.w900,
+              Color(
+            0xFFEFE1D5,
           ),
-        ),
+        );
+      },
+      itemBuilder:
+          (
+        BuildContext context,
+        int index,
+      ) {
+        if (index == 0) {
+          return Container(
+            width:
+                double.infinity,
+            margin:
+                const EdgeInsets.fromLTRB(
+              14,
+              14,
+              14,
+              10,
+            ),
+            padding:
+                const EdgeInsets.all(
+              12,
+            ),
+            decoration:
+                BoxDecoration(
+              color:
+                  _backgroundSoft,
+              borderRadius:
+                  BorderRadius.circular(
+                13,
+              ),
+              border:
+                  Border.all(
+                color:
+                    _border,
+              ),
+            ),
+            child:
+                const Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons
+                      .visibility_outlined,
+                  color:
+                      _maroon,
+                  size:
+                      19,
+                ),
+                SizedBox(
+                  width:
+                      9,
+                ),
+                Expanded(
+                  child:
+                      Text(
+                    'Preview mode — tap any sample conversation to see the full Messenger-style chat layout. These messages are not saved to Laravel.',
+                    style:
+                        TextStyle(
+                      color:
+                          _muted,
+                      fontSize:
+                          12,
+                      height:
+                          1.45,
+                      fontWeight:
+                          FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
-        SizedBox(
-          height:
-              6,
-        ),
+        final int conversationIndex =
+            index - 1;
 
-        Text(
-          'Start a conversation with a seller from a product page.',
-          textAlign:
-              TextAlign.center,
-          style:
-              TextStyle(
-            color:
-                _muted,
-            fontSize:
-                10.5,
-            height:
-                1.45,
+        final _DemoConversation conversation =
+            _demoConversations[
+                conversationIndex];
+
+        return _DemoConversationTile(
+          conversation:
+              conversation,
+          onTap:
+              () {
+            setState(() {
+              _demoConversationIndex =
+                  conversationIndex;
+            });
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDemoChatPanel(
+    _DemoConversation conversation, {
+    required bool mobile,
+  }) {
+    return Container(
+      color:
+          _backgroundSoft,
+      child:
+          Column(
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.fromLTRB(
+              7,
+              8,
+              11,
+              8,
+            ),
+            decoration:
+                const BoxDecoration(
+              color:
+                  _surface,
+              border:
+                  Border(
+                bottom:
+                    BorderSide(
+                  color:
+                      _border,
+                ),
+              ),
+            ),
+            child:
+                Row(
+              children: [
+                if (mobile)
+                  IconButton(
+                    tooltip:
+                        'Back to conversations',
+                    onPressed:
+                        () {
+                      setState(() {
+                        _demoConversationIndex =
+                            null;
+                      });
+                    },
+                    icon:
+                        const Icon(
+                      Icons
+                          .arrow_back_rounded,
+                      color:
+                          _text,
+                    ),
+                  ),
+
+                _DemoAvatar(
+                  initials:
+                      conversation.initials,
+                  size:
+                      44,
+                ),
+
+                const SizedBox(
+                  width:
+                      10,
+                ),
+
+                Expanded(
+                  child:
+                      Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        conversation.name,
+                        maxLines:
+                            1,
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style:
+                            const TextStyle(
+                          color:
+                              _text,
+                          fontSize:
+                              16,
+                          fontWeight:
+                              FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(
+                        height:
+                            3,
+                      ),
+                      Text(
+                        conversation.status,
+                        maxLines:
+                            1,
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style:
+                            const TextStyle(
+                          color:
+                              _muted,
+                          fontSize:
+                              11.5,
+                          fontWeight:
+                              FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal:
+                        9,
+                    vertical:
+                        5,
+                  ),
+                  decoration:
+                      BoxDecoration(
+                    color:
+                        _backgroundSoft,
+                    borderRadius:
+                        BorderRadius.circular(
+                      100,
+                    ),
+                    border:
+                        Border.all(
+                      color:
+                          _border,
+                    ),
+                  ),
+                  child:
+                      const Text(
+                    'PREVIEW',
+                    style:
+                        TextStyle(
+                      color:
+                          _maroon,
+                      fontSize:
+                          10.5,
+                      letterSpacing:
+                          0.4,
+                      fontWeight:
+                          FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+
+          Expanded(
+            child:
+                ListView.builder(
+              padding:
+                  const EdgeInsets.fromLTRB(
+                13,
+                18,
+                13,
+                22,
+              ),
+              itemCount:
+                  conversation.messages.length + 1,
+              itemBuilder:
+                  (
+                BuildContext context,
+                int index,
+              ) {
+                if (index == 0) {
+                  return Center(
+                    child:
+                        Container(
+                      margin:
+                          const EdgeInsets.only(
+                        bottom:
+                            4,
+                      ),
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal:
+                            11,
+                        vertical:
+                            6,
+                      ),
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            _surface,
+                        border:
+                            Border.all(
+                          color:
+                              _border,
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(
+                          100,
+                        ),
+                      ),
+                      child:
+                          const Text(
+                        'Sample conversation',
+                        style:
+                            TextStyle(
+                          color:
+                              _muted,
+                          fontSize:
+                              11,
+                          fontWeight:
+                              FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                final _DemoMessage message =
+                    conversation.messages[
+                        index - 1];
+
+                return _DemoMessageBubble(
+                  message:
+                      message,
+                  sellerInitials:
+                      conversation.initials,
+                );
+              },
+            ),
+          ),
+
+          Container(
+            padding:
+                const EdgeInsets.fromLTRB(
+              11,
+              10,
+              11,
+              10,
+            ),
+            decoration:
+                const BoxDecoration(
+              color:
+                  _surface,
+              border:
+                  Border(
+                top:
+                    BorderSide(
+                  color:
+                      _border,
+                ),
+              ),
+            ),
+            child:
+                SafeArea(
+              top:
+                  false,
+              child:
+                  Row(
+                children: [
+                  Expanded(
+                    child:
+                        TextField(
+                      enabled:
+                          false,
+                      decoration:
+                          InputDecoration(
+                        hintText:
+                            'Preview only — real messages use Laravel',
+                        hintStyle:
+                            const TextStyle(
+                          color:
+                              _muted2,
+                          fontSize:
+                              12.5,
+                        ),
+                        filled:
+                            true,
+                        fillColor:
+                            _backgroundSoft,
+                        contentPadding:
+                            const EdgeInsets.symmetric(
+                          horizontal:
+                              14,
+                          vertical:
+                              12,
+                        ),
+                        border:
+                            OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(
+                            14,
+                          ),
+                          borderSide:
+                              const BorderSide(
+                            color:
+                                _border,
+                          ),
+                        ),
+                        disabledBorder:
+                            OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(
+                            14,
+                          ),
+                          borderSide:
+                              const BorderSide(
+                            color:
+                                _border,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(
+                    width:
+                        8,
+                  ),
+
+                  Container(
+                    width:
+                        48,
+                    height:
+                        48,
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          _maroon.withValues(
+                        alpha:
+                            0.38,
+                      ),
+                      borderRadius:
+                          BorderRadius.circular(
+                        14,
+                      ),
+                    ),
+                    alignment:
+                        Alignment.center,
+                    child:
+                        const Icon(
+                      Icons
+                          .send_rounded,
+                      color:
+                          Colors.white,
+                      size:
+                          19,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2206,7 +2799,7 @@ class _MessagesScreenState
                     color:
                         _text,
                     fontSize:
-                        13,
+                        15,
                     fontWeight:
                         FontWeight.w900,
                   ),
@@ -2248,7 +2841,7 @@ class _MessagesScreenState
                       color:
                           _muted,
                       fontSize:
-                          8.5,
+                          11,
                     ),
                   ),
                 ],
@@ -2312,7 +2905,7 @@ class _MessagesScreenState
                 style:
                     const TextStyle(
                   fontSize:
-                      9,
+                      11.5,
                   fontWeight:
                       FontWeight.w800,
                 ),
@@ -2398,7 +2991,7 @@ class _MessagesScreenState
                   color:
                       _muted,
                   fontSize:
-                      8.5,
+                      11,
                   fontWeight:
                       FontWeight.w800,
                 ),
@@ -2485,7 +3078,7 @@ class _MessagesScreenState
                         color:
                             _danger,
                         fontSize:
-                            9.5,
+                            12,
                       ),
                     ),
                   ),
@@ -2532,7 +3125,7 @@ class _MessagesScreenState
                 color:
                     _text,
                 fontSize:
-                    15,
+                    17,
                 fontWeight:
                     FontWeight.w900,
               ),
@@ -2552,7 +3145,7 @@ class _MessagesScreenState
                 color:
                     _muted,
                 fontSize:
-                    10,
+                    12,
               ),
             ),
           ] else ...[
@@ -2640,7 +3233,7 @@ class _MessagesScreenState
                     color:
                         _muted2,
                     fontSize:
-                        11,
+                        13,
                   ),
                   counterText:
                       '',
@@ -2818,7 +3411,7 @@ class _MessagesScreenState
                   color:
                       _text,
                   fontSize:
-                      17,
+                      19,
                   fontWeight:
                       FontWeight.w900,
                 ),
@@ -2840,13 +3433,480 @@ class _MessagesScreenState
                   color:
                       _muted,
                   fontSize:
-                      10.5,
+                      12.5,
                   height:
-                      1.45,
+                      1.55,
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _DemoConversation {
+  final String name;
+  final String initials;
+  final String lastMessage;
+  final String time;
+  final int unread;
+  final String status;
+  final List<_DemoMessage> messages;
+
+  const _DemoConversation({
+    required this.name,
+    required this.initials,
+    required this.lastMessage,
+    required this.time,
+    required this.unread,
+    required this.status,
+    required this.messages,
+  });
+}
+
+class _DemoMessage {
+  final String body;
+  final String time;
+  final bool fromBuyer;
+
+  const _DemoMessage({
+    required this.body,
+    required this.time,
+    required this.fromBuyer,
+  });
+}
+
+class _DemoConversationTile
+    extends StatelessWidget {
+  final _DemoConversation conversation;
+  final VoidCallback onTap;
+
+  const _DemoConversationTile({
+    required this.conversation,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return Material(
+      color:
+          const Color(
+        0xFFFFFDF9,
+      ),
+      child:
+          InkWell(
+        onTap:
+            onTap,
+        child:
+            Padding(
+          padding:
+              const EdgeInsets.fromLTRB(
+            14,
+            12,
+            14,
+            12,
+          ),
+          child:
+              Row(
+            crossAxisAlignment:
+                CrossAxisAlignment.center,
+            children: [
+              _DemoAvatar(
+                initials:
+                    conversation.initials,
+                size:
+                    50,
+              ),
+
+              const SizedBox(
+                width:
+                    12,
+              ),
+
+              Expanded(
+                child:
+                    Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child:
+                              Text(
+                            conversation.name,
+                            maxLines:
+                                1,
+                            overflow:
+                                TextOverflow.ellipsis,
+                            style:
+                                TextStyle(
+                              color:
+                                  const Color(
+                                0xFF3B211B,
+                              ),
+                              fontSize:
+                                  14,
+                              fontWeight:
+                                  conversation.unread > 0
+                                      ? FontWeight.w900
+                                      : FontWeight.w800,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(
+                          width:
+                              8,
+                        ),
+
+                        Text(
+                          conversation.time,
+                          style:
+                              const TextStyle(
+                            color:
+                                Color(
+                              0xFFA99386,
+                            ),
+                            fontSize:
+                                11,
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(
+                      height:
+                          5,
+                    ),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child:
+                              Text(
+                            conversation.lastMessage,
+                            maxLines:
+                                1,
+                            overflow:
+                                TextOverflow.ellipsis,
+                            style:
+                                TextStyle(
+                              color:
+                                  const Color(
+                                0xFF987865,
+                              ),
+                              fontSize:
+                                  12.5,
+                              fontWeight:
+                                  conversation.unread > 0
+                                      ? FontWeight.w700
+                                      : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+
+                        if (conversation.unread >
+                            0) ...[
+                          const SizedBox(
+                            width:
+                                8,
+                          ),
+
+                          Container(
+                            constraints:
+                                const BoxConstraints(
+                              minWidth:
+                                  21,
+                              minHeight:
+                                  21,
+                            ),
+                            padding:
+                                const EdgeInsets.symmetric(
+                              horizontal:
+                                  6,
+                            ),
+                            alignment:
+                                Alignment.center,
+                            decoration:
+                                const BoxDecoration(
+                              color:
+                                  Color(
+                                0xFF561C17,
+                              ),
+                              shape:
+                                  BoxShape.circle,
+                            ),
+                            child:
+                                Text(
+                              '${conversation.unread}',
+                              style:
+                                  const TextStyle(
+                                color:
+                                    Colors.white,
+                                fontSize:
+                                    10.5,
+                                fontWeight:
+                                    FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DemoMessageBubble
+    extends StatelessWidget {
+  final _DemoMessage message;
+  final String sellerInitials;
+
+  const _DemoMessageBubble({
+    required this.message,
+    required this.sellerInitials,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.only(
+        top:
+            12,
+      ),
+      child:
+          Align(
+        alignment:
+            message.fromBuyer
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
+        child:
+            Row(
+          mainAxisSize:
+              MainAxisSize.min,
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            if (!message.fromBuyer) ...[
+              _DemoAvatar(
+                initials:
+                    sellerInitials,
+                size:
+                    30,
+              ),
+              const SizedBox(
+                width:
+                    7,
+              ),
+            ],
+
+            Flexible(
+              child:
+                  Container(
+                constraints:
+                    const BoxConstraints(
+                  maxWidth:
+                      285,
+                ),
+                padding:
+                    const EdgeInsets.fromLTRB(
+                  13,
+                  11,
+                  13,
+                  9,
+                ),
+                decoration:
+                    BoxDecoration(
+                  color:
+                      message.fromBuyer
+                          ? const Color(
+                              0xFF561C17,
+                            )
+                          : const Color(
+                              0xFFFFFDF9,
+                            ),
+                  border:
+                      Border.all(
+                    color:
+                        message.fromBuyer
+                            ? const Color(
+                                0xFF561C17,
+                              )
+                            : const Color(
+                                0xFFEADCCC,
+                              ),
+                  ),
+                  borderRadius:
+                      BorderRadius.only(
+                    topLeft:
+                        Radius.circular(
+                      message.fromBuyer
+                          ? 17
+                          : 5,
+                    ),
+                    topRight:
+                        Radius.circular(
+                      message.fromBuyer
+                          ? 5
+                          : 17,
+                    ),
+                    bottomLeft:
+                        const Radius.circular(
+                      17,
+                    ),
+                    bottomRight:
+                        const Radius.circular(
+                      17,
+                    ),
+                  ),
+                ),
+                child:
+                    Column(
+                  crossAxisAlignment:
+                      message.fromBuyer
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message.body,
+                      style:
+                          TextStyle(
+                        color:
+                            message.fromBuyer
+                                ? Colors.white
+                                : const Color(
+                                    0xFF3B211B,
+                                  ),
+                        fontSize:
+                            13,
+                        height:
+                            1.5,
+                        fontWeight:
+                            FontWeight.w500,
+                      ),
+                    ),
+
+                    const SizedBox(
+                      height:
+                          5,
+                    ),
+
+                    Text(
+                      message.time,
+                      style:
+                          TextStyle(
+                        color:
+                            message.fromBuyer
+                                ? const Color(
+                                    0xFFE8C8B2,
+                                  )
+                                : const Color(
+                                    0xFFA99386,
+                                  ),
+                        fontSize:
+                            10.5,
+                        fontWeight:
+                            FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DemoAvatar
+    extends StatelessWidget {
+  final String initials;
+  final double size;
+
+  const _DemoAvatar({
+    required this.initials,
+    required this.size,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) {
+    return Container(
+      width:
+          size,
+      height:
+          size,
+      alignment:
+          Alignment.center,
+      decoration:
+          BoxDecoration(
+        shape:
+            BoxShape.circle,
+        color:
+            const Color(
+          0xFF561C17,
+        ),
+        border:
+            Border.all(
+          color:
+              Colors.white,
+          width:
+              2,
+        ),
+        boxShadow:
+            <BoxShadow>[
+          BoxShadow(
+            color:
+                const Color(
+              0xFF561C17,
+            ).withValues(
+              alpha:
+                  0.12,
+            ),
+            blurRadius:
+                10,
+            offset:
+                const Offset(
+              0,
+              4,
+            ),
+          ),
+        ],
+      ),
+      child:
+          Text(
+        initials,
+        style:
+            TextStyle(
+          color:
+              Colors.white,
+          fontSize:
+              size >= 44
+                  ? 14
+                  : 10,
+          fontWeight:
+              FontWeight.w900,
         ),
       ),
     );
@@ -2951,7 +4011,7 @@ class _ConversationTile
                                 0xFF3B211B,
                               ),
                               fontSize:
-                                  11.5,
+                                  13.5,
                               fontWeight:
                                   conversation.unread >
                                           0
@@ -2978,7 +4038,7 @@ class _ConversationTile
                                 0xFFA99386,
                               ),
                               fontSize:
-                                  8,
+                                  10.5,
                             ),
                           ),
                         ],
@@ -3011,7 +4071,7 @@ class _ConversationTile
                                 0xFF987865,
                               ),
                               fontSize:
-                                  9.5,
+                                  12,
                               fontWeight:
                                   conversation.unread >
                                           0
@@ -3063,7 +4123,7 @@ class _ConversationTile
                                 color:
                                     Colors.white,
                                 fontSize:
-                                    7.5,
+                                    10.5,
                                 fontWeight:
                                     FontWeight.w900,
                               ),
@@ -3255,9 +4315,9 @@ class _MessageBubble
                                           0xFF3B211B,
                                         ),
                               fontSize:
-                                  11,
+                                  13,
                               height:
-                                  1.5,
+                                  1.55,
                             ),
                           ),
 
@@ -3282,7 +4342,7 @@ class _MessageBubble
                                             0xFFA99386,
                                           ),
                                 fontSize:
-                                    8,
+                                    10.5,
                                 fontWeight:
                                     FontWeight.w600,
                               ),
@@ -3475,7 +4535,7 @@ class _ProductInquiryCard
                             0xFFE8C8B2,
                           ),
                           fontSize:
-                              7.5,
+                              10.5,
                           letterSpacing:
                               1,
                           fontWeight:
@@ -3499,9 +4559,9 @@ class _ProductInquiryCard
                           color:
                               Colors.white,
                           fontSize:
-                              11,
+                              13,
                           height:
-                              1.35,
+                              1.45,
                           fontWeight:
                               FontWeight.w800,
                         ),
@@ -3523,7 +4583,7 @@ class _ProductInquiryCard
                               0xFFFFE7D9,
                             ),
                             fontSize:
-                                9.5,
+                                12,
                             fontWeight:
                                 FontWeight.w800,
                           ),
@@ -3624,7 +4684,7 @@ class _SellerStatus
               color:
                   textColor,
               fontSize:
-                  9,
+                  11.5,
               fontWeight:
                   FontWeight.w700,
             ),
@@ -3776,7 +4836,7 @@ class _InitialAvatar
           color:
               Colors.white,
           fontSize:
-              11,
+              13,
           fontWeight:
               FontWeight.w900,
         ),

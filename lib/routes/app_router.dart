@@ -5,20 +5,25 @@ import '../core/config/app_config.dart';
 import '../features/auth/login_screen.dart';
 import '../models/auth_user_model.dart';
 import '../services/auth_service.dart';
+import '../services/order_service.dart';
 import '../services/wishlist_service.dart';
 import '../features/auth/register_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
 import '../features/buyer/home/home_screen.dart';
 import '../features/buyer/cart/cart_screen.dart';
+import '../features/buyer/checkout/checkout_screen.dart';
 import '../features/buyer/orders/orders_screen.dart';
+import '../features/buyer/orders/order_tracking_screen.dart';
 import '../features/buyer/notifications/notifications_screen.dart';
 import '../features/buyer/products/product_details_screen.dart';
 import '../features/buyer/products/products_screen.dart';
 import '../features/buyer/messages/messages_screen.dart';
+import '../features/buyer/profile/account_screen.dart';
 import '../features/buyer/rewards/rewards_screen.dart';
 import '../features/buyer/wishlist/wishlist_screen.dart';
 import '../features/rider/dashboard/dashboard_screen.dart';
 import '../features/rider/scanner/scanner_screen.dart';
+import '../shared/widgets/buyer_navigation.dart';
 
 void safeBack(BuildContext context, {String fallback = '/login'}) {
   if (context.canPop()) {
@@ -73,6 +78,39 @@ ProductDetailData _toProductDetail(BuyerProduct product) {
   );
 }
 
+Widget _buyerNavigationFrame(
+  BuildContext context, {
+  required int currentIndex,
+  required Widget child,
+}) {
+  return BuyerNavigationFrame(
+    currentIndex: currentIndex,
+    onHome: () => context.go('/buyer/home'),
+    onOrders: () => context.go('/buyer/orders'),
+    onMessages: () => context.go('/buyer/messages'),
+    onProfile: () => context.go('/buyer/profile'),
+    child: child,
+  );
+}
+
+CheckoutItemData _toCheckoutItem(
+  ProductDetailData product,
+  ProductPurchaseRequest request,
+) {
+  return CheckoutItemData(
+    id: product.id,
+    productId: request.productId,
+    sellerId: 0,
+    seller: product.sellerName ?? 'LIKHAE Seller',
+    name: product.name,
+    variant: request.variant ?? '',
+    productVariantId: request.productVariationId,
+    imageUrl: product.imageUrl,
+    price: product.price,
+    quantity: request.quantity,
+  );
+}
+
 Future<void> _handleLogin(
   BuildContext context, {
   required String email,
@@ -87,7 +125,12 @@ Future<void> _handleLogin(
       deviceName: 'LIKHAE Flutter',
     );
 
-    final dynamic userPayload = payload['user'];
+    final dynamic responseData = payload['data'];
+    final dynamic userPayload =
+        payload['user'] ??
+        (responseData is Map
+            ? responseData['user'] ?? responseData
+            : responseData);
     if (userPayload is! Map<String, dynamic>) {
       throw const FormatException('Login response is missing user data.');
     }
@@ -108,9 +151,7 @@ Future<void> _handleLogin(
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            error.toString().replaceFirst('Exception: ', ''),
-          ),
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
         ),
       );
     }
@@ -166,19 +207,24 @@ final GoRouter appRouter = GoRouter(
       name: 'buyer-home',
       builder: (BuildContext context, GoRouterState state) {
         return BuyerHomeScreen(
+          onSearch: () => context.push('/buyer/products'),
           onBrowseProducts: () => context.push('/buyer/products'),
           onViewOrders: () => context.push('/buyer/orders'),
           onWishlist: () => context.push('/buyer/wishlist'),
           onCart: () => context.push('/buyer/cart'),
           onNotifications: () => context.push('/buyer/notifications'),
           onMessages: () => context.push('/buyer/messages'),
+          onProfile: () => context.push('/buyer/profile'),
           onVouchers: () => context.push('/buyer/rewards'),
           onViewAllCategories: () => context.push('/buyer/products'),
           onCategorySelected: (String categorySlug) {
             context.push('/buyer/products');
           },
           onProductSelected: (BuyerHomeProduct product) {
-            context.push('/buyer/product-details', extra: _toProductDetailFromHome(product));
+            context.push(
+              '/buyer/product-details',
+              extra: _toProductDetailFromHome(product),
+            );
           },
           onWishlistProduct: (BuyerHomeProduct product) async {
             await WishlistService.toggleProduct(product.id);
@@ -195,14 +241,22 @@ final GoRouter appRouter = GoRouter(
         final ProductDetailData product = extra is ProductDetailData
             ? extra
             : extra is BuyerHomeProduct
-                ? _toProductDetailFromHome(extra)
-                : _toProductDetail(extra as BuyerProduct);
+            ? _toProductDetailFromHome(extra)
+            : _toProductDetail(extra as BuyerProduct);
 
         return ProductDetailsScreen(
           product: product,
           relatedProducts: const [],
           onBack: () => safeBack(context, fallback: '/buyer/products'),
           onCart: () => context.push('/buyer/cart'),
+          onBuyNowRequest: (ProductPurchaseRequest request) async {
+            if (context.mounted) {
+              context.push(
+                '/buyer/checkout',
+                extra: <CheckoutItemData>[_toCheckoutItem(product, request)],
+              );
+            }
+          },
           onViewStore: (ProductDetailData detail) {
             context.push('/buyer/home');
           },
@@ -219,7 +273,10 @@ final GoRouter appRouter = GoRouter(
           onCart: () => context.push('/buyer/cart'),
           onNotifications: () => context.push('/buyer/notifications'),
           onProductSelected: (BuyerProduct product) {
-            context.push('/buyer/product-details', extra: _toProductDetail(product));
+            context.push(
+              '/buyer/product-details',
+              extra: _toProductDetail(product),
+            );
           },
           onWishlistProduct: (BuyerProduct product) async {
             await WishlistService.toggleProduct(product.id);
@@ -284,6 +341,27 @@ final GoRouter appRouter = GoRouter(
     ),
 
     GoRoute(
+      path: '/buyer/checkout',
+      name: 'buyer-checkout',
+      builder: (BuildContext context, GoRouterState state) {
+        final dynamic extra = state.extra;
+        final List<CheckoutItemData> items = extra is List
+            ? extra.whereType<CheckoutItemData>().toList(growable: false)
+            : const <CheckoutItemData>[];
+
+        return CheckoutScreen(
+          checkoutToken: 'offline-layout-checkout',
+          items: items,
+          addresses: const <CheckoutAddressData>[],
+          couriersBySeller: const <int, List<CheckoutCourierOption>>{},
+          initialRecipientName: '',
+          initialContactNumber: '',
+          onBackToCart: () => context.go('/buyer/cart'),
+        );
+      },
+    ),
+
+    GoRoute(
       path: '/buyer/rewards',
       name: 'buyer-rewards',
       builder: (BuildContext context, GoRouterState state) {
@@ -298,9 +376,53 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/orders',
       name: 'buyer-orders',
       builder: (BuildContext context, GoRouterState state) {
-        return OrdersScreen(
-          onBack: () => safeBack(context, fallback: '/buyer/home'),
-          onShopProducts: () => context.push('/buyer/products'),
+        return _buyerNavigationFrame(
+          context,
+          currentIndex: 1,
+          child: FutureBuilder<List<BuyerOrderData>>(
+            future: OrderService.fetchMyOrders(),
+            builder:
+                (
+                  BuildContext context,
+                  AsyncSnapshot<List<BuyerOrderData>> snapshot,
+                ) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(
+                      body: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  return OrdersScreen(
+                    orders: snapshot.data ?? const <BuyerOrderData>[],
+                    buyerNotice: snapshot.hasError
+                        ? 'Orders could not be loaded. Pull down to try again.'
+                        : null,
+                    onBack: () => safeBack(context, fallback: '/buyer/home'),
+                    onShopProducts: () => context.push('/buyer/products'),
+                    onTrackOrder: (BuyerOrderData order) {
+                      context.push('/buyer/order-tracking', extra: order);
+                    },
+                  );
+                },
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/buyer/order-tracking',
+      name: 'buyer-order-tracking',
+      builder: (BuildContext context, GoRouterState state) {
+        final dynamic extra = state.extra;
+        if (extra is! BuyerOrderData) {
+          return const Scaffold(
+            body: Center(child: Text('Tracking information is unavailable.')),
+          );
+        }
+
+        return OrderTrackingScreen(
+          order: extra,
+          onBack: () => safeBack(context, fallback: '/buyer/orders'),
         );
       },
     ),
@@ -309,8 +431,61 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/messages',
       name: 'buyer-messages',
       builder: (BuildContext context, GoRouterState state) {
-        return MessagesScreen(
-          onBack: () => safeBack(context, fallback: '/buyer/home'),
+        return _buyerNavigationFrame(
+          context,
+          currentIndex: 2,
+          child: MessagesScreen(
+            onBack: () => safeBack(context, fallback: '/buyer/home'),
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/buyer/profile',
+      name: 'buyer-profile',
+      builder: (BuildContext context, GoRouterState state) {
+        return _buyerNavigationFrame(
+          context,
+          currentIndex: 3,
+          child: FutureBuilder<AuthUserModel>(
+            future: AuthService.getCurrentUser(),
+            builder:
+                (BuildContext context, AsyncSnapshot<AuthUserModel> snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(
+                      body: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  if (snapshot.hasError || !snapshot.hasData) {
+                    return Scaffold(
+                      appBar: AppBar(
+                        title: const Text('Profile'),
+                        leading: IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () =>
+                              safeBack(context, fallback: '/buyer/home'),
+                        ),
+                      ),
+                      body: const Center(
+                        child: Text('Unable to load your profile.'),
+                      ),
+                    );
+                  }
+
+                  final AuthUserModel user = snapshot.data!;
+
+                  return AccountScreen(
+                    profile: BuyerProfileData(
+                      name: user.name,
+                      email: user.email ?? '',
+                      phone: user.contactNumber ?? '',
+                    ),
+                    onBack: () => safeBack(context, fallback: '/buyer/home'),
+                  );
+                },
+          ),
         );
       },
     ),
@@ -341,27 +516,18 @@ final GoRouter appRouter = GoRouter(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.error_outline_rounded,
-                size: 56,
-              ),
+              const Icon(Icons.error_outline_rounded, size: 56),
 
               const SizedBox(height: 16),
 
               const Text(
                 'Page not found',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
               ),
 
               const SizedBox(height: 8),
 
-              Text(
-                state.uri.toString(),
-                textAlign: TextAlign.center,
-              ),
+              Text(state.uri.toString(), textAlign: TextAlign.center),
 
               const SizedBox(height: 24),
 

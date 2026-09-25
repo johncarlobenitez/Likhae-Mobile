@@ -812,7 +812,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   'Notifications',
                   style: TextStyle(
                     color: _text,
-                    fontSize: 19,
+                    fontSize: 22,
                     height: 1.1,
                     letterSpacing: -0.4,
                     fontWeight:
@@ -831,7 +831,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       TextOverflow.ellipsis,
                   style: TextStyle(
                     color: _muted,
-                    fontSize: 9.5,
+                    fontSize: 13,
                   ),
                 ),
               ],
@@ -873,7 +873,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     : '$_unreadCount',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 8.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -934,7 +934,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 'NOTIFICATION CENTER',
                 style: TextStyle(
                   color: _maroon,
-                  fontSize: 8,
+                  fontSize: 11.5,
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w900,
                 ),
@@ -950,7 +950,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             'Important activity from your LIKHAE account.',
             style: TextStyle(
               color: _text,
-              fontSize: 18,
+              fontSize: 20,
               height: 1.25,
               fontWeight: FontWeight.w900,
             ),
@@ -966,8 +966,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 : '$_unreadCount ${_unreadCount == 1 ? 'notification is' : 'notifications are'} waiting for your attention.',
             style: const TextStyle(
               color: _muted,
-              fontSize: 10.5,
-              height: 1.45,
+              fontSize: 13.5,
+              height: 1.55,
             ),
           ),
 
@@ -977,7 +977,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
           SizedBox(
             width: double.infinity,
-            height: 44,
+            height: 48,
             child: OutlinedButton.icon(
               onPressed:
                   canMarkAll ? _markAllAsRead : null,
@@ -1014,7 +1014,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ? 'All notifications read'
                     : 'Mark all as read',
                 style: const TextStyle(
-                  fontSize: 10.5,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -1031,8 +1031,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               'Mark-all-read will become available when the Laravel notification action is connected.',
               style: TextStyle(
                 color: _muted,
-                fontSize: 8.5,
-                height: 1.4,
+                fontSize: 12,
+                height: 1.5,
               ),
             ),
           ],
@@ -1043,7 +1043,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildFilters() {
     return SizedBox(
-      height: 45,
+      height: 50,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -1117,7 +1117,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         color: selected
                             ? Colors.white
                             : _brown,
-                        fontSize: 10,
+                        fontSize: 13,
                         fontWeight:
                             FontWeight.w800,
                       ),
@@ -1135,7 +1135,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 alpha: 0.72,
                               )
                             : _muted2,
-                        fontSize: 8.5,
+                        fontSize: 12,
                         fontWeight:
                             FontWeight.w700,
                       ),
@@ -1277,7 +1277,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _text,
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -1294,8 +1294,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: _muted,
-              fontSize: 10.5,
-              height: 1.45,
+              fontSize: 13.5,
+              height: 1.55,
             ),
           ),
         ],
@@ -1413,7 +1413,7 @@ class _NotificationTile extends StatelessWidget {
                               color: const Color(
                                 0xFF3B211B,
                               ),
-                              fontSize: 11.5,
+                              fontSize: 14,
                               height: 1.25,
                               fontWeight: unread
                                   ? FontWeight.w900
@@ -1435,7 +1435,7 @@ class _NotificationTile extends StatelessWidget {
                               color: Color(
                                 0xFFA99386,
                               ),
-                              fontSize: 8,
+                              fontSize: 11.5,
                             ),
                           ),
                         ],
@@ -1455,8 +1455,8 @@ class _NotificationTile extends StatelessWidget {
                           color: Color(
                             0xFF987865,
                           ),
-                          fontSize: 9.5,
-                          height: 1.45,
+                          fontSize: 13,
+                          height: 1.55,
                         ),
                       ),
                     ],
@@ -1488,7 +1488,7 @@ class _NotificationTile extends StatelessWidget {
                               color: Color(
                                 0xFF6C4936,
                               ),
-                              fontSize: 7.5,
+                              fontSize: 11.5,
                               fontWeight:
                                   FontWeight.w800,
                             ),
@@ -1521,7 +1521,7 @@ class _NotificationTile extends StatelessWidget {
                                 color: Color(
                                   0xFF561C17,
                                 ),
-                                fontSize: 7,
+                                fontSize: 11,
                                 letterSpacing: 0.4,
                                 fontWeight:
                                     FontWeight.w900,

@@ -1071,9 +1071,9 @@ class _AccountScreenState
               color:
                   _muted,
               fontSize:
-                  12.5,
+                  15,
               height:
-                  1.45,
+                  1.55,
             ),
           ),
           actions: [
@@ -1430,9 +1430,9 @@ class _AccountScreenState
               color:
                   _muted,
               fontSize:
-                  12.5,
+                  15,
               height:
-                  1.45,
+                  1.55,
             ),
           ),
           actions: [
@@ -1762,7 +1762,14 @@ class _AccountScreenState
 
                     const SizedBox(
                       height:
-                          13,
+                          14,
+                    ),
+
+                    _buildSampleMessages(),
+
+                    const SizedBox(
+                      height:
+                          14,
                     ),
 
                     _buildTabs(),
@@ -1862,7 +1869,7 @@ class _AccountScreenState
                     color:
                         _text,
                     fontSize:
-                        19,
+                        22,
                     height:
                         1.1,
                     letterSpacing:
@@ -1888,7 +1895,7 @@ class _AccountScreenState
                     color:
                         _muted,
                     fontSize:
-                        9.5,
+                        12.5,
                   ),
                 ),
               ],
@@ -1939,7 +1946,7 @@ class _AccountScreenState
             color:
                 _maroon,
             fontSize:
-                8.5,
+                12,
             letterSpacing:
                 1.7,
             fontWeight:
@@ -1959,7 +1966,7 @@ class _AccountScreenState
             color:
                 _text,
             fontSize:
-                27,
+                30,
             height:
                 1.05,
             letterSpacing:
@@ -1981,7 +1988,7 @@ class _AccountScreenState
             color:
                 _muted,
             fontSize:
-                10.5,
+                13,
             height:
                 1.45,
           ),
@@ -2044,7 +2051,7 @@ class _AccountScreenState
                     color:
                         _text,
                     fontSize:
-                        12.5,
+                        15,
                     fontWeight:
                         FontWeight.w900,
                   ),
@@ -2066,7 +2073,7 @@ class _AccountScreenState
                     color:
                         _muted,
                     fontSize:
-                        9.5,
+                        12.5,
                   ),
                 ),
 
@@ -2089,12 +2096,188 @@ class _AccountScreenState
                       color:
                           _muted2,
                       fontSize:
-                          8.5,
+                          12,
                     ),
                   ),
                 ],
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildSampleMessages() {
+    const List<_AccountSampleMessage> messages =
+        <_AccountSampleMessage>[
+      _AccountSampleMessage(
+        icon: Icons.person_outline_rounded,
+        title: 'Profile tip',
+        message:
+            'Keep your name, email, and contact number updated so checkout details stay accurate.',
+      ),
+      _AccountSampleMessage(
+        icon: Icons.location_on_outlined,
+        title: 'Delivery tip',
+        message:
+            'Add a complete delivery address before placing an order for a smoother checkout.',
+      ),
+      _AccountSampleMessage(
+        icon: Icons.lock_outline_rounded,
+        title: 'Security tip',
+        message:
+            'Use at least 8 characters for your password and keep it private.',
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(
+        15,
+      ),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(
+          17,
+        ),
+        border: Border.all(
+          color: _border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'HELPFUL MESSAGES',
+            style: TextStyle(
+              color: _maroon,
+              fontSize: 11.5,
+              letterSpacing: 1.35,
+              fontWeight:
+                  FontWeight.w900,
+            ),
+          ),
+          const SizedBox(
+            height: 5,
+          ),
+          const Text(
+            'Quick account reminders',
+            style: TextStyle(
+              color: _text,
+              fontSize: 16,
+              fontWeight:
+                  FontWeight.w900,
+            ),
+          ),
+          const SizedBox(
+            height: 12,
+          ),
+          ...List<Widget>.generate(
+            messages.length,
+            (
+              int index,
+            ) {
+              final _AccountSampleMessage item =
+                  messages[index];
+
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom:
+                      index == messages.length - 1
+                          ? 0
+                          : 10,
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.all(
+                    12,
+                  ),
+                  decoration:
+                      BoxDecoration(
+                    color: _soft,
+                    borderRadius:
+                        BorderRadius.circular(
+                      13,
+                    ),
+                    border:
+                        Border.all(
+                      color: _border,
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        alignment:
+                            Alignment.center,
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xFFF1E4D7,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(
+                            11,
+                          ),
+                        ),
+                        child: Icon(
+                          item.icon,
+                          color:
+                              _maroon,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(
+                        width: 10,
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              style:
+                                  const TextStyle(
+                                color:
+                                    _text,
+                                fontSize:
+                                    13.5,
+                                fontWeight:
+                                    FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(
+                              height: 3,
+                            ),
+                            Text(
+                              item.message,
+                              style:
+                                  const TextStyle(
+                                color:
+                                    _muted,
+                                fontSize:
+                                    12.5,
+                                height:
+                                    1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -2217,7 +2400,7 @@ class _AccountScreenState
                                     ? _maroon
                                     : _text,
                             fontSize:
-                                10,
+                                13,
                             fontWeight:
                                 FontWeight.w800,
                           ),
@@ -2235,7 +2418,7 @@ class _AccountScreenState
                             color:
                                 _muted2,
                             fontSize:
-                                7.5,
+                                11.5,
                           ),
                         ),
                       ],
@@ -2323,7 +2506,7 @@ class _AccountScreenState
                       color:
                           _text,
                       fontSize:
-                          12,
+                          14.5,
                       fontWeight:
                           FontWeight.w800,
                     ),
@@ -2343,9 +2526,9 @@ class _AccountScreenState
                       color:
                           _muted,
                       fontSize:
-                          9.5,
+                          12.5,
                       height:
-                          1.4,
+                          1.5,
                     ),
                   ),
 
@@ -2367,7 +2550,7 @@ class _AccountScreenState
                         color:
                             _brown,
                         fontSize:
-                            8.5,
+                            12,
                         fontWeight:
                             FontWeight.w700,
                       ),
@@ -2422,7 +2605,7 @@ class _AccountScreenState
                             style:
                                 TextStyle(
                               fontSize:
-                                  10,
+                                  13,
                               fontWeight:
                                   FontWeight.w800,
                             ),
@@ -2498,7 +2681,7 @@ class _AccountScreenState
                             style:
                                 TextStyle(
                               fontSize:
-                                  10,
+                                  13,
                               fontWeight:
                                   FontWeight.w800,
                             ),
@@ -2746,7 +2929,7 @@ class _AccountScreenState
                             ? _muted2
                             : _text,
                     fontSize:
-                        11.5,
+                        14,
                   ),
                 ),
               ),
@@ -2874,7 +3057,7 @@ class _AccountScreenState
                             style:
                                 TextStyle(
                               fontSize:
-                                  11,
+                                  13.5,
                               fontWeight:
                                   FontWeight.w800,
                             ),
@@ -2941,7 +3124,7 @@ class _AccountScreenState
                       color:
                           _muted,
                       fontSize:
-                          10.5,
+                          13,
                     ),
                   ),
                 ],
@@ -3033,7 +3216,7 @@ class _AccountScreenState
                           color:
                               _text,
                           fontSize:
-                              12.5,
+                              15,
                           fontWeight:
                               FontWeight.w900,
                         ),
@@ -3053,9 +3236,9 @@ class _AccountScreenState
                       color:
                           _muted,
                       fontSize:
-                          8.5,
+                          12,
                       height:
-                          1.45,
+                          1.55,
                     ),
                   ),
 
@@ -3306,7 +3489,7 @@ class _AccountScreenState
                                   color:
                                       _text,
                                   fontSize:
-                                      10.5,
+                                      13,
                                   fontWeight:
                                       FontWeight.w700,
                                 ),
@@ -3368,7 +3551,7 @@ class _AccountScreenState
                                   style:
                                       TextStyle(
                                     fontSize:
-                                        11,
+                                        13.5,
                                     fontWeight:
                                         FontWeight.w800,
                                   ),
@@ -3638,7 +3821,7 @@ class _AccountScreenState
                         color:
                             _brown,
                         fontSize:
-                            9.5,
+                            12.5,
                         height:
                             1.5,
                       ),
@@ -3698,7 +3881,7 @@ class _AccountScreenState
                             style:
                                 TextStyle(
                               fontSize:
-                                  11,
+                                  13.5,
                               fontWeight:
                                   FontWeight.w800,
                             ),
@@ -3723,7 +3906,7 @@ class _AccountScreenState
         color:
             _muted2,
         fontSize:
-            11,
+            13.5,
       ),
       prefixIcon:
           prefixIcon ==
@@ -3888,6 +4071,19 @@ class _AccountScreenState
   }
 }
 
+
+class _AccountSampleMessage {
+  final IconData icon;
+  final String title;
+  final String message;
+
+  const _AccountSampleMessage({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+}
+
 class _AccountStatusBadge
     extends StatelessWidget {
   final bool active;
@@ -3979,7 +4175,7 @@ class _AccountStatusBadge
                           0xFF987865,
                         ),
               fontSize:
-                  8.5,
+                  12,
               fontWeight:
                   FontWeight.w800,
             ),
@@ -4108,7 +4304,7 @@ class _AccountPanel
                             0xFF3B211B,
                           ),
                           fontSize:
-                              13,
+                              15.5,
                           fontWeight:
                               FontWeight.w900,
                         ),
@@ -4128,9 +4324,9 @@ class _AccountPanel
                             0xFF987865,
                           ),
                           fontSize:
-                              9.5,
+                              12.5,
                           height:
-                              1.4,
+                              1.5,
                         ),
                       ),
                     ],
@@ -4317,7 +4513,7 @@ class _AvatarInitial
             0xFF561C17,
           ),
           fontSize:
-              18,
+              20,
           fontWeight:
               FontWeight.w900,
         ),
@@ -4439,7 +4635,7 @@ class _AddressCard
                           0xFF3B211B,
                         ),
                         fontSize:
-                            11,
+                            13.5,
                         fontWeight:
                             FontWeight.w900,
                       ),
@@ -4475,7 +4671,7 @@ class _AddressCard
                               0xFF561C17,
                             ),
                             fontSize:
-                                7,
+                                11,
                             fontWeight:
                                 FontWeight.w900,
                           ),
@@ -4501,7 +4697,7 @@ class _AddressCard
                         0xFF6C4936,
                       ),
                       fontSize:
-                          9.5,
+                          12.5,
                       fontWeight:
                           FontWeight.w600,
                     ),
@@ -4525,9 +4721,9 @@ class _AddressCard
                       0xFF987865,
                     ),
                     fontSize:
-                        10,
+                        13,
                     height:
-                        1.5,
+                        1.55,
                   ),
                 ),
 
@@ -4549,7 +4745,7 @@ class _AddressCard
                         0xFFA99386,
                       ),
                       fontSize:
-                          9,
+                          12,
                     ),
                   ),
                 ],
@@ -4742,7 +4938,7 @@ class _FieldLabel
           0xFF3B211B,
         ),
         fontSize:
-            10.5,
+            13,
         fontWeight:
             FontWeight.w700,
       ),
@@ -4839,7 +5035,7 @@ class _MessageBanner
                             0xFF256F4A,
                           ),
                 fontSize:
-                    10,
+                    13,
                 height:
                     1.45,
                 fontWeight:
@@ -4866,7 +5062,7 @@ InputDecoration _accountInputDecoration({
         0xFFA99386,
       ),
       fontSize:
-          11,
+          13.5,
     ),
     filled:
         true,

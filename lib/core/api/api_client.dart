@@ -21,7 +21,26 @@ class ApiClient {
     ),
   );
 
+  static Response<dynamic> _offlineResponse(
+    String path, {
+    dynamic data,
+    int statusCode = 200,
+  }) {
+    return Response<dynamic>(
+      data: data ?? <String, dynamic>{},
+      statusCode: statusCode,
+      requestOptions: RequestOptions(path: path),
+      headers: Headers.fromMap(<String, List<String>>{
+        'content-type': <String>['application/json'],
+      }),
+    );
+  }
+
   static Future<void> initialize() async {
+    if (!AppConfig.apiEnabled) {
+      return;
+    }
+
     _dio.interceptors.clear();
     _dio.interceptors.add(
       InterceptorsWrapper(
@@ -51,6 +70,10 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
     Options? options,
   }) async {
+    if (!AppConfig.apiEnabled) {
+      return _offlineResponse(path, data: <String, dynamic>{});
+    }
+
     return _dio.get(
       path,
       queryParameters: queryParameters,
@@ -63,6 +86,10 @@ class ApiClient {
     dynamic data, {
     Options? options,
   }) async {
+    if (!AppConfig.apiEnabled) {
+      return _offlineResponse(path, data: <String, dynamic>{});
+    }
+
     return _dio.post(
       path,
       data: data,
@@ -75,6 +102,10 @@ class ApiClient {
     dynamic data, {
     Options? options,
   }) async {
+    if (!AppConfig.apiEnabled) {
+      return _offlineResponse(path, data: <String, dynamic>{});
+    }
+
     return _dio.delete(
       path,
       data: data,

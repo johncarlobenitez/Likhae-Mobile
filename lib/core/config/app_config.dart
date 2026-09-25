@@ -1,6 +1,9 @@
 class AppConfig {
   AppConfig._();
 
+  /// Set to false while layouts are being finalized without backend integration.
+  static const bool apiEnabled = false;
+
   static const String webBaseUrl = 'https://likhae.online';
   static const String baseUrl = '$webBaseUrl/api/v1';
   static const String apiBaseUrl = baseUrl;

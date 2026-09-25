@@ -11,6 +11,25 @@ class AuthService {
     required String password,
     required String deviceName,
   }) async {
+    if (!AppConfig.apiEnabled) {
+      final Map<String, dynamic> dummyUser = <String, dynamic>{
+        'id': 1,
+        'name': 'Demo Buyer',
+        'email': email.isEmpty ? 'buyer@likhae.test' : email,
+        'contact_number': '+639000000001',
+        'status': 'active',
+        'email_verified': true,
+        'mobile_roles': <String>['buyer'],
+        'roles': <String>['buyer'],
+      };
+
+      return <String, dynamic>{
+        'token': 'demo-token',
+        'user': dummyUser,
+        'data': <String, dynamic>{'user': dummyUser},
+      };
+    }
+
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('auth/login'),
       <String, dynamic>{
@@ -20,12 +39,21 @@ class AuthService {
       },
     );
 
+    if ((response.statusCode ?? 500) >= 400) {
+      final dynamic responseData = response.data;
+      final String message = responseData is Map && responseData['message'] != null
+          ? responseData['message'].toString()
+          : 'Unable to sign in with these credentials.';
+      throw Exception(message);
+    }
+
     final dynamic payload = response.data;
     if (payload is! Map<String, dynamic>) {
       throw const FormatException('Invalid login response from server.');
     }
 
-    final String? newToken = payload['token']?.toString();
+    final String? newToken =
+      (payload['token'] ?? payload['access_token'])?.toString();
     if (newToken != null && newToken.isNotEmpty) {
       await TokenStorage.writeToken(newToken);
     }
@@ -34,6 +62,19 @@ class AuthService {
   }
 
   static Future<AuthUserModel> getCurrentUser() async {
+    if (!AppConfig.apiEnabled) {
+      return AuthUserModel(
+        id: 1,
+        name: 'Demo Buyer',
+        email: 'buyer@likhae.test',
+        contactNumber: '+639000000001',
+        status: 'active',
+        emailVerified: true,
+        roles: const <String>['buyer'],
+        mobileRoles: const <String>['buyer'],
+      );
+    }
+
     final Response<dynamic> response = await ApiClient.get(
       AppConfig.resolveApiUrl('auth/me'),
     );
