@@ -43,13 +43,15 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = false;
   bool _isSubmitting = false;
 
-  static const Color _background = Color(0xFFF4F1EB);
-  static const Color _surface = Color(0xFFFFFFFF);
-  static const Color _primary = Color(0xFF191816);
-  static const Color _secondaryText = Color(0xFF76716B);
-  static const Color _border = Color(0xFFE4E0DA);
-  static const Color _fieldBackground = Color(0xFFFBFAF8);
-  static const Color _accent = Color(0xFFD94343);
+  static const Color _background = Color(0xFFF7F2E9);
+  static const Color _surface = Color(0xFFFFFCF8);
+  static const Color _primary = Color(0xFF9E171B);
+  static const Color _primaryDark = Color(0xFF741015);
+  static const Color _text = Color(0xFF3B261F);
+  static const Color _secondaryText = Color(0xFF8B7669);
+  static const Color _border = Color(0xFFE5D5C3);
+  static const Color _fieldBackground = Color(0xFFFFFAF5);
+  static const Color _accent = Color(0xFFB42318);
 
   @override
   void dispose() {
@@ -125,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: error
               ? const Color(0xFFB42318)
-              : const Color(0xFF252320),
+              : _primaryDark,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -258,39 +260,44 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/images/login-page-bg.jpg',
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            errorBuilder: (
-              BuildContext context,
-              Object error,
-              StackTrace? stackTrace,
-            ) {
-              return Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF332D27),
-                      Color(0xFF171512),
-                    ],
-                  ),
-                ),
-              );
-            },
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFFFFBF4),
+                  Color(0xFFF0E5D5),
+                ],
+              ),
+            ),
           ),
 
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.28),
-                  Colors.black.withValues(alpha: 0.78),
-                ],
+          Positioned(
+            right: -30,
+            top: 15,
+            child: Transform.rotate(
+              angle: -0.28,
+              child: Icon(
+                Icons.local_florist_outlined,
+                size: compact ? 135 : 160,
+                color: _primary.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+
+          Positioned(
+            right: 28,
+            bottom: 22,
+            child: Container(
+              width: compact ? 66 : 78,
+              height: compact ? 66 : 78,
+              decoration: BoxDecoration(
+                color: _primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _primary.withValues(alpha: 0.10),
+                ),
               ),
             ),
           ),
@@ -312,10 +319,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
+                      color: _surface.withValues(alpha: 0.86),
                       borderRadius: BorderRadius.circular(100),
                       border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.18),
+                        color: _primary.withValues(alpha: 0.22),
                       ),
                     ),
                     child: const Row(
@@ -324,7 +331,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Icon(
                           Icons.location_on_outlined,
                           size: 15,
-                          color: Colors.white,
+                          color: _primary,
                         ),
                         SizedBox(
                           width: 6,
@@ -332,7 +339,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Text(
                           'Your Philippine marketplace',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: _primary,
                             fontSize: 10.5,
                             fontWeight: FontWeight.w600,
                           ),
@@ -353,14 +360,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           text: 'reimagined.',
                           style: TextStyle(
                             fontStyle: FontStyle.italic,
-                            color: Colors.white.withValues(alpha: 0.88),
+                            color: _primary,
                           ),
                         ),
                       ],
                     ),
                     maxLines: 2,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: _text,
                       fontSize: compact ? 24 : 27,
                       height: 1.05,
                       letterSpacing: -0.8,
@@ -377,7 +384,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.72),
+                      color: _secondaryText,
                       fontSize: 11.5,
                     ),
                   ),
@@ -405,9 +412,12 @@ class _LoginScreenState extends State<LoginScreen> {
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: _border.withValues(alpha: 0.85),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.07),
+            color: _primary.withValues(alpha: 0.08),
             blurRadius: 28,
             offset: const Offset(
               0,
@@ -431,7 +441,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text(
                 'Welcome back',
                 style: TextStyle(
-                  color: _primary,
+                  color: _text,
                   fontSize: 27,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.7,
@@ -596,7 +606,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       activeColor: _primary,
                       checkColor: Colors.white,
                       side: const BorderSide(
-                        color: Color(0xFFA6A19B),
+                        color: Color(0xFFB7A69B),
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
@@ -875,13 +885,13 @@ class _LoginScreenState extends State<LoginScreen> {
     return InputDecoration(
       hintText: hintText,
       hintStyle: const TextStyle(
-        color: Color(0xFFA8A39E),
+        color: Color(0xFFB4A49A),
         fontSize: 13.5,
         fontWeight: FontWeight.w400,
       ),
       prefixIcon: Icon(
         prefixIcon,
-        color: const Color(0xFF68635E),
+        color: const Color(0xFF8B7669),
         size: 20,
       ),
       suffixIcon: suffix,
@@ -941,7 +951,7 @@ class _LikhaeBrand extends StatelessWidget {
         const Text(
           'LIKHAE',
           style: TextStyle(
-            color: Color(0xFF191816),
+            color: Color(0xFF3B261F),
             fontSize: 21,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.2,
@@ -955,8 +965,8 @@ class _LikhaeBrand extends StatelessWidget {
         Container(
           width: 4,
           height: 4,
-          decoration: BoxDecoration(
-            color: Color(0xFFD94343),
+          decoration: const BoxDecoration(
+            color: Color(0xFF9E171B),
             shape: BoxShape.circle,
           ),
         ),
@@ -968,7 +978,7 @@ class _LikhaeBrand extends StatelessWidget {
         Text(
           'Marketplace',
           style: TextStyle(
-            color: Color(0xFF8A857F),
+            color: Color(0xFF8B7669),
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
           ),
@@ -990,7 +1000,7 @@ class _FieldLabel extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: Color(0xFF2A2825),
+        color: Color(0xFF3B261F),
         fontSize: 12.5,
         fontWeight: FontWeight.w700,
       ),
@@ -1011,7 +1021,7 @@ class _DividerLabel extends StatelessWidget {
       children: [
         const Expanded(
           child: Divider(
-            color: Color(0xFFE4E0DA),
+            color: Color(0xFFE5D5C3),
             height: 1,
           ),
         ),
@@ -1023,7 +1033,7 @@ class _DividerLabel extends StatelessWidget {
           child: Text(
             text,
             style: const TextStyle(
-              color: Color(0xFF928D87),
+              color: Color(0xFF9A8578),
               fontSize: 10.5,
               fontWeight: FontWeight.w500,
             ),
@@ -1032,7 +1042,7 @@ class _DividerLabel extends StatelessWidget {
 
         const Expanded(
           child: Divider(
-            color: Color(0xFFE4E0DA),
+            color: Color(0xFFE5D5C3),
             height: 1,
           ),
         ),
@@ -1060,10 +1070,10 @@ class _SocialButton extends StatelessWidget {
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF24221F),
+          backgroundColor: const Color(0xFFFFFCF8),
+          foregroundColor: const Color(0xFF3B261F),
           side: const BorderSide(
-            color: Color(0xFFE4E0DA),
+            color: Color(0xFFE5D5C3),
           ),
           padding: const EdgeInsets.symmetric(
             horizontal: 12,
@@ -1158,7 +1168,7 @@ class _TrustBadge extends StatelessWidget {
         Icon(
           icon,
           size: 12,
-          color: const Color(0xFF827D77),
+          color: const Color(0xFF8B7669),
         ),
 
         const SizedBox(
@@ -1169,7 +1179,7 @@ class _TrustBadge extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-            color: Color(0xFF827D77),
+            color: Color(0xFF8B7669),
             fontSize: 9.5,
             fontWeight: FontWeight.w600,
           ),
@@ -1198,9 +1208,9 @@ class _RoleButton extends StatelessWidget {
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           elevation: 0,
-          backgroundColor: const Color(0xFFF5F3EF),
-          foregroundColor: const Color(0xFF191816),
-          side: const BorderSide(color: Color(0xFFD8D4CE)),
+          backgroundColor: const Color(0xFFF7EFE5),
+          foregroundColor: const Color(0xFF741015),
+          side: const BorderSide(color: Color(0xFFDCC9B5)),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(13),

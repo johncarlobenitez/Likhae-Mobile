@@ -78,7 +78,7 @@ class BuyerBottomNavigation extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: _BuyerNavigationItem(
+              child: _NavigationItem(
                 icon: Icons.home_rounded,
                 label: 'Home',
                 active: currentIndex == 0,
@@ -86,7 +86,7 @@ class BuyerBottomNavigation extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: _BuyerNavigationItem(
+              child: _NavigationItem(
                 icon: Icons.shopping_bag_outlined,
                 label: 'My Orders',
                 active: currentIndex == 1,
@@ -94,7 +94,7 @@ class BuyerBottomNavigation extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: _BuyerNavigationItem(
+              child: _NavigationItem(
                 icon: Icons.chat_bubble_outline_rounded,
                 label: 'Messages',
                 active: currentIndex == 2,
@@ -102,7 +102,7 @@ class BuyerBottomNavigation extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: _BuyerNavigationItem(
+              child: _NavigationItem(
                 icon: Icons.person_rounded,
                 label: 'Me',
                 active: currentIndex == 3,
@@ -116,13 +116,13 @@ class BuyerBottomNavigation extends StatelessWidget {
   }
 }
 
-class _BuyerNavigationItem extends StatelessWidget {
+class _NavigationItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool active;
   final VoidCallback onTap;
 
-  const _BuyerNavigationItem({
+  const _NavigationItem({
     required this.icon,
     required this.label,
     required this.active,

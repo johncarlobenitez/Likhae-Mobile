@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 typedef LoadConversationMessagesCallback =
     Future<List<BuyerMessageData>> Function(
@@ -11,6 +13,13 @@ typedef SendBuyerMessageCallback =
     Future<BuyerMessageData> Function(
   BuyerConversationData seller,
   String body,
+);
+
+typedef SendBuyerAttachmentCallback =
+    Future<BuyerMessageData> Function(
+  BuyerConversationData seller,
+  String body,
+  String attachmentPath,
 );
 
 typedef ConversationMessageStreamBuilder =
@@ -132,12 +141,22 @@ class BuyerMessageData {
 
   final bool fromBuyer;
 
+  /// Optional attachment returned by Laravel.
+  /// Existing text-only messages can leave these null.
+  final String? attachmentUrl;
+  final String? attachmentName;
+
   const BuyerMessageData({
     required this.id,
     required this.body,
     required this.time,
     required this.fromBuyer,
+    this.attachmentUrl,
+    this.attachmentName,
   });
+
+  bool get hasAttachment =>
+      attachmentUrl?.trim().isNotEmpty == true;
 }
 
 class MessageProductReference {
@@ -209,6 +228,12 @@ class MessagesScreen extends StatefulWidget {
   final SendBuyerMessageCallback?
       onSendMessage;
 
+  /// Sends a message with one photo attachment.
+  /// The callback must upload attachmentPath to Laravel
+  /// and return the real saved message.
+  final SendBuyerAttachmentCallback?
+      onSendAttachment;
+
   /// Connect the Laravel message stream here later.
   ///
   /// The screen automatically reconnects if the stream
@@ -238,6 +263,7 @@ class MessagesScreen extends StatefulWidget {
     this.onProductReferenceSelected,
     this.onLoadMessages,
     this.onSendMessage,
+    this.onSendAttachment,
     this.messageStreamBuilder,
     this.onRefreshConversations,
     this.maxMessageLength = 2000,
@@ -300,6 +326,20 @@ class _MessagesScreenState
   final TextEditingController
       _messageController =
       TextEditingController();
+
+  final ImagePicker _imagePicker =
+      ImagePicker();
+
+  XFile? _pendingAttachment;
+
+  bool _pickingAttachment = false;
+
+  /// Extra messages typed while viewing the clearly
+  /// labeled sample conversation. Preview messages stay
+  /// local and are never presented as Laravel records.
+  final Map<String, List<_DemoMessage>>
+      _demoSentMessages =
+      <String, List<_DemoMessage>>{};
 
   final ScrollController
       _messageScrollController =
@@ -748,6 +788,9 @@ class _MessagesScreenState
 
         _messageError =
             null;
+
+        _messageController.clear();
+        _pendingAttachment = null;
       }
     });
 
@@ -1170,6 +1213,178 @@ class _MessagesScreenState
     );
   }
 
+  Future<void> _pickAttachment() async {
+    if (_pickingAttachment ||
+        _sendingMessage) {
+      return;
+    }
+
+    final ImageSource? source =
+        await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
+      ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              14,
+              12,
+              14,
+              14,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(
+                    Icons.photo_camera_outlined,
+                    color: _maroon,
+                  ),
+                  title: const Text(
+                    'Take Photo',
+                    style: TextStyle(
+                      color: _text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  onTap: () =>
+                      Navigator.of(context).pop(
+                    ImageSource.camera,
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.photo_library_outlined,
+                    color: _maroon,
+                  ),
+                  title: const Text(
+                    'Choose Photo',
+                    style: TextStyle(
+                      color: _text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  onTap: () =>
+                      Navigator.of(context).pop(
+                    ImageSource.gallery,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (source == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _pickingAttachment = true;
+    });
+
+    try {
+      final XFile? image =
+          await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 82,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+
+      if (!mounted || image == null) {
+        return;
+      }
+
+      setState(() {
+        _pendingAttachment = image;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage(
+        'Unable to select attachment: ${_errorText(error)}',
+        error: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _pickingAttachment = false;
+        });
+      }
+    }
+  }
+
+  void _removeAttachment() {
+    if (_sendingMessage) {
+      return;
+    }
+
+    setState(() {
+      _pendingAttachment = null;
+    });
+  }
+
+  Future<void> _sendDemoMessage(
+    _DemoConversation conversation,
+  ) async {
+    if (_sendingMessage) {
+      return;
+    }
+
+    final String body =
+        _messageController.text.trim();
+    final XFile? attachment =
+        _pendingAttachment;
+
+    if (body.isEmpty && attachment == null) {
+      return;
+    }
+
+    if (body.length > widget.maxMessageLength) {
+      _showMessage(
+        'Messages cannot exceed ${widget.maxMessageLength} characters.',
+        error: true,
+      );
+      return;
+    }
+
+    final TimeOfDay now = TimeOfDay.now();
+    final String time = now.format(context);
+
+    setState(() {
+      final List<_DemoMessage> sent =
+          _demoSentMessages.putIfAbsent(
+        conversation.name,
+        () => <_DemoMessage>[],
+      );
+
+      sent.add(
+        _DemoMessage(
+          body: body,
+          time: time,
+          fromBuyer: true,
+          attachmentPath: attachment?.path,
+        ),
+      );
+
+      _messageController.clear();
+      _pendingAttachment = null;
+    });
+
+    _showMessage(
+      'Preview only — this message is not saved to Laravel.',
+    );
+  }
+
   Future<void> _sendMessage() async {
     final BuyerConversationData?
         seller =
@@ -1184,7 +1399,11 @@ class _MessagesScreenState
         _messageController.text
             .trim();
 
-    if (body.isEmpty) {
+    final XFile? attachment =
+        _pendingAttachment;
+
+    if (body.isEmpty &&
+        attachment == null) {
       return;
     }
 
@@ -1202,9 +1421,25 @@ class _MessagesScreenState
         sender =
         widget.onSendMessage;
 
-    if (sender == null) {
+    final SendBuyerAttachmentCallback?
+        attachmentSender =
+        widget.onSendAttachment;
+
+    if (attachment == null &&
+        sender == null) {
       _showMessage(
-        'Messaging will be connected to Laravel later.',
+        'Messaging is not connected to Laravel.',
+        error: true,
+      );
+
+      return;
+    }
+
+    if (attachment != null &&
+        attachmentSender == null) {
+      _showMessage(
+        'Attachment sending is not connected to Laravel.',
+        error: true,
       );
 
       return;
@@ -1228,11 +1463,22 @@ class _MessagesScreenState
        * Wait for Laravel to successfully create the
        * message and return the real message object.
        */
-      final BuyerMessageData sent =
-          await sender(
-        seller,
-        body,
-      );
+      final BuyerMessageData sent;
+
+      if (attachment != null) {
+        sent =
+            await attachmentSender!(
+          seller,
+          body,
+          attachment.path,
+        );
+      } else {
+        sent =
+            await sender!(
+          seller,
+          body,
+        );
+      }
 
       if (!mounted ||
           !_isActiveSeller(
@@ -2319,6 +2565,8 @@ class _MessagesScreenState
             setState(() {
               _demoConversationIndex =
                   conversationIndex;
+              _messageController.clear();
+              _pendingAttachment = null;
             });
           },
         );
@@ -2482,22 +2730,31 @@ class _MessagesScreenState
 
           Expanded(
             child:
-                ListView.builder(
-              padding:
-                  const EdgeInsets.fromLTRB(
-                13,
-                18,
-                13,
-                22,
-              ),
-              itemCount:
-                  conversation.messages.length + 1,
-              itemBuilder:
-                  (
-                BuildContext context,
-                int index,
-              ) {
-                if (index == 0) {
+                Builder(
+              builder: (BuildContext context) {
+                final List<_DemoMessage> messages =
+                    <_DemoMessage>[
+                  ...conversation.messages,
+                  ...(_demoSentMessages[conversation.name] ??
+                      const <_DemoMessage>[]),
+                ];
+
+                return ListView.builder(
+                  padding:
+                      const EdgeInsets.fromLTRB(
+                    13,
+                    18,
+                    13,
+                    22,
+                  ),
+                  itemCount:
+                      messages.length + 1,
+                  itemBuilder:
+                      (
+                    BuildContext context,
+                    int index,
+                  ) {
+                    if (index == 0) {
                   return Center(
                     child:
                         Container(
@@ -2544,143 +2801,40 @@ class _MessagesScreenState
                   );
                 }
 
-                final _DemoMessage message =
-                    conversation.messages[
-                        index - 1];
+                    final _DemoMessage message =
+                        messages[index - 1];
 
-                return _DemoMessageBubble(
-                  message:
-                      message,
-                  sellerInitials:
-                      conversation.initials,
+                    return _DemoMessageBubble(
+                      message:
+                          message,
+                      sellerInitials:
+                          conversation.initials,
+                    );
+                  },
                 );
               },
             ),
           ),
 
-          Container(
-            padding:
-                const EdgeInsets.fromLTRB(
-              11,
-              10,
-              11,
-              10,
-            ),
-            decoration:
-                const BoxDecoration(
-              color:
-                  _surface,
-              border:
-                  Border(
-                top:
-                    BorderSide(
-                  color:
-                      _border,
-                ),
-              ),
-            ),
-            child:
-                SafeArea(
-              top:
-                  false,
-              child:
-                  Row(
-                children: [
-                  Expanded(
-                    child:
-                        TextField(
-                      enabled:
-                          false,
-                      decoration:
-                          InputDecoration(
-                        hintText:
-                            'Preview only — real messages use Laravel',
-                        hintStyle:
-                            const TextStyle(
-                          color:
-                              _muted2,
-                          fontSize:
-                              12.5,
-                        ),
-                        filled:
-                            true,
-                        fillColor:
-                            _backgroundSoft,
-                        contentPadding:
-                            const EdgeInsets.symmetric(
-                          horizontal:
-                              14,
-                          vertical:
-                              12,
-                        ),
-                        border:
-                            OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(
-                            14,
-                          ),
-                          borderSide:
-                              const BorderSide(
-                            color:
-                                _border,
-                          ),
-                        ),
-                        disabledBorder:
-                            OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(
-                            14,
-                          ),
-                          borderSide:
-                              const BorderSide(
-                            color:
-                                _border,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(
-                    width:
-                        8,
-                  ),
-
-                  Container(
-                    width:
-                        48,
-                    height:
-                        48,
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          _maroon.withValues(
-                        alpha:
-                            0.38,
-                      ),
-                      borderRadius:
-                          BorderRadius.circular(
-                        14,
-                      ),
-                    ),
-                    alignment:
-                        Alignment.center,
-                    child:
-                        const Icon(
-                      Icons
-                          .send_rounded,
-                      color:
-                          Colors.white,
-                      size:
-                          19,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          _buildDemoComposer(
+            conversation,
+            mobile: mobile,
           ),
+
         ],
       ),
+    );
+  }
+
+  Widget _buildDemoComposer(
+    _DemoConversation conversation, {
+    required bool mobile,
+  }) {
+    return _buildMessageBox(
+      hintText: 'Message ${conversation.name}...',
+      onSend: () =>
+          _sendDemoMessage(conversation),
+      mobile: mobile,
     );
   }
 
@@ -2716,6 +2870,7 @@ class _MessagesScreenState
 
           _buildComposer(
             seller,
+            mobile: mobile,
           ),
         ],
       ),
@@ -3169,15 +3324,42 @@ class _MessagesScreenState
   }
 
   Widget _buildComposer(
-    BuyerConversationData seller,
-  ) {
+    BuyerConversationData seller, {
+    required bool mobile,
+  }) {
+    return _buildMessageBox(
+      hintText: 'Message ${seller.name}...',
+      onSend: _sendMessage,
+      mobile: mobile,
+    );
+  }
+
+  Widget _buildMessageBox({
+    required String hintText,
+    required Future<void> Function() onSend,
+    required bool mobile,
+  }) {
+    final XFile? attachment =
+        _pendingAttachment;
+
+    final bool keyboardOpen =
+        MediaQuery.of(context).viewInsets.bottom > 0;
+
+    // BuyerNavigation uses a floating bottom bar on mobile.
+    // Keep only the composer above that bar without changing
+    // the chat/header/message layout. When the keyboard opens,
+    // the extra clearance is removed so the composer stays close
+    // to the keyboard.
+    final double navigationClearance =
+        mobile && !keyboardOpen ? 74 : 0;
+
     return Container(
       padding:
-          const EdgeInsets.fromLTRB(
+          EdgeInsets.fromLTRB(
         11,
-        10,
+        8,
         11,
-        10,
+        10 + navigationClearance,
       ),
       decoration:
           const BoxDecoration(
@@ -3197,159 +3379,357 @@ class _MessagesScreenState
         top:
             false,
         child:
-            Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.end,
+            Column(
+          mainAxisSize:
+              MainAxisSize.min,
           children: [
-            Expanded(
-              child:
-                  TextField(
-                controller:
-                    _messageController,
-                enabled:
-                    !_sendingMessage,
-                textInputAction:
-                    TextInputAction.send,
-                textCapitalization:
-                    TextCapitalization.sentences,
-                minLines:
-                    1,
-                maxLines:
-                    4,
-                maxLength:
-                    widget.maxMessageLength,
-                onSubmitted:
-                    (_) {
-                  if (!_sendingMessage) {
-                    _sendMessage();
-                  }
-                },
+            if (attachment != null) ...[
+              Container(
+                width:
+                    double.infinity,
+                margin:
+                    const EdgeInsets.only(
+                  bottom:
+                      8,
+                ),
+                padding:
+                    const EdgeInsets.all(
+                  8,
+                ),
                 decoration:
-                    InputDecoration(
-                  hintText:
-                      'Message ${seller.name}...',
-                  hintStyle:
-                      const TextStyle(
-                    color:
-                        _muted2,
-                    fontSize:
-                        13,
-                  ),
-                  counterText:
-                      '',
-                  filled:
-                      true,
-                  fillColor:
+                    BoxDecoration(
+                  color:
                       _backgroundSoft,
-                  contentPadding:
-                      const EdgeInsets.symmetric(
-                    horizontal:
-                        14,
-                    vertical:
-                        12,
+                  borderRadius:
+                      BorderRadius.circular(
+                    12,
                   ),
                   border:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      14,
-                    ),
-                    borderSide:
-                        const BorderSide(
-                      color:
-                          _border,
-                    ),
-                  ),
-                  enabledBorder:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      14,
-                    ),
-                    borderSide:
-                        const BorderSide(
-                      color:
-                          _border,
-                    ),
-                  ),
-                  focusedBorder:
-                      OutlineInputBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      14,
-                    ),
-                    borderSide:
-                        const BorderSide(
-                      color:
-                          _tan,
-                      width:
-                          1.3,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(
-              width:
-                  8,
-            ),
-
-            SizedBox(
-              width:
-                  48,
-              height:
-                  48,
-              child:
-                  ElevatedButton(
-                onPressed:
-                    _sendingMessage
-                        ? null
-                        : _sendMessage,
-                style:
-                    ElevatedButton.styleFrom(
-                  elevation:
-                      0,
-                  backgroundColor:
-                      _maroon,
-                  foregroundColor:
-                      Colors.white,
-                  disabledBackgroundColor:
-                      _maroon.withValues(
-                    alpha: 0.45,
-                  ),
-                  padding:
-                      EdgeInsets.zero,
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      14,
-                    ),
+                      Border.all(
+                    color:
+                        _border,
                   ),
                 ),
                 child:
-                    _sendingMessage
-                        ? const SizedBox(
+                    Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius:
+                          BorderRadius.circular(
+                        9,
+                      ),
+                      child:
+                          Image.file(
+                        File(attachment.path),
+                        width:
+                            48,
+                        height:
+                            48,
+                        fit:
+                            BoxFit.cover,
+                        errorBuilder:
+                            (
+                          BuildContext context,
+                          Object error,
+                          StackTrace? stackTrace,
+                        ) {
+                          return Container(
                             width:
-                                19,
+                                48,
                             height:
-                                19,
+                                48,
+                            color:
+                                _surface,
+                            alignment:
+                                Alignment.center,
                             child:
-                                CircularProgressIndicator(
-                              strokeWidth:
-                                  2,
+                                const Icon(
+                              Icons.image_outlined,
                               color:
-                                  Colors.white,
+                                  _muted2,
                             ),
-                          )
-                        : const Icon(
-                            Icons
-                                .send_rounded,
-                            size:
-                                19,
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(
+                      width:
+                          9,
+                    ),
+
+                    Expanded(
+                      child:
+                          Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Photo attachment',
+                            style:
+                                TextStyle(
+                              color:
+                                  _text,
+                              fontSize:
+                                  12,
+                              fontWeight:
+                                  FontWeight.w800,
+                            ),
                           ),
+                          const SizedBox(
+                            height:
+                                2,
+                          ),
+                          Text(
+                            attachment.name,
+                            maxLines:
+                                1,
+                            overflow:
+                                TextOverflow.ellipsis,
+                            style:
+                                const TextStyle(
+                              color:
+                                  _muted,
+                              fontSize:
+                                  11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    IconButton(
+                      tooltip:
+                          'Remove attachment',
+                      onPressed:
+                          _sendingMessage
+                              ? null
+                              : _removeAttachment,
+                      icon:
+                          const Icon(
+                        Icons.close_rounded,
+                        color:
+                            _muted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+            ],
+
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width:
+                      44,
+                  height:
+                      48,
+                  child:
+                      IconButton(
+                    tooltip:
+                        'Attach photo',
+                    onPressed:
+                        _sendingMessage ||
+                                _pickingAttachment
+                            ? null
+                            : _pickAttachment,
+                    style:
+                        IconButton.styleFrom(
+                      backgroundColor:
+                          _backgroundSoft,
+                      foregroundColor:
+                          _maroon,
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          14,
+                        ),
+                        side:
+                            const BorderSide(
+                          color:
+                              _border,
+                        ),
+                      ),
+                    ),
+                    icon:
+                        _pickingAttachment
+                            ? const SizedBox(
+                                width:
+                                    18,
+                                height:
+                                    18,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth:
+                                      2,
+                                  color:
+                                      _maroon,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.attach_file_rounded,
+                                size:
+                                    20,
+                              ),
+                  ),
+                ),
+
+                const SizedBox(
+                  width:
+                      8,
+                ),
+
+                Expanded(
+                  child:
+                      TextField(
+                    controller:
+                        _messageController,
+                    enabled:
+                        !_sendingMessage,
+                    textInputAction:
+                        TextInputAction.send,
+                    textCapitalization:
+                        TextCapitalization.sentences,
+                    minLines:
+                        1,
+                    maxLines:
+                        4,
+                    maxLength:
+                        widget.maxMessageLength,
+                    onSubmitted:
+                        (_) {
+                      if (!_sendingMessage) {
+                        onSend();
+                      }
+                    },
+                    decoration:
+                        InputDecoration(
+                      hintText:
+                          hintText,
+                      hintStyle:
+                          const TextStyle(
+                        color:
+                            _muted2,
+                        fontSize:
+                            13,
+                      ),
+                      counterText:
+                          '',
+                      filled:
+                          true,
+                      fillColor:
+                          _backgroundSoft,
+                      contentPadding:
+                          const EdgeInsets.symmetric(
+                        horizontal:
+                            14,
+                        vertical:
+                            12,
+                      ),
+                      border:
+                          OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          14,
+                        ),
+                        borderSide:
+                            const BorderSide(
+                          color:
+                              _border,
+                        ),
+                      ),
+                      enabledBorder:
+                          OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          14,
+                        ),
+                        borderSide:
+                            const BorderSide(
+                          color:
+                              _border,
+                        ),
+                      ),
+                      focusedBorder:
+                          OutlineInputBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          14,
+                        ),
+                        borderSide:
+                            const BorderSide(
+                          color:
+                              _tan,
+                          width:
+                              1.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                  width:
+                      8,
+                ),
+
+                SizedBox(
+                  width:
+                      48,
+                  height:
+                      48,
+                  child:
+                      ElevatedButton(
+                    onPressed:
+                        _sendingMessage
+                            ? null
+                            : onSend,
+                    style:
+                        ElevatedButton.styleFrom(
+                      elevation:
+                          0,
+                      backgroundColor:
+                          _maroon,
+                      foregroundColor:
+                          Colors.white,
+                      disabledBackgroundColor:
+                          const Color(0x73561C17),
+                      padding:
+                          EdgeInsets.zero,
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          14,
+                        ),
+                      ),
+                    ),
+                    child:
+                        _sendingMessage
+                            ? const SizedBox(
+                                width:
+                                    19,
+                                height:
+                                    19,
+                                child:
+                                    CircularProgressIndicator(
+                                  strokeWidth:
+                                      2,
+                                  color:
+                                      Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                size:
+                                    19,
+                              ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -3471,11 +3851,13 @@ class _DemoMessage {
   final String body;
   final String time;
   final bool fromBuyer;
+  final String? attachmentPath;
 
   const _DemoMessage({
     required this.body,
     required this.time,
     required this.fromBuyer,
+    this.attachmentPath,
   });
 }
 
@@ -3785,6 +4167,38 @@ class _DemoMessageBubble
                           ? CrossAxisAlignment.end
                           : CrossAxisAlignment.start,
                   children: [
+                    if (message.attachmentPath != null) ...[
+                      ClipRRect(
+                        borderRadius:
+                            BorderRadius.circular(
+                          10,
+                        ),
+                        child:
+                            Image.file(
+                          File(message.attachmentPath!),
+                          width:
+                              220,
+                          height:
+                              150,
+                          fit:
+                              BoxFit.cover,
+                          errorBuilder:
+                              (
+                            BuildContext context,
+                            Object error,
+                            StackTrace? stackTrace,
+                          ) {
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                      if (message.body.trim().isNotEmpty)
+                        const SizedBox(
+                          height:
+                              8,
+                        ),
+                    ],
+                    if (message.body.trim().isNotEmpty)
                     Text(
                       message.body,
                       style:
@@ -4304,6 +4718,94 @@ class _MessageBubble
                                 ? CrossAxisAlignment.end
                                 : CrossAxisAlignment.start,
                         children: [
+                          if (message.hasAttachment) ...[
+                            ClipRRect(
+                              borderRadius:
+                                  BorderRadius.circular(
+                                10,
+                              ),
+                              child:
+                                  Image.network(
+                                message.attachmentUrl!,
+                                width:
+                                    220,
+                                height:
+                                    150,
+                                fit:
+                                    BoxFit.cover,
+                                errorBuilder:
+                                    (
+                                  BuildContext context,
+                                  Object error,
+                                  StackTrace? stackTrace,
+                                ) {
+                                  return Container(
+                                    width:
+                                        220,
+                                    padding:
+                                        const EdgeInsets.all(
+                                      12,
+                                    ),
+                                    decoration:
+                                        BoxDecoration(
+                                      color:
+                                          message.fromBuyer
+                                              ? const Color(0x22FFFFFF)
+                                              : const Color(0xFFF6EFE7),
+                                      borderRadius:
+                                          BorderRadius.circular(
+                                        10,
+                                      ),
+                                    ),
+                                    child:
+                                        Row(
+                                      children: [
+                                        Icon(
+                                          Icons.attachment_rounded,
+                                          color:
+                                              message.fromBuyer
+                                                  ? Colors.white
+                                                  : const Color(0xFF561C17),
+                                        ),
+                                        const SizedBox(
+                                          width:
+                                              8,
+                                        ),
+                                        Expanded(
+                                          child:
+                                              Text(
+                                            message.attachmentName ??
+                                                'Attachment',
+                                            maxLines:
+                                                1,
+                                            overflow:
+                                                TextOverflow.ellipsis,
+                                            style:
+                                                TextStyle(
+                                              color:
+                                                  message.fromBuyer
+                                                      ? Colors.white
+                                                      : const Color(0xFF3B211B),
+                                              fontSize:
+                                                  12,
+                                              fontWeight:
+                                                  FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            if (message.body.trim().isNotEmpty)
+                              const SizedBox(
+                                height:
+                                    8,
+                              ),
+                          ],
+                          if (message.body.trim().isNotEmpty)
                           Text(
                             message.body,
                             style:

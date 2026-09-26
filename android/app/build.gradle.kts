@@ -9,6 +9,10 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -23,6 +27,12 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        val mapboxAccessToken =
+            providers.gradleProperty("MAPBOX_ACCESS_TOKEN")
+                .orElse(providers.environmentVariable("MAPBOX_ACCESS_TOKEN"))
+                .orElse("")
+        resValue("string", "mapbox_access_token", mapboxAccessToken.get())
     }
 
     buildTypes {

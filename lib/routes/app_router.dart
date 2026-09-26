@@ -22,7 +22,17 @@ import '../features/buyer/profile/account_screen.dart';
 import '../features/buyer/rewards/rewards_screen.dart';
 import '../features/buyer/wishlist/wishlist_screen.dart';
 import '../features/rider/dashboard/dashboard_screen.dart';
-import '../features/rider/scanner/scanner_screen.dart';
+import '../features/rider/deliveries/rider_deliveries_screen.dart';
+import '../features/rider/deliveries/rider_delivery_details_screen.dart';
+import '../features/rider/deliveries/rider_delivery_models.dart';
+import '../features/rider/deliveries/rider_delivery_tracking_screen.dart';
+import '../features/rider/earnings/rider_earnings_screen.dart';
+import '../features/rider/history/rider_history_screen.dart';
+import '../features/rider/pickups/rider_pickup_details_screen.dart';
+import '../features/rider/pickups/rider_pickups_screen.dart';
+import '../features/rider/profile/rider_profile_screen.dart';
+import '../features/rider/rider_navigation.dart';
+import '../features/rider/scanner/rider_scanner_screen.dart';
 import '../shared/widgets/buyer_navigation.dart';
 
 void safeBack(BuildContext context, {String fallback = '/login'}) {
@@ -90,6 +100,61 @@ Widget _buyerNavigationFrame(
     onMessages: () => context.go('/buyer/messages'),
     onProfile: () => context.go('/buyer/profile'),
     child: child,
+  );
+}
+
+Widget _riderNavigationFrame(
+  BuildContext context, {
+  required int currentIndex,
+  required Widget child,
+}) {
+  return _riderScreenPresentation(
+    context,
+    child: RiderNavigationFrame(
+      currentIndex: currentIndex,
+      onDashboard: () => context.go('/rider/dashboard'),
+      onAssignments: () => context.go('/rider/assignments'),
+      onHistory: () => context.go('/rider/history'),
+      onEarnings: () => context.go('/rider/earnings'),
+      onProfile: () => context.go('/rider/profile'),
+      child: child,
+    ),
+  );
+}
+
+Widget _riderScreenPresentation(
+  BuildContext context, {
+  required Widget child,
+}) {
+  final MediaQueryData mediaQuery = MediaQuery.of(context);
+  final double systemTextScale =
+      mediaQuery.textScaler.scale(16) / 16;
+  final double riderTextScale = systemTextScale < 1.05
+      ? 1.05
+      : systemTextScale;
+  final Duration duration = mediaQuery.disableAnimations
+      ? Duration.zero
+      : const Duration(milliseconds: 220);
+
+  return MediaQuery(
+    data: mediaQuery.copyWith(
+      textScaler: TextScaler.linear(riderTextScale),
+    ),
+    child: TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      child: child,
+      builder: (BuildContext context, double value, Widget? child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 8 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+    ),
   );
 }
 
@@ -483,6 +548,12 @@ final GoRouter appRouter = GoRouter(
                       phone: user.contactNumber ?? '',
                     ),
                     onBack: () => safeBack(context, fallback: '/buyer/home'),
+                    onLogout: () async {
+                      await AuthService.logout();
+                      if (context.mounted) {
+                        context.go('/login');
+                      }
+                    },
                   );
                 },
           ),
@@ -495,7 +566,216 @@ final GoRouter appRouter = GoRouter(
       path: '/rider/dashboard',
       name: 'rider-dashboard',
       builder: (BuildContext context, GoRouterState state) {
-        return const RiderDashboardScreen();
+        return _riderNavigationFrame(
+          context,
+          currentIndex: 0,
+          child: RiderDashboardScreen(
+            onOpenScanner: () => context.push('/rider/scanner'),
+            onViewAllShipments: () => context.go('/rider/assignments'),
+            onViewParcel: (RiderDashboardParcelData parcel) {
+              context.push(
+                '/rider/delivery-details',
+                extra: RiderDeliveryData(
+                  id: parcel.id,
+                  trackingCode: parcel.trackingCode,
+                  buyerName: parcel.buyerName,
+                  contact: parcel.contact,
+                  address: parcel.address,
+                  amount: parcel.amount,
+                  status: parcel.status,
+                  statusLabel: parcel.statusLabel,
+                  imageUrl: parcel.imageUrl,
+                  deliveryLatitude: parcel.deliveryLatitude,
+                  deliveryLongitude: parcel.deliveryLongitude,
+                  isPreview: parcel.isPreview,
+                ),
+              );
+            },
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/assignments',
+      name: 'rider-assignments',
+      builder: (BuildContext context, GoRouterState state) {
+        return _riderNavigationFrame(
+          context,
+          currentIndex: 1,
+          child: RiderDeliveriesScreen(
+            onViewDelivery: (RiderDeliveryData delivery) {
+              context.push('/rider/delivery-details', extra: delivery);
+            },
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/pickups',
+      name: 'rider-pickups',
+      builder: (BuildContext context, GoRouterState state) {
+        return _riderNavigationFrame(
+          context,
+          currentIndex: 1,
+          child: RiderPickupsScreen(
+            onViewPickup: (RiderPickupData pickup) {
+              context.push('/rider/pickup-details', extra: pickup);
+            },
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/pickup-details',
+      name: 'rider-pickup-details',
+      builder: (BuildContext context, GoRouterState state) {
+        final dynamic extra = state.extra;
+
+        if (extra is! RiderPickupData) {
+          return _riderScreenPresentation(
+            context,
+            child: Scaffold(
+              appBar: AppBar(title: const Text('Pickup Details')),
+              body: const Center(
+                child: Text('Pickup information is unavailable.'),
+              ),
+            ),
+          );
+        }
+
+        return _riderScreenPresentation(
+          context,
+          child: RiderPickupDetailsScreen(
+            pickup: extra,
+            onBack: () => safeBack(context, fallback: '/rider/pickups'),
+            onBackToPickups: () => context.go('/rider/pickups'),
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/history',
+      name: 'rider-history',
+      builder: (BuildContext context, GoRouterState state) {
+        return _riderNavigationFrame(
+          context,
+          currentIndex: 2,
+          child: const RiderHistoryScreen(),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/earnings',
+      name: 'rider-earnings',
+      builder: (BuildContext context, GoRouterState state) {
+        return _riderNavigationFrame(
+          context,
+          currentIndex: 3,
+          child: const RiderEarningsScreen(),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/profile',
+      name: 'rider-profile',
+      builder: (BuildContext context, GoRouterState state) {
+        return _riderNavigationFrame(
+          context,
+          currentIndex: 4,
+          child: FutureBuilder<AuthUserModel>(
+            future: AuthService.getCurrentUser(),
+            builder:
+                (BuildContext context, AsyncSnapshot<AuthUserModel> snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(
+                      body: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  final AuthUserModel? user = snapshot.data;
+
+                  return RiderProfileScreen(
+                    profile: user == null
+                        ? null
+                        : RiderProfileData(
+                            id: user.id,
+                            name: user.name,
+                            email: user.email ?? 'Not recorded',
+                            contactNumber:
+                                user.contactNumber ?? 'Not recorded',
+                            birthday: 'Not recorded',
+                            sex: 'Not recorded',
+                            address: 'Not recorded',
+                            vehicleType: 'Not recorded',
+                            plateNumber: 'Not recorded',
+                            status: user.status ?? 'Active',
+                            primaryRole: 'Rider',
+                          ),
+                    onLogout: () async {
+                      await AuthService.logout();
+                      if (context.mounted) {
+                        context.go('/login');
+                      }
+                    },
+                  );
+                },
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/delivery-details',
+      name: 'rider-delivery-details',
+      builder: (BuildContext context, GoRouterState state) {
+        final dynamic extra = state.extra;
+        final RiderDeliveryData? delivery = extra is RiderDeliveryData
+            ? extra
+            : null;
+
+        return _riderScreenPresentation(
+          context,
+          child: RiderDeliveryDetailsScreen(
+            delivery: delivery,
+            onBackToDeliveries: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/rider/assignments');
+              }
+            },
+            onViewTracking: (RiderDeliveryData selectedDelivery) {
+              context.push(
+                '/rider/delivery-tracking',
+                extra: selectedDelivery,
+              );
+            },
+          ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/delivery-tracking',
+      name: 'rider-delivery-tracking',
+      builder: (BuildContext context, GoRouterState state) {
+        final dynamic extra = state.extra;
+
+        return _riderScreenPresentation(
+          context,
+          child: RiderDeliveryTrackingScreen(
+            delivery: extra is RiderDeliveryData ? extra : null,
+            onOpenDetails: (RiderDeliveryData delivery) {
+              context.push('/rider/delivery-details', extra: delivery);
+            },
+          ),
+        );
       },
     ),
 
@@ -503,7 +783,17 @@ final GoRouter appRouter = GoRouter(
       path: '/rider/scanner',
       name: 'rider-scanner',
       builder: (BuildContext context, GoRouterState state) {
-        return const RiderScannerScreen();
+        return _riderScreenPresentation(
+          context,
+          child: RiderScannerScreen(
+            onSignOut: () async {
+              await AuthService.logout();
+              if (context.mounted) {
+                context.go('/login');
+              }
+            },
+          ),
+        );
       },
     ),
   ],
