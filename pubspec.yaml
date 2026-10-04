@@ -47,6 +47,7 @@ dependencies:
   mapbox_maps_flutter: ^2.31.1
   mapbox_navigation_sdk: ^0.0.1
   mobile_scanner: ^7.4.2
+  image: 4.10.1
 
 dev_dependencies:
   flutter_test:

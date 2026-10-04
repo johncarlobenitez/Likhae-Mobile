@@ -29,7 +29,7 @@
 	<key>MBXAccessToken</key>
 	<string>$(MAPBOX_ACCESS_TOKEN)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Likhae uses your location to guide riders to the delivery destination.</string>
+	<string>Likhae uses your location to guide riders and add GPS coordinates to delivery proof photos.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Likhae uses the camera so riders can capture proof of delivery.</string>
 	<key>UIBackgroundModes</key>

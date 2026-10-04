@@ -11,7 +11,9 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'package:mapbox_navigation_sdk/mapbox_navigation_sdk.dart'
     as navigation;
 
+import '../../../services/auth_service.dart';
 import 'rider_delivery_models.dart';
+import 'rider_proof_watermark.dart';
 
 class RiderDeliveryTrackingScreen extends StatefulWidget {
   final RiderDeliveryData? delivery;
@@ -797,6 +799,17 @@ class _RiderDeliveryTrackingScreenState
     });
 
     try {
+      final String riderName = (await AuthService.getCurrentUser()).name.trim();
+      if (riderName.isEmpty) {
+        throw Exception('Unable to load the rider name for the watermark.');
+      }
+      final Position position =
+          await RiderProofWatermark.requireCurrentPosition();
+
+      if (!mounted) {
+        return;
+      }
+
       final XFile? photo =
           await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -820,8 +833,19 @@ class _RiderDeliveryTrackingScreenState
         return;
       }
 
+      final String stampedPath = await RiderProofWatermark.stamp(
+        imagePath: photo.path,
+        riderName: riderName,
+        capturedAt: DateTime.now(),
+        position: position,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        _proofPhoto = photo;
+        _proofPhoto = XFile(stampedPath);
       });
     } catch (error) {
       if (!mounted) {
@@ -832,7 +856,7 @@ class _RiderDeliveryTrackingScreenState
           .showSnackBar(
         SnackBar(
           content: Text(
-            'Unable to open camera: $error',
+            'Unable to capture watermarked proof: $error',
           ),
         ),
       );

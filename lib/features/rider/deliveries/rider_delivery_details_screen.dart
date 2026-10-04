@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../services/auth_service.dart';
 import 'rider_delivery_models.dart';
+import 'rider_proof_watermark.dart';
 
 class RiderDeliveryDetailsScreen extends StatefulWidget {
   final RiderDeliveryData? delivery;
@@ -116,6 +118,16 @@ class _RiderDeliveryDetailsScreenState
     }
 
     try {
+      final String riderName = (await AuthService.getCurrentUser()).name.trim();
+      if (riderName.isEmpty) {
+        throw Exception('Unable to load the rider name for the watermark.');
+      }
+      final position = await RiderProofWatermark.requireCurrentPosition();
+
+      if (!mounted) {
+        return;
+      }
+
       final XFile? image = await ImagePicker().pickImage(
         source: ImageSource.camera,
         imageQuality: 85,
@@ -126,14 +138,25 @@ class _RiderDeliveryDetailsScreenState
         return;
       }
 
+      final String stampedPath = await RiderProofWatermark.stamp(
+        imagePath: image.path,
+        riderName: riderName,
+        capturedAt: DateTime.now(),
+        position: position,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        _proofPath = image.path;
+        _proofPath = stampedPath;
       });
 
       _showMessage('Proof of delivery captured.');
     } catch (error) {
       _showMessage(
-        'Unable to open the camera. Check the camera permission and try again.',
+        'Unable to capture watermarked proof: $error',
         error: true,
       );
     }
