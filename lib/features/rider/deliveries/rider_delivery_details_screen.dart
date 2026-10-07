@@ -262,6 +262,8 @@ class _RiderDeliveryDetailsScreenState
 
   String _labelForStatus(String status) {
     switch (status) {
+      case 'accepted':
+        return 'Accepted';
       case 'in_transit':
         return 'In Transit';
       case 'out_for_delivery':
@@ -377,21 +379,59 @@ class _RiderDeliveryDetailsScreenState
   }
 
   Widget _buildRecipientCard() {
-    return _SectionCard(
-      title: 'Recipient',
-      icon: Icons.person_pin_circle_outlined,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F0E8),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE4D3BF)),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _DetailRow(label: 'Buyer', value: _delivery.buyerName),
-          const SizedBox(height: 13),
-          _DetailRow(label: 'Contact', value: _delivery.contact),
-          const SizedBox(height: 13),
-          _DetailRow(label: 'Delivery Address', value: _delivery.address),
-          const SizedBox(height: 13),
+          Row(
+            children: <Widget>[
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9D9C8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.location_on_rounded,
+                  color: _maroon,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Recipient',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DetailRow(label: 'Buyer', value: _delivery.buyerName, compact: true),
+          const SizedBox(height: 10),
+          _DetailRow(label: 'Contact', value: _delivery.contact, compact: true),
+          const SizedBox(height: 10),
+          _DetailRow(
+            label: 'Delivery Address',
+            value: _delivery.address,
+            compact: true,
+          ),
+          const SizedBox(height: 10),
           _DetailRow(
             label: 'Order Amount',
             value: formatRiderMoney(_delivery.amount),
             valueColor: _maroon,
+            compact: true,
+            valueWeight: FontWeight.w700,
           ),
         ],
       ),
@@ -407,6 +447,20 @@ class _RiderDeliveryDetailsScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          if (status == 'assigned')
+            _PrimaryActionButton(
+              text: _submitting ? 'Updating...' : 'Accept Assignment',
+              icon: Icons.assignment_turned_in_outlined,
+              enabled: !_submitting,
+              onPressed: () => _transition('accepted'),
+            ),
+          if (status == 'accepted')
+            _PrimaryActionButton(
+              text: _submitting ? 'Updating...' : 'Start Delivery',
+              icon: Icons.near_me_outlined,
+              enabled: !_submitting,
+              onPressed: () => _transition('out_for_delivery'),
+            ),
           if (status == 'picked_up')
             _PrimaryActionButton(
               text: _submitting ? 'Updating...' : 'Mark In Transit',
@@ -518,7 +572,13 @@ class _RiderDeliveryDetailsScreenState
               ),
             ),
           ],
-          if (!<String>{'picked_up', 'in_transit', 'out_for_delivery'}.contains(status))
+          if (!<String>{
+            'assigned',
+            'accepted',
+            'picked_up',
+            'in_transit',
+            'out_for_delivery',
+          }.contains(status))
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
@@ -660,35 +720,43 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
+  final bool compact;
+  final FontWeight? valueWeight;
 
   const _DetailRow({
     required this.label,
     required this.value,
     this.valueColor,
+    this.compact = false,
+    this.valueWeight,
   });
 
   @override
   Widget build(BuildContext context) {
+    final TextStyle labelStyle = TextStyle(
+      color: const Color(0xFF987865),
+      fontSize: compact ? 12 : 12,
+      fontWeight: FontWeight.w600,
+    );
+
+    final TextStyle valueStyle = TextStyle(
+      color: valueColor ?? const Color(0xFF3B211B),
+      fontSize: compact ? 15 : 14,
+      height: 1.45,
+      fontWeight: valueWeight ?? FontWeight.w700,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(
-            color: Color(0xFF987865),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
+          style: labelStyle,
         ),
         const SizedBox(height: 4),
         Text(
           value.trim().isEmpty ? 'Not available' : value,
-          style: TextStyle(
-            color: valueColor ?? const Color(0xFF3B211B),
-            fontSize: 14,
-            height: 1.45,
-            fontWeight: FontWeight.w800,
-          ),
+          style: valueStyle,
         ),
       ],
     );

@@ -2507,7 +2507,7 @@ class _StoreProductCard
                               color:
                                   Colors.white,
                               fontSize:
-                                  8,
+                                  10,
                               fontWeight:
                                   FontWeight.w900,
                             ),
@@ -2662,7 +2662,7 @@ class _StoreProductCard
                             0xFF6C4936,
                           ),
                           fontSize:
-                              7,
+                              9,
                           letterSpacing:
                               0.7,
                           fontWeight:
@@ -2689,7 +2689,7 @@ class _StoreProductCard
                           0xFF3B211B,
                         ),
                         fontSize:
-                            11,
+                            13,
                         height:
                             1.3,
                         fontWeight:
@@ -2721,7 +2721,7 @@ class _StoreProductCard
                               0xFF561C17,
                             ),
                             fontSize:
-                                13,
+                                15,
                             fontWeight:
                                 FontWeight.w900,
                           ),
@@ -2742,7 +2742,7 @@ class _StoreProductCard
                                 0xFFA99386,
                               ),
                               fontSize:
-                                  8,
+                                  9.5,
                               decoration:
                                   TextDecoration.lineThrough,
                             ),
@@ -2786,7 +2786,7 @@ class _StoreProductCard
                                 0xFF3B211B,
                               ),
                               fontSize:
-                                  8,
+                                  9.5,
                               fontWeight:
                                   FontWeight.w700,
                             ),
@@ -2813,7 +2813,7 @@ class _StoreProductCard
                                 0xFF987865,
                               ),
                               fontSize:
-                                  8,
+                                  9.5,
                             ),
                           ),
                         ),
@@ -2831,7 +2831,7 @@ class _StoreProductCard
                                 0xFF987865,
                               ),
                               fontSize:
-                                  7.5,
+                                  9,
                             ),
                           ),
                       ],

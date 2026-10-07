@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/config/app_config.dart';
 import '../features/auth/login_screen.dart';
 import '../models/auth_user_model.dart';
 import '../services/auth_service.dart';
+import '../services/buyer_mobile_service.dart';
 import '../services/order_service.dart';
+import '../services/philippine_address_service.dart';
+import '../services/product_service.dart';
 import '../services/wishlist_service.dart';
 import '../features/auth/register_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
@@ -28,11 +33,14 @@ import '../features/rider/deliveries/rider_delivery_models.dart';
 import '../features/rider/deliveries/rider_delivery_tracking_screen.dart';
 import '../features/rider/earnings/rider_earnings_screen.dart';
 import '../features/rider/history/rider_history_screen.dart';
+import '../features/rider/messages/rider_messages_screen.dart';
 import '../features/rider/pickups/rider_pickup_details_screen.dart';
 import '../features/rider/pickups/rider_pickups_screen.dart';
 import '../features/rider/profile/rider_profile_screen.dart';
 import '../features/rider/rider_navigation.dart';
+import '../features/rider/rider_api_loader.dart';
 import '../features/rider/scanner/rider_scanner_screen.dart';
+import '../services/rider_mobile_service.dart';
 import '../shared/widgets/buyer_navigation.dart';
 
 void safeBack(BuildContext context, {String fallback = '/login'}) {
@@ -62,6 +70,7 @@ ProductDetailData _toProductDetailFromHome(BuyerHomeProduct product) {
     soldCount: product.soldCount,
     sellerName: product.sellerName,
     sellerSlug: product.sellerSlug,
+    sellerUserId: product.sellerUserId,
     wishlisted: product.wishlisted,
   );
 }
@@ -84,7 +93,77 @@ ProductDetailData _toProductDetail(BuyerProduct product) {
     soldCount: product.soldCount,
     sellerName: product.sellerName,
     sellerSlug: product.sellerSlug,
+    sellerUserId: product.sellerUserId,
     wishlisted: product.wishlisted,
+  );
+}
+
+Widget _productDetailScreen(BuildContext context, ProductDetailData product) {
+  return ProductDetailsScreen(
+    product: product,
+    relatedProducts: const [],
+    onBack: () => safeBack(context, fallback: '/buyer/products'),
+    onCart: () => context.push('/buyer/cart'),
+    onAddToCartRequest: AppConfig.apiEnabled
+        ? (ProductPurchaseRequest request) async {
+            await BuyerMobileService.addCartItem(
+              productId: request.productId,
+              productVariantId: request.productVariationId ??
+                  (throw const FormatException(
+                    'Choose an available product option before adding it to your cart.',
+                  )),
+              quantity: request.quantity,
+            );
+          }
+        : null,
+    onWishlistToggle: AppConfig.apiEnabled
+        ? (ProductDetailData detail) =>
+              BuyerMobileService.toggleWishlist(detail.id)
+        : null,
+    onBuyNowRequest: (ProductPurchaseRequest request) async {
+      if (context.mounted) {
+        if (AppConfig.apiEnabled) {
+          final CartItemData cartItem = await BuyerMobileService.addCartItem(
+            productId: request.productId,
+            productVariantId: request.productVariationId ??
+                (throw const FormatException(
+                  'Choose an available product option before checking out.',
+                )),
+            quantity: request.quantity,
+          );
+          if (!context.mounted) return;
+          context.push(
+            '/buyer/checkout',
+            extra: _BuyerCheckoutRouteData(
+              items: <CheckoutItemData>[_checkoutItemFromCart(cartItem)],
+              cartItemIds: <int>[
+                int.parse(cartItem.id),
+              ],
+            ),
+          );
+        } else {
+          context.push(
+            '/buyer/checkout',
+            extra: <CheckoutItemData>[_toCheckoutItem(product, request)],
+          );
+        }
+      }
+    },
+    onViewStore: (ProductDetailData detail) {
+      context.push('/buyer/home');
+    },
+    onMessageSeller: product.sellerUserId == null
+        ? null
+        : (ProductDetailData detail) {
+            context.push(
+              '/buyer/messages',
+              extra: BuyerConversationData(
+                sellerId: detail.sellerUserId.toString(),
+                name: detail.sellerName ?? 'Seller',
+                slug: detail.sellerSlug ?? detail.sellerName ?? '',
+              ),
+            );
+          },
   );
 }
 
@@ -113,7 +192,7 @@ Widget _riderNavigationFrame(
     child: RiderNavigationFrame(
       currentIndex: currentIndex,
       onDashboard: () => context.go('/rider/dashboard'),
-      onAssignments: () => context.go('/rider/assignments'),
+      onAssignments: () => context.go('/rider/pickups'),
       onHistory: () => context.go('/rider/history'),
       onEarnings: () => context.go('/rider/earnings'),
       onProfile: () => context.go('/rider/profile'),
@@ -122,24 +201,16 @@ Widget _riderNavigationFrame(
   );
 }
 
-Widget _riderScreenPresentation(
-  BuildContext context, {
-  required Widget child,
-}) {
+Widget _riderScreenPresentation(BuildContext context, {required Widget child}) {
   final MediaQueryData mediaQuery = MediaQuery.of(context);
-  final double systemTextScale =
-      mediaQuery.textScaler.scale(16) / 16;
-  final double riderTextScale = systemTextScale < 1.05
-      ? 1.05
-      : systemTextScale;
+  final double systemTextScale = mediaQuery.textScaler.scale(16) / 16;
+  final double riderTextScale = systemTextScale < 1.05 ? 1.05 : systemTextScale;
   final Duration duration = mediaQuery.disableAnimations
       ? Duration.zero
       : const Duration(milliseconds: 220);
 
   return MediaQuery(
-    data: mediaQuery.copyWith(
-      textScaler: TextScaler.linear(riderTextScale),
-    ),
+    data: mediaQuery.copyWith(textScaler: TextScaler.linear(riderTextScale)),
     child: TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
       duration: duration,
@@ -173,6 +244,49 @@ CheckoutItemData _toCheckoutItem(
     imageUrl: product.imageUrl,
     price: product.price,
     quantity: request.quantity,
+  );
+}
+
+CheckoutItemData _checkoutItemFromCart(CartItemData item) {
+  return CheckoutItemData(
+    id: item.productId ?? 0,
+    productId: item.productId ?? 0,
+    productVariantId: item.productVariationId,
+    sellerId: item.sellerId ?? 0,
+    seller: item.seller,
+    name: item.name,
+    variant: item.variant,
+    price: item.price,
+    quantity: item.quantity,
+    imageUrl: item.imageUrl,
+  );
+}
+
+class _BuyerCheckoutRouteData {
+  final List<CheckoutItemData> items;
+  final List<int> cartItemIds;
+  final Map<int, String> voucherCodes;
+
+  const _BuyerCheckoutRouteData({
+    required this.items,
+    required this.cartItemIds,
+    this.voucherCodes = const <int, String>{},
+  });
+}
+
+Future<SelectedProfilePhoto?> _pickBuyerProfilePhoto() async {
+  final XFile? image = await ImagePicker().pickImage(
+    source: ImageSource.gallery,
+    maxWidth: 1200,
+    maxHeight: 1200,
+    imageQuality: 85,
+  );
+  if (image == null) {
+    return null;
+  }
+  return SelectedProfilePhoto(
+    fileName: image.name,
+    bytes: await image.readAsBytes(),
   );
 }
 
@@ -223,6 +337,19 @@ Future<void> _handleLogin(
   }
 }
 
+Future<RegistrationDocument?> _pickRegistrationDocument(
+  RegistrationDocumentType type,
+) async {
+  final List<PlatformFile> files = await FilePicker.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: <String>['jpg', 'jpeg', 'png', 'pdf'],
+  );
+  if (files.isEmpty) return null;
+  final PlatformFile file = files.first;
+  if (file.path == null || file.path!.isEmpty) return null;
+  return RegistrationDocument(name: file.name, path: file.path);
+}
+
 final GoRouter appRouter = GoRouter(
   initialLocation: '/login',
 
@@ -244,8 +371,6 @@ final GoRouter appRouter = GoRouter(
               onError: () {},
             );
           },
-          onContinueAsBuyer: () => context.push('/buyer/home'),
-          onContinueAsRider: () => context.push('/rider/dashboard'),
         );
       },
     ),
@@ -254,7 +379,24 @@ final GoRouter appRouter = GoRouter(
       path: '/register',
       name: 'register',
       builder: (BuildContext context, GoRouterState state) {
-        return const RegisterScreen();
+        return RegisterScreen(
+          onSubmit: (RegisterFormData data) async {
+            final Map<String, dynamic> payload = await AuthService.register(data);
+            if (!context.mounted) return;
+            final dynamic message = payload['message'];
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(message?.toString() ?? 'Registration submitted.')),
+            );
+            context.go('/login');
+          },
+          onPickDocument: _pickRegistrationDocument,
+          loadRegions: PhilippineAddressService.fetchRegions,
+          loadProvinces: PhilippineAddressService.fetchProvinces,
+          loadMunicipalities:
+              PhilippineAddressService.fetchMunicipalities,
+          loadBarangays: PhilippineAddressService.fetchBarangays,
+          loadPostalCode: PhilippineAddressService.fetchPostalCode,
+        );
       },
     ),
 
@@ -292,7 +434,11 @@ final GoRouter appRouter = GoRouter(
             );
           },
           onWishlistProduct: (BuyerHomeProduct product) async {
-            await WishlistService.toggleProduct(product.id);
+            if (AppConfig.apiEnabled) {
+              await BuyerMobileService.toggleWishlist(product.id);
+            } else {
+              await WishlistService.toggleProduct(product.id);
+            }
           },
         );
       },
@@ -309,22 +455,46 @@ final GoRouter appRouter = GoRouter(
             ? _toProductDetailFromHome(extra)
             : _toProductDetail(extra as BuyerProduct);
 
-        return ProductDetailsScreen(
-          product: product,
-          relatedProducts: const [],
-          onBack: () => safeBack(context, fallback: '/buyer/products'),
-          onCart: () => context.push('/buyer/cart'),
-          onBuyNowRequest: (ProductPurchaseRequest request) async {
-            if (context.mounted) {
-              context.push(
-                '/buyer/checkout',
-                extra: <CheckoutItemData>[_toCheckoutItem(product, request)],
-              );
-            }
-          },
-          onViewStore: (ProductDetailData detail) {
-            context.push('/buyer/home');
-          },
+        if (!AppConfig.apiEnabled || product.slug?.trim().isNotEmpty != true) {
+          return _productDetailScreen(context, product);
+        }
+
+        return FutureBuilder<ProductDetailData>(
+          future: ProductService.fetchProductDetails(product.slug!),
+          builder:
+              (
+                BuildContext context,
+                AsyncSnapshot<ProductDetailData> snapshot,
+              ) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError || !snapshot.hasData) {
+                  return Scaffold(
+                    appBar: AppBar(
+                      leading: IconButton(
+                        onPressed: () =>
+                            safeBack(context, fallback: '/buyer/products'),
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      title: const Text('Product details'),
+                    ),
+                    body: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Unable to load product details: '
+                          '${snapshot.error ?? 'No product data was returned.'}',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                return _productDetailScreen(context, snapshot.data!);
+              },
         );
       },
     ),
@@ -344,7 +514,11 @@ final GoRouter appRouter = GoRouter(
             );
           },
           onWishlistProduct: (BuyerProduct product) async {
-            await WishlistService.toggleProduct(product.id);
+            if (AppConfig.apiEnabled) {
+              await BuyerMobileService.toggleWishlist(product.id);
+            } else {
+              await WishlistService.toggleProduct(product.id);
+            }
           },
         );
       },
@@ -354,11 +528,82 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/wishlist',
       name: 'buyer-wishlist',
       builder: (BuildContext context, GoRouterState state) {
-        return WishlistScreen(
-          onBack: () => safeBack(context, fallback: '/buyer/home'),
-          onContinueShopping: () => context.push('/buyer/home'),
-          onCart: () => context.push('/buyer/cart'),
-          onNotifications: () => context.push('/buyer/notifications'),
+        WishlistScreen buildWishlist(List<WishlistProduct> products) =>
+            WishlistScreen(
+              products: products,
+              onBack: () => safeBack(context, fallback: '/buyer/home'),
+              onContinueShopping: () => context.push('/buyer/home'),
+              onCart: () => context.push('/buyer/cart'),
+              onNotifications: () => context.push('/buyer/notifications'),
+              onRefresh: AppConfig.apiEnabled
+                  ? BuyerMobileService.fetchWishlist
+                  : null,
+              onRemoveProduct: AppConfig.apiEnabled
+                  ? (WishlistProduct product) =>
+                        BuyerMobileService.toggleWishlist(product.id)
+                  : null,
+              onClearWishlist: AppConfig.apiEnabled
+                  ? () async {
+                      final List<WishlistProduct> current =
+                          await BuyerMobileService.fetchWishlist();
+                      for (final WishlistProduct product in current) {
+                        await BuyerMobileService.toggleWishlist(product.id);
+                      }
+                    }
+                  : null,
+              onProductSelected: (WishlistProduct product) {
+                context.push(
+                  '/buyer/product-details',
+                  extra: ProductDetailData(
+                    id: product.id,
+                    name: product.name,
+                    slug: product.slug,
+                    category: product.category,
+                    sellerName: product.sellerName,
+                    imageUrl: product.imageUrl,
+                    price: product.price,
+                    originalPrice: product.originalPrice,
+                    rating: product.rating,
+                    reviewCount: product.reviewCount,
+                    soldCount: product.soldCount,
+                    stock: product.stock ?? 0,
+                    sellerUserId: product.sellerUserId,
+                  ),
+                );
+              },
+            );
+
+        if (!AppConfig.apiEnabled) {
+          return buildWishlist(const <WishlistProduct>[]);
+        }
+        return FutureBuilder<List<WishlistProduct>>(
+          future: BuyerMobileService.fetchWishlist(),
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<WishlistProduct>> snapshot,
+          ) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Wishlist'),
+                  leading: IconButton(
+                    onPressed: () =>
+                        safeBack(context, fallback: '/buyer/home'),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                ),
+                body: Center(
+                  child: Text('Unable to load your wishlist: ${snapshot.error}'),
+                ),
+              );
+            }
+            return buildWishlist(snapshot.data ?? const <WishlistProduct>[]);
+          },
         );
       },
     ),
@@ -367,8 +612,18 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/notifications',
       name: 'buyer-notifications',
       builder: (BuildContext context, GoRouterState state) {
-        return NotificationsScreen(
+        NotificationsScreen buildNotifications(
+          List<BuyerNotificationData> notifications,
+        ) {
+          return NotificationsScreen(
+          notifications: notifications,
           onBack: () => safeBack(context, fallback: '/buyer/home'),
+          onRefresh: AppConfig.apiEnabled
+              ? BuyerMobileService.fetchNotifications
+              : null,
+          onMarkAllAsRead: AppConfig.apiEnabled
+              ? BuyerMobileService.markAllNotificationsRead
+              : null,
           onNotificationTap: (notification) async {
             // Route based on the notification type when the buyer taps one.
             switch (notification.type) {
@@ -390,6 +645,44 @@ final GoRouter appRouter = GoRouter(
             }
           },
         );
+        }
+
+        if (!AppConfig.apiEnabled) {
+          return buildNotifications(const <BuyerNotificationData>[]);
+        }
+        return FutureBuilder<List<BuyerNotificationData>>(
+          future: BuyerMobileService.fetchNotifications(),
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<BuyerNotificationData>> snapshot,
+          ) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Notifications'),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () =>
+                        safeBack(context, fallback: '/buyer/home'),
+                  ),
+                ),
+                body: Center(
+                  child: Text(
+                    'Unable to load notifications: ${snapshot.error}',
+                  ),
+                ),
+              );
+            }
+            return buildNotifications(
+              snapshot.data ?? const <BuyerNotificationData>[],
+            );
+          },
+        );
       },
     ),
 
@@ -397,10 +690,99 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/cart',
       name: 'buyer-cart',
       builder: (BuildContext context, GoRouterState state) {
-        return CartScreen(
+        final Map<int, String> voucherCodes =
+            state.extra is Map<int, String>
+            ? Map<int, String>.from(state.extra! as Map<int, String>)
+            : const <int, String>{};
+        Widget buildCart(List<CartItemData> items) => CartScreen(
+          items: items,
           onBack: () => safeBack(context, fallback: '/buyer/home'),
           onContinueShopping: () => context.push('/buyer/home'),
-          onChangeAddress: () => context.push('/buyer/home'),
+          onChangeAddress: () => context.push(
+            '/buyer/profile',
+            extra: BuyerAccountTab.addresses,
+          ),
+          onRefresh: AppConfig.apiEnabled ? BuyerMobileService.fetchCart : null,
+          onUpdateQuantity: AppConfig.apiEnabled
+              ? BuyerMobileService.updateCartQuantity
+              : null,
+          onRemoveItem: AppConfig.apiEnabled
+              ? BuyerMobileService.removeCartItem
+              : null,
+          onRemoveSelected: AppConfig.apiEnabled
+              ? (List<CartItemData> selected) async {
+                  for (final CartItemData item in selected) {
+                    await BuyerMobileService.removeCartItem(item);
+                  }
+                }
+              : null,
+          onCheckout: AppConfig.apiEnabled
+              ? (CartCheckoutRequest request) async {
+                  final Map<String, int> selectedQuantities =
+                      <String, int>{
+                        for (final CartCheckoutItem item in request.items)
+                          item.id: item.quantity,
+                      };
+                  final List<CartItemData> selectedItems = items
+                      .where((CartItemData item) =>
+                          selectedQuantities.containsKey(item.id))
+                      .map(
+                        (CartItemData item) => item.copyWith(
+                          quantity: selectedQuantities[item.id],
+                        ),
+                      )
+                      .toList(growable: false);
+                  final List<int> cartItemIds = selectedItems
+                      .map((CartItemData item) => int.tryParse(item.id))
+                      .whereType<int>()
+                      .toList(growable: false);
+                  if (selectedItems.isEmpty ||
+                      cartItemIds.length != selectedItems.length) {
+                    throw const FormatException(
+                      'The selected cart items could not be identified.',
+                    );
+                  }
+                  await context.push<void>(
+                    '/buyer/checkout',
+                    extra: _BuyerCheckoutRouteData(
+                      items: selectedItems
+                          .map(_checkoutItemFromCart)
+                          .toList(growable: false),
+                      cartItemIds: cartItemIds,
+                      voucherCodes: voucherCodes,
+                    ),
+                  );
+                }
+              : null,
+        );
+
+        if (!AppConfig.apiEnabled) {
+          return buildCart(const <CartItemData>[]);
+        }
+        return FutureBuilder<List<CartItemData>>(
+          future: BuyerMobileService.fetchCart(),
+          builder: (BuildContext context, AsyncSnapshot<List<CartItemData>> snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Cart'),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => safeBack(context, fallback: '/buyer/home'),
+                  ),
+                ),
+                body: Center(
+                  child: Text('Unable to load your cart: ${snapshot.error}'),
+                ),
+              );
+            }
+            return buildCart(snapshot.data ?? const <CartItemData>[]);
+          },
         );
       },
     ),
@@ -410,18 +792,87 @@ final GoRouter appRouter = GoRouter(
       name: 'buyer-checkout',
       builder: (BuildContext context, GoRouterState state) {
         final dynamic extra = state.extra;
-        final List<CheckoutItemData> items = extra is List
+        final _BuyerCheckoutRouteData? routeData =
+            extra is _BuyerCheckoutRouteData ? extra : null;
+        final List<CheckoutItemData> items = routeData?.items ?? (extra is List
             ? extra.whereType<CheckoutItemData>().toList(growable: false)
-            : const <CheckoutItemData>[];
+            : const <CheckoutItemData>[]);
 
-        return CheckoutScreen(
-          checkoutToken: 'offline-layout-checkout',
-          items: items,
-          addresses: const <CheckoutAddressData>[],
-          couriersBySeller: const <int, List<CheckoutCourierOption>>{},
-          initialRecipientName: '',
-          initialContactNumber: '',
-          onBackToCart: () => context.go('/buyer/cart'),
+        Widget buildCheckout(List<CheckoutAddressData> addresses) {
+          CheckoutAddressData? defaultAddress;
+          for (final CheckoutAddressData address in addresses) {
+            if (address.isDefault) {
+              defaultAddress = address;
+              break;
+            }
+          }
+          defaultAddress ??= addresses.isEmpty ? null : addresses.first;
+          return CheckoutScreen(
+            checkoutToken: 'laravel-buyer-checkout',
+            items: items,
+            addresses: addresses,
+            couriersBySeller: const <int, List<CheckoutCourierOption>>{},
+            requireCourierSelection: false,
+            appliedVoucherCodes:
+                routeData?.voucherCodes ?? const <int, String>{},
+            initialRecipientName: defaultAddress?.recipient ?? '',
+            initialContactNumber: defaultAddress?.phone ?? '',
+            onBackToCart: () => context.go('/buyer/cart'),
+            onPlaceOrder: routeData == null
+                ? null
+                : (CheckoutPlaceOrderRequest request) async {
+                    await BuyerMobileService.placeOrder(
+                      cartItemIds: routeData.cartItemIds,
+                      addressId: request.addressId,
+                      paymentMethod: request.paymentMethod,
+                      voucherCodes: routeData.voucherCodes,
+                    );
+                    if (context.mounted) {
+                      context.go('/buyer/orders');
+                    }
+                  },
+          );
+        }
+
+        if (!AppConfig.apiEnabled) {
+          return buildCheckout(const <CheckoutAddressData>[]);
+        }
+        if (routeData == null || routeData.cartItemIds.isEmpty) {
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Checkout requires items selected from your connected cart.',
+              ),
+            ),
+          );
+        }
+        return FutureBuilder<List<CheckoutAddressData>>(
+          future: BuyerMobileService.fetchCheckoutAddresses(),
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<CheckoutAddressData>> snapshot,
+          ) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Checkout'),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => context.go('/buyer/cart'),
+                  ),
+                ),
+                body: Center(
+                  child: Text('Unable to load delivery addresses: ${snapshot.error}'),
+                ),
+              );
+            }
+            return buildCheckout(snapshot.data ?? const <CheckoutAddressData>[]);
+          },
         );
       },
     ),
@@ -430,9 +881,69 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/rewards',
       name: 'buyer-rewards',
       builder: (BuildContext context, GoRouterState state) {
-        return RewardsScreen(
+        RewardsScreen buildRewards(RewardsData data) => RewardsScreen(
+          activeVouchers: data.activeVouchers,
+          voucherHistory: data.voucherHistory,
+          pointsBalance: data.pointsBalance,
+          pointActivities: data.pointActivities,
+          availableCashback: data.availableCashback,
+          pendingCashback: data.pendingCashback,
+          cashbackActivities: data.cashbackActivities,
+          pointsPerCompletedOrder: data.pointsPerCompletedOrder,
+          pointsPerReview: data.pointsPerReview,
+          cashbackRate: data.cashbackRate,
           onBack: () => safeBack(context, fallback: '/buyer/home'),
           onBrowseProducts: () => context.push('/buyer/products'),
+          onRefresh: AppConfig.apiEnabled
+              ? BuyerMobileService.fetchRewards
+              : null,
+          onUseVoucher: (RewardVoucherData voucher) {
+            if (voucher.sellerId == null || voucher.code.trim().isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('This voucher cannot be applied automatically.'),
+                ),
+              );
+              return;
+            }
+            context.push(
+              '/buyer/cart',
+              extra: <int, String>{voucher.sellerId!: voucher.code},
+            );
+          },
+        );
+
+        if (!AppConfig.apiEnabled) {
+          return RewardsScreen(
+            onBack: () => safeBack(context, fallback: '/buyer/home'),
+            onBrowseProducts: () => context.push('/buyer/products'),
+          );
+        }
+        return FutureBuilder<RewardsData>(
+          future: BuyerMobileService.fetchRewards(),
+          builder: (BuildContext context, AsyncSnapshot<RewardsData> snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError || !snapshot.hasData) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Rewards'),
+                  leading: IconButton(
+                    onPressed: () =>
+                        safeBack(context, fallback: '/buyer/home'),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                ),
+                body: Center(
+                  child: Text('Unable to load rewards: ${snapshot.error}'),
+                ),
+              );
+            }
+            return buildRewards(snapshot.data!);
+          },
         );
       },
     ),
@@ -459,11 +970,33 @@ final GoRouter appRouter = GoRouter(
 
                   return OrdersScreen(
                     orders: snapshot.data ?? const <BuyerOrderData>[],
+                    showProductPreviewWhenEmpty: !AppConfig.apiEnabled,
                     buyerNotice: snapshot.hasError
                         ? 'Orders could not be loaded. Pull down to try again.'
                         : null,
                     onBack: () => safeBack(context, fallback: '/buyer/home'),
                     onShopProducts: () => context.push('/buyer/products'),
+                    onRefresh: AppConfig.apiEnabled
+                        ? BuyerMobileService.fetchOrders
+                        : null,
+                    onCancelOrder: AppConfig.apiEnabled
+                        ? (BuyerOrderData order, String reason, String note) =>
+                              BuyerMobileService.cancelOrder(
+                                order,
+                                <String>[reason, note]
+                                    .where((String value) => value.trim().isNotEmpty)
+                                    .join('\n\n'),
+                              )
+                        : null,
+                    onReceiveOrder: AppConfig.apiEnabled
+                        ? BuyerMobileService.confirmOrderReceived
+                        : null,
+                    onSubmitProductReview: AppConfig.apiEnabled
+                        ? BuyerMobileService.submitProductReview
+                        : null,
+                    onSubmitReturnRequest: AppConfig.apiEnabled
+                        ? BuyerMobileService.requestOrderReturn
+                        : null,
                     onTrackOrder: (BuyerOrderData order) {
                       context.push('/buyer/order-tracking', extra: order);
                     },
@@ -496,12 +1029,69 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/messages',
       name: 'buyer-messages',
       builder: (BuildContext context, GoRouterState state) {
-        return _buyerNavigationFrame(
-          context,
-          currentIndex: 2,
-          child: MessagesScreen(
-            onBack: () => safeBack(context, fallback: '/buyer/home'),
-          ),
+        Widget buildMessages(List<BuyerConversationData> conversations) {
+          return _buyerNavigationFrame(
+            context,
+            currentIndex: 2,
+            child: MessagesScreen(
+              conversations: conversations,
+              initialSeller: state.extra is BuyerConversationData
+                  ? state.extra! as BuyerConversationData
+                  : null,
+              showPreviewWhenEmpty: !AppConfig.apiEnabled,
+              onBack: () => safeBack(context, fallback: '/buyer/home'),
+              onRefreshConversations: AppConfig.apiEnabled
+                  ? BuyerMobileService.fetchConversations
+                  : null,
+              onLoadMessages: AppConfig.apiEnabled
+                  ? BuyerMobileService.fetchMessages
+                  : null,
+              onSendMessage: AppConfig.apiEnabled
+                  ? BuyerMobileService.sendMessage
+                  : null,
+              onSendAttachment: AppConfig.apiEnabled
+                  ? BuyerMobileService.sendAttachment
+                  : null,
+              messageStreamBuilder: AppConfig.apiEnabled
+                  ? BuyerMobileService.watchMessages
+                  : null,
+            ),
+          );
+        }
+
+        if (!AppConfig.apiEnabled) {
+          return buildMessages(const <BuyerConversationData>[]);
+        }
+        return FutureBuilder<List<BuyerConversationData>>(
+          future: BuyerMobileService.fetchConversations(),
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<BuyerConversationData>> snapshot,
+          ) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Messages'),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () =>
+                        safeBack(context, fallback: '/buyer/home'),
+                  ),
+                ),
+                body: Center(
+                  child: Text('Unable to load messages: ${snapshot.error}'),
+                ),
+              );
+            }
+            return buildMessages(
+              snapshot.data ?? const <BuyerConversationData>[],
+            );
+          },
         );
       },
     ),
@@ -510,13 +1100,37 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/profile',
       name: 'buyer-profile',
       builder: (BuildContext context, GoRouterState state) {
+        final BuyerAccountTab initialTab = state.extra is BuyerAccountTab
+            ? state.extra! as BuyerAccountTab
+            : BuyerAccountTab.profile;
+        Future<List<Object>> loadBuyerAccount() async {
+          if (AppConfig.apiEnabled) {
+            final List<dynamic> results = await Future.wait<dynamic>(
+              <Future<dynamic>>[
+                BuyerMobileService.fetchProfile(),
+                BuyerMobileService.fetchBuyerAddresses(),
+              ],
+            );
+            return <Object>[results[0] as BuyerProfileData, results[1] as List<BuyerAddressData>];
+          }
+          final AuthUserModel user = await AuthService.getCurrentUser();
+          return <Object>[
+            BuyerProfileData(
+              name: user.name,
+              email: user.email ?? '',
+              phone: user.contactNumber ?? '',
+            ),
+            const <BuyerAddressData>[],
+          ];
+        }
+
         return _buyerNavigationFrame(
           context,
           currentIndex: 3,
-          child: FutureBuilder<AuthUserModel>(
-            future: AuthService.getCurrentUser(),
+          child: FutureBuilder<List<Object>>(
+            future: loadBuyerAccount(),
             builder:
-                (BuildContext context, AsyncSnapshot<AuthUserModel> snapshot) {
+                (BuildContext context, AsyncSnapshot<List<Object>> snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Scaffold(
                       body: Center(child: CircularProgressIndicator()),
@@ -533,21 +1147,46 @@ final GoRouter appRouter = GoRouter(
                               safeBack(context, fallback: '/buyer/home'),
                         ),
                       ),
-                      body: const Center(
-                        child: Text('Unable to load your profile.'),
+                      body: Center(
+                        child: Text(
+                          'Unable to load your profile: ${snapshot.error ?? 'No profile data was returned.'}',
+                        ),
                       ),
                     );
                   }
 
-                  final AuthUserModel user = snapshot.data!;
+                  final BuyerProfileData profile =
+                      snapshot.data![0] as BuyerProfileData;
+                  final List<BuyerAddressData> addresses =
+                      snapshot.data![1] as List<BuyerAddressData>;
 
                   return AccountScreen(
-                    profile: BuyerProfileData(
-                      name: user.name,
-                      email: user.email ?? '',
-                      phone: user.contactNumber ?? '',
-                    ),
+                    profile: profile,
+                    addresses: addresses,
+                    initialTab: initialTab,
                     onBack: () => safeBack(context, fallback: '/buyer/home'),
+                    onPickProfilePhoto: _pickBuyerProfilePhoto,
+                    onUpdateProfile: AppConfig.apiEnabled
+                        ? BuyerMobileService.updateProfile
+                        : null,
+                    onRemoveProfilePhoto: AppConfig.apiEnabled
+                        ? BuyerMobileService.deleteProfilePhoto
+                        : null,
+                    onAddAddress: AppConfig.apiEnabled
+                        ? BuyerMobileService.createBuyerAddress
+                        : null,
+                    onDeleteAddress: AppConfig.apiEnabled
+                        ? BuyerMobileService.deleteBuyerAddress
+                        : null,
+                    onSetDefaultAddress: AppConfig.apiEnabled
+                        ? BuyerMobileService.setDefaultBuyerAddress
+                        : null,
+                    onChangePassword: AppConfig.apiEnabled
+                        ? BuyerMobileService.changePassword
+                        : null,
+                    onRefresh: AppConfig.apiEnabled
+                        ? BuyerMobileService.fetchAccountSnapshot
+                        : null,
                     onLogout: () async {
                       await AuthService.logout();
                       if (context.mounted) {
@@ -569,26 +1208,106 @@ final GoRouter appRouter = GoRouter(
         return _riderNavigationFrame(
           context,
           currentIndex: 0,
-          child: RiderDashboardScreen(
-            onOpenScanner: () => context.push('/rider/scanner'),
-            onViewAllShipments: () => context.go('/rider/assignments'),
-            onViewParcel: (RiderDashboardParcelData parcel) {
-              context.push(
-                '/rider/delivery-details',
-                extra: RiderDeliveryData(
-                  id: parcel.id,
-                  trackingCode: parcel.trackingCode,
-                  buyerName: parcel.buyerName,
-                  contact: parcel.contact,
-                  address: parcel.address,
-                  amount: parcel.amount,
-                  status: parcel.status,
-                  statusLabel: parcel.statusLabel,
-                  imageUrl: parcel.imageUrl,
-                  deliveryLatitude: parcel.deliveryLatitude,
-                  deliveryLongitude: parcel.deliveryLongitude,
-                  isPreview: parcel.isPreview,
+          child: AppConfig.apiEnabled
+              ? RiderApiLoader<RiderDashboardSnapshot>(
+                  load: RiderMobileService.fetchDashboard,
+                  builder:
+                      (
+                        BuildContext context,
+                        RiderDashboardSnapshot? data,
+                        Object? error,
+                        Future<void> Function() refresh,
+                      ) => RiderDashboardScreen(
+                        stats: data?.stats ?? const <RiderDashboardStatData>[],
+                        recentParcels:
+                            data?.recentParcels ??
+                            const <RiderDashboardParcelData>[],
+                        showPreviewWhenEmpty: false,
+                        statusMessage: error?.toString(),
+                        onRefresh: refresh,
+                        onOpenScanner: () => context.push('/rider/scanner'),
+                        onOpenMessages: () => context.push('/rider/messages'),
+                        onOpenNotifications: () =>
+                            context.push('/rider/notifications'),
+                        onViewAllShipments: () =>
+                            context.go('/rider/assignments'),
+                        onViewParcel: (RiderDashboardParcelData parcel) {
+                          context.push(
+                            '/rider/delivery-details',
+                            extra: RiderDeliveryData(
+                              id: parcel.id,
+                              trackingCode: parcel.trackingCode,
+                              buyerName: parcel.buyerName,
+                              contact: parcel.contact,
+                              address: parcel.address,
+                              amount: parcel.amount,
+                              status: parcel.status,
+                              statusLabel: parcel.statusLabel,
+                              imageUrl: parcel.imageUrl,
+                              deliveryLatitude: parcel.deliveryLatitude,
+                              deliveryLongitude: parcel.deliveryLongitude,
+                              isPreview: parcel.isPreview,
+                            ),
+                          );
+                        },
+                      ),
+                )
+              : RiderDashboardScreen(
+                  onOpenScanner: () => context.push('/rider/scanner'),
+                  onOpenMessages: () => context.push('/rider/messages'),
+                  onOpenNotifications: () =>
+                      context.push('/rider/notifications'),
+                  onViewAllShipments: () => context.go('/rider/assignments'),
+                  onViewParcel: (RiderDashboardParcelData parcel) {
+                    context.push(
+                      '/rider/delivery-details',
+                      extra: RiderDeliveryData(
+                        id: parcel.id,
+                        trackingCode: parcel.trackingCode,
+                        buyerName: parcel.buyerName,
+                        contact: parcel.contact,
+                        address: parcel.address,
+                        amount: parcel.amount,
+                        status: parcel.status,
+                        statusLabel: parcel.statusLabel,
+                        imageUrl: parcel.imageUrl,
+                        deliveryLatitude: parcel.deliveryLatitude,
+                        deliveryLongitude: parcel.deliveryLongitude,
+                        isPreview: parcel.isPreview,
+                      ),
+                    );
+                  },
                 ),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/notifications',
+      name: 'rider-notifications',
+      builder: (BuildContext context, GoRouterState state) {
+        return _riderNavigationFrame(
+          context,
+          currentIndex: 0,
+          child: FutureBuilder<List<BuyerNotificationData>>(
+            future: AppConfig.apiEnabled
+                ? RiderMobileService.fetchNotifications()
+                : Future<List<BuyerNotificationData>>.value(
+                    const <BuyerNotificationData>[],
+                  ),
+            builder: (
+              BuildContext context,
+              AsyncSnapshot<List<BuyerNotificationData>> snapshot,
+            ) {
+              return NotificationsScreen(
+                notifications: snapshot.data ?? const <BuyerNotificationData>[],
+                onBack: () => safeBack(context, fallback: '/rider/dashboard'),
+                onRefresh: AppConfig.apiEnabled
+                    ? RiderMobileService.fetchNotifications
+                    : null,
+                onMarkAllAsRead: AppConfig.apiEnabled
+                    ? RiderMobileService.markAllNotificationsRead
+                    : null,
               );
             },
           ),
@@ -603,11 +1322,40 @@ final GoRouter appRouter = GoRouter(
         return _riderNavigationFrame(
           context,
           currentIndex: 1,
-          child: RiderDeliveriesScreen(
-            onViewDelivery: (RiderDeliveryData delivery) {
-              context.push('/rider/delivery-details', extra: delivery);
-            },
-          ),
+          child: AppConfig.apiEnabled
+              ? RiderApiLoader<RiderAssignmentsSnapshot>(
+                  load: RiderMobileService.fetchAssignments,
+                  refreshInterval: const Duration(seconds: 15),
+                  builder:
+                      (
+                        BuildContext context,
+                        RiderAssignmentsSnapshot? data,
+                        Object? error,
+                        Future<void> Function() refresh,
+                      ) => RiderDeliveriesScreen(
+                        deliveries:
+                            data?.deliveries ?? const <RiderDeliveryData>[],
+                        stats: data?.stats,
+                        statusMessage: error?.toString(),
+                        showPreviewWhenEmpty: false,
+                        onRefresh: refresh,
+                        onBack: () =>
+                            safeBack(context, fallback: '/rider/dashboard'),
+                        onViewDelivery: (RiderDeliveryData delivery) {
+                          context.push(
+                            '/rider/delivery-details',
+                            extra: delivery,
+                          );
+                        },
+                      ),
+                )
+              : RiderDeliveriesScreen(
+                  onBack: () =>
+                      safeBack(context, fallback: '/rider/dashboard'),
+                  onViewDelivery: (RiderDeliveryData delivery) {
+                    context.push('/rider/delivery-details', extra: delivery);
+                  },
+                ),
         );
       },
     ),
@@ -619,11 +1367,40 @@ final GoRouter appRouter = GoRouter(
         return _riderNavigationFrame(
           context,
           currentIndex: 1,
-          child: RiderPickupsScreen(
-            onViewPickup: (RiderPickupData pickup) {
-              context.push('/rider/pickup-details', extra: pickup);
-            },
-          ),
+          child: AppConfig.apiEnabled
+              ? RiderApiLoader<RiderPickupsSnapshot>(
+                  load: RiderMobileService.fetchPickups,
+                  builder:
+                      (
+                        BuildContext context,
+                        RiderPickupsSnapshot? data,
+                        Object? error,
+                        Future<void> Function() refresh,
+                      ) => RiderPickupsScreen(
+                        pickups: data?.pickups ?? const <RiderPickupData>[],
+                        stats:
+                            data?.stats ??
+                            const RiderPickupStatsData(
+                              ready: 0,
+                              accepted: 0,
+                              pickedUp: 0,
+                            ),
+                        statusMessage: error?.toString(),
+                        onRefresh: refresh,
+                        onViewDeliveries: () =>
+                            context.push('/rider/assignments'),
+                        onViewPickup: (RiderPickupData pickup) {
+                          context.push('/rider/pickup-details', extra: pickup);
+                        },
+                      ),
+                )
+              : RiderPickupsScreen(
+                  onViewDeliveries: () =>
+                      context.push('/rider/assignments'),
+                  onViewPickup: (RiderPickupData pickup) {
+                    context.push('/rider/pickup-details', extra: pickup);
+                  },
+                ),
         );
       },
     ),
@@ -650,6 +1427,12 @@ final GoRouter appRouter = GoRouter(
           context,
           child: RiderPickupDetailsScreen(
             pickup: extra,
+            onVerifyTracking: AppConfig.apiEnabled
+                ? RiderMobileService.verifyPickup
+                : null,
+            onTransition: AppConfig.apiEnabled
+                ? RiderMobileService.transitionPickup
+                : null,
             onBack: () => safeBack(context, fallback: '/rider/pickups'),
             onBackToPickups: () => context.go('/rider/pickups'),
           ),
@@ -664,7 +1447,59 @@ final GoRouter appRouter = GoRouter(
         return _riderNavigationFrame(
           context,
           currentIndex: 2,
-          child: const RiderHistoryScreen(),
+          child: AppConfig.apiEnabled
+              ? RiderApiLoader<List<RiderHistoryData>>(
+                  load: RiderMobileService.fetchHistory,
+                  builder:
+                      (
+                        BuildContext context,
+                        List<RiderHistoryData>? data,
+                        Object? error,
+                        Future<void> Function() refresh,
+                      ) => RiderHistoryScreen(
+                        history: data ?? const <RiderHistoryData>[],
+                        statusMessage: error?.toString(),
+                        onRefresh: refresh,
+                      ),
+                )
+              : const RiderHistoryScreen(),
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/rider/messages',
+      name: 'rider-messages',
+      builder: (BuildContext context, GoRouterState state) {
+        return _riderNavigationFrame(
+          context,
+          currentIndex: -1,
+          child: AppConfig.apiEnabled
+              ? RiderApiLoader<List<RiderConversationData>>(
+                  load: RiderMobileService.fetchConversations,
+                  builder:
+                      (
+                        BuildContext context,
+                        List<RiderConversationData>? data,
+                        Object? error,
+                        Future<void> Function() refresh,
+                      ) => RiderMessagesScreen(
+                        conversations:
+                            data ?? const <RiderConversationData>[],
+                        onRefresh: RiderMobileService.fetchConversations,
+                        onLoadMessages: RiderMobileService.fetchMessages,
+                        onSendMessage: RiderMobileService.sendMessage,
+                        messageStreamBuilder:
+                            RiderMobileService.watchMessages,
+                        statusMessage: error?.toString(),
+                        onBack: () =>
+                            safeBack(context, fallback: '/rider/dashboard'),
+                      ),
+                )
+              : RiderMessagesScreen(
+                  onBack: () =>
+                      safeBack(context, fallback: '/rider/dashboard'),
+                ),
         );
       },
     ),
@@ -676,7 +1511,26 @@ final GoRouter appRouter = GoRouter(
         return _riderNavigationFrame(
           context,
           currentIndex: 3,
-          child: const RiderEarningsScreen(),
+          child: AppConfig.apiEnabled
+              ? RiderApiLoader<RiderEarningsSnapshot>(
+                  load: RiderMobileService.fetchEarnings,
+                  builder:
+                      (
+                        BuildContext context,
+                        RiderEarningsSnapshot? data,
+                        Object? error,
+                        Future<void> Function() refresh,
+                      ) => RiderEarningsScreen(
+                        earningsRows:
+                            data?.rows ?? const <RiderEarningRowData>[],
+                        earningsNotice:
+                            error?.toString() ??
+                            data?.notice ??
+                            'No earnings records are available.',
+                        onRefresh: refresh,
+                      ),
+                )
+              : const RiderEarningsScreen(),
         );
       },
     ),
@@ -688,44 +1542,69 @@ final GoRouter appRouter = GoRouter(
         return _riderNavigationFrame(
           context,
           currentIndex: 4,
-          child: FutureBuilder<AuthUserModel>(
-            future: AuthService.getCurrentUser(),
-            builder:
-                (BuildContext context, AsyncSnapshot<AuthUserModel> snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
-                    );
-                  }
+          child: AppConfig.apiEnabled
+              ? RiderApiLoader<RiderProfileData>(
+                  load: RiderMobileService.fetchProfile,
+                  builder:
+                      (
+                        BuildContext context,
+                        RiderProfileData? data,
+                        Object? error,
+                        Future<void> Function() refresh,
+                      ) => RiderProfileScreen(
+                        profile: data,
+                        statusMessage: error?.toString(),
+                        onRefresh: refresh,
+                        onLogout: () async {
+                          await AuthService.logout();
+                          if (context.mounted) {
+                            context.go('/login');
+                          }
+                        },
+                      ),
+                )
+              : FutureBuilder<AuthUserModel>(
+                  future: AuthService.getCurrentUser(),
+                  builder:
+                      (
+                        BuildContext context,
+                        AsyncSnapshot<AuthUserModel> snapshot,
+                      ) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Scaffold(
+                            body: Center(child: CircularProgressIndicator()),
+                          );
+                        }
 
-                  final AuthUserModel? user = snapshot.data;
+                        final AuthUserModel? user = snapshot.data;
 
-                  return RiderProfileScreen(
-                    profile: user == null
-                        ? null
-                        : RiderProfileData(
-                            id: user.id,
-                            name: user.name,
-                            email: user.email ?? 'Not recorded',
-                            contactNumber:
-                                user.contactNumber ?? 'Not recorded',
-                            birthday: 'Not recorded',
-                            sex: 'Not recorded',
-                            address: 'Not recorded',
-                            vehicleType: 'Not recorded',
-                            plateNumber: 'Not recorded',
-                            status: user.status ?? 'Active',
-                            primaryRole: 'Rider',
-                          ),
-                    onLogout: () async {
-                      await AuthService.logout();
-                      if (context.mounted) {
-                        context.go('/login');
-                      }
-                    },
-                  );
-                },
-          ),
+                        return RiderProfileScreen(
+                          profile: user == null
+                              ? null
+                              : RiderProfileData(
+                                  id: user.id,
+                                  name: user.name,
+                                  email: user.email ?? 'Not recorded',
+                                  contactNumber:
+                                      user.contactNumber ?? 'Not recorded',
+                                  birthday: 'Not recorded',
+                                  sex: 'Not recorded',
+                                  address: 'Not recorded',
+                                  vehicleType: 'Not recorded',
+                                  plateNumber: 'Not recorded',
+                                  status: user.status ?? 'Active',
+                                  primaryRole: 'Rider',
+                                ),
+                          onLogout: () async {
+                            await AuthService.logout();
+                            if (context.mounted) {
+                              context.go('/login');
+                            }
+                          },
+                        );
+                      },
+                ),
         );
       },
     ),
@@ -743,6 +1622,10 @@ final GoRouter appRouter = GoRouter(
           context,
           child: RiderDeliveryDetailsScreen(
             delivery: delivery,
+            showPreviewWhenNull: !AppConfig.apiEnabled,
+            onTransition: AppConfig.apiEnabled
+                ? RiderMobileService.transitionDelivery
+                : null,
             onBackToDeliveries: () {
               if (context.canPop()) {
                 context.pop();
@@ -751,10 +1634,7 @@ final GoRouter appRouter = GoRouter(
               }
             },
             onViewTracking: (RiderDeliveryData selectedDelivery) {
-              context.push(
-                '/rider/delivery-tracking',
-                extra: selectedDelivery,
-              );
+              context.push('/rider/delivery-tracking', extra: selectedDelivery);
             },
           ),
         );
@@ -771,6 +1651,10 @@ final GoRouter appRouter = GoRouter(
           context,
           child: RiderDeliveryTrackingScreen(
             delivery: extra is RiderDeliveryData ? extra : null,
+            showPreviewWhenNull: !AppConfig.apiEnabled,
+            onTransition: AppConfig.apiEnabled
+                ? RiderMobileService.transitionDelivery
+                : null,
             onOpenDetails: (RiderDeliveryData delivery) {
               context.push('/rider/delivery-details', extra: delivery);
             },

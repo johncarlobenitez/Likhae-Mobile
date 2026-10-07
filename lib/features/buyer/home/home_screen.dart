@@ -1,12 +1,11 @@
-﻿import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/services/product_service.dart';
 import 'package:likhae/shared/widgets/buyer_navigation.dart';
 
 typedef BuyerHomeProductCallback = void Function(BuyerHomeProduct product);
-typedef BuyerHomeWishlistCallback = Future<void> Function(BuyerHomeProduct product);
+typedef BuyerHomeWishlistCallback =
+    Future<void> Function(BuyerHomeProduct product);
 typedef BuyerHomeCategoryCallback = void Function(String categorySlug);
 typedef BuyerHomeRefreshCallback = Future<void> Function();
 
@@ -17,7 +16,9 @@ class BuyerHomeProduct {
   final String? category;
   final String? sellerName;
   final String? sellerSlug;
+  final int? sellerUserId;
   final String? imageUrl;
+  final List<String> imageUrls;
   final double price;
   final double? originalPrice;
   final double? rating;
@@ -35,7 +36,9 @@ class BuyerHomeProduct {
     this.category,
     this.sellerName,
     this.sellerSlug,
+    this.sellerUserId,
     this.imageUrl,
+    this.imageUrls = const <String>[],
     this.originalPrice,
     this.rating,
     this.soldCount = 0,
@@ -60,31 +63,121 @@ class BuyerHomeProduct {
   static BuyerHomeProduct fromApi(Map<String, dynamic> json) {
     final dynamic rawId = json['id'] ?? json['db_id'];
     final dynamic rawName = json['name'];
-    final dynamic rawPrice = json['price'];
+    final dynamic rawPrice = json['price'] ?? json['min_price'];
     if (rawId == null || rawName == null || rawPrice == null) {
       return const BuyerHomeProduct(id: 0, name: 'Unknown product', price: 0);
     }
 
-    final String imageValue = (json['image_url'] ?? json['image'] ?? '').toString();
-    final String sellerValue = (json['seller'] ?? json['seller_name'] ?? '').toString();
+    final dynamic rawImage = json['primary_image'];
+    final Map<String, dynamic>? primaryImage = rawImage is Map
+        ? Map<String, dynamic>.from(rawImage)
+        : null;
+    final dynamic rawSeller = json['seller'];
+    final Map<String, dynamic>? seller = rawSeller is Map
+        ? Map<String, dynamic>.from(rawSeller)
+        : null;
+    final dynamic rawCategory = json['category'];
+    final Map<String, dynamic>? category = rawCategory is Map
+        ? Map<String, dynamic>.from(rawCategory)
+        : null;
+    final String imageValue = (json['image_url'] ??
+            json['image'] ??
+            primaryImage?['url'] ??
+            primaryImage?['file_path'] ??
+            '')
+        .toString()
+        .trim();
+    final List<String> galleryImages = _parseImageUrls(
+      json['images'] ?? json['gallery'] ?? json['photos'],
+    );
+    final List<String> resolvedImages = <String>[];
+    for (final String value in <String>[imageValue, ...galleryImages]) {
+      final String resolved = AppConfig.resolveMediaUrl(value);
+      if (resolved.isNotEmpty && !resolvedImages.contains(resolved)) {
+        resolvedImages.add(resolved);
+      }
+    }
+    final String sellerValue =
+        (seller?['business_name'] ??
+                json['seller_name'] ??
+                (rawSeller is String ? rawSeller : ''))
+            .toString();
 
     return BuyerHomeProduct(
       id: int.tryParse(rawId.toString()) ?? 0,
       name: rawName.toString(),
       slug: (json['slug'] ?? '').toString(),
-      category: (json['category'] ?? json['parent_category'] ?? '').toString(),
+      category:
+          (category?['name'] ?? json['parent_category'] ?? json['category'] ?? '')
+              .toString(),
       sellerName: sellerValue.isEmpty ? null : sellerValue,
-      imageUrl: imageValue.isEmpty ? null : AppConfig.resolveMediaUrl(imageValue),
+      sellerUserId: int.tryParse(
+        (seller?['user_id'] ?? json['seller_user_id'] ?? '').toString(),
+      ),
+      imageUrl: resolvedImages.isEmpty
+          ? null
+          : resolvedImages.first,
+      imageUrls: resolvedImages,
       price: double.tryParse(rawPrice.toString()) ?? 0,
-      originalPrice: double.tryParse((json['old_price'] ?? json['original_price'])?.toString() ?? '') ??
-          double.tryParse((json['old_price'] ?? json['original_price'])?.toString() ?? ''),
+      originalPrice:
+          double.tryParse(
+            (json['old_price'] ?? json['original_price'])?.toString() ?? '',
+          ),
       rating: double.tryParse((json['rating'] ?? '0').toString()),
-      soldCount: int.tryParse((json['sold'] ?? json['sold_count'] ?? '0').toString()) ?? 0,
-      stock: int.tryParse((json['stock'] ?? json['variant_stock'] ?? '0').toString()) ?? 0,
+      soldCount:
+          int.tryParse(
+            (json['sold'] ?? json['sold_count'] ?? '0').toString(),
+          ) ??
+          0,
+      stock:
+          int.tryParse(
+            (json['stock'] ?? json['variant_stock'] ?? '0').toString(),
+          ) ??
+          0,
       isFeatured: json['is_featured'] == true,
       isRecommended: json['is_recommended'] == true,
       wishlisted: json['wishlisted'] == true,
     );
+  }
+
+  static List<String> _parseImageUrls(dynamic value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+
+    final List<String> urls = <String>[];
+    for (final dynamic item in value) {
+      String raw = '';
+      if (item is Map) {
+        final Map<String, dynamic> image = Map<String, dynamic>.from(item);
+        raw = (image['url'] ??
+                image['image_url'] ??
+                image['image'] ??
+                image['file_path'] ??
+                image['path'] ??
+                '')
+            .toString();
+      } else if (item != null) {
+        raw = item.toString();
+      }
+
+      final String clean = raw.trim();
+      if (clean.isNotEmpty && !urls.contains(clean)) {
+        urls.add(clean);
+      }
+    }
+    return urls;
+  }
+
+  List<String> get galleryImages {
+    final List<String> images = <String>[];
+    for (final String image in <String>[?imageUrl, ...imageUrls]) {
+      final String clean = image.trim();
+      if (clean.isNotEmpty && !images.contains(clean)) {
+        images.add(clean);
+      }
+    }
+    return images;
   }
 }
 
@@ -93,11 +186,7 @@ class BuyerHomeCategory {
   final String slug;
   final IconData? icon;
 
-  const BuyerHomeCategory({
-    required this.name,
-    required this.slug,
-    this.icon,
-  });
+  const BuyerHomeCategory({required this.name, required this.slug, this.icon});
 }
 
 class BuyerHomeScreen extends StatefulWidget {
@@ -168,16 +257,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   static const Color border = Color(0xFFEADCCC);
   static const Color maroon = Color(0xFF561C17);
   static const Color maroonLight = Color(0xFF7A2A22);
-  static const Color maroonDark = Color(0xFF3E130F);
   static const Color text = Color(0xFF3B211B);
   static const Color brown = Color(0xFF6C4936);
   static const Color muted = Color(0xFF987865);
   static const Color muted2 = Color(0xFFA99386);
   static const Color tan = Color(0xFFC19771);
   static const Color star = Color(0xFFC88418);
-  static const Color danger = Color(0xFFB42318);
-
-  Timer? _timer;
   final Set<int> _wishlistIds = <int>{};
   final Set<int> _wishlistLoading = <int>{};
   List<BuyerHomeProduct> _loadedProducts = <BuyerHomeProduct>[];
@@ -193,13 +278,18 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   Future<void> _loadProducts() async {
     try {
-      final List<BuyerHomeProduct> fetched = await ProductService.fetchHomeProducts();
+      final List<BuyerHomeProduct> fetched =
+          await ProductService.fetchHomeProducts();
       if (!mounted) return;
       setState(() {
         _loadedProducts = fetched;
       });
     } catch (_) {
-      // offline fallback already handled by ProductService
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load products right now.')),
+        );
+      }
     }
   }
 
@@ -244,10 +334,19 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       return _shuffledProducts(widget.featuredProducts).take(4).toList();
     }
 
-    final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[...widget.products, ..._loadedProducts];
-    final List<BuyerHomeProduct> featured = baseProducts.where((BuyerHomeProduct product) => product.isFeatured).toList();
-    if (featured.isNotEmpty) return _shuffledProducts(featured).take(4).toList();
-    if (baseProducts.isNotEmpty) return _shuffledProducts(baseProducts).take(4).toList();
+    final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[
+      ...widget.products,
+      ..._loadedProducts,
+    ];
+    final List<BuyerHomeProduct> featured = baseProducts
+        .where((BuyerHomeProduct product) => product.isFeatured)
+        .toList();
+    if (featured.isNotEmpty) {
+      return _shuffledProducts(featured).take(4).toList();
+    }
+    if (baseProducts.isNotEmpty) {
+      return _shuffledProducts(baseProducts).take(4).toList();
+    }
     return <BuyerHomeProduct>[];
   }
 
@@ -256,10 +355,17 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       return _shuffledProducts(widget.recommendedProducts).take(4).toList();
     }
 
-    final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[...widget.products, ..._loadedProducts];
-    final List<BuyerHomeProduct> recs = baseProducts.where((BuyerHomeProduct product) => product.isRecommended).toList();
+    final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[
+      ...widget.products,
+      ..._loadedProducts,
+    ];
+    final List<BuyerHomeProduct> recs = baseProducts
+        .where((BuyerHomeProduct product) => product.isRecommended)
+        .toList();
     if (recs.isNotEmpty) return _shuffledProducts(recs).take(4).toList();
-    if (baseProducts.isNotEmpty) return _shuffledProducts(baseProducts).take(4).toList();
+    if (baseProducts.isNotEmpty) {
+      return _shuffledProducts(baseProducts).take(4).toList();
+    }
     return <BuyerHomeProduct>[];
   }
 
@@ -267,7 +373,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     if (widget.heroProduct != null) return widget.heroProduct;
     final List<BuyerHomeProduct> featured = _featuredProducts;
     if (featured.isNotEmpty) return featured.first;
-    final List<BuyerHomeProduct> base = <BuyerHomeProduct>[...widget.products, ..._loadedProducts];
+    final List<BuyerHomeProduct> base = <BuyerHomeProduct>[
+      ...widget.products,
+      ..._loadedProducts,
+    ];
     if (base.isNotEmpty) return _shuffledProducts(base).first;
     return null;
   }
@@ -275,7 +384,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   Future<void> _toggleWishlist(BuyerHomeProduct product) async {
     if (_wishlistLoading.contains(product.id)) return;
 
-    final BuyerHomeWishlistCallback? asyncCallback = widget.onWishlistProductAsync;
+    final BuyerHomeWishlistCallback? asyncCallback =
+        widget.onWishlistProductAsync;
     final BuyerHomeProductCallback? syncCallback = widget.onWishlistProduct;
     if (asyncCallback == null && syncCallback == null) {
       return;
@@ -350,7 +460,17 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              const Expanded(child: Text('LIKHAE', style: TextStyle(color: maroon, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2))),
+              const Expanded(
+                child: Text(
+                  'LIKHAE',
+                  style: TextStyle(
+                    color: maroon,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
               const SizedBox(width: 8),
               IconButton(
                 tooltip: 'Notifications',
@@ -384,7 +504,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   Expanded(
                     child: Text(
                       'Search products, categories...',
-                      style: TextStyle(color: muted2, fontSize: 12.5, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: muted2,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                   Icon(Icons.tune_rounded, size: 19, color: brown),
@@ -406,22 +530,38 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         children: <Widget>[
           _buildHero(product),
           const SizedBox(height: 30),
-          _buildHeaderRow('CURATED', 'Featured Products', 'Top picks from trusted sellers.', 'See All', widget.onViewFeatured),
+          _buildHeaderRow(
+            'CURATED',
+            'Featured Products',
+            'Top picks from trusted sellers.',
+            'See All',
+            widget.onViewFeatured,
+          ),
           const SizedBox(height: 12),
           _ProductGrid(
             products: _featuredProducts,
-            isWishlisted: (BuyerHomeProduct product) => _wishlistIds.contains(product.id),
-            isWishlistLoading: (BuyerHomeProduct product) => _wishlistLoading.contains(product.id),
+            isWishlisted: (BuyerHomeProduct product) =>
+                _wishlistIds.contains(product.id),
+            isWishlistLoading: (BuyerHomeProduct product) =>
+                _wishlistLoading.contains(product.id),
             onProductSelected: widget.onProductSelected,
             onWishlistProduct: _toggleWishlist,
           ),
           const SizedBox(height: 30),
-          _buildHeaderRow('FOR YOU', 'Recommended For You', 'Marketplace recommendations selected for this section.', 'See All', widget.onViewRecommended),
+          _buildHeaderRow(
+            'FOR YOU',
+            'Recommended For You',
+            'Marketplace recommendations selected for this section.',
+            'See All',
+            widget.onViewRecommended,
+          ),
           const SizedBox(height: 12),
           _ProductGrid(
             products: _recommendedProducts,
-            isWishlisted: (BuyerHomeProduct product) => _wishlistIds.contains(product.id),
-            isWishlistLoading: (BuyerHomeProduct product) => _wishlistLoading.contains(product.id),
+            isWishlisted: (BuyerHomeProduct product) =>
+                _wishlistIds.contains(product.id),
+            isWishlistLoading: (BuyerHomeProduct product) =>
+                _wishlistLoading.contains(product.id),
             onProductSelected: widget.onProductSelected,
             onWishlistProduct: _toggleWishlist,
           ),
@@ -438,26 +578,59 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFFFFFDF9), Color(0xFFF6EFE7), Color(0xFFEFE7DE)],
+          colors: <Color>[
+            Color(0xFFFFFDF9),
+            Color(0xFFF6EFE7),
+            Color(0xFFEFE7DE),
+          ],
         ),
         border: Border.all(color: border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text('YOUR MARKETPLACE', style: TextStyle(color: maroonLight, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.6)),
+          const Text(
+            'YOUR MARKETPLACE',
+            style: TextStyle(
+              color: maroonLight,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.6,
+            ),
+          ),
           const SizedBox(height: 8),
           Text.rich(
             TextSpan(
               children: <InlineSpan>[
-                const TextSpan(text: 'Discover something\n', style: TextStyle(color: maroon, fontSize: 34, height: 0.98, letterSpacing: -1.1, fontWeight: FontWeight.w700)),
-                TextSpan(text: 'worth keeping.', style: TextStyle(color: maroonLight, fontSize: 34, height: 0.98, letterSpacing: -1.1, fontWeight: FontWeight.w700, fontStyle: FontStyle.italic)),
+                const TextSpan(
+                  text: 'Discover something\n',
+                  style: TextStyle(
+                    color: maroon,
+                    fontSize: 34,
+                    height: 0.98,
+                    letterSpacing: -1.1,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                TextSpan(
+                  text: 'worth keeping.',
+                  style: TextStyle(
+                    color: maroonLight,
+                    fontSize: 34,
+                    height: 0.98,
+                    letterSpacing: -1.1,
+                    fontWeight: FontWeight.w700,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 12),
           Text(
-            product == null ? 'Explore meaningful products from local sellers across LIKHAE.' : product.name,
+            product == null
+                ? 'Explore meaningful products from local sellers across LIKHAE.'
+                : product.name,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: text, fontSize: 12.5, height: 1.5),
@@ -466,10 +639,25 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             const SizedBox(height: 7),
             Row(
               children: <Widget>[
-                Text('₱${product.price.toStringAsFixed(2)}', style: const TextStyle(color: maroon, fontSize: 17, fontWeight: FontWeight.w800)),
-                if (product.originalPrice != null && product.originalPrice! > product.price) ...<Widget>[
+                Text(
+                  '₱${product.price.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: maroon,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (product.originalPrice != null &&
+                    product.originalPrice! > product.price) ...<Widget>[
                   const SizedBox(width: 7),
-                  Text('₱${product.originalPrice!.toStringAsFixed(2)}', style: const TextStyle(color: muted2, fontSize: 10, decoration: TextDecoration.lineThrough)),
+                  Text(
+                    '₱${product.originalPrice!.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: muted2,
+                      fontSize: 10,
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -479,9 +667,22 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             spacing: 9,
             runSpacing: 9,
             children: <Widget>[
-              _PrimaryActionButton(label: 'Shop Now', icon: Icons.arrow_forward_rounded, onTap: widget.onBrowseProducts),
-              _OutlineActionButton(label: 'My Orders', icon: Icons.receipt_long_outlined, onTap: widget.onViewOrders),
-              if (product != null && widget.onProductSelected != null) _OutlineActionButton(label: 'View Product', icon: Icons.visibility_outlined, onTap: () => widget.onProductSelected!(product)),
+              _PrimaryActionButton(
+                label: 'Shop Now',
+                icon: Icons.arrow_forward_rounded,
+                onTap: widget.onBrowseProducts,
+              ),
+              _OutlineActionButton(
+                label: 'My Orders',
+                icon: Icons.receipt_long_outlined,
+                onTap: widget.onViewOrders,
+              ),
+              if (product != null && widget.onProductSelected != null)
+                _OutlineActionButton(
+                  label: 'View Product',
+                  icon: Icons.visibility_outlined,
+                  onTap: () => widget.onProductSelected!(product),
+                ),
             ],
           ),
         ],
@@ -489,7 +690,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     );
   }
 
-  Widget _buildHeaderRow(String kicker, String title, String subtitle, String actionText, VoidCallback? onAction) {
+  Widget _buildHeaderRow(
+    String kicker,
+    String title,
+    String subtitle,
+    String actionText,
+    VoidCallback? onAction,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: <Widget>[
@@ -497,11 +704,35 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(kicker, style: const TextStyle(color: maroon, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+              Text(
+                kicker,
+                style: const TextStyle(
+                  color: maroon,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.5,
+                ),
+              ),
               const SizedBox(height: 5),
-              Text(title, style: const TextStyle(color: text, fontSize: 25, height: 1.03, letterSpacing: -0.7, fontWeight: FontWeight.w700)),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: text,
+                  fontSize: 25,
+                  height: 1.03,
+                  letterSpacing: -0.7,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 7),
-              Text(subtitle, style: const TextStyle(color: muted, fontSize: 10.5, height: 1.45)),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: muted,
+                  fontSize: 10.5,
+                  height: 1.45,
+                ),
+              ),
             ],
           ),
         ),
@@ -510,7 +741,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Text(actionText, style: const TextStyle(color: brown, fontSize: 10.5, fontWeight: FontWeight.w800)),
+              Text(
+                actionText,
+                style: const TextStyle(
+                  color: brown,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const SizedBox(width: 4),
               const Icon(Icons.arrow_forward_rounded, size: 14, color: brown),
             ],
@@ -542,7 +780,8 @@ class _ProductGrid extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         final int columns = constraints.maxWidth < 330 ? 1 : 2;
         const double spacing = 10;
-        final double itemWidth = (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
+        final double itemWidth =
+            (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
 
         return Directionality(
           textDirection: TextDirection.rtl,
@@ -557,7 +796,9 @@ class _ProductGrid extends StatelessWidget {
                   product: product,
                   isWishlisted: isWishlisted(product),
                   wishlistLoading: isWishlistLoading(product),
-                  onTap: onProductSelected == null ? null : () => onProductSelected!(product),
+                  onTap: onProductSelected == null
+                      ? null
+                      : () => onProductSelected!(product),
                   onWishlist: () => onWishlistProduct(product),
                 ),
               );
@@ -607,15 +848,31 @@ class _ProductCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
-                    Container(color: const Color(0xFFF3ECE4), child: _ProductImage(imageUrl: product.imageUrl)),
+                    Container(
+                      color: const Color(0xFFF3ECE4),
+                      child: _ProductGallery(images: product.galleryImages),
+                    ),
                     if (discount != null)
                       Positioned(
                         left: 8,
                         top: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                          decoration: BoxDecoration(color: _BuyerHomeScreenState.maroon, borderRadius: BorderRadius.circular(8)),
-                          child: Text('-${discount.round()}%', style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w800)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _BuyerHomeScreenState.maroon,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '-${discount.round()}%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                       ),
                     Positioned(
@@ -633,9 +890,18 @@ class _ProductCard extends StatelessWidget {
                             child: wishlistLoading
                                 ? const Padding(
                                     padding: EdgeInsets.all(8),
-                                    child: CircularProgressIndicator(strokeWidth: 1.8, color: _BuyerHomeScreenState.maroon),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.8,
+                                      color: _BuyerHomeScreenState.maroon,
+                                    ),
                                   )
-                                : Icon(isWishlisted ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 18, color: _BuyerHomeScreenState.maroon),
+                                : Icon(
+                                    isWishlisted
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    size: 18,
+                                    color: _BuyerHomeScreenState.maroon,
+                                  ),
                           ),
                         ),
                       ),
@@ -646,9 +912,23 @@ class _ProductCard extends StatelessWidget {
                           color: Colors.black.withValues(alpha: 0.42),
                           alignment: Alignment.center,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.64), borderRadius: BorderRadius.circular(8)),
-                            child: const Text('OUT OF STOCK', style: TextStyle(color: Colors.white, fontSize: 8.5, letterSpacing: 0.7, fontWeight: FontWeight.w900)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.64),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'OUT OF STOCK',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                letterSpacing: 0.7,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -660,14 +940,44 @@ class _ProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    if (product.category?.trim().isNotEmpty == true) ...<Widget>[
-                      Text(product.category!.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _BuyerHomeScreenState.brown, fontSize: 7.5, letterSpacing: 0.7, fontWeight: FontWeight.w800)),
+                    if (product.category?.trim().isNotEmpty ==
+                        true) ...<Widget>[
+                      Text(
+                        product.category!.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _BuyerHomeScreenState.brown,
+                          fontSize: 9,
+                          letterSpacing: 0.7,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                       const SizedBox(height: 5),
                     ],
-                    Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _BuyerHomeScreenState.text, fontSize: 11.5, height: 1.3, fontWeight: FontWeight.w800)),
-                    if (product.sellerName?.trim().isNotEmpty == true) ...<Widget>[
+                    Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _BuyerHomeScreenState.text,
+                        fontSize: 13,
+                        height: 1.3,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (product.sellerName?.trim().isNotEmpty ==
+                        true) ...<Widget>[
                       const SizedBox(height: 5),
-                      Text(product.sellerName!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _BuyerHomeScreenState.muted, fontSize: 8.5)),
+                      Text(
+                        product.sellerName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _BuyerHomeScreenState.muted,
+                          fontSize: 10,
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 8),
                     Wrap(
@@ -675,25 +985,65 @@ class _ProductCard extends StatelessWidget {
                       spacing: 4,
                       runSpacing: 3,
                       children: <Widget>[
-                        Text('₱${product.price.toStringAsFixed(2)}', style: const TextStyle(color: _BuyerHomeScreenState.maroon, fontSize: 13.5, fontWeight: FontWeight.w900)),
-                        if (product.originalPrice != null && product.originalPrice! > product.price)
-                          Text('₱${product.originalPrice!.toStringAsFixed(2)}', style: const TextStyle(color: _BuyerHomeScreenState.muted2, fontSize: 8.5, decoration: TextDecoration.lineThrough)),
+                        Text(
+                          '₱${product.price.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: _BuyerHomeScreenState.maroon,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        if (product.originalPrice != null &&
+                            product.originalPrice! > product.price)
+                          Text(
+                            '₱${product.originalPrice!.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              color: _BuyerHomeScreenState.muted2,
+                              fontSize: 9.5,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: <Widget>[
                         if (product.rating != null) ...<Widget>[
-                          const Icon(Icons.star_rounded, color: _BuyerHomeScreenState.star, size: 14),
+                          const Icon(
+                            Icons.star_rounded,
+                            color: _BuyerHomeScreenState.star,
+                            size: 14,
+                          ),
                           const SizedBox(width: 2),
-                          Text(product.rating!.toStringAsFixed(1), style: const TextStyle(color: _BuyerHomeScreenState.text, fontSize: 8.5, fontWeight: FontWeight.w700)),
+                          Text(
+                            product.rating!.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: _BuyerHomeScreenState.text,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                           const SizedBox(width: 5),
                         ],
                         Expanded(
-                          child: Text('${product.soldCount} sold', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _BuyerHomeScreenState.muted, fontSize: 8.5)),
+                          child: Text(
+                            '${product.soldCount} sold',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _BuyerHomeScreenState.muted,
+                              fontSize: 9.5,
+                            ),
+                          ),
                         ),
                         if (product.stock != null && !product.isOutOfStock)
-                          Text('${product.stock} left', style: const TextStyle(color: _BuyerHomeScreenState.muted, fontSize: 7.5)),
+                          Text(
+                            '${product.stock} left',
+                            style: const TextStyle(
+                              color: _BuyerHomeScreenState.muted,
+                              fontSize: 9,
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -707,25 +1057,115 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-class _ProductImage extends StatelessWidget {
-  final String? imageUrl;
-  const _ProductImage({required this.imageUrl});
+class _ProductGallery extends StatefulWidget {
+  final List<String> images;
+
+  const _ProductGallery({required this.images});
+
+  @override
+  State<_ProductGallery> createState() => _ProductGalleryState();
+}
+
+class _ProductGalleryState extends State<_ProductGallery> {
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final String? url = imageUrl?.trim();
-    if (url == null || url.isEmpty) {
-      return const Center(child: Icon(Icons.inventory_2_outlined, size: 34, color: _BuyerHomeScreenState.muted2));
+    final List<String> images = widget.images;
+    if (images.isEmpty) {
+      return const Center(
+        child: Icon(
+          Icons.inventory_2_outlined,
+          size: 34,
+          color: _BuyerHomeScreenState.muted2,
+        ),
+      );
     }
 
-    final String resolvedUrl = AppConfig.resolveMediaUrl(url);
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        PageView.builder(
+          itemCount: images.length,
+          onPageChanged: (int index) {
+            if (mounted) {
+              setState(() => _currentIndex = index);
+            }
+          },
+          itemBuilder: (BuildContext context, int index) {
+            return _ProductImage(url: images[index]);
+          },
+        ),
+        if (images.length > 1)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 8,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List<Widget>.generate(images.length, (int index) {
+                final bool active = index == _currentIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: active ? 14 : 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? _BuyerHomeScreenState.maroon
+                        : _BuyerHomeScreenState.muted2.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProductImage extends StatelessWidget {
+  final String url;
+
+  const _ProductImage({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final String imageUrl = url.trim();
+    if (imageUrl.isEmpty) {
+      return const Center(
+        child: Icon(
+          Icons.inventory_2_outlined,
+          size: 34,
+          color: _BuyerHomeScreenState.muted2,
+        ),
+      );
+    }
+
     return Image.network(
-      resolvedUrl,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, size: 34, color: _BuyerHomeScreenState.muted2)),
+      imageUrl,
+      fit: BoxFit.contain,
+      alignment: Alignment.center,
+      errorBuilder: (_, _, _) => const Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          size: 34,
+          color: _BuyerHomeScreenState.muted2,
+        ),
+      ),
       loadingBuilder: (_, child, progress) {
         if (progress == null) return child;
-        return const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: _BuyerHomeScreenState.maroon)));
+        return const Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _BuyerHomeScreenState.maroon,
+            ),
+          ),
+        );
       },
     );
   }
@@ -736,7 +1176,11 @@ class _PrimaryActionButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  const _PrimaryActionButton({required this.label, required this.icon, required this.onTap});
+  const _PrimaryActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -744,10 +1188,21 @@ class _PrimaryActionButton extends StatelessWidget {
       height: 45,
       child: ElevatedButton.icon(
         onPressed: onTap,
-        style: ElevatedButton.styleFrom(elevation: 0, backgroundColor: _BuyerHomeScreenState.maroon, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: _BuyerHomeScreenState.maroon,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
         iconAlignment: IconAlignment.end,
         icon: Icon(icon, size: 16),
-        label: Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }
@@ -758,7 +1213,11 @@ class _OutlineActionButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
 
-  const _OutlineActionButton({required this.label, required this.icon, required this.onTap});
+  const _OutlineActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -766,9 +1225,19 @@ class _OutlineActionButton extends StatelessWidget {
       height: 45,
       child: OutlinedButton.icon(
         onPressed: onTap,
-        style: OutlinedButton.styleFrom(foregroundColor: _BuyerHomeScreenState.maroon, padding: const EdgeInsets.symmetric(horizontal: 15), side: const BorderSide(color: _BuyerHomeScreenState.tan), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _BuyerHomeScreenState.maroon,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          side: const BorderSide(color: _BuyerHomeScreenState.tan),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
         icon: Icon(icon, size: 16),
-        label: Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }

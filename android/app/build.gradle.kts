@@ -44,6 +44,11 @@ android {
     }
 }
 
+dependencies {
+    // Required by mapbox_navigation_sdk to keep its Kotlin runtime aligned.
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.9.24"))
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

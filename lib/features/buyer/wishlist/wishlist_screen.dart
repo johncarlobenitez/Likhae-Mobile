@@ -7,7 +7,8 @@ typedef WishlistProductCallback = Future<void> Function(
 
 typedef WishlistClearCallback = Future<void> Function();
 
-typedef WishlistRefreshCallback = Future<void> Function();
+typedef WishlistRefreshCallback =
+    Future<List<WishlistProduct>> Function();
 
 typedef WishlistProductSelectedCallback = void Function(
   WishlistProduct product,
@@ -23,6 +24,7 @@ class WishlistProduct {
 
   final String? sellerName;
   final String? sellerSlug;
+  final int? sellerUserId;
 
   final String? imageUrl;
 
@@ -58,6 +60,7 @@ class WishlistProduct {
     this.category,
     this.sellerName,
     this.sellerSlug,
+    this.sellerUserId,
     this.imageUrl,
     this.originalPrice,
     this.rating,
@@ -628,7 +631,11 @@ class _WishlistScreenState
     }
 
     try {
-      await callback();
+      final List<WishlistProduct> refreshed = await callback();
+      if (!mounted) return;
+      setState(() {
+        _wishlist = List<WishlistProduct>.from(refreshed);
+      });
     } catch (error) {
       _showMessage(
         _errorText(
@@ -2324,7 +2331,7 @@ class _WishlistProductCard
                               color:
                                   Colors.white,
                               fontSize:
-                                  8,
+                                  10,
                               fontWeight:
                                   FontWeight.w800,
                             ),
@@ -2430,7 +2437,7 @@ class _WishlistProductCard
                                 color:
                                     Colors.white,
                                 fontSize:
-                                    8.5,
+                                      10,
                                 letterSpacing:
                                     0.7,
                                 fontWeight:
@@ -2474,7 +2481,7 @@ class _WishlistProductCard
                             0xFF6C4936,
                           ),
                           fontSize:
-                              7.5,
+                              9,
                           letterSpacing:
                               0.7,
                           fontWeight:
@@ -2501,7 +2508,7 @@ class _WishlistProductCard
                           0xFF3B211B,
                         ),
                         fontSize:
-                            11.5,
+                            13,
                         height:
                             1.25,
                         fontWeight:
@@ -2531,7 +2538,7 @@ class _WishlistProductCard
                             0xFF987865,
                           ),
                           fontSize:
-                              8.5,
+                              10,
                         ),
                       ),
                     ],
@@ -2560,7 +2567,7 @@ class _WishlistProductCard
                               0xFF561C17,
                             ),
                             fontSize:
-                                13,
+                                15,
                             fontWeight:
                                 FontWeight.w900,
                           ),
@@ -2581,7 +2588,7 @@ class _WishlistProductCard
                                 0xFFA99386,
                               ),
                               fontSize:
-                                  8,
+                                  9.5,
                               decoration:
                                   TextDecoration.lineThrough,
                             ),
@@ -2625,7 +2632,7 @@ class _WishlistProductCard
                                 0xFF3B211B,
                               ),
                               fontSize:
-                                  8,
+                                  9.5,
                               fontWeight:
                                   FontWeight.w700,
                             ),
@@ -2647,7 +2654,7 @@ class _WishlistProductCard
                                   0xFF987865,
                                 ),
                                 fontSize:
-                                    7.5,
+                                    9,
                               ),
                             ),
                           ],
@@ -2673,7 +2680,7 @@ class _WishlistProductCard
                                 0xFF987865,
                               ),
                               fontSize:
-                                  8,
+                                  9.5,
                             ),
                           ),
                         ),
@@ -2691,7 +2698,7 @@ class _WishlistProductCard
                                 0xFF987865,
                               ),
                               fontSize:
-                                  7.5,
+                                  9,
                             ),
                           ),
                       ],

@@ -7,6 +7,8 @@ class CheckoutScreen extends StatefulWidget {
     required this.items,
     required this.addresses,
     required this.couriersBySeller,
+    this.appliedVoucherCodes = const <int, String>{},
+    this.requireCourierSelection = true,
     this.defaultAddressId,
     this.initialRecipientName = '',
     this.initialContactNumber = '',
@@ -18,6 +20,8 @@ class CheckoutScreen extends StatefulWidget {
   final List<CheckoutItemData> items;
   final List<CheckoutAddressData> addresses;
   final Map<int, List<CheckoutCourierOption>> couriersBySeller;
+  final Map<int, String> appliedVoucherCodes;
+  final bool requireCourierSelection;
   final int? defaultAddressId;
   final String initialRecipientName;
   final String initialContactNumber;
@@ -38,7 +42,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   static const Color _primary = Color(0xFF6F2017);
   static const Color _primaryDark = Color(0xFF541711);
   static const Color _danger = Color(0xFFB42318);
-  static const Color _dangerBg = Color(0xFFFFEFEA);
   static const Color _disabled = Color(0xFFD8CCC3);
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
@@ -95,7 +98,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _recipientController.dispose();
     _contactController.dispose();
 
-    for (final TextEditingController controller in _shopNoteControllers.values) {
+    for (final TextEditingController controller
+        in _shopNoteControllers.values) {
       controller.dispose();
     }
 
@@ -125,13 +129,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   void _syncShopState() {
-    final Set<int> sellerIds = widget.items.map((CheckoutItemData e) => e.sellerId).toSet();
+    final Set<int> sellerIds = widget.items
+        .map((CheckoutItemData e) => e.sellerId)
+        .toSet();
 
     for (final int sellerId in sellerIds) {
-      _shopNoteControllers.putIfAbsent(
-        sellerId,
-        () => TextEditingController(),
-      );
+      _shopNoteControllers.putIfAbsent(sellerId, () => TextEditingController());
 
       _selectedCouriers.putIfAbsent(sellerId, () => null);
 
@@ -141,7 +144,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final int? currentSelected = _selectedCouriers[sellerId];
 
       if (currentSelected != null &&
-          !options.any((CheckoutCourierOption item) => item.id == currentSelected)) {
+          !options.any(
+            (CheckoutCourierOption item) => item.id == currentSelected,
+          )) {
         _selectedCouriers[sellerId] = null;
       }
     }
@@ -157,7 +162,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Map<int, List<CheckoutItemData>> get _groupedItems {
-    final Map<int, List<CheckoutItemData>> grouped = <int, List<CheckoutItemData>>{};
+    final Map<int, List<CheckoutItemData>> grouped =
+        <int, List<CheckoutItemData>>{};
 
     for (final CheckoutItemData item in widget.items) {
       grouped.putIfAbsent(item.sellerId, () => <CheckoutItemData>[]).add(item);
@@ -184,6 +190,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   bool get _hasMissingCourierAvailability {
+    if (!widget.requireCourierSelection) {
+      return false;
+    }
+
     for (final int sellerId in _groupedItems.keys) {
       final List<CheckoutCourierOption> options =
           widget.couriersBySeller[sellerId] ?? const <CheckoutCourierOption>[];
@@ -195,6 +205,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   bool get _hasUnselectedCouriers {
+    if (!widget.requireCourierSelection) {
+      return false;
+    }
+
     for (final int sellerId in _groupedItems.keys) {
       final List<CheckoutCourierOption> options =
           widget.couriersBySeller[sellerId] ?? const <CheckoutCourierOption>[];
@@ -251,7 +265,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     final Map<int, String> notes = <int, String>{};
-    for (final MapEntry<int, TextEditingController> entry in _shopNoteControllers.entries) {
+    for (final MapEntry<int, TextEditingController> entry
+        in _shopNoteControllers.entries) {
       final String note = entry.value.text.trim();
       if (note.isNotEmpty) {
         notes[entry.key] = note;
@@ -278,19 +293,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!mounted) return;
       _showSnack(error.toString());
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _submitting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+        });
+      }
     }
   }
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _handleBack() {
@@ -423,7 +437,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             const SizedBox(height: 14),
             _buildAddressCard(),
             const SizedBox(height: 14),
-            ..._buildSellerSections(),
+            if (widget.requireCourierSelection) ..._buildSellerSections(),
             _buildPaymentCard(),
             const SizedBox(height: 14),
             _buildSummaryCard(showButton: false),
@@ -455,7 +469,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         const SizedBox(height: 16),
                         _buildAddressCard(),
                         const SizedBox(height: 16),
-                        ..._buildSellerSections(),
+                        if (widget.requireCourierSelection)
+                          ..._buildSellerSections(),
                         _buildPaymentCard(),
                       ],
                     ),
@@ -483,7 +498,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3E7DD),
                   borderRadius: BorderRadius.circular(999),
@@ -511,11 +529,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const SizedBox(height: 8),
               const Text(
                 'Confirm recipient details, delivery address, and payment method.',
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 14,
-                  height: 1.45,
-                ),
+                style: TextStyle(color: _muted, fontSize: 14, height: 1.45),
               ),
             ],
           ),
@@ -528,7 +542,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               foregroundColor: _primary,
               side: const BorderSide(color: Color(0xFFC49A7A)),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
             child: const Text(
               'Back to Cart',
@@ -619,7 +635,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     return _CheckoutCard(
       title: 'Delivery address',
-      subtitle: 'Confirm the complete address where the order should be delivered.',
+      subtitle:
+          'Confirm the complete address where the order should be delivered.',
       leadingIcon: Icons.location_on_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -627,12 +644,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           if (widget.addresses.isEmpty)
             _InfoBanner(
               icon: Icons.location_off_outlined,
-              text: 'No delivery address is available. Add an address before placing an order.',
+              text:
+                  'No delivery address is available. Add an address before placing an order.',
               danger: true,
             )
           else ...[
             DropdownButtonFormField<int>(
-              value: _selectedAddressId,
+              initialValue: _selectedAddressId,
               isExpanded: true,
               menuMaxHeight: 340,
               decoration: _inputDecoration(
@@ -680,7 +698,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   List<Widget> _buildSellerSections() {
     final List<Widget> widgets = <Widget>[];
 
-    for (final MapEntry<int, List<CheckoutItemData>> entry in _groupedItems.entries) {
+    for (final MapEntry<int, List<CheckoutItemData>> entry
+        in _groupedItems.entries) {
       final int sellerId = entry.key;
       final List<CheckoutItemData> shopItems = entry.value;
       final String sellerName = shopItems.first.seller;
@@ -695,7 +714,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               DropdownButtonFormField<int>(
-                value: _selectedCouriers[sellerId],
+                initialValue: _selectedCouriers[sellerId],
                 isExpanded: true,
                 menuMaxHeight: 340,
                 decoration: _inputDecoration(
@@ -822,10 +841,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (int index = 0; index < widget.items.length; index++) ...[
-            _SummaryItem(
-              item: widget.items[index],
-              pesoFormatter: _peso,
-            ),
+            _SummaryItem(item: widget.items[index], pesoFormatter: _peso),
             if (index < widget.items.length - 1)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
@@ -833,6 +849,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
           ],
           const SizedBox(height: 16),
+          if (widget.appliedVoucherCodes.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1E4D7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Voucher applied: ${widget.appliedVoucherCodes.values.join(', ')}',
+                style: const TextStyle(
+                  color: _primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           const Divider(height: 1, color: _border),
           const SizedBox(height: 14),
           Row(
@@ -840,10 +874,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const Expanded(
                 child: Text(
                   'Product total',
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: _muted, fontSize: 13),
                 ),
               ),
               Text(
@@ -859,11 +890,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           const SizedBox(height: 10),
           const Text(
             'Courier fees are recalculated securely when you place the order.',
-            style: TextStyle(
-              color: _muted,
-              fontSize: 12,
-              height: 1.45,
-            ),
+            style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
           ),
           if (showButton) ...[
             const SizedBox(height: 18),
@@ -911,7 +938,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           border: const Border(top: BorderSide(color: _border)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 22,
               offset: const Offset(0, -8),
             ),
@@ -926,10 +953,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 children: [
                   const Text(
                     'Product total',
-                    style: TextStyle(
-                      color: _muted,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: _muted, fontSize: 11),
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -1020,10 +1044,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const Text(
                 'Add a product before checking out.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: _muted, fontSize: 13),
               ),
               const SizedBox(height: 18),
               OutlinedButton.icon(
@@ -1063,10 +1084,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         fontSize: 12,
         fontWeight: FontWeight.w600,
       ),
-      hintStyle: const TextStyle(
-        color: Color(0xFFB59F92),
-        fontSize: 13,
-      ),
+      hintStyle: const TextStyle(color: Color(0xFFB59F92), fontSize: 13),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: _border),
@@ -1122,7 +1140,7 @@ class _CheckoutCard extends StatelessWidget {
         border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
+            color: Colors.black.withValues(alpha: 0.035),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -1143,11 +1161,7 @@ class _CheckoutCard extends StatelessWidget {
                       color: _surfaceSoft,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(
-                      leadingIcon,
-                      size: 19,
-                      color: _primary,
-                    ),
+                    child: Icon(leadingIcon, size: 19, color: _primary),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -1268,14 +1282,16 @@ class _PaymentOptionTile extends StatelessWidget {
         color: selected ? _primaryBg : _disabledBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: selected ? _primary.withOpacity(0.65) : _border,
+          color: selected ? _primary.withValues(alpha: 0.65) : _border,
         ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+            selected
+                ? Icons.radio_button_checked_rounded
+                : Icons.radio_button_off_rounded,
             color: selected ? _primary : _disabledText,
             size: 22,
           ),
@@ -1287,7 +1303,9 @@ class _PaymentOptionTile extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    color: enabled ? (selected ? _primary : const Color(0xFF614B41)) : _disabledText,
+                    color: enabled
+                        ? (selected ? _primary : const Color(0xFF614B41))
+                        : _disabledText,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
@@ -1310,10 +1328,7 @@ class _PaymentOptionTile extends StatelessWidget {
 }
 
 class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({
-    required this.item,
-    required this.pesoFormatter,
-  });
+  const _SummaryItem({required this.item, required this.pesoFormatter});
 
   final CheckoutItemData item;
   final String Function(double) pesoFormatter;
@@ -1374,9 +1389,7 @@ class _SummaryItem extends StatelessWidget {
 }
 
 class _ProductImage extends StatelessWidget {
-  const _ProductImage({
-    required this.imageUrl,
-  });
+  const _ProductImage({required this.imageUrl});
 
   final String? imageUrl;
 
@@ -1386,45 +1399,40 @@ class _ProductImage extends StatelessWidget {
 
     if (url.isEmpty) {
       return const Center(
-        child: Icon(
-          Icons.image_outlined,
-          color: Color(0xFFAA998E),
-        ),
+        child: Icon(Icons.image_outlined, color: Color(0xFFAA998E)),
       );
     }
 
     return Image.network(
       url,
       fit: BoxFit.cover,
-      loadingBuilder: (
-        BuildContext context,
-        Widget child,
-        ImageChunkEvent? loadingProgress,
-      ) {
-        if (loadingProgress == null) {
-          return child;
-        }
+      loadingBuilder:
+          (
+            BuildContext context,
+            Widget child,
+            ImageChunkEvent? loadingProgress,
+          ) {
+            if (loadingProgress == null) {
+              return child;
+            }
 
-        return const Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        );
-      },
-      errorBuilder: (
-        BuildContext context,
-        Object error,
-        StackTrace? stackTrace,
-      ) {
-        return const Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: Color(0xFFAA998E),
-          ),
-        );
-      },
+            return const Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            );
+          },
+      errorBuilder:
+          (BuildContext context, Object error, StackTrace? stackTrace) {
+            return const Center(
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: Color(0xFFAA998E),
+              ),
+            );
+          },
     );
   }
 }
@@ -1504,22 +1512,15 @@ class CheckoutAddressData {
   final bool isDefault;
 
   String get shortAddress {
-    return <String?>[
-      line1,
-      barangay,
-      city,
-      province,
-    ].where((String? value) => value != null && value.trim().isNotEmpty).join(', ');
+    return <String?>[line1, barangay, city, province]
+        .where((String? value) => value != null && value.trim().isNotEmpty)
+        .join(', ');
   }
 
   String get fullAddress {
-    return <String?>[
-      line1,
-      barangay,
-      city,
-      province,
-      postalCode,
-    ].where((String? value) => value != null && value.trim().isNotEmpty).join(', ');
+    return <String?>[line1, barangay, city, province, postalCode]
+        .where((String? value) => value != null && value.trim().isNotEmpty)
+        .join(', ');
   }
 
   factory CheckoutAddressData.fromJson(Map<String, dynamic> json) {
@@ -1588,7 +1589,8 @@ class CheckoutPlaceOrderRequest {
       'contact_number': contactNumber,
       'address_id': addressId,
       'courier': couriersBySeller.map(
-        (int sellerId, int courierId) => MapEntry(sellerId.toString(), courierId),
+        (int sellerId, int courierId) =>
+            MapEntry(sellerId.toString(), courierId),
       ),
       'notes': notesBySeller.map(
         (int sellerId, String note) => MapEntry(sellerId.toString(), note),

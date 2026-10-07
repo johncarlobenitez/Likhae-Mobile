@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/features/buyer/products/products_screen.dart';
 
 enum BuyerOrdersMode { overview, success, details, review, returnRequest }
@@ -75,6 +78,7 @@ class BuyerOrderProductData {
 
   final String? variant;
   final String? imageUrl;
+  final List<String> imageUrls;
 
   final double price;
 
@@ -89,6 +93,7 @@ class BuyerOrderProductData {
     this.productVariationId,
     this.variant,
     this.imageUrl,
+    this.imageUrls = const <String>[],
   });
 
   int get safeQuantity {
@@ -97,6 +102,17 @@ class BuyerOrderProductData {
 
   double get lineTotal {
     return price * safeQuantity;
+  }
+
+  List<String> get galleryImages {
+    final List<String> images = <String>[];
+    for (final String image in <String>[?imageUrl, ...imageUrls]) {
+      final String clean = image.trim();
+      if (clean.isNotEmpty && !images.contains(clean)) {
+        images.add(clean);
+      }
+    }
+    return images;
   }
 }
 
@@ -177,6 +193,8 @@ class BuyerOrderData {
 
   final BuyerOrderLocation? orderLocation;
 
+  final BuyerOrderLocation? riderLocation;
+
   final List<BuyerOrderTimelineEvent> timeline;
 
   final DateTime? createdAt;
@@ -194,6 +212,7 @@ class BuyerOrderData {
   final bool? allowMarkReceived;
   final bool? allowReview;
   final bool? allowReturnRequest;
+  final bool hasActiveReturnRequest;
 
   const BuyerOrderData({
     required this.id,
@@ -209,6 +228,7 @@ class BuyerOrderData {
     this.buyerContact,
     this.tracking,
     this.orderLocation,
+    this.riderLocation,
     this.timeline = const <BuyerOrderTimelineEvent>[],
     this.createdAt,
     this.isPreview = false,
@@ -216,20 +236,33 @@ class BuyerOrderData {
     this.allowMarkReceived,
     this.allowReview,
     this.allowReturnRequest,
+    this.hasActiveReturnRequest = false,
   });
 
   factory BuyerOrderData.fromApi(Map<String, dynamic> json) {
     BuyerOrderLocation? parseLocation(dynamic raw, String label) {
-      if (raw is! Map) {
+      dynamic source = raw;
+      if (source is Map<String, dynamic>) {
+        source = source['location'] ?? source;
+      } else if (source is Map) {
+        source = source['location'] ?? Map<String, dynamic>.from(source);
+      }
+
+      if (source is! Map) {
         return null;
       }
 
-      final Map<String, dynamic> location = Map<String, dynamic>.from(raw);
+      final Map<String, dynamic> location = Map<String, dynamic>.from(source);
       final double? latitude = double.tryParse(
-        (location['latitude'] ?? location['lat'] ?? '').toString(),
+        (location['latitude'] ?? location['lat'] ?? location['y'] ?? '')
+            .toString(),
       );
       final double? longitude = double.tryParse(
-        (location['longitude'] ?? location['lng'] ?? location['lon'] ?? '')
+        (location['longitude'] ??
+                location['lng'] ??
+                location['lon'] ??
+                location['x'] ??
+                '')
             .toString(),
       );
 
@@ -261,6 +294,28 @@ class BuyerOrderData {
                 final Map<String, dynamic> details = nestedProduct is Map
                     ? Map<String, dynamic>.from(nestedProduct)
                     : product;
+                final String? primaryImage = (product['image_url'] ??
+                        details['image_url'] ??
+                        details['image'])
+                    ?.toString();
+                final List<String> galleryImages = _parseOrderImageUrls(
+                  product['images'] ??
+                      details['images'] ??
+                      product['gallery'] ??
+                      details['gallery'] ??
+                      product['photos'] ??
+                      details['photos'],
+                );
+                final List<String> resolvedImages = <String>[];
+                for (final String value in <String>[
+                  ?primaryImage,
+                  ...galleryImages,
+                ]) {
+                  final String resolved = AppConfig.resolveMediaUrl(value);
+                  if (resolved.isNotEmpty && !resolvedImages.contains(resolved)) {
+                    resolvedImages.add(resolved);
+                  }
+                }
 
                 return BuyerOrderProductData(
                   id: (product['id'] ?? details['id'] ?? '').toString(),
@@ -274,11 +329,10 @@ class BuyerOrderData {
                   name: (product['name'] ?? details['name'] ?? 'Product')
                       .toString(),
                   variant: product['variant']?.toString(),
-                  imageUrl:
-                      (product['image_url'] ??
-                              details['image_url'] ??
-                              details['image'])
-                          ?.toString(),
+                  imageUrl: resolvedImages.isEmpty
+                      ? null
+                      : resolvedImages.first,
+                  imageUrls: resolvedImages,
                   price:
                       double.tryParse(
                         (product['price'] ?? product['unit_price'] ?? 0)
@@ -315,7 +369,9 @@ class BuyerOrderData {
       id: (json['id'] ?? json['order_number'] ?? '').toString(),
       status: (json['buyer_status'] ?? backendStatus).toString(),
       backendStatus: backendStatus,
-      statusLabel: (json['status_label'] ?? backendStatus).toString(),
+      statusLabel:
+          (json['buyer_status_label'] ?? json['status_label'] ?? backendStatus)
+              .toString(),
       payment: (json['payment_method'] ?? json['payment'] ?? 'Not specified')
           .toString(),
       paymentStatus: json['payment_status']?.toString(),
@@ -337,11 +393,20 @@ class BuyerOrderData {
             json['current_order_location'],
         'Order location',
       ),
+      riderLocation: parseLocation(
+        json['rider_location'] ??
+            json['driver_location'] ??
+            json['current_rider_location'] ??
+            json['rider'] ??
+            json['driver'],
+        'Rider location',
+      ),
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()),
       allowCancel: json['allow_cancel'] as bool?,
       allowMarkReceived: json['allow_mark_received'] as bool?,
       allowReview: json['allow_review'] as bool?,
       allowReturnRequest: json['allow_return_request'] as bool?,
+      hasActiveReturnRequest: json['has_active_return_request'] == true,
     );
   }
 
@@ -460,10 +525,14 @@ class BuyerOrderData {
     String? backendStatus,
     String? statusLabel,
     String? paymentStatus,
+    BuyerOrderLocation? orderLocation,
+    BuyerOrderLocation? riderLocation,
+    bool clearRiderLocation = false,
     bool? allowCancel,
     bool? allowMarkReceived,
     bool? allowReview,
     bool? allowReturnRequest,
+    bool? hasActiveReturnRequest,
     bool? isPreview,
   }) {
     return BuyerOrderData(
@@ -479,7 +548,10 @@ class BuyerOrderData {
       buyerContact: buyerContact,
       shippingAddress: shippingAddress,
       tracking: tracking,
-      orderLocation: orderLocation,
+      orderLocation: orderLocation ?? this.orderLocation,
+      riderLocation: clearRiderLocation
+          ? null
+          : riderLocation ?? this.riderLocation,
       timeline: timeline,
       createdAt: createdAt,
       isPreview: isPreview ?? this.isPreview,
@@ -487,7 +559,37 @@ class BuyerOrderData {
       allowMarkReceived: allowMarkReceived ?? this.allowMarkReceived,
       allowReview: allowReview ?? this.allowReview,
       allowReturnRequest: allowReturnRequest ?? this.allowReturnRequest,
+      hasActiveReturnRequest:
+          hasActiveReturnRequest ?? this.hasActiveReturnRequest,
     );
+  }
+
+  static List<String> _parseOrderImageUrls(dynamic value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+
+    final List<String> urls = <String>[];
+    for (final dynamic item in value) {
+      String raw = '';
+      if (item is Map) {
+        final Map<String, dynamic> image = Map<String, dynamic>.from(item);
+        raw = (image['url'] ??
+                image['image_url'] ??
+                image['image'] ??
+                image['file_path'] ??
+                image['path'] ??
+                '')
+            .toString();
+      } else if (item != null) {
+        raw = item.toString();
+      }
+      final String clean = raw.trim();
+      if (clean.isNotEmpty && !urls.contains(clean)) {
+        urls.add(clean);
+      }
+    }
+    return urls;
   }
 }
 
@@ -498,13 +600,38 @@ class BuyerOrderReviewRequest {
 
   final int rating;
 
+  final int riderRating;
+
+  final String riderReview;
+
   final String review;
+
+  final List<XFile> photos;
 
   const BuyerOrderReviewRequest({
     required this.order,
     required this.product,
     required this.rating,
+    required this.riderRating,
+    required this.riderReview,
     required this.review,
+    required this.photos,
+  });
+}
+
+class _SubmittedProductReview {
+  final int rating;
+  final int riderRating;
+  final String riderReview;
+  final String review;
+  final List<XFile> photos;
+
+  const _SubmittedProductReview({
+    required this.rating,
+    required this.riderRating,
+    required this.riderReview,
+    required this.review,
+    required this.photos,
   });
 }
 
@@ -554,7 +681,7 @@ typedef SubmitOrderReturnCallback =
 
 typedef BuyerOrderCallback = void Function(BuyerOrderData order);
 
-typedef OrdersRefreshCallback = Future<void> Function();
+typedef OrdersRefreshCallback = Future<List<BuyerOrderData>> Function();
 
 class OrdersScreen extends StatefulWidget {
   final List<BuyerOrderData> orders;
@@ -582,6 +709,8 @@ class OrdersScreen extends StatefulWidget {
   final VoidCallback? onShopProducts;
 
   final BuyerOrderCallback? onTrackOrder;
+  final BuyerOrderCallback? onContactSeller;
+  final VoidCallback? onOpenHelpCenter;
 
   final CancelOrderCallback? onCancelOrder;
   final ReceiveOrderCallback? onReceiveOrder;
@@ -613,6 +742,8 @@ class OrdersScreen extends StatefulWidget {
     this.onBack,
     this.onShopProducts,
     this.onTrackOrder,
+    this.onContactSeller,
+    this.onOpenHelpCenter,
     this.onCancelOrder,
     this.onReceiveOrder,
     this.onSubmitReview,
@@ -663,6 +794,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   bool _receivingOrder = false;
   bool _submittingReview = false;
   bool _submittingReturn = false;
+  String? _returnSubmissionError;
 
   final GlobalKey<FormState> _reviewFormKey = GlobalKey<FormState>();
 
@@ -670,15 +802,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   final TextEditingController _reviewController = TextEditingController();
 
+  final TextEditingController _riderReviewController = TextEditingController();
+
   final TextEditingController _returnDetailsController =
       TextEditingController();
 
   int _rating = 5;
+  int _riderRating = 5;
+  List<XFile> _reviewPhotos = <XFile>[];
 
   String? _returnRequestType;
   String? _returnReason;
 
   final Set<String> _reviewedProductIds = <String>{};
+  final Map<String, _SubmittedProductReview> _submittedReviews =
+      <String, _SubmittedProductReview>{};
 
   final List<String> _returnTypes = const <String>[
     'Return and refund',
@@ -1071,6 +1209,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void dispose() {
     _reviewController.dispose();
+    _riderReviewController.dispose();
     _returnDetailsController.dispose();
 
     super.dispose();
@@ -1184,17 +1323,85 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return;
     }
 
-    _reviewController.clear();
-
     setState(() {
       _selectedOrderId = order.id;
 
       _selectedReviewProductId = order.products.first.id;
 
-      _rating = 5;
-
       _mode = BuyerOrdersMode.review;
+
+      _loadProductReview(order.products.first.id);
     });
+  }
+
+  void _loadProductReview(String productId) {
+    final _SubmittedProductReview? review = _submittedReviews[productId];
+    _rating = review?.rating ?? 5;
+    _riderRating = review?.riderRating ?? 5;
+    _riderReviewController.text = review?.riderReview ?? '';
+    _reviewController.text = review?.review ?? '';
+    _reviewPhotos = review == null
+        ? <XFile>[]
+        : List<XFile>.from(review.photos);
+  }
+
+  void _selectReviewProduct(String productId) {
+    setState(() {
+      _selectedReviewProductId = productId;
+      _loadProductReview(productId);
+    });
+  }
+
+  Future<void> _addReviewPhotos() async {
+    try {
+      final List<XFile> selected = await ImagePicker().pickMultiImage(
+        imageQuality: 85,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+
+      if (!mounted || selected.isEmpty) {
+        return;
+      }
+
+      const int maxPhotos = 5;
+      const int maxPhotoBytes = 5 * 1024 * 1024;
+      final List<XFile> accepted = <XFile>[];
+      bool oversizedPhoto = false;
+
+      for (final XFile photo in selected) {
+        if (_reviewPhotos.length + accepted.length >= maxPhotos) {
+          break;
+        }
+
+        if (await photo.length() > maxPhotoBytes) {
+          oversizedPhoto = true;
+          continue;
+        }
+        accepted.add(photo);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _reviewPhotos = <XFile>[..._reviewPhotos, ...accepted];
+      });
+
+      if (oversizedPhoto) {
+        _showMessage(
+          'Each product photo must be 5 MB or smaller.',
+          error: true,
+        );
+      } else if (selected.length > accepted.length) {
+        _showMessage('You can attach up to 5 product photos.');
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage('Unable to select product photos: $error', error: true);
+      }
+    }
   }
 
   void _openReturn(BuyerOrderData order) {
@@ -1210,6 +1417,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     _returnDetailsController.clear();
 
     setState(() {
+      _returnSubmissionError = null;
       _selectedOrderId = order.id;
 
       _returnRequestType = null;
@@ -1228,7 +1436,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
 
     try {
-      await callback();
+      final List<BuyerOrderData> orders = await callback();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _orders = orders;
+        _syncSelectedReviewProduct();
+      });
     } catch (error) {
       _showMessage(_errorText(error), error: true);
     }
@@ -1609,11 +1824,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return;
     }
 
-    if (widget.onSubmitProductReview == null && widget.onSubmitReview == null) {
-      _showMessage(
-        'Product review submission will be connected to Laravel later.',
-      );
-
+    if (widget.onSubmitProductReview == null) {
+      final String message = widget.onSubmitReview == null
+          ? 'Reviews cannot be saved yet because order review submission is not connected.'
+          : 'This review handler does not support rider ratings and product photos yet.';
+      _showMessage(message, error: true);
       return;
     }
 
@@ -1622,22 +1837,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
     });
 
     try {
-      if (widget.onSubmitProductReview != null) {
-        await widget.onSubmitProductReview!(
-          BuyerOrderReviewRequest(
-            order: order,
-            product: product,
-            rating: _rating,
-            review: _reviewController.text.trim(),
-          ),
-        );
-      } else {
-        await widget.onSubmitReview!(
-          order,
-          _rating,
-          _reviewController.text.trim(),
-        );
-      }
+      final String riderReview = _riderReviewController.text.trim();
+      final String review = _reviewController.text.trim();
+
+      await widget.onSubmitProductReview!(
+        BuyerOrderReviewRequest(
+          order: order,
+          product: product,
+          rating: _rating,
+          riderRating: _riderRating,
+          riderReview: riderReview,
+          review: review,
+          photos: List<XFile>.unmodifiable(_reviewPhotos),
+        ),
+      );
 
       if (!mounted) {
         return;
@@ -1645,34 +1858,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
       setState(() {
         _reviewedProductIds.add(product.id);
-
-        _reviewController.clear();
+        _submittedReviews[product.id] = _SubmittedProductReview(
+          rating: _rating,
+          riderRating: _riderRating,
+          riderReview: riderReview,
+          review: review,
+          photos: List<XFile>.unmodifiable(_reviewPhotos),
+        );
       });
 
-      _showMessage('Review submitted for ${product.name}.');
-
-      if (order.products.length > 1) {
-        final BuyerOrderProductData? nextProduct = order.products
-            .cast<BuyerOrderProductData?>()
-            .firstWhere(
-              (BuyerOrderProductData? candidate) =>
-                  candidate != null &&
-                  !_reviewedProductIds.contains(candidate.id),
-              orElse: () => null,
-            );
-
-        if (nextProduct != null) {
-          setState(() {
-            _selectedReviewProductId = nextProduct.id;
-
-            _rating = 5;
-          });
-
-          return;
-        }
-      }
-
-      _openDetails(order);
+      _showMessage('Review saved. You can still edit the review text.');
     } catch (error) {
       _showMessage(_errorText(error), error: true);
     } finally {
@@ -1703,6 +1898,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (!(_returnFormKey.currentState?.validate() ?? false)) {
       return;
     }
+
+    setState(() {
+      _returnSubmissionError = null;
+    });
 
     final String? requestType = _returnRequestType;
 
@@ -1752,12 +1951,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
         setState(() {
           _orders[index] = order.copyWith(
             status: 'returns',
-            backendStatus: 'returns',
             statusLabel: 'Return / Refund Requested',
             allowCancel: false,
             allowMarkReceived: false,
             allowReview: false,
             allowReturnRequest: false,
+            hasActiveReturnRequest: true,
           );
         });
       }
@@ -1768,17 +1967,23 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ? _orders[index]
           : order.copyWith(
               status: 'returns',
-              backendStatus: 'returns',
               statusLabel: 'Return / Refund Requested',
               allowCancel: false,
               allowMarkReceived: false,
               allowReview: false,
               allowReturnRequest: false,
+              hasActiveReturnRequest: true,
             );
 
       _openDetails(updatedOrder);
     } catch (error) {
-      _showMessage(_errorText(error), error: true);
+      final String message = _errorText(error);
+      if (mounted) {
+        setState(() {
+          _returnSubmissionError = message;
+        });
+      }
+      _showMessage(message, error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -1820,8 +2025,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final BuyerOrderData? detailOrder = _mode == BuyerOrdersMode.details
+        ? _selectedOrder
+        : null;
+
     return Scaffold(
       backgroundColor: _background,
+      bottomNavigationBar: detailOrder == null
+          ? null
+          : _buildDetailsBottomBar(detailOrder),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -1905,14 +2117,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 2),
-
-                Text(
-                  _modeSubtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _muted, fontSize: 11.5),
-                ),
+                if (_modeSubtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    _modeSubtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _muted, fontSize: 11.5),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1946,7 +2159,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return 'Order Details';
 
       case BuyerOrdersMode.review:
-        return 'Review Product';
+        return 'Rate & Review';
 
       case BuyerOrdersMode.returnRequest:
         return 'Return / Refund';
@@ -1962,10 +2175,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return 'Your order was submitted successfully';
 
       case BuyerOrdersMode.details:
-        return 'Order and shipment information';
+        return '';
 
       case BuyerOrdersMode.review:
-        return 'Review a completed product';
+        return 'Rate the product and delivery rider';
 
       case BuyerOrdersMode.returnRequest:
         return 'Submit a return or refund request';
@@ -2349,206 +2562,375 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 90),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
       children: [
-        const Text(
-          'ORDER DETAILS',
-          style: TextStyle(
-            color: _maroon,
-            fontSize: 11,
-            letterSpacing: 1.7,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-
-        const SizedBox(height: 5),
-
-        Text(
-          '#${order.id}',
-          style: const TextStyle(
-            color: _text,
-            fontSize: 27,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-
-        const SizedBox(height: 5),
-
-        Text(
-          '${order.statusLabel} · ${order.payment}',
-          style: const TextStyle(color: _muted, fontSize: 12.5),
-        ),
-
-        const SizedBox(height: 16),
-
         if (order.isPreview) ...[
           const _NoticeCard(
             message:
                 'Sample order details only. This is a UI preview and is not stored in Laravel.',
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
         ],
-
-        _OrderCard(
-          order: order,
-          onOpen: null,
-          onTrack: widget.onTrackOrder == null
-              ? null
-              : () {
-                  widget.onTrackOrder!(order);
-                },
-          onCancel: order.canCancel
-              ? () {
-                  _showCancelDialog(order);
-                }
-              : null,
-          onReceive: order.canMarkReceived
-              ? () {
-                  _markReceived(order);
-                }
-              : null,
-          onReview: order.canReview
-              ? () {
-                  _openReview(order);
-                }
-              : null,
-          onReturn: order.canRequestReturn
-              ? () {
-                  _openReturn(order);
-                }
-              : null,
-          receiving: _receivingOrder,
-          showDetailsButton: false,
-        ),
-
-        const SizedBox(height: 14),
-
-        _buildShipmentTimeline(order),
-
-        const SizedBox(height: 14),
-
-        _buildDeliveryDetails(order),
-
-        const SizedBox(height: 14),
-
-        _buildPaymentSummary(order),
+        _buildBuyerShippingCard(order),
+        const SizedBox(height: 12),
+        _buildBuyerProductsCard(order),
+        const SizedBox(height: 12),
+        _buildBuyerSupportCard(order),
+        const SizedBox(height: 12),
+        _buildBuyerOrderInfoCard(order),
       ],
     );
   }
 
-  Widget _buildShipmentTimeline(BuyerOrderData order) {
-    return _OrderSection(
-      title: 'Shipment Timeline',
-      icon: Icons.local_shipping_outlined,
+  Widget _buildBuyerShippingCard(BuyerOrderData order) {
+    final BuyerOrderTimelineEvent? latestEvent = _latestTimelineEvent(order);
+    final bool delivered = <String>{
+      'delivered',
+      'completed',
+    }.contains(order.normalizedStatus);
+    final Color statusColor = delivered ? const Color(0xFF168548) : _maroon;
+
+    return _BuyerDetailCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (order.timeline.isEmpty)
-            const Text(
-              'No shipment events recorded yet.',
-              style: TextStyle(color: _muted, fontSize: 12.5),
-            )
-          else
-            ...List<Widget>.generate(order.timeline.length, (int index) {
-              final BuyerOrderTimelineEvent event = order.timeline[index];
-
-              return _TimelineItem(
-                event: event,
-                showLine: index != order.timeline.length - 1,
-              );
-            }),
-
-          if (widget.onTrackOrder != null) ...[
-            const SizedBox(height: 12),
-
-            OutlinedButton.icon(
-              onPressed: () {
-                widget.onTrackOrder!(order);
-              },
-              icon: const Icon(Icons.location_searching_rounded, size: 16),
-              label: const Text('Track Order'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _maroon,
-                side: const BorderSide(color: _tan),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDeliveryDetails(BuyerOrderData order) {
-    return _OrderSection(
-      title: 'Delivery Details',
-      icon: Icons.location_on_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            order.buyerName,
-            style: const TextStyle(
-              color: _text,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-
-          if (order.buyerContact?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: 4),
-
-            Text(
-              order.buyerContact!,
-              style: const TextStyle(color: _muted, fontSize: 11.5),
-            ),
-          ],
-
-          const SizedBox(height: 8),
-
-          Text(
-            order.shippingAddress.trim().isEmpty
-                ? 'No delivery address recorded.'
-                : order.shippingAddress,
-            style: const TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
-          ),
-
-          if (order.tracking?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: 12),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(
-                color: _soft,
-                borderRadius: BorderRadius.circular(11),
-              ),
+          InkWell(
+            onTap: widget.onTrackOrder == null
+                ? null
+                : () => widget.onTrackOrder!(order),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
                 children: [
-                  const Icon(Icons.qr_code_rounded, color: _maroon, size: 18),
-
-                  const SizedBox(width: 8),
-
-                  const Text(
-                    'Tracking',
-                    style: TextStyle(color: _muted, fontSize: 11.5),
-                  ),
-
-                  const Spacer(),
-
-                  Flexible(
+                  const Expanded(
                     child: Text(
-                      order.tracking!,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
+                      'Shipping Information',
+                      style: TextStyle(
                         color: _text,
-                        fontSize: 12,
+                        fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
+                  if (widget.onTrackOrder != null)
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _muted2,
+                      size: 25,
+                    ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            order.tracking?.trim().isNotEmpty == true
+                ? 'Tracking No. ${order.tracking}'
+                : 'Tracking number will appear after shipment.',
+            style: const TextStyle(color: _muted, fontSize: 12.5),
+          ),
+          const SizedBox(height: 22),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.local_shipping_outlined, color: statusColor, size: 27),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      latestEvent?.label ?? order.statusLabel,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      latestEvent?.time.trim().isNotEmpty == true
+                          ? latestEvent!.time
+                          : 'Shipment update pending',
+                      style: const TextStyle(color: _muted2, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 19),
+            child: Divider(height: 1, color: _border),
+          ),
+          const Text(
+            'Delivery Information',
+            style: TextStyle(
+              color: _text,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 17),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on_outlined, color: _muted, size: 25),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: order.buyerName.trim().isEmpty
+                                ? 'Buyer'
+                                : order.buyerName,
+                          ),
+                          if (order.buyerContact?.trim().isNotEmpty == true)
+                            TextSpan(
+                              text: '  ${order.buyerContact}',
+                              style: const TextStyle(
+                                color: _muted2,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                        ],
+                      ),
+                      style: const TextStyle(
+                        color: _text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      order.shippingAddress.trim().isEmpty
+                          ? 'No delivery address recorded.'
+                          : order.shippingAddress,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 12.5,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  BuyerOrderTimelineEvent? _latestTimelineEvent(BuyerOrderData order) {
+    BuyerOrderTimelineEvent? latest;
+    for (final BuyerOrderTimelineEvent event in order.timeline) {
+      if (event.done) {
+        latest = event;
+      }
+    }
+    return latest;
+  }
+
+  Widget _buildBuyerProductsCard(BuyerOrderData order) {
+    return _BuyerDetailCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: widget.onShopProducts,
+            child: const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 13, 13),
+              child: Row(
+                children: [
+                  Icon(Icons.storefront_outlined, color: _maroon, size: 23),
+                  SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'Likhae Marketplace',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: _muted2, size: 24),
+                ],
+              ),
+            ),
+          ),
+          if (order.products.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 14, 16, 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'No products recorded for this order.',
+                  style: TextStyle(color: _muted, fontSize: 12.5),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: List<Widget>.generate(
+                order.products.length,
+                (int index) => _OrderProductRow(
+                  product: order.products[index],
+                  showDivider: index != order.products.length - 1,
+                ),
+                growable: false,
+              ),
+            ),
+          const Divider(height: 1, color: _border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const Text(
+                  'Order Total: ',
+                  style: TextStyle(color: _text, fontSize: 14),
+                ),
+                Text(
+                  _formatPrice(order.total),
+                  style: const TextStyle(
+                    color: _maroon,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBuyerSupportCard(BuyerOrderData order) {
+    return _BuyerDetailCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 9),
+            child: Text(
+              'Support Center',
+              style: TextStyle(
+                color: _text,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          _BuyerDetailActionRow(
+            icon: Icons.settings_backup_restore_rounded,
+            title: 'Request for Return/Refund',
+            subtitle: order.canRequestReturn
+                ? 'Submit a request for this order.'
+                : 'Availability depends on the order status.',
+            onTap: () {
+              if (order.canRequestReturn) {
+                _openReturn(order);
+                return;
+              }
+              _showMessage(
+                'This order is not currently eligible for a return or refund request.',
+                error: true,
+              );
+            },
+          ),
+          const Divider(height: 1, indent: 53, color: _border),
+          _BuyerDetailActionRow(
+            icon: Icons.forum_outlined,
+            title: 'Contact Seller',
+            onTap: () {
+              if (widget.onContactSeller != null) {
+                widget.onContactSeller!(order);
+                return;
+              }
+              _showMessage('Seller messaging is currently unavailable.');
+            },
+          ),
+          const Divider(height: 1, indent: 53, color: _border),
+          _BuyerDetailActionRow(
+            icon: Icons.help_outline_rounded,
+            title: 'Help Center',
+            onTap: () {
+              if (widget.onOpenHelpCenter != null) {
+                widget.onOpenHelpCenter!();
+                return;
+              }
+              _showMessage('The help center is currently unavailable.');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBuyerOrderInfoCard(BuyerOrderData order) {
+    return _BuyerDetailCard(
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Order ID',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Flexible(
+                child: Text(
+                  order.id,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _text, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 9),
+              SizedBox(
+                height: 31,
+                child: OutlinedButton(
+                  onPressed: () => _copyOrderId(order.id),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _text,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    side: const BorderSide(color: _muted2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Copy', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _DetailRow(label: 'Paid by', value: order.payment),
+          if (order.paymentStatus?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 14),
+            _DetailRow(label: 'Payment status', value: order.paymentStatus!),
+          ],
+          const SizedBox(height: 14),
+          _DetailRow(label: 'Order status', value: order.statusLabel),
+          if (order.createdAt != null) ...[
+            const SizedBox(height: 14),
+            _DetailRow(
+              label: 'Placed on',
+              value: _formatDetailDate(order.createdAt!),
             ),
           ],
         ],
@@ -2556,37 +2938,247 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildPaymentSummary(BuyerOrderData order) {
-    return _OrderSection(
-      title: 'Payment Summary',
-      icon: Icons.payment_outlined,
-      child: Column(
-        children: [
-          _DetailRow(label: 'Order total', value: _formatPrice(order.total)),
+  Future<void> _copyOrderId(String orderId) async {
+    await Clipboard.setData(ClipboardData(text: orderId));
+    if (mounted) {
+      _showMessage('Order ID copied.');
+    }
+  }
 
-          const SizedBox(height: 11),
+  String _formatDetailDate(DateTime date) {
+    const List<String> months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final DateTime local = date.toLocal();
+    final int hour = local.hour == 0
+        ? 12
+        : local.hour > 12
+        ? local.hour - 12
+        : local.hour;
+    final String minute = local.minute.toString().padLeft(2, '0');
+    final String period = local.hour >= 12 ? 'PM' : 'AM';
+    return '${months[local.month - 1]} ${local.day}, ${local.year} '
+        '$hour:$minute $period';
+  }
 
-          const Divider(height: 1, color: _border),
+  Widget? _buildDetailsBottomBar(BuyerOrderData order) {
+    final List<Widget> actions = <Widget>[
+      if (order.canCancel)
+        _BuyerDetailBottomButton(
+          label: 'Cancel Order',
+          onPressed: () => _showCancelDialog(order),
+        ),
+      if (order.canRequestReturn)
+        _BuyerDetailBottomButton(
+          label: 'Return/Refund',
+          onPressed: () => _openReturn(order),
+        ),
+      if (order.canMarkReceived)
+        _BuyerDetailBottomButton(
+          label: _receivingOrder ? 'Updating...' : 'Order Received',
+          filled: true,
+          onPressed: _receivingOrder ? null : () => _markReceived(order),
+        ),
+      if (order.canReview)
+        _BuyerDetailBottomButton(
+          label: 'Rate & Review',
+          filled: true,
+          onPressed: () => _openReview(order),
+        ),
+    ];
 
-          const SizedBox(height: 11),
+    if (actions.isEmpty) {
+      return null;
+    }
 
-          _DetailRow(
-            label: 'Order status',
-            value: order.statusLabel,
-            valueColor: _maroon,
-          ),
-
-          const SizedBox(height: 11),
-
-          _DetailRow(label: 'Payment method', value: order.payment),
-
-          if (order.paymentStatus?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: 11),
-
-            _DetailRow(label: 'Payment status', value: order.paymentStatus!),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: _border)),
+        ),
+        child: Row(
+          children: [
+            for (int index = 0; index < actions.length; index++) ...[
+              if (index > 0) const SizedBox(width: 9),
+              Expanded(child: actions[index]),
+            ],
           ],
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildRatingPicker({
+    required String label,
+    required int rating,
+    required bool enabled,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _InputLabel(text: label),
+        const SizedBox(height: 7),
+        Wrap(
+          spacing: 5,
+          children: List<Widget>.generate(5, (int index) {
+            final int value = index + 1;
+            final bool selected = rating >= value;
+            return Semantics(
+              button: true,
+              label: '$value star${value == 1 ? '' : 's'}',
+              child: InkWell(
+                onTap: enabled ? () => onChanged(value) : null,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 39,
+                  height: 39,
+                  decoration: BoxDecoration(
+                    color: selected ? const Color(0xFFFFC107) : _soft,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: selected ? const Color(0xFFE0A800) : _border,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    selected ? Icons.star_rounded : Icons.star_border_rounded,
+                    color: selected ? _star : _muted2,
+                    size: 23,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          '$rating out of 5',
+          style: const TextStyle(color: _muted, fontSize: 11.5),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewPhotoPicker({required bool locked}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _InputLabel(text: 'Add product photos', requiredField: false),
+        const SizedBox(height: 5),
+        const Text(
+          'JPG, PNG, or WebP · up to 5 photos · 5 MB each',
+          style: TextStyle(color: _muted, fontSize: 11.5),
+        ),
+        const SizedBox(height: 9),
+        Wrap(
+          spacing: 9,
+          runSpacing: 9,
+          children: [
+            for (int index = 0; index < _reviewPhotos.length; index++)
+              SizedBox(
+                width: 76,
+                height: 76,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: FutureBuilder<List<int>>(
+                          future: _reviewPhotos[index].readAsBytes(),
+                          builder:
+                              (
+                                BuildContext context,
+                                AsyncSnapshot<List<int>> snapshot,
+                              ) {
+                                if (snapshot.hasError) {
+                                  return const ColoredBox(
+                                    color: _soft,
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      color: _muted,
+                                    ),
+                                  );
+                                }
+                                if (!snapshot.hasData) {
+                                  return const ColoredBox(
+                                    color: _soft,
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: _maroon,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return Image.memory(
+                                  Uint8List.fromList(snapshot.data!),
+                                  fit: BoxFit.cover,
+                                );
+                              },
+                        ),
+                      ),
+                    ),
+                    if (!locked)
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _reviewPhotos.removeAt(index);
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: const CircleAvatar(
+                            radius: 12,
+                            backgroundColor: _maroon,
+                            child: Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (!locked && _reviewPhotos.length < 5)
+              OutlinedButton(
+                onPressed: _submittingReview ? null : _addReviewPhotos,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _maroon,
+                  side: const BorderSide(color: _border),
+                  minimumSize: const Size(76, 76),
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Icon(Icons.add_photo_alternate_outlined),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -2622,7 +3214,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 6),
 
           const Text(
-            'Review Product',
+            'Rate and review your order',
             style: TextStyle(
               color: _text,
               fontSize: 27,
@@ -2633,7 +3225,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 7),
 
           const Text(
-            'Choose a product from this completed order and share your experience.',
+            'Ratings and photos lock after your first submission. Review text can still be edited.',
             style: TextStyle(color: _muted, fontSize: 12.5),
           ),
 
@@ -2677,14 +3269,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             if (value == null) {
                               return;
                             }
-
-                            setState(() {
-                              _selectedReviewProductId = value;
-
-                              _reviewController.clear();
-
-                              _rating = 5;
-                            });
+                            _selectReviewProduct(value);
                           },
                   ),
 
@@ -2698,59 +3283,74 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   child: Divider(height: 1, color: _border),
                 ),
 
-                const _InputLabel(text: 'Your rating'),
-
-                const SizedBox(height: 9),
-
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
-                  children: List<Widget>.generate(5, (int index) {
-                    final int starValue = index + 1;
-
-                    final bool selected = _rating >= starValue;
-
-                    return InkWell(
-                      onTap: _submittingReview
-                          ? null
-                          : () {
-                              setState(() {
-                                _rating = starValue;
-                              });
-                            },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(3),
-                        child: Icon(
-                          selected
-                              ? Icons.star_rounded
-                              : Icons.star_border_rounded,
-                          color: _star,
-                          size: 31,
-                        ),
-                      ),
-                    );
-                  }),
+                _buildRatingPicker(
+                  label: 'Product rating',
+                  rating: _rating,
+                  enabled:
+                      !_submittingReview &&
+                      !_reviewedProductIds.contains(product.id),
+                  onChanged: (int value) {
+                    setState(() {
+                      _rating = value;
+                    });
+                  },
                 ),
 
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
 
-                Text(
-                  '$_rating out of 5',
-                  style: const TextStyle(color: _muted, fontSize: 11.5),
+                _buildRatingPicker(
+                  label: 'Delivery rider rating',
+                  rating: _riderRating,
+                  enabled:
+                      !_submittingReview &&
+                      !_reviewedProductIds.contains(product.id),
+                  onChanged: (int value) {
+                    setState(() {
+                      _riderRating = value;
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                const _InputLabel(
+                  text: 'Rider review (optional)',
+                  requiredField: false,
+                ),
+
+                const SizedBox(height: 7),
+
+                TextFormField(
+                  controller: _riderReviewController,
+                  enabled: !_submittingReview,
+                  minLines: 2,
+                  maxLines: 4,
+                  maxLength: 1000,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: _inputDecoration(
+                    hintText: 'Comment on the delivery experience',
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                _buildReviewPhotoPicker(
+                  locked:
+                      _submittingReview ||
+                      _reviewedProductIds.contains(product.id),
                 ),
 
                 const SizedBox(height: 18),
 
-                const _InputLabel(text: 'Review'),
+                const _InputLabel(text: 'Product review'),
 
                 const SizedBox(height: 7),
 
                 TextFormField(
                   controller: _reviewController,
                   enabled: !_submittingReview,
-                  minLines: 5,
-                  maxLines: 7,
+                  minLines: 3,
+                  maxLines: 6,
                   maxLength: 3000,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: _inputDecoration(
@@ -2793,8 +3393,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text(
-                            'Submit Review',
+                        : Text(
+                            _reviewedProductIds.contains(product.id)
+                                ? 'Update Review'
+                                : 'Submit Review',
                             style: TextStyle(fontWeight: FontWeight.w800),
                           ),
                   ),
@@ -3002,6 +3604,54 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                 ),
 
+                if (_returnSubmissionError != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(13),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEFEE),
+                      border: Border.all(color: const Color(0xFFF4B7B2)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.error_outline_rounded,
+                          color: _danger,
+                          size: 19,
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Request not submitted',
+                                style: TextStyle(
+                                  color: _danger,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              SelectableText(
+                                _returnSubmissionError!,
+                                style: const TextStyle(
+                                  color: Color(0xFF7A271A),
+                                  fontSize: 12,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 17),
 
                 SizedBox(
@@ -3150,8 +3800,6 @@ class _OrderCard extends StatelessWidget {
 
   final bool receiving;
 
-  final bool showDetailsButton;
-
   const _OrderCard({
     required this.order,
     required this.onOpen,
@@ -3161,7 +3809,6 @@ class _OrderCard extends StatelessWidget {
     required this.onReview,
     required this.onReturn,
     required this.receiving,
-    this.showDetailsButton = true,
   });
 
   @override
@@ -3271,7 +3918,7 @@ class _OrderCard extends StatelessWidget {
                   ],
                 ),
 
-                if (showDetailsButton ||
+                if (onOpen != null ||
                     onTrack != null ||
                     onCancel != null ||
                     onReceive != null ||
@@ -3319,7 +3966,7 @@ class _OrderCard extends StatelessWidget {
                             onPressed: onTrack,
                           ),
 
-                        if (showDetailsButton && onOpen != null)
+                        if (onOpen != null)
                           _SmallActionButton(
                             text: 'View Details',
                             onPressed: onOpen,
@@ -3401,7 +4048,7 @@ class _OrderProductRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFEADCCC)),
                 ),
-                child: _OrderProductImage(imageUrl: product.imageUrl),
+                child: _OrderProductGallery(images: product.galleryImages),
               ),
 
               const SizedBox(width: 12),
@@ -3596,140 +4243,141 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _OrderSection extends StatelessWidget {
-  final String title;
-
-  final IconData icon;
-
+class _BuyerDetailCard extends StatelessWidget {
   final Widget child;
+  final EdgeInsetsGeometry padding;
 
-  const _OrderSection({
-    required this.title,
-    required this.icon,
+  const _BuyerDetailCard({
     required this.child,
+    this.padding = const EdgeInsets.all(16),
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(15),
+      width: double.infinity,
+      padding: padding,
       decoration: BoxDecoration(
         color: const Color(0xFFFFFDF9),
         border: Border.all(color: const Color(0xFFEADCCC)),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(17),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 37,
-                height: 37,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1E4D7),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                alignment: Alignment.center,
-                child: Icon(icon, color: const Color(0xFF561C17), size: 18),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
+class _BuyerDetailActionRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  const _BuyerDetailActionRow({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: const Color(0xFF766C65), size: 24),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF3B211B),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (subtitle?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle!,
+                      style: const TextStyle(
+                        color: Color(0xFF987865),
+                        fontSize: 11.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
               ),
-
-              const SizedBox(width: 9),
-
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Color(0xFF3B211B),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
+            ),
+            const SizedBox(width: 8),
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFFA99386),
+                size: 23,
               ),
-            ],
-          ),
-
-          const SizedBox(height: 15),
-
-          child,
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _TimelineItem extends StatelessWidget {
-  final BuyerOrderTimelineEvent event;
+class _BuyerDetailBottomButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final bool filled;
 
-  final bool showLine;
-
-  const _TimelineItem({required this.event, required this.showLine});
+  const _BuyerDetailBottomButton({
+    required this.label,
+    required this.onPressed,
+    this.filled = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 30,
-            child: Column(
-              children: [
-                Container(
-                  width: 27,
-                  height: 27,
-                  decoration: BoxDecoration(
-                    color: event.done
-                        ? const Color(0xFF561C17)
-                        : const Color(0xFFF1ECE7),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    event.done ? Icons.check_rounded : Icons.circle,
-                    color: event.done ? Colors.white : const Color(0xFFA99386),
-                    size: event.done ? 15 : 6,
-                  ),
-                ),
-
-                if (showLine)
-                  Expanded(
-                    child: Container(width: 1, color: const Color(0xFFEADCCC)),
-                  ),
-              ],
+    final ButtonStyle style = filled
+        ? ElevatedButton.styleFrom(
+            elevation: 0,
+            backgroundColor: const Color(0xFF561C17),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xFFD8CBC3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-          ),
-
-          const SizedBox(width: 9),
-
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    event.label,
-                    style: const TextStyle(
-                      color: Color(0xFF3B211B),
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-
-                  const SizedBox(height: 3),
-
-                  Text(
-                    event.time.trim().isEmpty ? 'Pending' : event.time,
-                    style: const TextStyle(
-                      color: Color(0xFFA99386),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
+          )
+        : OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF561C17),
+            side: const BorderSide(color: Color(0xFF561C17)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-          ),
-        ],
-      ),
+          );
+
+    return SizedBox(
+      height: 48,
+      child: filled
+          ? ElevatedButton(
+              onPressed: onPressed,
+              style: style,
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            )
+          : OutlinedButton(
+              onPressed: onPressed,
+              style: style,
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
     );
   }
 }
@@ -3752,7 +4400,7 @@ class _SelectedProduct extends StatelessWidget {
             color: const Color(0xFFF3ECE4),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: _OrderProductImage(imageUrl: product.imageUrl),
+          child: _OrderProductGallery(images: product.galleryImages),
         ),
 
         const SizedBox(width: 11),
@@ -3805,51 +4453,113 @@ class _SelectedProduct extends StatelessWidget {
   }
 }
 
-class _OrderProductImage extends StatelessWidget {
-  final String? imageUrl;
+class _OrderProductGallery extends StatefulWidget {
+  final List<String> images;
 
-  const _OrderProductImage({required this.imageUrl});
+  const _OrderProductGallery({required this.images});
+
+  @override
+  State<_OrderProductGallery> createState() => _OrderProductGalleryState();
+}
+
+class _OrderProductGalleryState extends State<_OrderProductGallery> {
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final String? url = imageUrl?.trim();
+    final List<String> images = widget.images;
+    if (images.isEmpty) {
+      return const Center(
+        child: Icon(Icons.image_outlined, color: Color(0xFFA99386), size: 28),
+      );
+    }
 
-    if (url == null || url.isEmpty) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        PageView.builder(
+          itemCount: images.length,
+          onPageChanged: (int index) {
+            if (mounted) {
+              setState(() => _currentIndex = index);
+            }
+          },
+          itemBuilder: (BuildContext context, int index) {
+            return _OrderProductImage(url: images[index]);
+          },
+        ),
+        if (images.length > 1)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 4,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List<Widget>.generate(images.length, (int index) {
+                final bool active = index == _currentIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                  width: active ? 9 : 4,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? const Color(0xFF561C17)
+                        : const Color(0xFFA99386).withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _OrderProductImage extends StatelessWidget {
+  final String url;
+
+  const _OrderProductImage({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final String imageUrl = url.trim();
+    if (imageUrl.isEmpty) {
       return const Center(
         child: Icon(Icons.image_outlined, color: Color(0xFFA99386), size: 28),
       );
     }
 
     return Image.network(
-      url,
-      fit: BoxFit.cover,
-      loadingBuilder:
-          (BuildContext context, Widget child, ImageChunkEvent? progress) {
-            if (progress == null) {
-              return child;
-            }
-
-            return const Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF561C17),
-                ),
-              ),
-            );
-          },
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: Color(0xFFA99386),
-                size: 27,
-              ),
-            );
-          },
+      imageUrl,
+      fit: BoxFit.contain,
+      errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+        return const Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: Color(0xFFA99386),
+            size: 27,
+          ),
+        );
+      },
+      loadingBuilder: (
+        BuildContext context,
+        Widget child,
+        ImageChunkEvent? progress,
+      ) {
+        if (progress == null) return child;
+        return const Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF561C17),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -3858,9 +4568,7 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
 
-  final Color? valueColor;
-
-  const _DetailRow({required this.label, required this.value, this.valueColor});
+  const _DetailRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -3880,8 +4588,8 @@ class _DetailRow extends StatelessWidget {
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: TextStyle(
-              color: valueColor ?? const Color(0xFF3B211B),
+            style: const TextStyle(
+              color: Color(0xFF3B211B),
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),

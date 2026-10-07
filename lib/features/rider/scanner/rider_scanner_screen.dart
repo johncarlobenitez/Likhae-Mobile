@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-typedef RiderScannerCallback =
-    Future<void> Function(String trackingCode);
+typedef RiderScannerCallback = Future<void> Function(String trackingCode);
 
-typedef RiderScannerSignOutCallback =
-    Future<void> Function();
+typedef RiderScannerSignOutCallback = Future<void> Function();
 
 class RiderScannerScreen extends StatefulWidget {
   /// Optional callback when a QR/barcode/manual tracking code is accepted.
@@ -37,12 +35,10 @@ class RiderScannerScreen extends StatefulWidget {
   });
 
   @override
-  State<RiderScannerScreen> createState() =>
-      _RiderScannerScreenState();
+  State<RiderScannerScreen> createState() => _RiderScannerScreenState();
 }
 
-class _RiderScannerScreenState
-    extends State<RiderScannerScreen> {
+class _RiderScannerScreenState extends State<RiderScannerScreen> {
   static const Color _primary = Color(0xFF561C17);
   static const Color _background = Color(0xFFFBF7F2);
   static const Color _surface = Color(0xFFFFFDF9);
@@ -59,14 +55,12 @@ class _RiderScannerScreenState
   static const Color _danger = Color(0xFFB42318);
   static const Color _dangerSoft = Color(0xFFFFF1F0);
 
-  final MobileScannerController _scannerController =
-      MobileScannerController(
+  final MobileScannerController _scannerController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     torchEnabled: false,
   );
 
-  final TextEditingController _manualCodeController =
-      TextEditingController();
+  final TextEditingController _manualCodeController = TextEditingController();
 
   bool _handlingScan = false;
   bool _scannerPaused = false;
@@ -83,9 +77,7 @@ class _RiderScannerScreenState
     super.dispose();
   }
 
-  Future<void> _onDetect(
-    BarcodeCapture capture,
-  ) async {
+  Future<void> _onDetect(BarcodeCapture capture) async {
     if (_handlingScan || _scannerPaused) {
       return;
     }
@@ -93,8 +85,7 @@ class _RiderScannerScreenState
     String? detectedCode;
 
     for (final Barcode barcode in capture.barcodes) {
-      final String code =
-          barcode.rawValue?.trim() ?? '';
+      final String code = barcode.rawValue?.trim() ?? '';
 
       if (code.isNotEmpty) {
         detectedCode = code;
@@ -102,19 +93,14 @@ class _RiderScannerScreenState
       }
     }
 
-    if (detectedCode == null ||
-        detectedCode.isEmpty) {
+    if (detectedCode == null || detectedCode.isEmpty) {
       return;
     }
 
-    await _processTrackingCode(
-      detectedCode,
-    );
+    await _processTrackingCode(detectedCode);
   }
 
-  Future<void> _processTrackingCode(
-    String rawCode,
-  ) async {
+  Future<void> _processTrackingCode(String rawCode) async {
     if (_handlingScan) {
       return;
     }
@@ -123,8 +109,7 @@ class _RiderScannerScreenState
 
     if (code.isEmpty) {
       setState(() {
-        _errorMessage =
-            'Enter or scan a valid tracking code.';
+        _errorMessage = 'Enter or scan a valid tracking code.';
       });
 
       return;
@@ -136,13 +121,9 @@ class _RiderScannerScreenState
     });
 
     try {
-      final String? expected =
-          widget.expectedTrackingCode
-              ?.trim();
+      final String? expected = widget.expectedTrackingCode?.trim();
 
-      if (expected != null &&
-          expected.isNotEmpty &&
-          code != expected) {
+      if (expected != null && expected.isNotEmpty && code != expected) {
         await _scannerController.stop();
 
         if (!mounted) {
@@ -173,13 +154,10 @@ class _RiderScannerScreenState
         _manualCodeController.text = code;
       });
 
-      final RiderScannerCallback? callback =
-          widget.onScanned;
+      final RiderScannerCallback? callback = widget.onScanned;
 
       if (callback != null) {
-        await callback(
-          code,
-        );
+        await callback(code);
 
         return;
       }
@@ -191,9 +169,7 @@ class _RiderScannerScreenState
       /// If scanner was pushed from another page,
       /// return the scanned tracking code.
       if (context.canPop()) {
-        context.pop(
-          code,
-        );
+        context.pop(code);
       }
     } catch (error) {
       if (!mounted) {
@@ -201,8 +177,7 @@ class _RiderScannerScreenState
       }
 
       setState(() {
-        _errorMessage =
-            'Unable to process parcel: $error';
+        _errorMessage = 'Unable to process parcel: $error';
       });
     } finally {
       if (mounted) {
@@ -214,21 +189,17 @@ class _RiderScannerScreenState
   }
 
   Future<void> _submitManualCode() async {
-    final String code =
-        _manualCodeController.text.trim();
+    final String code = _manualCodeController.text.trim();
 
     if (code.isEmpty) {
       setState(() {
-        _errorMessage =
-            'Enter the parcel tracking code.';
+        _errorMessage = 'Enter the parcel tracking code.';
       });
 
       return;
     }
 
-    await _processTrackingCode(
-      code,
-    );
+    await _processTrackingCode(code);
   }
 
   Future<void> _scanAgain() async {
@@ -250,8 +221,7 @@ class _RiderScannerScreenState
       }
 
       setState(() {
-        _errorMessage =
-            'Unable to restart camera: $error';
+        _errorMessage = 'Unable to restart camera: $error';
       });
     }
   }
@@ -265,8 +235,7 @@ class _RiderScannerScreenState
       }
 
       setState(() {
-        _errorMessage =
-            'Unable to control flashlight: $error';
+        _errorMessage = 'Unable to control flashlight: $error';
       });
     }
   }
@@ -280,8 +249,7 @@ class _RiderScannerScreenState
       }
 
       setState(() {
-        _errorMessage =
-            'Unable to switch camera: $error';
+        _errorMessage = 'Unable to switch camera: $error';
       });
     }
   }
@@ -304,21 +272,15 @@ class _RiderScannerScreenState
         return;
       }
 
-      context.go(
-        '/login',
-      );
+      context.go('/login');
     } catch (error) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Unable to sign out: $error',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to sign out: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -329,9 +291,7 @@ class _RiderScannerScreenState
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
@@ -350,76 +310,44 @@ class _RiderScannerScreenState
         actions: <Widget>[
           if (widget.showSignOut)
             TextButton.icon(
-              onPressed:
-                  _signingOut
-                      ? null
-                      : _signOut,
-              icon:
-                  _signingOut
-                      ? const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: _primary,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.logout_rounded,
-                          size: 18,
-                        ),
-              label: Text(
-                _signingOut
-                    ? 'Signing Out'
-                    : 'Sign Out',
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor:
-                    _primary,
-              ),
+              onPressed: _signingOut ? null : _signOut,
+              icon: _signingOut
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _primary,
+                      ),
+                    )
+                  : const Icon(Icons.logout_rounded, size: 18),
+              label: Text(_signingOut ? 'Signing Out' : 'Sign Out'),
+              style: TextButton.styleFrom(foregroundColor: _primary),
             ),
         ],
       ),
       body: SafeArea(
         child: ListView(
-          padding:
-              const EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            100,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
           children: <Widget>[
             _buildHeading(),
 
-            const SizedBox(
-              height: 18,
-            ),
+            const SizedBox(height: 18),
 
             _buildScanner(),
 
-            const SizedBox(
-              height: 16,
-            ),
+            const SizedBox(height: 16),
 
-            if (_errorMessage != null) ...<
-                Widget>[
+            if (_errorMessage != null) ...<Widget>[
               _buildErrorMessage(),
 
-              const SizedBox(
-                height: 16,
-              ),
+              const SizedBox(height: 16),
             ],
 
-            if (_scannedCode != null &&
-                _errorMessage == null) ...<
-                Widget>[
+            if (_scannedCode != null && _errorMessage == null) ...<Widget>[
               _buildSuccessMessage(),
 
-              const SizedBox(
-                height: 16,
-              ),
+              const SizedBox(height: 16),
             ],
 
             _buildManualEntry(),
@@ -430,13 +358,10 @@ class _RiderScannerScreenState
   }
 
   Widget _buildHeading() {
-    final String? expected =
-        widget.expectedTrackingCode
-            ?.trim();
+    final String? expected = widget.expectedTrackingCode?.trim();
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         const Text(
           'PARCEL VERIFICATION',
@@ -448,9 +373,7 @@ class _RiderScannerScreenState
           ),
         ),
 
-        const SizedBox(
-          height: 7,
-        ),
+        const SizedBox(height: 7),
 
         const Text(
           'Scan Waybill',
@@ -462,45 +385,28 @@ class _RiderScannerScreenState
           ),
         ),
 
-        const SizedBox(
-          height: 8,
-        ),
+        const SizedBox(height: 8),
 
         const Text(
           'Scan the QR code or barcode printed on the seller\'s parcel waybill.',
-          style: TextStyle(
-            color: _muted,
-            fontSize: 13,
-            height: 1.5,
-          ),
+          style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
         ),
 
-        if (expected != null &&
-            expected.isNotEmpty) ...<Widget>[
-          const SizedBox(
-            height: 10,
-          ),
+        if (expected != null && expected.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 10),
 
           Container(
-            padding:
-                const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 8,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: _soft,
-              borderRadius:
-                  BorderRadius.circular(
-                10,
-              ),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               'Expected: $expected',
               style: const TextStyle(
                 color: _primary,
                 fontSize: 11.5,
-                fontWeight:
-                    FontWeight.w800,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -514,13 +420,8 @@ class _RiderScannerScreenState
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.black,
-        borderRadius:
-            BorderRadius.circular(
-          22,
-        ),
-        border: Border.all(
-          color: _border,
-        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _border),
       ),
       child: Column(
         children: <Widget>[
@@ -530,19 +431,15 @@ class _RiderScannerScreenState
               children: <Widget>[
                 Positioned.fill(
                   child: MobileScanner(
-                    controller:
-                        _scannerController,
-                    onDetect:
-                        _onDetect,
+                    controller: _scannerController,
+                    onDetect: _onDetect,
+                    errorBuilder: _buildCameraError,
                   ),
                 ),
 
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: CustomPaint(
-                      painter:
-                          _ScannerOverlayPainter(),
-                    ),
+                    child: CustomPaint(painter: _ScannerOverlayPainter()),
                   ),
                 ),
 
@@ -551,27 +448,17 @@ class _RiderScannerScreenState
                   left: 16,
                   right: 16,
                   child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment
-                            .spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: <Widget>[
                       _ScannerControlButton(
-                        icon:
-                            Icons
-                                .flashlight_on_rounded,
-                        tooltip:
-                            'Flashlight',
-                        onTap:
-                            _toggleTorch,
+                        icon: Icons.flashlight_on_rounded,
+                        tooltip: 'Flashlight',
+                        onTap: _toggleTorch,
                       ),
                       _ScannerControlButton(
-                        icon:
-                            Icons
-                                .cameraswitch_rounded,
-                        tooltip:
-                            'Switch Camera',
-                        onTap:
-                            _switchCamera,
+                        icon: Icons.cameraswitch_rounded,
+                        tooltip: 'Switch Camera',
+                        onTap: _switchCamera,
                       ),
                     ],
                   ),
@@ -583,21 +470,14 @@ class _RiderScannerScreenState
                   bottom: 22,
                   child: Text(
                     'Place the QR code or barcode inside the frame.',
-                    textAlign:
-                        TextAlign.center,
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 12,
                       height: 1.4,
-                      fontWeight:
-                          FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                       shadows: <Shadow>[
-                        Shadow(
-                          color:
-                              Colors.black,
-                          blurRadius:
-                              6,
-                        ),
+                        Shadow(color: Colors.black, blurRadius: 6),
                       ],
                     ),
                   ),
@@ -606,34 +486,18 @@ class _RiderScannerScreenState
                 if (_handlingScan)
                   Positioned.fill(
                     child: Container(
-                      color:
-                          const Color(
-                        0x66000000,
-                      ),
-                      alignment:
-                          Alignment.center,
-                      child:
-                          const Column(
-                        mainAxisSize:
-                            MainAxisSize.min,
-                        children: <
-                            Widget>[
-                          CircularProgressIndicator(
-                            color:
-                                Colors.white,
-                          ),
-                          SizedBox(
-                            height:
-                                12,
-                          ),
+                      color: const Color(0x66000000),
+                      alignment: Alignment.center,
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          CircularProgressIndicator(color: Colors.white),
+                          SizedBox(height: 12),
                           Text(
                             'Processing parcel...',
-                            style:
-                                TextStyle(
-                              color:
-                                  Colors.white,
-                              fontWeight:
-                                  FontWeight.w800,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ],
@@ -646,48 +510,27 @@ class _RiderScannerScreenState
 
           Container(
             width: double.infinity,
-            padding:
-                const EdgeInsets.all(
-              14,
-            ),
+            padding: const EdgeInsets.all(14),
             color: _surface,
             child: Row(
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    _scannerPaused
-                        ? 'Scanner paused'
-                        : 'Camera scanner active',
-                    style:
-                        const TextStyle(
+                    _scannerPaused ? 'Scanner paused' : 'Camera scanner active',
+                    style: const TextStyle(
                       color: _muted,
                       fontSize: 12,
-                      fontWeight:
-                          FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
 
                 if (_scannerPaused)
                   TextButton.icon(
-                    onPressed:
-                        _scanAgain,
-                    icon:
-                        const Icon(
-                      Icons
-                          .refresh_rounded,
-                      size:
-                          18,
-                    ),
-                    label:
-                        const Text(
-                      'Scan Again',
-                    ),
-                    style:
-                        TextButton.styleFrom(
-                      foregroundColor:
-                          _primary,
-                    ),
+                    onPressed: _scanAgain,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('Scan Again'),
+                    style: TextButton.styleFrom(foregroundColor: _primary),
                   ),
               ],
             ),
@@ -697,24 +540,60 @@ class _RiderScannerScreenState
     );
   }
 
+  Widget _buildCameraError(BuildContext context, MobileScannerException error) {
+    return Container(
+      color: Colors.black,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(
+            Icons.no_photography_outlined,
+            color: Colors.white,
+            size: 42,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Camera is unavailable',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Allow camera permission in Settings, then try again.\n${error.errorCode.message}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _scanAgain,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try Again'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white54),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildManualEntry() {
     return Container(
-      padding: const EdgeInsets.all(
-        16,
-      ),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
-        border: Border.all(
-          color: _border,
-        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _border),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const Text(
             'Manual Tracking Code',
@@ -725,118 +604,63 @@ class _RiderScannerScreenState
             ),
           ),
 
-          const SizedBox(
-            height: 5,
-          ),
+          const SizedBox(height: 5),
 
           const Text(
             'If the camera cannot read the waybill, enter the parcel tracking code manually.',
-            style: TextStyle(
-              color: _muted,
-              fontSize: 12,
-              height: 1.5,
-            ),
+            style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
           ),
 
-          const SizedBox(
-            height: 14,
-          ),
+          const SizedBox(height: 14),
 
           TextField(
-            controller:
-                _manualCodeController,
-            enabled:
-                !_handlingScan,
+            controller: _manualCodeController,
+            enabled: !_handlingScan,
             autocorrect: false,
-            textCapitalization:
-                TextCapitalization
-                    .characters,
-            textInputAction:
-                TextInputAction.done,
-            onSubmitted:
-                (
-              String value,
-            ) {
+            textCapitalization: TextCapitalization.characters,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (String value) {
               _submitManualCode();
             },
             decoration: InputDecoration(
-              hintText:
-                  'Enter tracking code',
-              prefixIcon:
-                  const Icon(
-                Icons
-                    .confirmation_number_outlined,
-              ),
+              hintText: 'Enter tracking code',
+              prefixIcon: const Icon(Icons.confirmation_number_outlined),
               filled: true,
               fillColor: Colors.white,
-              contentPadding:
-                  const EdgeInsets.symmetric(
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 14,
               ),
-              enabledBorder:
-                  OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(
-                  12,
-                ),
-                borderSide:
-                    const BorderSide(
-                  color: _border,
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _border),
               ),
-              focusedBorder:
-                  OutlineInputBorder(
-                borderRadius:
-                    BorderRadius.circular(
-                  12,
-                ),
-                borderSide:
-                    const BorderSide(
-                  color: _primary,
-                  width: 1.4,
-                ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: _primary, width: 1.4),
               ),
             ),
           ),
 
-          const SizedBox(
-            height: 12,
-          ),
+          const SizedBox(height: 12),
 
           SizedBox(
             width: double.infinity,
             height: 49,
             child: ElevatedButton.icon(
-              onPressed:
-                  _handlingScan
-                      ? null
-                      : _submitManualCode,
-              style:
-                  ElevatedButton.styleFrom(
+              onPressed: _handlingScan ? null : _submitManualCode,
+              style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor:
-                    _primary,
-                foregroundColor:
-                    Colors.white,
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    12,
-                  ),
+                backgroundColor: _primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              icon: const Icon(
-                Icons
-                    .verified_outlined,
-              ),
+              icon: const Icon(Icons.verified_outlined),
               label: const Text(
                 'Use Tracking Code',
-                style: TextStyle(
-                  fontWeight:
-                      FontWeight.w900,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ),
@@ -848,62 +672,40 @@ class _RiderScannerScreenState
   Widget _buildSuccessMessage() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(
-        14,
-      ),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _successSoft,
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
-        border: Border.all(
-          color: const Color(
-            0xFFB7DFC5,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFB7DFC5)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(
-            Icons
-                .check_circle_rounded,
-            color: _success,
-            size: 22,
-          ),
+          const Icon(Icons.check_circle_rounded, color: _success, size: 22),
 
-          const SizedBox(
-            width: 9,
-          ),
+          const SizedBox(width: 9),
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 const Text(
                   'Parcel code scanned',
                   style: TextStyle(
                     color: _success,
                     fontSize: 12.5,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 4,
-                ),
+                const SizedBox(height: 4),
 
                 Text(
                   _scannedCode ?? '',
                   style: const TextStyle(
                     color: _success,
                     fontSize: 13,
-                    fontWeight:
-                        FontWeight.w700,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -912,12 +714,8 @@ class _RiderScannerScreenState
 
           IconButton(
             tooltip: 'Scan Again',
-            onPressed:
-                _scanAgain,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              color: _success,
-            ),
+            onPressed: _scanAgain,
+            icon: const Icon(Icons.refresh_rounded, color: _success),
           ),
         ],
       ),
@@ -927,34 +725,18 @@ class _RiderScannerScreenState
   Widget _buildErrorMessage() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(
-        14,
-      ),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _dangerSoft,
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
-        border: Border.all(
-          color: const Color(
-            0xFFF4C3BE,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF4C3BE)),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(
-            Icons.error_outline_rounded,
-            color: _danger,
-            size: 22,
-          ),
+          const Icon(Icons.error_outline_rounded, color: _danger, size: 22),
 
-          const SizedBox(
-            width: 9,
-          ),
+          const SizedBox(width: 9),
 
           Expanded(
             child: Text(
@@ -963,20 +745,15 @@ class _RiderScannerScreenState
                 color: _danger,
                 fontSize: 12.5,
                 height: 1.45,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
 
           IconButton(
             tooltip: 'Scan Again',
-            onPressed:
-                _scanAgain,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              color: _danger,
-            ),
+            onPressed: _scanAgain,
+            icon: const Icon(Icons.refresh_rounded, color: _danger),
           ),
         ],
       ),
@@ -984,14 +761,12 @@ class _RiderScannerScreenState
   }
 }
 
-class _ScannerControlButton
-    extends StatelessWidget {
+class _ScannerControlButton extends StatelessWidget {
   final IconData icon;
 
   final String tooltip;
 
-  final Future<void> Function()
-      onTap;
+  final Future<void> Function() onTap;
 
   const _ScannerControlButton({
     required this.icon,
@@ -1000,213 +775,117 @@ class _ScannerControlButton
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Material(
-      color: const Color(
-        0x99000000,
-      ),
-      borderRadius:
-          BorderRadius.circular(
-        100,
-      ),
+      color: const Color(0x99000000),
+      borderRadius: BorderRadius.circular(100),
       child: IconButton(
         tooltip: tooltip,
         onPressed: onTap,
         color: Colors.white,
-        icon: Icon(
-          icon,
-        ),
+        icon: Icon(icon),
       ),
     );
   }
 }
 
-class _ScannerOverlayPainter
-    extends CustomPainter {
-  static const Color _overlay =
-      Color(0x77000000);
+class _ScannerOverlayPainter extends CustomPainter {
+  static const Color _overlay = Color(0x77000000);
 
-  static const Color _frame =
-      Colors.white;
+  static const Color _frame = Colors.white;
 
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
-    final double frameWidth =
-        size.width * 0.72;
+  void paint(Canvas canvas, Size size) {
+    final double frameWidth = size.width * 0.72;
 
-    final double frameHeight =
-        frameWidth * 0.62;
+    final double frameHeight = frameWidth * 0.62;
 
-    final Rect frameRect =
-        Rect.fromCenter(
-      center: Offset(
-        size.width / 2,
-        size.height / 2,
-      ),
+    final Rect frameRect = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
       width: frameWidth,
       height: frameHeight,
     );
 
-    final RRect frame =
-        RRect.fromRectAndRadius(
+    final RRect frame = RRect.fromRectAndRadius(
       frameRect,
-      const Radius.circular(
-        20,
-      ),
+      const Radius.circular(20),
     );
 
-    final Path fullScreen =
-        Path()
-          ..addRect(
-            Offset.zero &
-                size,
-          );
+    final Path fullScreen = Path()..addRect(Offset.zero & size);
 
-    final Path hole =
-        Path()
-          ..addRRect(
-            frame,
-          );
+    final Path hole = Path()..addRRect(frame);
 
-    final Path overlayPath =
-        Path.combine(
+    final Path overlayPath = Path.combine(
       PathOperation.difference,
       fullScreen,
       hole,
     );
 
-    canvas.drawPath(
-      overlayPath,
-      Paint()
-        ..color =
-            _overlay,
-    );
+    canvas.drawPath(overlayPath, Paint()..color = _overlay);
 
-    final Paint cornerPaint =
-        Paint()
-          ..color =
-              _frame
-          ..strokeWidth =
-              4
-          ..style =
-              PaintingStyle.stroke
-          ..strokeCap =
-              StrokeCap.round;
+    final Paint cornerPaint = Paint()
+      ..color = _frame
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
-    const double corner =
-        30;
+    const double corner = 30;
 
     /// Top left.
     canvas.drawLine(
-      Offset(
-        frameRect.left,
-        frameRect.top + corner,
-      ),
-      Offset(
-        frameRect.left,
-        frameRect.top,
-      ),
+      Offset(frameRect.left, frameRect.top + corner),
+      Offset(frameRect.left, frameRect.top),
       cornerPaint,
     );
 
     canvas.drawLine(
-      Offset(
-        frameRect.left,
-        frameRect.top,
-      ),
-      Offset(
-        frameRect.left + corner,
-        frameRect.top,
-      ),
+      Offset(frameRect.left, frameRect.top),
+      Offset(frameRect.left + corner, frameRect.top),
       cornerPaint,
     );
 
     /// Top right.
     canvas.drawLine(
-      Offset(
-        frameRect.right - corner,
-        frameRect.top,
-      ),
-      Offset(
-        frameRect.right,
-        frameRect.top,
-      ),
+      Offset(frameRect.right - corner, frameRect.top),
+      Offset(frameRect.right, frameRect.top),
       cornerPaint,
     );
 
     canvas.drawLine(
-      Offset(
-        frameRect.right,
-        frameRect.top,
-      ),
-      Offset(
-        frameRect.right,
-        frameRect.top + corner,
-      ),
+      Offset(frameRect.right, frameRect.top),
+      Offset(frameRect.right, frameRect.top + corner),
       cornerPaint,
     );
 
     /// Bottom left.
     canvas.drawLine(
-      Offset(
-        frameRect.left,
-        frameRect.bottom - corner,
-      ),
-      Offset(
-        frameRect.left,
-        frameRect.bottom,
-      ),
+      Offset(frameRect.left, frameRect.bottom - corner),
+      Offset(frameRect.left, frameRect.bottom),
       cornerPaint,
     );
 
     canvas.drawLine(
-      Offset(
-        frameRect.left,
-        frameRect.bottom,
-      ),
-      Offset(
-        frameRect.left + corner,
-        frameRect.bottom,
-      ),
+      Offset(frameRect.left, frameRect.bottom),
+      Offset(frameRect.left + corner, frameRect.bottom),
       cornerPaint,
     );
 
     /// Bottom right.
     canvas.drawLine(
-      Offset(
-        frameRect.right - corner,
-        frameRect.bottom,
-      ),
-      Offset(
-        frameRect.right,
-        frameRect.bottom,
-      ),
+      Offset(frameRect.right - corner, frameRect.bottom),
+      Offset(frameRect.right, frameRect.bottom),
       cornerPaint,
     );
 
     canvas.drawLine(
-      Offset(
-        frameRect.right,
-        frameRect.bottom,
-      ),
-      Offset(
-        frameRect.right,
-        frameRect.bottom - corner,
-      ),
+      Offset(frameRect.right, frameRect.bottom),
+      Offset(frameRect.right, frameRect.bottom - corner),
       cornerPaint,
     );
   }
 
   @override
-  bool shouldRepaint(
-    covariant CustomPainter
-        oldDelegate,
-  ) {
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return false;
   }
 }

@@ -24,9 +24,11 @@ class AddressOption {
 
 class RegistrationDocument {
   final String name;
+  final String? path;
 
   const RegistrationDocument({
     required this.name,
+    this.path,
   });
 }
 
@@ -1320,6 +1322,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildFormCard() {
+    final List<Widget> steps = _accountType == MobileAccountType.rider
+        ? <Widget>[
+            _buildPersonalStep(),
+            _buildContactStep(),
+            _buildAddressStep(),
+            _buildVehicleStep(),
+            _buildVerificationStep(),
+          ]
+        : <Widget>[
+            _buildPersonalStep(),
+            _buildContactStep(),
+            _buildAddressStep(),
+            _buildVerificationStep(),
+          ];
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(
@@ -1347,32 +1364,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ],
       ),
-      child: SizedBox(
-        child: AnimatedSize(
-          duration: const Duration(
-            milliseconds: 250,
-          ),
-          curve: Curves.easeOutCubic,
-          child: IndexedStack(
-            index: _currentStep,
-            children:
-                _accountType ==
-                    MobileAccountType.rider
-                ? [
-                    _buildPersonalStep(),
-                    _buildContactStep(),
-                    _buildAddressStep(),
-                    _buildVehicleStep(),
-                    _buildVerificationStep(),
-                  ]
-                : [
-                    _buildPersonalStep(),
-                    _buildContactStep(),
-                    _buildAddressStep(),
-                    _buildVerificationStep(),
-                  ],
-          ),
-        ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        child: steps[_currentStep],
       ),
     );
   }

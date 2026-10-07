@@ -1,0 +1,42 @@
+name: mapbox_navigation_sdk
+description: >
+  Add Turn By Turn Navigation to Your Flutter Application Using MapBox. 
+  Never leave your app when you need to navigate your users to a location.
+version: 0.0.1
+homepage: "https://etornam.dev"
+repository: "https://github.com/iamEtornam/flutter_mapbox_navigation"
+
+environment:
+  sdk: '>=2.19.4 <4.0.0'
+  flutter: ">=2.5.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  plugin_platform_interface: ^2.1.8
+  very_good_analysis: ^10.2.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: dev.etornam.mapboxnavigation
+        pluginClass: FlutterMapboxNavigationPlugin
+      ios:
+        pluginClass: FlutterMapboxNavigationPlugin
+ #      linux:
+ #        pluginClass: FlutterMapboxNavigationPlugin
+ #      macos:
+ #        pluginClass: FlutterMapboxNavigationPlugin
+ #      windows:
+ #        pluginClass: FlutterMapboxNavigationPluginCApi
+ #      web:
+ #        pluginClass: FlutterMapboxNavigationWeb
+ #        fileName: flutter_mapbox_navigation_web.dart

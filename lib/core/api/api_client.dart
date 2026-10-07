@@ -47,7 +47,7 @@ class ApiClient {
         onRequest: (RequestOptions options, RequestInterceptorHandler handler) async {
           final String? token = await TokenStorage.readToken();
           if (token != null && token.trim().isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
+            options.headers['Authorization'] = 'Bearer ${token.trim()}';
           }
           options.headers['Accept'] = 'application/json';
           handler.next(options);
@@ -91,6 +91,22 @@ class ApiClient {
     }
 
     return _dio.post(
+      path,
+      data: data,
+      options: options,
+    );
+  }
+
+  static Future<Response<dynamic>> patch(
+    String path,
+    dynamic data, {
+    Options? options,
+  }) async {
+    if (!AppConfig.apiEnabled) {
+      return _offlineResponse(path, data: <String, dynamic>{});
+    }
+
+    return _dio.patch(
       path,
       data: data,
       options: options,

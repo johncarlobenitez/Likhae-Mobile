@@ -97,6 +97,7 @@ class BuyerProfileData {
 
   final String phone;
 
+  final String? middleInitial;
   final DateTime? birthday;
   final BuyerGender? gender;
 
@@ -106,6 +107,7 @@ class BuyerProfileData {
     required this.name,
     required this.email,
     this.phone = '',
+    this.middleInitial,
     this.birthday,
     this.gender,
     this.profilePhotoUrl,
@@ -120,6 +122,16 @@ class BuyerProfileData {
 
     return cleanName[0].toUpperCase();
   }
+}
+
+class BuyerAccountSnapshot {
+  final BuyerProfileData profile;
+  final List<BuyerAddressData> addresses;
+
+  const BuyerAccountSnapshot({
+    required this.profile,
+    required this.addresses,
+  });
 }
 
 class SelectedProfilePhoto {
@@ -303,10 +315,13 @@ typedef AddBuyerAddressCallback =
 typedef DeleteBuyerAddressCallback =
     Future<void> Function(BuyerAddressData address);
 
+typedef SetDefaultBuyerAddressCallback =
+    Future<void> Function(BuyerAddressData address);
+
 typedef ChangeBuyerPasswordCallback =
     Future<void> Function(ChangeBuyerPasswordRequest request);
 
-typedef RefreshBuyerAccountCallback = Future<void> Function();
+typedef RefreshBuyerAccountCallback = Future<BuyerAccountSnapshot> Function();
 
 typedef LogoutBuyerCallback = Future<void> Function();
 
@@ -336,6 +351,8 @@ class AccountScreen extends StatefulWidget {
 
   final DeleteBuyerAddressCallback? onDeleteAddress;
 
+  final SetDefaultBuyerAddressCallback? onSetDefaultAddress;
+
   final ChangeBuyerPasswordCallback? onChangePassword;
 
   final RefreshBuyerAccountCallback? onRefresh;
@@ -363,6 +380,7 @@ class AccountScreen extends StatefulWidget {
     this.onRemoveProfilePhoto,
     this.onAddAddress,
     this.onDeleteAddress,
+    this.onSetDefaultAddress,
     this.onChangePassword,
     this.onRefresh,
     this.onLogout,
@@ -416,6 +434,7 @@ class _AccountScreenState extends State<AccountScreen> {
   bool _addingAddress = false;
 
   final Set<String> _deletingAddressIds = <String>{};
+  final Set<String> _defaultingAddressIds = <String>{};
 
   bool _changingPassword = false;
   bool _refreshing = false;
@@ -588,7 +607,22 @@ class _AccountScreenState extends State<AccountScreen> {
     });
 
     try {
-      await callback();
+      final BuyerAccountSnapshot snapshot = await callback();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _profile = snapshot.profile;
+        _addresses = List<BuyerAddressData>.from(snapshot.addresses);
+        _nameController.text = snapshot.profile.name;
+        _emailController.text = snapshot.profile.email;
+        _phoneController.text = snapshot.profile.phone;
+        _birthday = snapshot.profile.birthday;
+        _gender = snapshot.profile.gender;
+        _selectedPhoto = null;
+      });
+      widget.onProfileChanged?.call(snapshot.profile);
+      widget.onAddressesChanged?.call(_addresses);
     } catch (error) {
       _showMessage(_errorText(error), error: true);
     } finally {
@@ -1058,6 +1092,39 @@ class _AccountScreenState extends State<AccountScreen> {
         setState(() {
           _deletingAddressIds.remove(address.id);
         });
+      }
+    }
+  }
+
+  Future<void> _setDefaultAddress(BuyerAddressData address) async {
+    if (address.isDefault || _defaultingAddressIds.contains(address.id)) {
+      return;
+    }
+    final SetDefaultBuyerAddressCallback? callback =
+        widget.onSetDefaultAddress;
+    if (callback == null) {
+      _showMessage('Setting the default address is not connected.');
+      return;
+    }
+    setState(() => _defaultingAddressIds.add(address.id));
+    try {
+      await callback(address);
+      if (!mounted) return;
+      setState(() {
+        _addresses = _addresses
+            .map(
+              (BuyerAddressData current) =>
+                  current.copyWith(isDefault: current.id == address.id),
+            )
+            .toList(growable: false);
+      });
+      _notifyAddressesChanged();
+      _showMessage('Default delivery address updated.');
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) {
+        setState(() => _defaultingAddressIds.remove(address.id));
       }
     }
   }
@@ -2036,6 +2103,8 @@ class _AccountScreenState extends State<AccountScreen> {
                 child: _AddressCard(
                   address: address,
                   deleting: _deletingAddressIds.contains(address.id),
+                  settingDefault: _defaultingAddressIds.contains(address.id),
+                  onSetDefault: () => _setDefaultAddress(address),
                   onDelete: () {
                     _deleteAddress(address);
                   },
@@ -2784,12 +2853,16 @@ class _AddressCard extends StatelessWidget {
   final BuyerAddressData address;
 
   final bool deleting;
+  final bool settingDefault;
+  final VoidCallback onSetDefault;
 
   final VoidCallback onDelete;
 
   const _AddressCard({
     required this.address,
     required this.deleting,
+    required this.settingDefault,
+    required this.onSetDefault,
     required this.onDelete,
   });
 
@@ -2911,23 +2984,38 @@ class _AddressCard extends StatelessWidget {
 
           const SizedBox(width: 6),
 
-          IconButton(
-            tooltip: 'Delete address',
-            onPressed: deleting ? null : onDelete,
-            icon: deleting
-                ? const SizedBox(
-                    width: 17,
-                    height: 17,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFFB42318),
-                    ),
-                  )
-                : const Icon(
-                    Icons.delete_outline_rounded,
-                    color: Color(0xFFB42318),
-                    size: 19,
-                  ),
+          Column(
+            children: [
+              if (!address.isDefault)
+                TextButton(
+                  onPressed: settingDefault ? null : onSetDefault,
+                  child: settingDefault
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Set default'),
+                ),
+              IconButton(
+                tooltip: 'Delete address',
+                onPressed: deleting ? null : onDelete,
+                icon: deleting
+                    ? const SizedBox(
+                        width: 17,
+                        height: 17,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFB42318),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Color(0xFFB42318),
+                        size: 19,
+                      ),
+              ),
+            ],
           ),
         ],
       ),

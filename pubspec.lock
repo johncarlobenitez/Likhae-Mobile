@@ -684,17 +684,16 @@ packages:
     dependency: "direct main"
     description:
       name: mapbox_maps_flutter
-      sha256: "8f431b36f9ec1c7fa498364df54d30a1b6dbedba53e99182cd528567006681ec"
+      sha256: c2043d610ae976831b958f9ca22627a729f22598f5b339e3c94eb8d883f918ce
       url: "https://pub.dev"
     source: hosted
-    version: "2.31.1"
+    version: "2.23.1"
   mapbox_navigation_sdk:
     dependency: "direct main"
     description:
-      name: mapbox_navigation_sdk
-      sha256: e225144e2e97c1813c050813fef217aa9d29e50bf1b857d226cff466a4f93489
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/mapbox_navigation_sdk"
+      relative: true
+    source: path
     version: "0.0.1"
   matcher:
     dependency: transitive

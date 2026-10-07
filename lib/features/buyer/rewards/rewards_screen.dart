@@ -69,6 +69,7 @@ class RewardVoucherData {
   /// Optional additional campaign context.
   final String? campaignName;
   final String? sellerName;
+  final int? sellerId;
 
   /// Optional explicit usability supplied by Laravel.
   ///
@@ -85,7 +86,34 @@ class RewardVoucherData {
     required this.expires,
     this.campaignName,
     this.sellerName,
+    this.sellerId,
     this.canUse,
+  });
+}
+
+class RewardsData {
+  final List<RewardVoucherData> activeVouchers;
+  final List<VoucherHistoryData> voucherHistory;
+  final int pointsBalance;
+  final List<PointsActivityData> pointActivities;
+  final double availableCashback;
+  final double pendingCashback;
+  final List<CashbackActivityData> cashbackActivities;
+  final int pointsPerCompletedOrder;
+  final int pointsPerReview;
+  final double cashbackRate;
+
+  const RewardsData({
+    required this.activeVouchers,
+    required this.voucherHistory,
+    required this.pointsBalance,
+    required this.pointActivities,
+    required this.availableCashback,
+    required this.pendingCashback,
+    required this.cashbackActivities,
+    required this.pointsPerCompletedOrder,
+    required this.pointsPerReview,
+    required this.cashbackRate,
   });
 }
 
@@ -132,7 +160,7 @@ class CashbackActivityData {
   });
 }
 
-typedef RewardsRefreshCallback = Future<void> Function();
+typedef RewardsRefreshCallback = Future<RewardsData> Function();
 
 typedef RewardVoucherCallback = void Function(
   RewardVoucherData voucher,
@@ -260,6 +288,7 @@ class _RewardsScreenState
       Color(0xFFB42318);
 
   late RewardsTab _activeTab;
+  late RewardsData _data;
 
   bool _refreshing = false;
 
@@ -268,6 +297,7 @@ class _RewardsScreenState
     super.initState();
 
     _activeTab = widget.initialTab;
+    _data = _widgetData();
   }
 
   @override
@@ -283,7 +313,29 @@ class _RewardsScreenState
       _activeTab =
           widget.initialTab;
     }
+    if (oldWidget.activeVouchers != widget.activeVouchers ||
+        oldWidget.voucherHistory != widget.voucherHistory ||
+        oldWidget.pointsBalance != widget.pointsBalance ||
+        oldWidget.pointActivities != widget.pointActivities ||
+        oldWidget.availableCashback != widget.availableCashback ||
+        oldWidget.pendingCashback != widget.pendingCashback ||
+        oldWidget.cashbackActivities != widget.cashbackActivities) {
+      _data = _widgetData();
+    }
   }
+
+  RewardsData _widgetData() => RewardsData(
+    activeVouchers: widget.activeVouchers,
+    voucherHistory: widget.voucherHistory,
+    pointsBalance: widget.pointsBalance,
+    pointActivities: widget.pointActivities,
+    availableCashback: widget.availableCashback,
+    pendingCashback: widget.pendingCashback,
+    cashbackActivities: widget.cashbackActivities,
+    pointsPerCompletedOrder: widget.pointsPerCompletedOrder,
+    pointsPerReview: widget.pointsPerReview,
+    cashbackRate: widget.cashbackRate,
+  );
 
   Future<void> _refresh() async {
     final RewardsRefreshCallback? callback =
@@ -299,7 +351,11 @@ class _RewardsScreenState
     });
 
     try {
-      await callback();
+      final RewardsData refreshed = await callback();
+      if (!mounted) return;
+      setState(() {
+        _data = refreshed;
+      });
     } catch (error) {
       _showMessage(
         _errorText(
@@ -869,7 +925,7 @@ class _RewardsScreenState
                 label:
                     'Active vouchers',
                 value:
-                    '${widget.activeVouchers.length}',
+                    '${_data.activeVouchers.length}',
               ),
             ),
             SizedBox(
@@ -884,7 +940,7 @@ class _RewardsScreenState
                     'Reward points',
                 value:
                     _formatInteger(
-                  widget.pointsBalance,
+                  _data.pointsBalance,
                 ),
               ),
             ),
@@ -900,7 +956,7 @@ class _RewardsScreenState
                     'Cashback',
                 value:
                     _formatMoney(
-                  widget.availableCashback,
+                  _data.availableCashback,
                 ),
               ),
             ),
@@ -1064,10 +1120,10 @@ class _RewardsScreenState
               14,
         ),
 
-        if (widget.activeVouchers.isEmpty)
+        if (_data.activeVouchers.isEmpty)
           _buildNoVoucherCard()
         else
-          ...widget.activeVouchers.map(
+          ..._data.activeVouchers.map(
             (
               RewardVoucherData voucher,
             ) {
@@ -1109,7 +1165,7 @@ class _RewardsScreenState
               Icons
                   .history_rounded,
           child:
-              widget.voucherHistory.isEmpty
+              _data.voucherHistory.isEmpty
                   ? const _SimpleEmptyRow(
                       title:
                           'No voucher history yet',
@@ -1118,7 +1174,7 @@ class _RewardsScreenState
                     )
                   : Column(
                       children:
-                          widget.voucherHistory
+                          _data.voucherHistory
                               .map(
                         (
                           VoucherHistoryData item,
@@ -1427,7 +1483,7 @@ class _RewardsScreenState
 
               Text(
                 _formatInteger(
-                  widget.pointsBalance,
+                  _data.pointsBalance,
                 ),
                 style:
                     const TextStyle(
@@ -1551,7 +1607,7 @@ class _RewardsScreenState
             children: [
               _EarnPointCard(
                 value:
-                    '+${widget.pointsPerCompletedOrder}',
+                    '+${_data.pointsPerCompletedOrder}',
                 label:
                     'Completed / delivered order',
                 icon:
@@ -1566,7 +1622,7 @@ class _RewardsScreenState
 
               _EarnPointCard(
                 value:
-                    '+${widget.pointsPerReview}',
+                    '+${_data.pointsPerReview}',
                 label:
                     'Product review',
                 icon:
@@ -1589,7 +1645,7 @@ class _RewardsScreenState
               Icons
                   .history_rounded,
           child:
-              widget.pointActivities.isEmpty
+              _data.pointActivities.isEmpty
                   ? const _SimpleEmptyRow(
                       title:
                           'No points activity yet',
@@ -1598,7 +1654,7 @@ class _RewardsScreenState
                     )
                   : Column(
                       children:
-                          widget.pointActivities
+                          _data.pointActivities
                               .map(
                         (
                           PointsActivityData activity,
@@ -1617,19 +1673,19 @@ class _RewardsScreenState
 
   Widget _buildCashback() {
     final double safeAvailable =
-        widget.availableCashback < 0
+        _data.availableCashback < 0
             ? 0
-            : widget.availableCashback;
+            : _data.availableCashback;
 
     final double safePending =
-        widget.pendingCashback < 0
+        _data.pendingCashback < 0
             ? 0
-            : widget.pendingCashback;
+            : _data.pendingCashback;
 
     final double safeRate =
-        widget.cashbackRate < 0
+        _data.cashbackRate < 0
             ? 0
-            : widget.cashbackRate;
+            : _data.cashbackRate;
 
     return Column(
       crossAxisAlignment:
@@ -1936,7 +1992,7 @@ class _RewardsScreenState
               Icons
                   .history_rounded,
           child:
-              widget.cashbackActivities.isEmpty
+              _data.cashbackActivities.isEmpty
                   ? const _SimpleEmptyRow(
                       title:
                           'No cashback activity yet',
@@ -1945,7 +2001,7 @@ class _RewardsScreenState
                     )
                   : Column(
                       children:
-                          widget.cashbackActivities
+                          _data.cashbackActivities
                               .map(
                         (
                           CashbackActivityData activity,

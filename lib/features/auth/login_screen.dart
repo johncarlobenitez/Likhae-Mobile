@@ -12,8 +12,6 @@ class LoginScreen extends StatefulWidget {
   final VoidCallback? onRegister;
   final VoidCallback? onGoogleSignIn;
   final VoidCallback? onFacebookSignIn;
-  final VoidCallback? onContinueAsBuyer;
-  final VoidCallback? onContinueAsRider;
 
   const LoginScreen({
     super.key,
@@ -22,8 +20,6 @@ class LoginScreen extends StatefulWidget {
     this.onRegister,
     this.onGoogleSignIn,
     this.onFacebookSignIn,
-    this.onContinueAsBuyer,
-    this.onContinueAsRider,
   });
 
   @override
@@ -807,42 +803,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
 
-                const SizedBox(height: 24),
-
-                const _DividerLabel(text: 'or quick access'),
-
-                const SizedBox(height: 16),
-
-                // â”€â”€ Role selection (if/else navigation) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                Row(
-                  children: [
-                    Expanded(
-                      child: _RoleButton(
-                        label: 'Buyer',
-                        icon: Icons.storefront_outlined,
-                        onTap: () {
-                          if (widget.onContinueAsBuyer != null) {
-                            widget.onContinueAsBuyer!();
-                          }
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    Expanded(
-                      child: _RoleButton(
-                        label: 'Rider',
-                        icon: Icons.delivery_dining_outlined,
-                        onTap: () {
-                          if (widget.onContinueAsRider != null) {
-                            widget.onContinueAsRider!();
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
             ],
           ),
         ),
@@ -1185,56 +1145,6 @@ class _TrustBadge extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _RoleButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _RoleButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 50,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          elevation: 0,
-          backgroundColor: const Color(0xFFF7EFE5),
-          foregroundColor: const Color(0xFF741015),
-          side: const BorderSide(color: Color(0xFFDCC9B5)),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(13),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 7),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
