@@ -8,7 +8,7 @@ class PhilippineAddressService {
 
   static final Dio _dio = Dio(
     BaseOptions(
-      baseUrl: '${AppConfig.webBaseUrl}/address/philippines',
+      baseUrl: AppConfig.resolveApiUrl('address/philippines'),
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
       headers: <String, String>{'Accept': 'application/json'},
@@ -51,11 +51,16 @@ class PhilippineAddressService {
   static Future<String?> fetchPostalCode({
     required String municipalityCode,
     required String barangayCode,
+    required String provinceName,
+    required String municipalityName,
   }) async {
     final Response<dynamic> response = await _dio.get(
       '/postal-code',
       queryParameters: <String, dynamic>{
         'municipality': municipalityCode,
+        'province_name': provinceName,
+        'municipality_name': municipalityName,
+        'barangay': barangayCode,
       },
     );
     final dynamic data = response.data;

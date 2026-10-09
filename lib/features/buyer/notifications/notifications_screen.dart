@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import '../../../services/realtime_service.dart';
 
 enum BuyerNotificationType {
   orders,
@@ -275,6 +279,8 @@ typedef MarkAllNotificationsReadCallback = Future<void> Function();
 typedef RefreshNotificationsCallback =
     Future<List<BuyerNotificationData>> Function();
 
+typedef NotificationStreamBuilder = Stream<BuyerNotificationData> Function();
+
 class NotificationsScreen extends StatefulWidget {
   final List<BuyerNotificationData> notifications;
 
@@ -301,6 +307,8 @@ class NotificationsScreen extends StatefulWidget {
   /// Reload the authoritative notification list from Laravel.
   final RefreshNotificationsCallback? onRefresh;
 
+  final NotificationStreamBuilder? realtimeStreamBuilder;
+
   /// Lets Home/navigation update its notification badge after
   /// this screen receives new server state or marks all read.
   final ValueChanged<int>? onUnreadCountChanged;
@@ -313,6 +321,7 @@ class NotificationsScreen extends StatefulWidget {
     this.onNotificationTap,
     this.onMarkAllAsRead,
     this.onRefresh,
+    this.realtimeStreamBuilder,
     this.onUnreadCountChanged,
   });
 
@@ -353,6 +362,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _refreshing = false;
 
   final Set<String> _openingNotificationIds = <String>{};
+  StreamSubscription<BuyerNotificationData>? _notificationStream;
 
   @override
   void initState() {
@@ -363,6 +373,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
 
     _activeFilter = widget.initialFilter;
+
+    if (widget.realtimeStreamBuilder != null) {
+      unawaited(_connectRealtime());
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_notificationStream?.cancel());
+    super.dispose();
+  }
+
+  Future<void> _connectRealtime() async {
+    try {
+      final NotificationStreamBuilder? builder =
+          widget.realtimeStreamBuilder;
+      if (builder == null) return;
+
+      _notificationStream = builder().listen(
+        (BuyerNotificationData notification) {
+          if (!mounted ||
+              _notifications.any(
+                (BuyerNotificationData item) => item.id == notification.id,
+              )) {
+            return;
+          }
+          setState(() => _notifications.insert(0, notification));
+          widget.onUnreadCountChanged?.call(_unreadCount);
+        },
+        onError: (_) {},
+      );
+    } catch (_) {
+      // The initial API list and manual refresh remain available offline.
+    }
   }
 
   @override

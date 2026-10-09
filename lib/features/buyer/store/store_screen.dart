@@ -58,12 +58,26 @@ class StoreSellerData {
 
   factory StoreSellerData.fromApi(Map<String, dynamic> json) {
     return StoreSellerData(
-      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
-      name: (json['name'] ?? 'Seller').toString(),
-      slug: (json['slug'] ?? '').toString(),
-      avatarUrl: json['logo_url']?.toString() ?? json['avatar_url']?.toString(),
-      location: json['location']?.toString(),
-      joinedYear: json['joined_year']?.toString(),
+      id: int.tryParse(
+            (json['id'] ?? json['user_id'] ?? json['seller_user_id'])
+                    ?.toString() ??
+                '',
+          ) ??
+          0,
+      name: (json['name'] ??
+              json['business_name'] ??
+              json['store_name'] ??
+              'Seller')
+          .toString(),
+      slug: (json['slug'] ?? json['store_slug'] ?? json['seller_slug'] ?? '')
+          .toString(),
+      avatarUrl: json['logo_url']?.toString() ??
+          json['avatar_url']?.toString() ??
+          json['seller_avatar']?.toString(),
+      location: json['location']?.toString() ??
+          json['seller_location']?.toString(),
+      joinedYear: json['joined_year']?.toString() ??
+          json['year_joined']?.toString(),
       rating: double.tryParse(json['rating']?.toString() ?? ''),
       description: json['description']?.toString(),
       verified: json['verified'] == true || json['is_verified'] == true,
@@ -135,21 +149,57 @@ class StoreProductData {
   });
 
   factory StoreProductData.fromApi(Map<String, dynamic> json) {
-    final String imageValue = (json['image_url'] ?? json['image'] ?? '').toString();
-    final double price = double.tryParse(json['price']?.toString() ?? '') ?? 0;
+    final dynamic rawImage = json['image_url'] ??
+        json['image'] ??
+        json['photo'] ??
+        json['primary_image'];
+    final String imageValue = rawImage is Map
+        ? (rawImage['url'] ?? rawImage['image_url'] ?? rawImage['file_path'] ?? '')
+              .toString()
+        : (rawImage ?? '').toString();
+    final dynamic rawVariants = json['variants'];
+    final Map<String, dynamic>? defaultVariant = rawVariants is List
+        ? rawVariants
+              .whereType<Map>()
+              .map((Map item) => Map<String, dynamic>.from(item))
+              .cast<Map<String, dynamic>?>()
+              .firstWhere(
+                (Map<String, dynamic>? item) => item?['is_default'] == true,
+                orElse: () => null,
+              )
+        : null;
+    final double price = double.tryParse(
+          (json['price'] ??
+                  json['min_price'] ??
+                  defaultVariant?['price'] ??
+                  '')
+              .toString(),
+        ) ??
+        0;
+    final double? originalPrice = double.tryParse(
+      (json['old_price'] ??
+              json['original_price'] ??
+              defaultVariant?['original_price'] ??
+              '')
+          .toString(),
+    );
 
     return StoreProductData(
       id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
       name: (json['name'] ?? 'Product').toString(),
       slug: json['slug']?.toString(),
-      category: json['category']?.toString() ?? json['parent_category']?.toString(),
+      category: json['category'] is Map
+          ? (json['category'] as Map)['name']?.toString()
+          : json['category']?.toString() ?? json['parent_category']?.toString(),
       imageUrl: imageValue.isEmpty ? null : AppConfig.resolveMediaUrl(imageValue),
       price: price,
-      originalPrice: double.tryParse(json['old_price']?.toString() ?? json['original_price']?.toString() ?? ''),
+      originalPrice: originalPrice,
       rating: double.tryParse(json['rating']?.toString() ?? ''),
       soldCount: int.tryParse(json['sold']?.toString() ?? json['sold_count']?.toString() ?? '0') ?? 0,
-      stock: int.tryParse(json['stock']?.toString() ?? '0'),
-      wishlisted: json['wishlisted'] == true,
+      stock: int.tryParse(
+        (json['stock'] ?? json['quantity'])?.toString() ?? '0',
+      ),
+      wishlisted: json['wishlisted'] == true || json['wishlist'] == true,
     );
   }
 

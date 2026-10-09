@@ -64,8 +64,10 @@ class RiderBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color surface = Theme.of(context).colorScheme.surface;
+
     return Material(
-      color: Colors.white,
+      color: surface,
       borderRadius: BorderRadius.circular(36),
       clipBehavior: Clip.antiAlias,
       child: Container(
@@ -74,7 +76,7 @@ class RiderBottomNavigation extends StatelessWidget {
           borderRadius: BorderRadius.circular(36),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
+              color: Theme.of(context).shadowColor.withValues(alpha: 0.10),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -144,8 +146,11 @@ class _RiderNavigationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color activeColor = Color(0xFF561C17);
-    const Color inactiveColor = Color(0xFF8A7A72);
+    final Color activeColor = Theme.of(context).colorScheme.primary;
+    final Color inactiveColor = Theme.of(context)
+        .colorScheme
+        .onSurface
+        .withValues(alpha: 0.62);
 
     return Material(
       type: MaterialType.transparency,

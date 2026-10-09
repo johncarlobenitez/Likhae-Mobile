@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
@@ -10,6 +11,8 @@ import '../features/buyer/orders/orders_screen.dart';
 import '../features/buyer/profile/account_screen.dart';
 import '../features/buyer/rewards/rewards_screen.dart';
 import '../features/buyer/wishlist/wishlist_screen.dart';
+import 'realtime_service.dart';
+import 'auth_service.dart';
 
 class _BuyerProductData {
   final int id;
@@ -338,6 +341,8 @@ class BuyerMobileService {
         'house_number': request.houseNumber,
         'street_address': request.street,
         'landmark': request.landmark,
+        if (request.latitude != null) 'latitude': request.latitude,
+        if (request.longitude != null) 'longitude': request.longitude,
         'is_default': request.isDefault,
       },
     );
@@ -360,6 +365,8 @@ class BuyerMobileService {
       province: row['province_name']?.toString(),
       postalCode: row['postal_code']?.toString(),
       landmark: row['landmark']?.toString(),
+      latitude: _asDouble(row['latitude']),
+      longitude: _asDouble(row['longitude']),
       isDefault: row['is_default'] == true,
       formattedAddress: row['formatted_address']?.toString(),
     );
@@ -511,28 +518,58 @@ class BuyerMobileService {
     final String endpoint =
         'buyer/orders/items/${Uri.encodeComponent(request.product.id)}/review';
     final Map<String, dynamic> fields = <String, dynamic>{
-      'rating': request.rating,
-      'rider_rating': request.riderRating,
+      if (!request.isTextUpdate) 'rating': request.rating,
+      if (!request.isTextUpdate) 'rider_rating': request.riderRating,
       'rider_comment': request.riderReview,
       'comment': request.review,
     };
-    final Response<dynamic> response;
-    if (request.photos.isEmpty) {
-      response = await ApiClient.post(
-        AppConfig.resolveApiUrl(endpoint),
-        fields,
-      );
-    } else {
-      final FormData formData = FormData.fromMap(<String, dynamic>{
-        ...fields,
-        'image': await MultipartFile.fromFile(request.photos.first.path),
-      });
-      response = await ApiClient.post(
-        AppConfig.resolveApiUrl(endpoint),
-        formData,
+
+    Response<dynamic> response = await _postReview(
+      endpoint,
+      fields,
+      request.photos,
+    );
+
+    // A completed order may not have a delivery rider. Laravel then rejects
+    // rider_rating, but the buyer's product rating should still be saved.
+    if (!request.isTextUpdate &&
+        (response.statusCode == 409 || response.statusCode == 422) &&
+        _responseMessage(response).toLowerCase().contains('delivery rider')) {
+      final Map<String, dynamic> productOnlyFields = <String, dynamic>{
+        'rating': request.rating,
+        'comment': request.review,
+      };
+      response = await _postReview(
+        endpoint,
+        productOnlyFields,
+        request.photos,
       );
     }
+
     _requirePayload(response);
+  }
+
+  static Future<Response<dynamic>> _postReview(
+    String endpoint,
+    Map<String, dynamic> fields,
+    List<XFile> photos,
+  ) async {
+    if (photos.isEmpty) {
+      return ApiClient.post(AppConfig.resolveApiUrl(endpoint), fields);
+    }
+
+    final FormData formData = FormData.fromMap(<String, dynamic>{
+      ...fields,
+      'image': await MultipartFile.fromFile(photos.first.path),
+    });
+    return ApiClient.post(AppConfig.resolveApiUrl(endpoint), formData);
+  }
+
+  static String _responseMessage(Response<dynamic> response) {
+    final dynamic payload = response.data;
+    return payload is Map && payload['message'] != null
+        ? payload['message'].toString()
+        : '';
   }
 
   static Future<BuyerProfileData> fetchProfile() async {
@@ -637,6 +674,8 @@ class BuyerMobileService {
             province: row['province_name']?.toString(),
             postalCode: row['postal_code']?.toString(),
             landmark: row['landmark']?.toString(),
+            latitude: _asDouble(row['latitude']),
+            longitude: _asDouble(row['longitude']),
             isDefault: row['is_default'] == true,
             formattedAddress: row['formatted_address']?.toString(),
           );
@@ -733,6 +772,33 @@ class BuyerMobileService {
     _requirePayload(response);
   }
 
+  static Stream<BuyerNotificationData> watchNotifications() async* {
+    final user = await AuthService.getCurrentUser();
+    final RealtimeSubscription subscription =
+        await LikhaeRealtimeService.subscribe('App.Models.User.${user.id}');
+    try {
+      await for (final RealtimeEvent event in subscription.events) {
+        if (event.name != 'notification.created') continue;
+        final DateTime? createdAt =
+            DateTime.tryParse((event.data['created_at'] ?? '').toString());
+        yield BuyerNotificationData(
+          id: (event.data['id'] ?? '').toString(),
+          type: BuyerNotificationData.resolveType(
+            event.data['type']?.toString(),
+          ),
+          title: (event.data['title'] ?? '').toString(),
+          message: (event.data['message'] ?? '').toString(),
+          time: createdAt == null ? 'Just now' : _displayTime(createdAt),
+          unread: true,
+          createdAt: createdAt,
+          actionUrl: event.data['action_url']?.toString(),
+        );
+      }
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
   static Future<List<BuyerConversationData>> fetchConversations() async {
     return (await _getRows('buyer/messages'))
         .whereType<Map>()
@@ -769,7 +835,7 @@ class BuyerMobileService {
             body: (row['body'] ?? '').toString(),
             time: _displayTime(row['sent_at']),
             fromBuyer: row['from_buyer'] == true,
-            attachmentUrl: row['attachment_url']?.toString(),
+            attachmentUrl: _messageAttachmentUrl(row),
             attachmentName: row['attachment_name']?.toString(),
           );
         })
@@ -779,17 +845,39 @@ class BuyerMobileService {
   static Stream<BuyerMessageData> watchMessages(
     BuyerConversationData conversation,
   ) async* {
-    final Set<String> knownIds = (await fetchMessages(
-      conversation,
-    )).map((BuyerMessageData message) => message.id).toSet();
-    while (true) {
-      await Future<void>.delayed(const Duration(seconds: 5));
-      final List<BuyerMessageData> latest = await fetchMessages(conversation);
-      for (final BuyerMessageData message in latest) {
-        if (knownIds.add(message.id)) {
-          yield message;
+    final Set<String> knownIds = (await fetchMessages(conversation))
+        .map((BuyerMessageData message) => message.id)
+        .toSet();
+    RealtimeSubscription? subscription;
+    try {
+      subscription = await LikhaeRealtimeService.subscribe(
+        'conversations.${conversation.conversationId}',
+      );
+      await for (final RealtimeEvent event in subscription.events) {
+        if (event.name != 'message.sent') continue;
+        final String id = (event.data['id'] ?? '').toString();
+        if (id.isEmpty || !knownIds.add(id)) continue;
+        yield BuyerMessageData(
+          id: id,
+          body: (event.data['body'] ?? '').toString(),
+          time: _displayTime(event.data['sent_at']),
+          fromBuyer: false,
+          attachmentUrl: event.data['attachment_url']?.toString(),
+          attachmentName: event.data['attachment_name']?.toString(),
+        );
+      }
+    } catch (_) {
+      // Keep the existing lightweight polling fallback when Reverb is not
+      // configured, temporarily unavailable, or unreachable on this network.
+      while (true) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        final List<BuyerMessageData> latest = await fetchMessages(conversation);
+        for (final BuyerMessageData message in latest) {
+          if (knownIds.add(message.id)) yield message;
         }
       }
+    } finally {
+      await subscription?.cancel();
     }
   }
 
@@ -843,9 +931,28 @@ class BuyerMobileService {
       body: (message['body'] ?? '').toString(),
       time: _displayTime(message['sent_at']),
       fromBuyer: message['from_buyer'] == true,
-      attachmentUrl: message['attachment_url']?.toString(),
+      attachmentUrl: _messageAttachmentUrl(message),
       attachmentName: message['attachment_name']?.toString(),
     );
+  }
+
+  static String? _messageAttachmentUrl(Map<String, dynamic> message) {
+    dynamic raw = message['attachment_url'] ??
+        message['attachment'] ??
+        message['attachment_path'] ??
+        message['image_url'] ??
+        message['photo_url'];
+
+    if (raw is Map) {
+      raw = raw['url'] ?? raw['image_url'] ?? raw['path'] ?? raw['file_path'];
+    }
+
+    if (raw == null) {
+      return null;
+    }
+
+    final String value = raw.toString().trim();
+    return value.isEmpty ? null : AppConfig.resolveMediaUrl(value);
   }
 
   static CartItemData _cartItem(Map<String, dynamic> row) {

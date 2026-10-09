@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'theme_controller.dart';
+
 class AppTheme {
   AppTheme._();
 
@@ -1160,6 +1162,49 @@ class AppTheme {
   // Use these when converting screens that still have hardcoded
   // light colors.
   // ============================================================
+
+  static Color adaptive(Color lightColor) {
+    if (!ThemeController.instance.usesDarkPalette) return lightColor;
+
+    switch (lightColor.value) {
+      case 0xFFFBF7F2:
+        return darkBackground;
+      case 0xFFFFFDF9:
+        return darkSurface;
+      case 0xFFF6EFE7:
+        return darkSurfaceSoft;
+      case 0xFFF1E4D7:
+        return darkSurfaceStrong;
+      case 0xFFEFE7DE:
+        return darkSurfaceStrong;
+      case 0xFFF3ECE4:
+        return darkSurfaceSoft;
+      case 0xFF561C17:
+        return darkMaroon;
+      case 0xFF3E130F:
+        return darkMaroonDark;
+      case 0xFF7A2A22:
+        return darkMaroonSoft;
+      case 0xFFC19771:
+        return darkTan;
+      case 0xFF3B211B:
+        return darkText;
+      case 0xFF6C4936:
+        return darkBrown;
+      case 0xFF987865:
+        return darkMuted;
+      case 0xFFA99386:
+        return darkMutedSoft;
+      case 0xFFEADCCC:
+        return darkBorder;
+      case 0xFFB42318:
+        return darkDanger;
+      case 0xFFC88418:
+        return darkWarning;
+      default:
+        return lightColor;
+    }
+  }
 
   static bool isDark(
     BuildContext context,

@@ -107,6 +107,7 @@ void main() {
           'id': 63,
           'price': '250.00',
           'stock': 8,
+          'image_url': '/storage/products/basket-natural.jpg',
           'description': 'Natural, medium',
           'option_values': <Map<String, dynamic>>[
             <String, dynamic>{'value': 'Natural'},
@@ -158,6 +159,10 @@ void main() {
       expect(detail.variations.single.value, 'Natural, medium');
       expect(detail.variations.single.stock, 8);
       expect(detail.variations.single.price, 250);
+      expect(
+        detail.variations.single.galleryImages.single,
+        'https://likhae.online/storage/products/basket-natural.jpg',
+      );
     });
   });
 }

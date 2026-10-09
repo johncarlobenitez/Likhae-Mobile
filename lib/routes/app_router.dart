@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/config/app_config.dart';
+import '../core/theme/app_theme.dart';
 import '../features/auth/login_screen.dart';
 import '../models/auth_user_model.dart';
 import '../services/auth_service.dart';
@@ -11,6 +12,7 @@ import '../services/buyer_mobile_service.dart';
 import '../services/order_service.dart';
 import '../services/philippine_address_service.dart';
 import '../services/product_service.dart';
+import '../services/store_service.dart';
 import '../services/wishlist_service.dart';
 import '../features/auth/register_screen.dart';
 import '../features/auth/forgot_password_screen.dart';
@@ -25,6 +27,8 @@ import '../features/buyer/products/products_screen.dart';
 import '../features/buyer/messages/messages_screen.dart';
 import '../features/buyer/profile/account_screen.dart';
 import '../features/buyer/rewards/rewards_screen.dart';
+import '../features/buyer/store/store_screen.dart';
+import '../features/buyer/settings/buyer_system_settings_screen.dart';
 import '../features/buyer/wishlist/wishlist_screen.dart';
 import '../features/rider/dashboard/dashboard_screen.dart';
 import '../features/rider/deliveries/rider_deliveries_screen.dart';
@@ -50,6 +54,13 @@ void safeBack(BuildContext context, {String fallback = '/login'}) {
   }
 
   context.go(fallback);
+}
+
+Widget _authTheme(Widget child) {
+  return Theme(
+    data: AppTheme.lightTheme,
+    child: child,
+  );
 }
 
 ProductDetailData _toProductDetailFromHome(BuyerHomeProduct product) {
@@ -94,6 +105,76 @@ ProductDetailData _toProductDetail(BuyerProduct product) {
     sellerName: product.sellerName,
     sellerSlug: product.sellerSlug,
     sellerUserId: product.sellerUserId,
+    wishlisted: product.wishlisted,
+  );
+}
+
+StoreSellerData _storeSellerFromProduct(ProductDetailData product) {
+  return StoreSellerData(
+    id: product.sellerUserId ?? 0,
+    name: product.sellerName ?? 'Seller',
+    slug: product.sellerSlug ?? '',
+    avatarUrl: product.sellerAvatarUrl,
+    location: product.sellerLocation,
+    verified: product.sellerVerified,
+  );
+}
+
+StoreSellerData _storeSellerFromConversation(BuyerConversationData seller) {
+  // The buyer messages endpoint may return a conversation placeholder such as
+  // "conversation-123" instead of a real seller store key. Laravel accepts
+  // the seller's business name as a store route key, so use it as a safe
+  // fallback. This also keeps older/deployed API responses working.
+  final String conversationSlug = seller.slug.trim();
+  final bool isConversationPlaceholder = conversationSlug.isEmpty ||
+      conversationSlug.toLowerCase().startsWith('conversation-');
+  final String storeRouteKey = isConversationPlaceholder
+      ? seller.name.trim()
+      : conversationSlug;
+
+  return StoreSellerData(
+    id: int.tryParse(seller.sellerId) ?? 0,
+    name: seller.name,
+    slug: storeRouteKey,
+    avatarUrl: seller.avatarUrl,
+  );
+}
+
+String _storeRouteKey(StoreSellerData seller) {
+  final String slug = seller.slug.trim();
+  return slug.isNotEmpty ? slug : seller.name.trim();
+}
+
+BuyerConversationData _conversationFromStoreSeller(StoreSellerData seller) {
+  return BuyerConversationData(
+    sellerId: seller.id.toString(),
+    name: seller.name,
+    slug: seller.slug,
+    avatarUrl: seller.avatarUrl,
+  );
+}
+
+ProductDetailData _toProductDetailFromStore(
+  StoreProductData product,
+  StoreSellerData seller,
+) {
+  return ProductDetailData(
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    category: product.category,
+    imageUrl: product.imageUrl,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    stock: product.stock ?? 0,
+    rating: product.rating,
+    soldCount: product.soldCount,
+    sellerName: seller.name,
+    sellerSlug: seller.slug,
+    sellerUserId: seller.id == 0 ? null : seller.id,
+    sellerAvatarUrl: seller.avatarUrl,
+    sellerLocation: seller.location,
+    sellerVerified: seller.verified == true,
     wishlisted: product.wishlisted,
   );
 }
@@ -150,7 +231,10 @@ Widget _productDetailScreen(BuildContext context, ProductDetailData product) {
       }
     },
     onViewStore: (ProductDetailData detail) {
-      context.push('/buyer/home');
+      context.push(
+        '/buyer/store',
+        extra: _storeSellerFromProduct(detail),
+      );
     },
     onMessageSeller: product.sellerUserId == null
         ? null
@@ -171,9 +255,26 @@ Widget _buyerNavigationFrame(
   BuildContext context, {
   required int currentIndex,
   required Widget child,
+  String? aiPage,
+  String? aiPageTitle,
 }) {
+  final String resolvedAiPage = aiPage ?? switch (currentIndex) {
+    1 => 'orders',
+    2 => 'messages',
+    3 => 'account',
+    _ => 'buyer',
+  };
+  final String resolvedAiPageTitle = aiPageTitle ?? switch (currentIndex) {
+    1 => 'My Orders',
+    2 => 'Messages',
+    3 => 'Account',
+    _ => 'Buyer portal',
+  };
+
   return BuyerNavigationFrame(
     currentIndex: currentIndex,
+    aiPage: resolvedAiPage,
+    aiPageTitle: resolvedAiPageTitle,
     onHome: () => context.go('/buyer/home'),
     onOrders: () => context.go('/buyer/orders'),
     onMessages: () => context.go('/buyer/messages'),
@@ -359,7 +460,8 @@ final GoRouter appRouter = GoRouter(
       path: '/login',
       name: 'login',
       builder: (BuildContext context, GoRouterState state) {
-        return LoginScreen(
+        return _authTheme(
+          LoginScreen(
           onRegister: () => context.push('/register'),
           onForgotPassword: () => context.push('/forgot-password'),
           onSignIn: (String email, String password, bool rememberMe) async {
@@ -371,6 +473,7 @@ final GoRouter appRouter = GoRouter(
               onError: () {},
             );
           },
+          ),
         );
       },
     ),
@@ -379,7 +482,12 @@ final GoRouter appRouter = GoRouter(
       path: '/register',
       name: 'register',
       builder: (BuildContext context, GoRouterState state) {
-        return RegisterScreen(
+        return _authTheme(
+          RegisterScreen(
+          onSendEmailVerificationCode:
+              AuthService.sendRegistrationEmailVerificationCode,
+          onVerifyEmailVerificationCode:
+              AuthService.verifyRegistrationEmailVerificationCode,
           onSubmit: (RegisterFormData data) async {
             final Map<String, dynamic> payload = await AuthService.register(data);
             if (!context.mounted) return;
@@ -396,6 +504,7 @@ final GoRouter appRouter = GoRouter(
               PhilippineAddressService.fetchMunicipalities,
           loadBarangays: PhilippineAddressService.fetchBarangays,
           loadPostalCode: PhilippineAddressService.fetchPostalCode,
+          ),
         );
       },
     ),
@@ -404,7 +513,7 @@ final GoRouter appRouter = GoRouter(
       path: '/forgot-password',
       name: 'forgot-password',
       builder: (BuildContext context, GoRouterState state) {
-        return const ForgotPasswordScreen();
+        return _authTheme(const ForgotPasswordScreen());
       },
     ),
 
@@ -525,6 +634,130 @@ final GoRouter appRouter = GoRouter(
     ),
 
     GoRoute(
+      path: '/buyer/store',
+      name: 'buyer-store',
+      builder: (BuildContext context, GoRouterState state) {
+        final dynamic extra = state.extra;
+        final StoreSellerData? requestedSeller = extra is StoreSellerData
+            ? extra
+            : extra is BuyerConversationData
+            ? _storeSellerFromConversation(extra)
+            : null;
+
+        if (requestedSeller == null) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                onPressed: () => safeBack(context, fallback: '/buyer/home'),
+                icon: const Icon(Icons.arrow_back),
+              ),
+              title: const Text('Store'),
+            ),
+            body: const Center(
+              child: Text('This store is unavailable.'),
+            ),
+          );
+        }
+
+        final String storeRouteKey = _storeRouteKey(requestedSeller);
+
+        if (AppConfig.apiEnabled && storeRouteKey.isEmpty) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                onPressed: () => safeBack(context, fallback: '/buyer/home'),
+                icon: const Icon(Icons.arrow_back),
+              ),
+              title: const Text('Store'),
+            ),
+            body: const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'This seller does not have a store page yet.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final Future<StorePageData> storeFuture = AppConfig.apiEnabled
+            ? StoreService.fetchStore(storeRouteKey)
+            : Future<StorePageData>.value(
+                StorePageData(
+                  seller: requestedSeller,
+                  products: const <StoreProductData>[],
+                ),
+              );
+
+        return FutureBuilder<StorePageData>(
+          future: storeFuture,
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<StorePageData> snapshot,
+          ) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (snapshot.hasError || !snapshot.hasData) {
+              return Scaffold(
+                appBar: AppBar(
+                  leading: IconButton(
+                    onPressed: () =>
+                        safeBack(context, fallback: '/buyer/home'),
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                  title: const Text('Store'),
+                ),
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'Unable to load this store: ${snapshot.error ?? 'No store data was returned.'}',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final StorePageData store = snapshot.data!;
+            return StoreScreen(
+              seller: store.seller,
+              products: store.products,
+              onBack: () => safeBack(context, fallback: '/buyer/home'),
+              onMessageSeller: store.seller.id == 0
+                  ? null
+                  : () {
+                      context.push(
+                        '/buyer/messages',
+                        extra: _conversationFromStoreSeller(store.seller),
+                      );
+                    },
+              onProductSelected: (StoreProductData product) {
+                context.push(
+                  '/buyer/product-details',
+                  extra: _toProductDetailFromStore(product, store.seller),
+                );
+              },
+              onWishlistProduct: (StoreProductData product) async {
+                if (AppConfig.apiEnabled) {
+                  await BuyerMobileService.toggleWishlist(product.id);
+                } else {
+                  await WishlistService.toggleProduct(product.id);
+                }
+              },
+            );
+          },
+        );
+      },
+    ),
+
+    GoRoute(
       path: '/buyer/wishlist',
       name: 'buyer-wishlist',
       builder: (BuildContext context, GoRouterState state) {
@@ -620,6 +853,9 @@ final GoRouter appRouter = GoRouter(
           onBack: () => safeBack(context, fallback: '/buyer/home'),
           onRefresh: AppConfig.apiEnabled
               ? BuyerMobileService.fetchNotifications
+              : null,
+          realtimeStreamBuilder: AppConfig.realtimeEnabled
+              ? BuyerMobileService.watchNotifications
               : null,
           onMarkAllAsRead: AppConfig.apiEnabled
               ? BuyerMobileService.markAllNotificationsRead
@@ -1052,6 +1288,12 @@ final GoRouter appRouter = GoRouter(
               onSendAttachment: AppConfig.apiEnabled
                   ? BuyerMobileService.sendAttachment
                   : null,
+              onViewStore: (BuyerConversationData seller) {
+                context.push(
+                  '/buyer/store',
+                  extra: _storeSellerFromConversation(seller),
+                );
+              },
               messageStreamBuilder: AppConfig.apiEnabled
                   ? BuyerMobileService.watchMessages
                   : null,
@@ -1092,6 +1334,23 @@ final GoRouter appRouter = GoRouter(
               snapshot.data ?? const <BuyerConversationData>[],
             );
           },
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/buyer/settings',
+      name: 'buyer-settings',
+      builder: (BuildContext context, GoRouterState state) {
+        return _buyerNavigationFrame(
+          context,
+          currentIndex: 3,
+          aiPage: 'account',
+          aiPageTitle: 'System Settings',
+          child: BuyerSystemSettingsScreen(
+            onBack: () => safeBack(context, fallback: '/buyer/profile'),
+            onMyAccount: () => context.go('/buyer/profile'),
+          ),
         );
       },
     ),
@@ -1184,6 +1443,7 @@ final GoRouter appRouter = GoRouter(
                     onChangePassword: AppConfig.apiEnabled
                         ? BuyerMobileService.changePassword
                         : null,
+                    onSystemSettings: () => context.push('/buyer/settings'),
                     onRefresh: AppConfig.apiEnabled
                         ? BuyerMobileService.fetchAccountSnapshot
                         : null,
@@ -1304,6 +1564,9 @@ final GoRouter appRouter = GoRouter(
                 onBack: () => safeBack(context, fallback: '/rider/dashboard'),
                 onRefresh: AppConfig.apiEnabled
                     ? RiderMobileService.fetchNotifications
+                    : null,
+                realtimeStreamBuilder: AppConfig.realtimeEnabled
+                    ? BuyerMobileService.watchNotifications
                     : null,
                 onMarkAllAsRead: AppConfig.apiEnabled
                     ? RiderMobileService.markAllNotificationsRead

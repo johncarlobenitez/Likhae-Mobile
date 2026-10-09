@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../features/buyer/ai/buyer_ai_assistant.dart';
+import '../../features/buyer/settings/buyer_system_settings_screen.dart';
+
 class BuyerNavigationFrame extends StatelessWidget {
   final Widget child;
   final int currentIndex;
@@ -7,6 +10,8 @@ class BuyerNavigationFrame extends StatelessWidget {
   final VoidCallback onOrders;
   final VoidCallback onMessages;
   final VoidCallback onProfile;
+  final String aiPage;
+  final String aiPageTitle;
 
   const BuyerNavigationFrame({
     super.key,
@@ -16,27 +21,40 @@ class BuyerNavigationFrame extends StatelessWidget {
     required this.onOrders,
     required this.onMessages,
     required this.onProfile,
+    this.aiPage = 'buyer',
+    this.aiPageTitle = 'Buyer portal',
   });
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        child,
-        Positioned(
-          left: 18,
-          right: 18,
-          bottom: 18,
-          child: BuyerBottomNavigation(
-            currentIndex: currentIndex,
-            onHome: onHome,
-            onOrders: onOrders,
-            onMessages: onMessages,
-            onProfile: onProfile,
-          ),
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: BuyerSystemSettingsController.instance,
+      builder: (BuildContext context, Widget? childWidget) {
+        final bool showAssistant =
+            BuyerSystemSettingsController.instance.showAiAssistant;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            child,
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 18,
+              child: BuyerBottomNavigation(
+                currentIndex: currentIndex,
+                onHome: onHome,
+                onOrders: onOrders,
+                onMessages: onMessages,
+                onProfile: onProfile,
+              ),
+            ),
+            if (showAssistant)
+              Positioned.fill(
+                child: BuyerAiAssistant(page: aiPage, pageTitle: aiPageTitle),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -59,8 +77,10 @@ class BuyerBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color surface = Theme.of(context).colorScheme.surface;
+
     return Material(
-      color: Colors.white,
+      color: surface,
       borderRadius: BorderRadius.circular(36),
       clipBehavior: Clip.antiAlias,
       child: Container(
@@ -69,7 +89,7 @@ class BuyerBottomNavigation extends StatelessWidget {
           borderRadius: BorderRadius.circular(36),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
+              color: Theme.of(context).shadowColor.withValues(alpha: 0.10),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -131,8 +151,11 @@ class _NavigationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color activeColor = Color(0xFF561C17);
-    const Color inactiveColor = Color(0xFF8A7A72);
+    final Color activeColor = Theme.of(context).colorScheme.primary;
+    final Color inactiveColor = Theme.of(context)
+        .colorScheme
+        .onSurface
+        .withValues(alpha: 0.62);
 
     return Material(
       type: MaterialType.transparency,

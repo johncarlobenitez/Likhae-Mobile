@@ -191,6 +191,8 @@ class BuyerOrderData {
 
   final String? tracking;
 
+  final String? shipmentId;
+
   final BuyerOrderLocation? orderLocation;
 
   final BuyerOrderLocation? riderLocation;
@@ -227,6 +229,7 @@ class BuyerOrderData {
     this.paymentStatus,
     this.buyerContact,
     this.tracking,
+    this.shipmentId,
     this.orderLocation,
     this.riderLocation,
     this.timeline = const <BuyerOrderTimelineEvent>[],
@@ -387,6 +390,9 @@ class BuyerOrderData {
           ?.toString(),
       shippingAddress: address,
       tracking: (json['tracking_number'] ?? json['tracking'])?.toString(),
+      shipmentId: (json['shipment_id'] ?? '').toString().trim().isEmpty
+          ? null
+          : (json['shipment_id'] ?? '').toString(),
       orderLocation: parseLocation(
         json['order_location'] ??
             json['shipment_location'] ??
@@ -548,6 +554,7 @@ class BuyerOrderData {
       buyerContact: buyerContact,
       shippingAddress: shippingAddress,
       tracking: tracking,
+      shipmentId: shipmentId,
       orderLocation: orderLocation ?? this.orderLocation,
       riderLocation: clearRiderLocation
           ? null
@@ -608,6 +615,10 @@ class BuyerOrderReviewRequest {
 
   final List<XFile> photos;
 
+  /// The Laravel endpoint locks numeric ratings and photos after the first
+  /// submission, but still allows the review text to be edited.
+  final bool isTextUpdate;
+
   const BuyerOrderReviewRequest({
     required this.order,
     required this.product,
@@ -616,6 +627,7 @@ class BuyerOrderReviewRequest {
     required this.riderReview,
     required this.review,
     required this.photos,
+    this.isTextUpdate = false,
   });
 }
 
@@ -1364,7 +1376,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return;
       }
 
-      const int maxPhotos = 5;
+      // Laravel currently accepts one image per product review.
+      const int maxPhotos = 1;
       const int maxPhotoBytes = 5 * 1024 * 1024;
       final List<XFile> accepted = <XFile>[];
       bool oversizedPhoto = false;
@@ -1395,7 +1408,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           error: true,
         );
       } else if (selected.length > accepted.length) {
-        _showMessage('You can attach up to 5 product photos.');
+        _showMessage('You can attach one product photo.');
       }
     } catch (error) {
       if (mounted) {
@@ -1849,6 +1862,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           riderReview: riderReview,
           review: review,
           photos: List<XFile>.unmodifiable(_reviewPhotos),
+          isTextUpdate: _reviewedProductIds.contains(product.id),
         ),
       );
 
@@ -3081,7 +3095,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         const _InputLabel(text: 'Add product photos', requiredField: false),
         const SizedBox(height: 5),
         const Text(
-          'JPG, PNG, or WebP · up to 5 photos · 5 MB each',
+          'JPG, PNG, or WebP · one photo · 5 MB maximum',
           style: TextStyle(color: _muted, fontSize: 11.5),
         ),
         const SizedBox(height: 9),

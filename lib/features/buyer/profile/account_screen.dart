@@ -1,8 +1,14 @@
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 
-enum BuyerAccountTab { profile, addresses, password }
+enum BuyerAccountTab { profile, addresses, password, settings }
 
 extension BuyerAccountTabInfo on BuyerAccountTab {
   String get label {
@@ -15,6 +21,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.password:
         return 'Change Password';
+
+      case BuyerAccountTab.settings:
+        return 'System Settings';
     }
   }
 
@@ -28,6 +37,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.password:
         return 'Account security';
+
+      case BuyerAccountTab.settings:
+        return 'App preferences';
     }
   }
 
@@ -41,6 +53,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.password:
         return Icons.lock_outline_rounded;
+
+      case BuyerAccountTab.settings:
+        return Icons.settings_outlined;
     }
   }
 }
@@ -192,6 +207,8 @@ class BuyerAddressData {
   final String? region;
   final String? postalCode;
   final String? landmark;
+  final double? latitude;
+  final double? longitude;
 
   final bool isDefault;
 
@@ -212,6 +229,8 @@ class BuyerAddressData {
     this.region,
     this.postalCode,
     this.landmark,
+    this.latitude,
+    this.longitude,
     this.isDefault = false,
     this.formattedAddress,
   });
@@ -252,6 +271,8 @@ class BuyerAddressData {
       region: region,
       postalCode: postalCode,
       landmark: landmark,
+      latitude: latitude,
+      longitude: longitude,
       isDefault: isDefault ?? this.isDefault,
       formattedAddress: formattedAddress,
     );
@@ -271,6 +292,8 @@ class CreateBuyerAddressRequest {
   final String region;
   final String postalCode;
   final String landmark;
+  final double? latitude;
+  final double? longitude;
 
   final bool isDefault;
 
@@ -286,6 +309,8 @@ class CreateBuyerAddressRequest {
     required this.region,
     required this.postalCode,
     required this.landmark,
+    this.latitude,
+    this.longitude,
     required this.isDefault,
   });
 }
@@ -355,6 +380,8 @@ class AccountScreen extends StatefulWidget {
 
   final ChangeBuyerPasswordCallback? onChangePassword;
 
+  final VoidCallback? onSystemSettings;
+
   final RefreshBuyerAccountCallback? onRefresh;
 
   final LogoutBuyerCallback? onLogout;
@@ -382,6 +409,7 @@ class AccountScreen extends StatefulWidget {
     this.onDeleteAddress,
     this.onSetDefaultAddress,
     this.onChangePassword,
+    this.onSystemSettings,
     this.onRefresh,
     this.onLogout,
     this.onProfileChanged,
@@ -394,6 +422,9 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
+  static const String _mapboxAccessToken =
+      String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
+
   static const Color _background = Color(0xFFFBF7F2);
 
   static const Color _surface = Color(0xFFFFFDF9);
@@ -417,6 +448,8 @@ class _AccountScreenState extends State<AccountScreen> {
   static const Color _tan = Color(0xFFC19771);
 
   static const Color _danger = Color(0xFFB42318);
+
+  static const LatLng _defaultAddressMapCenter = LatLng(14.5995, 120.9842);
 
   static const int _maxProfilePhotoBytes = 2 * 1024 * 1024;
 
@@ -478,6 +511,20 @@ class _AccountScreenState extends State<AccountScreen> {
   final TextEditingController _postalCodeController = TextEditingController();
 
   final TextEditingController _landmarkController = TextEditingController();
+
+  final TextEditingController _addressSearchController =
+      TextEditingController();
+  final Dio _addressGeocoder = Dio();
+
+  mapbox.MapboxMap? _addressMap;
+  mapbox.CircleAnnotationManager? _addressMarkerManager;
+
+  LatLng? _selectedAddressLocation;
+  LatLng _addressMapCenter = _defaultAddressMapCenter;
+  double _addressMapZoom = 14;
+  bool _findingAddress = false;
+  bool _usingDeviceLocation = false;
+  String? _addressLocationMessage;
 
   bool _newAddressIsDefault = false;
 
@@ -579,12 +626,218 @@ class _AccountScreenState extends State<AccountScreen> {
     _regionController.dispose();
     _postalCodeController.dispose();
     _landmarkController.dispose();
+    _addressSearchController.dispose();
 
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
 
     super.dispose();
+  }
+
+  void _setAddressLocation(LatLng location, {bool moveMap = true}) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedAddressLocation = location;
+      _addressMapCenter = location;
+      _addressLocationMessage = null;
+    });
+
+    unawaited(_syncAddressMarker());
+
+    if (moveMap && _addressMap != null) {
+      _addressMapZoom = 16;
+      unawaited(
+        _addressMap!.setCamera(
+          mapbox.CameraOptions(
+            center: _toMapboxPoint(location),
+            zoom: _addressMapZoom,
+          ),
+        ),
+      );
+    }
+  }
+
+  bool get _canShowAddressMap {
+    if (kIsWeb) {
+      return false;
+    }
+
+    final bool supportedPlatform =
+        defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+    return supportedPlatform && _mapboxAccessToken.isNotEmpty;
+  }
+
+  Future<void> _onAddressMapCreated(mapbox.MapboxMap map) async {
+    _addressMap = map;
+    _addressMarkerManager =
+        await map.annotations.createCircleAnnotationManager();
+    await _syncAddressMarker();
+  }
+
+  Future<void> _syncAddressMarker() async {
+    final mapbox.CircleAnnotationManager? manager = _addressMarkerManager;
+    if (manager == null) {
+      return;
+    }
+
+    await manager.deleteAll();
+
+    final LatLng? location = _selectedAddressLocation;
+    if (location == null) {
+      return;
+    }
+
+    await manager.create(
+      mapbox.CircleAnnotationOptions(
+        geometry: _toMapboxPoint(location),
+        circleColor: _maroon.toARGB32(),
+        circleRadius: 11,
+        circleStrokeColor: Colors.white.toARGB32(),
+        circleStrokeWidth: 3,
+      ),
+    );
+  }
+
+  void _onAddressMapTap(mapbox.MapContentGestureContext context) {
+    _setAddressLocation(_fromMapboxPoint(context.point));
+  }
+
+  mapbox.Point _toMapboxPoint(LatLng location) {
+    return mapbox.Point(
+      coordinates: mapbox.Position(location.longitude, location.latitude),
+    );
+  }
+
+  LatLng _fromMapboxPoint(mapbox.Point point) {
+    return LatLng(
+      point.coordinates.lat.toDouble(),
+      point.coordinates.lng.toDouble(),
+    );
+  }
+
+  Future<void> _useDeviceLocation() async {
+    if (_usingDeviceLocation) {
+      return;
+    }
+
+    setState(() {
+      _usingDeviceLocation = true;
+      _addressLocationMessage = null;
+    });
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw const FormatException('Turn on location services first.');
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw const FormatException(
+          'Location permission is required to use device location.',
+        );
+      }
+
+      final Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      _setAddressLocation(LatLng(position.latitude, position.longitude));
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _addressLocationMessage = _addressLocationErrorText(error);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _usingDeviceLocation = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _findAddress() async {
+    final String query = _addressSearchController.text.trim();
+    if (query.isEmpty || _findingAddress) {
+      return;
+    }
+
+    const String mapboxToken = String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
+    if (mapboxToken.isEmpty) {
+      setState(() {
+        _addressLocationMessage =
+            'Enter an address or tap the map. Address search needs MAPBOX_ACCESS_TOKEN.';
+      });
+      return;
+    }
+
+    setState(() {
+      _findingAddress = true;
+      _addressLocationMessage = null;
+    });
+
+    try {
+      final Response<dynamic> response = await _addressGeocoder.get(
+        'https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json',
+        queryParameters: <String, dynamic>{
+          'access_token': mapboxToken,
+          'country': 'ph',
+          'limit': 1,
+        },
+      );
+      final dynamic features = response.data is Map
+          ? (response.data as Map)['features']
+          : null;
+      final dynamic coordinates = features is List && features.isNotEmpty
+          ? (features.first is Map
+              ? (features.first as Map)['center']
+              : null)
+          : null;
+
+      if (coordinates is! List || coordinates.length < 2) {
+        throw const FormatException('No matching address was found.');
+      }
+
+      final double? longitude = double.tryParse(coordinates[0].toString());
+      final double? latitude = double.tryParse(coordinates[1].toString());
+      if (latitude == null || longitude == null) {
+        throw const FormatException('The selected address has no coordinates.');
+      }
+
+      _setAddressLocation(LatLng(latitude, longitude));
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _addressLocationMessage = _addressLocationErrorText(error);
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _findingAddress = false;
+        });
+      }
+    }
+  }
+
+  String _addressLocationErrorText(Object error) {
+    if (error is FormatException) {
+      return error.message.toString();
+    }
+
+    return 'Unable to set the delivery location. You can tap the map to pin it manually.';
   }
 
   void _cleanupDeletingAddressIds() {
@@ -953,6 +1206,8 @@ class _AccountScreenState extends State<AccountScreen> {
           region: _regionController.text.trim(),
           postalCode: _postalCodeController.text.trim(),
           landmark: _landmarkController.text.trim(),
+           latitude: _selectedAddressLocation?.latitude,
+           longitude: _selectedAddressLocation?.longitude,
           isDefault: _newAddressIsDefault,
         ),
       );
@@ -1005,8 +1260,26 @@ class _AccountScreenState extends State<AccountScreen> {
     _regionController.clear();
     _postalCodeController.clear();
     _landmarkController.clear();
+    _addressSearchController.clear();
 
     _newAddressIsDefault = false;
+    _selectedAddressLocation = null;
+    _addressMapCenter = _defaultAddressMapCenter;
+    _addressMapZoom = 14;
+    _addressLocationMessage = null;
+
+    unawaited(_syncAddressMarker());
+    final mapbox.MapboxMap? map = _addressMap;
+    if (map != null) {
+      unawaited(
+        map.setCamera(
+          mapbox.CameraOptions(
+            center: _toMapboxPoint(_defaultAddressMapCenter),
+            zoom: _addressMapZoom,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _deleteAddress(BuyerAddressData address) async {
@@ -1660,6 +1933,11 @@ class _AccountScreenState extends State<AccountScreen> {
             borderRadius: BorderRadius.circular(13),
             child: InkWell(
               onTap: () {
+                if (tab == BuyerAccountTab.settings &&
+                    widget.onSystemSettings != null) {
+                  widget.onSystemSettings!();
+                  return;
+                }
                 _changeTab(tab);
               },
               borderRadius: BorderRadius.circular(13),
@@ -1724,6 +2002,18 @@ class _AccountScreenState extends State<AccountScreen> {
 
       case BuyerAccountTab.password:
         return _buildPasswordSection();
+
+      case BuyerAccountTab.settings:
+        return _AccountPanel(
+          title: 'System Settings',
+          subtitle: 'Manage app appearance, sounds, notifications, and AI.',
+          icon: Icons.settings_outlined,
+          child: FilledButton.icon(
+            onPressed: widget.onSystemSettings,
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: const Text('Open System Settings'),
+          ),
+        );
     }
   }
 
@@ -2260,6 +2550,10 @@ class _AccountScreenState extends State<AccountScreen> {
 
                   const SizedBox(height: 13),
 
+                   _buildAddressPinSection(),
+
+                   const SizedBox(height: 13),
+
                   Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -2339,6 +2633,153 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddressPinSection() {
+    final LatLng? selectedLocation = _selectedAddressLocation;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Confirm location',
+                  style: TextStyle(
+                    color: _brown,
+                    fontSize: 11,
+                    letterSpacing: 1.4,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: [
+                    OutlinedButton(
+                      onPressed: _findingAddress || _usingDeviceLocation
+                          ? null
+                          : _findAddress,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _maroon,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: const Size(0, 34),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: const BorderSide(color: _border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: _findingAddress
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              'Find address',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                    ),
+                    OutlinedButton(
+                      onPressed: _findingAddress || _usingDeviceLocation
+                          ? null
+                          : _useDeviceLocation,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _maroon,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        minimumSize: const Size(0, 34),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: const BorderSide(color: _border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: _usingDeviceLocation
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              'Use device location',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _addressSearchController,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _findAddress(),
+                  decoration: _inputDecoration(
+                    hintText: 'Optional: search street, landmark, or address',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 230,
+            child: _canShowAddressMap
+                ? mapbox.MapWidget(
+                    viewport: mapbox.CameraViewportState(
+                      center: _toMapboxPoint(_addressMapCenter),
+                      zoom: _addressMapZoom,
+                    ),
+                    onMapCreated: _onAddressMapCreated,
+                    onTapListener: _onAddressMapTap,
+                  )
+                : Container(
+                    color: const Color(0xFFF7F2EE),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      kIsWeb
+                          ? 'Mapbox Maps SDK is available on Android and iOS.'
+                          : 'Add MAPBOX_ACCESS_TOKEN to your Flutter run configuration to load the map.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 13,
+                        height: 1.45,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            child: Text(
+              selectedLocation == null
+                  ? 'Tap the map, search an address, or use device location to pin the delivery point.'
+                  : 'Pinned: ${selectedLocation.latitude.toStringAsFixed(6)}, ${selectedLocation.longitude.toStringAsFixed(6)}',
+              style: const TextStyle(color: _muted, fontSize: 11.5, height: 1.4),
+            ),
+          ),
+          if (_addressLocationMessage != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              child: Text(
+                _addressLocationMessage!,
+                style: const TextStyle(color: _danger, fontSize: 11.5),
+              ),
+            ),
         ],
       ),
     );

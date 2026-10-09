@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:likhae/core/config/app_config.dart';
 
 typedef LoadConversationMessagesCallback =
     Future<List<BuyerMessageData>> Function(BuyerConversationData seller);
@@ -141,6 +142,13 @@ class BuyerMessageData {
   });
 
   bool get hasAttachment => attachmentUrl?.trim().isNotEmpty == true;
+
+  bool get isAttachmentPlaceholder {
+    return RegExp(
+      r'^\[(photo|image|attachment)\]$',
+      caseSensitive: false,
+    ).hasMatch(body.trim());
+  }
 }
 
 class MessageProductReference {
@@ -2952,7 +2960,9 @@ class _MessageBubble extends StatelessWidget {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(10),
                               child: Image.network(
-                                message.attachmentUrl!,
+                                AppConfig.resolveMediaUrl(
+                                  message.attachmentUrl!,
+                                ),
                                 width: 220,
                                 height: 150,
                                 fit: BoxFit.cover,
@@ -3003,10 +3013,12 @@ class _MessageBubble extends StatelessWidget {
                                     },
                               ),
                             ),
-                            if (message.body.trim().isNotEmpty)
+                            if (message.body.trim().isNotEmpty &&
+                                !message.isAttachmentPlaceholder)
                               const SizedBox(height: 8),
                           ],
-                          if (message.body.trim().isNotEmpty)
+                          if (message.body.trim().isNotEmpty &&
+                              !message.isAttachmentPlaceholder)
                             Text(
                               message.body,
                               style: TextStyle(

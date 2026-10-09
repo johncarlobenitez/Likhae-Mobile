@@ -7,6 +7,92 @@ import '../models/auth_user_model.dart';
 import '../features/auth/register_screen.dart';
 
 class AuthService {
+  static Future<void> sendRegistrationEmailVerificationCode(
+    String email,
+  ) async {
+    if (!AppConfig.apiEnabled) {
+      throw const FormatException(
+        'Enable the Laravel API with --dart-define=API_ENABLED=true before verifying email.',
+      );
+    }
+
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('auth/register/email-verification/send'),
+      <String, dynamic>{'email': email.trim()},
+    );
+
+    if ((response.statusCode ?? 500) >= 400) {
+      final DioException error = DioException.badResponse(
+        statusCode: response.statusCode ?? 500,
+        requestOptions: response.requestOptions,
+        response: response,
+      );
+      throw Exception(ApiClient.formatError(error));
+    }
+  }
+
+  static Future<String> verifyRegistrationEmailVerificationCode({
+    required String email,
+    required String code,
+  }) async {
+    if (!AppConfig.apiEnabled) {
+      throw const FormatException(
+        'Enable the Laravel API with --dart-define=API_ENABLED=true before verifying email.',
+      );
+    }
+
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('auth/register/email-verification/verify'),
+      <String, dynamic>{
+        'email': email.trim(),
+        'code': code.trim(),
+      },
+    );
+
+    if ((response.statusCode ?? 500) >= 400) {
+      final DioException error = DioException.badResponse(
+        statusCode: response.statusCode ?? 500,
+        requestOptions: response.requestOptions,
+        response: response,
+      );
+      throw Exception(ApiClient.formatError(error));
+    }
+
+    final String? token = _extractEmailVerificationToken(response.data);
+
+    if (token == null || token.isEmpty) {
+      throw const FormatException(
+        'The server did not return an email verification token.',
+      );
+    }
+
+    return token;
+  }
+
+  static String? _extractEmailVerificationToken(dynamic payload) {
+    if (payload is! Map) {
+      return null;
+    }
+
+    for (final String key in <String>[
+      'verification_token',
+      'email_verification_token',
+      'token',
+    ]) {
+      final String value = payload[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+
+    final dynamic nestedData = payload['data'];
+    if (nestedData is Map) {
+      return _extractEmailVerificationToken(nestedData);
+    }
+
+    return null;
+  }
+
   static Future<Map<String, dynamic>> register(RegisterFormData data) async {
     if (!AppConfig.apiEnabled) {
       throw const FormatException(
@@ -39,6 +125,7 @@ class AuthService {
       'password': data.password,
       'password_confirmation': data.password,
       'terms': '1',
+      'email_verification_token': data.emailVerificationToken,
     };
 
     if (data.vehicleType != null) fields['vehicle_type'] = data.vehicleType;

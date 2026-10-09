@@ -12,6 +12,13 @@ Run with the API enabled:
 flutter run --dart-define=API_ENABLED=true
 ```
 
+Run with Mapbox and Laravel Reverb enabled in PowerShell. Keep this command on
+one line; PowerShell does not use `^` for line continuation:
+
+```powershell
+flutter run --dart-define="API_ENABLED=true" --dart-define="MAPBOX_ACCESS_TOKEN=$env:MAPBOX_ACCESS_TOKEN" --dart-define="REVERB_APP_KEY=$env:REVERB_APP_KEY" --dart-define="REVERB_HOST=likhae.online" --dart-define="REVERB_PORT=443" --dart-define="REVERB_SCHEME=https"
+```
+
 Override the API and web origins for a local or staging backend:
 
 ```sh
@@ -28,8 +35,8 @@ With `API_ENABLED=true`, buyer catalog/product details, cart, checkout and
 seller vouchers, order history/actions/reviews/returns, address create/delete/
 default selection, wishlist, rewards, notifications, seller conversations and
 image attachments, and profile name/contact/birthday/gender/photo and password
-changes use authenticated Laravel APIs. Messages poll Laravel while a
-conversation is open; this is near-real-time polling, not a push/SSE service.
+changes use authenticated Laravel APIs. Messages and notifications use
+targeted Reverb subscriptions when configured, with API polling as fallback.
 Wishlist records and profile photos require applying the new Laravel migration.
 
 Email changes remain unavailable: they need a verified email-change flow, not
@@ -49,8 +56,8 @@ assignments must be accepted and started before completion, pickup completion
 records the scanned waybill, and delivery completion uploads its proof photo
 and receiver name. Earnings show the amounts already recorded by the Laravel
 workflow; payout rules and settlement remain controlled by the backend.
-Messages poll Laravel while a conversation is open (near-real-time, not
-push/SSE). While an active delivery is being tracked, the rider app sends
+Messages use a targeted Reverb conversation subscription when configured, with
+polling as fallback. While an active delivery is being tracked, the rider app sends
 throttled GPS updates to Laravel. Laravel stores only the latest position for
 that delivery assignment and makes it available in the authenticated buyer
 order response while the shipment remains out for delivery. The position is

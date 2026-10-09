@@ -65,6 +65,8 @@ class RegisterFormData {
 
   final String password;
 
+  final String emailVerificationToken;
+
   const RegisterFormData({
     required this.accountType,
     required this.firstName,
@@ -89,12 +91,20 @@ class RegisterFormData {
     required this.vehicleOrCr,
     required this.driversLicense,
     required this.password,
+    required this.emailVerificationToken,
   });
 }
 
 typedef RegistrationSubmitCallback = Future<void> Function(
   RegisterFormData data,
 );
+
+typedef EmailVerificationSendCallback = Future<void> Function(String email);
+
+typedef EmailVerificationVerifyCallback = Future<String> Function({
+  required String email,
+  required String code,
+});
 
 typedef AddressLoader = Future<List<AddressOption>> Function();
 
@@ -105,6 +115,8 @@ typedef ChildAddressLoader = Future<List<AddressOption>> Function(
 typedef PostalCodeLoader = Future<String?> Function({
   required String municipalityCode,
   required String barangayCode,
+  required String provinceName,
+  required String municipalityName,
 });
 
 typedef DocumentPickerCallback = Future<RegistrationDocument?> Function(
@@ -113,6 +125,10 @@ typedef DocumentPickerCallback = Future<RegistrationDocument?> Function(
 
 class RegisterScreen extends StatefulWidget {
   final RegistrationSubmitCallback? onSubmit;
+
+  final EmailVerificationSendCallback? onSendEmailVerificationCode;
+
+  final EmailVerificationVerifyCallback? onVerifyEmailVerificationCode;
 
   final AddressLoader? loadRegions;
   final ChildAddressLoader? loadProvinces;
@@ -125,6 +141,8 @@ class RegisterScreen extends StatefulWidget {
   const RegisterScreen({
     super.key,
     this.onSubmit,
+    this.onSendEmailVerificationCode,
+    this.onVerifyEmailVerificationCode,
     this.loadRegions,
     this.loadProvinces,
     this.loadMunicipalities,
@@ -171,6 +189,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       TextEditingController();
 
   final TextEditingController _emailController =
+      TextEditingController();
+
+  final TextEditingController _emailVerificationCodeController =
       TextEditingController();
 
   final TextEditingController _contactController =
@@ -232,6 +253,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _isSubmitting = false;
 
+  bool _emailVerificationCodeSent = false;
+
+  bool _emailVerified = false;
+
+  bool _isSendingEmailVerificationCode = false;
+
+  bool _isVerifyingEmail = false;
+
+  String? _emailVerificationToken;
+
+  String? _emailUsedForVerification;
+
   @override
   void initState() {
     super.initState();
@@ -251,6 +284,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _ageController.dispose();
 
     _emailController.dispose();
+    _emailVerificationCodeController.dispose();
     _contactController.dispose();
 
     _streetController.dispose();
@@ -523,6 +557,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           await widget.loadPostalCode!(
         municipalityCode: _municipality!.code,
         barangayCode: barangay.code,
+        provinceName: _province?.name ?? '',
+        municipalityName: _municipality!.name,
       );
 
       if (!mounted) {
@@ -657,8 +693,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (_currentStep == 1) {
-      return _contactFormKey.currentState?.validate() ??
-          false;
+      final bool valid = _contactFormKey.currentState?.validate() ?? false;
+
+      if (!valid) {
+        return false;
+      }
+
+      if (_emailVerificationEnabled && !_emailVerified) {
+        _showMessage(
+          'Verify your email address before continuing.',
+          error: true,
+        );
+        return false;
+      }
+
+      return true;
     }
 
     if (_currentStep == 2) {
@@ -852,6 +901,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ? _driversLicense
             : null,
         password: _passwordController.text,
+        emailVerificationToken: _emailVerificationToken ?? '',
       );
 
       await widget.onSubmit!(data);
@@ -861,16 +911,135 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       _showMessage(
-        error.toString().replaceFirst(
-          'Exception: ',
-          '',
-        ),
+        _errorMessage(error),
         error: true,
       );
     } finally {
       if (mounted) {
         setState(() {
           _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  bool get _emailVerificationEnabled =>
+      widget.onSendEmailVerificationCode != null &&
+      widget.onVerifyEmailVerificationCode != null;
+
+  String? _validateEmail(String value) {
+    final String email = value.trim();
+
+    if (email.isEmpty) {
+      return 'Please enter your email.';
+    }
+
+    final RegExp emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (!emailPattern.hasMatch(email)) {
+      return 'Enter a valid email address.';
+    }
+
+    return null;
+  }
+
+  void _onEmailChanged(String value) {
+    final String email = value.trim().toLowerCase();
+    if (_emailUsedForVerification == null ||
+        _emailUsedForVerification == email) {
+      return;
+    }
+
+    setState(() {
+      _emailVerificationCodeSent = false;
+      _emailVerified = false;
+      _emailVerificationToken = null;
+      _emailVerificationCodeController.clear();
+    });
+  }
+
+  Future<void> _sendEmailVerificationCode() async {
+    final String email = _emailController.text.trim().toLowerCase();
+    final String? error = _validateEmail(email);
+
+    if (error != null) {
+      _showMessage(error, error: true);
+      return;
+    }
+
+    final EmailVerificationSendCallback? callback =
+        widget.onSendEmailVerificationCode;
+    if (callback == null || _isSendingEmailVerificationCode) {
+      return;
+    }
+
+    setState(() {
+      _isSendingEmailVerificationCode = true;
+      _emailVerified = false;
+      _emailVerificationToken = null;
+    });
+
+    try {
+      await callback(email);
+      if (!mounted) return;
+      setState(() {
+        _emailVerificationCodeSent = true;
+        _emailUsedForVerification = email;
+        _emailVerificationCodeController.clear();
+      });
+      _showMessage('Verification code sent. Check your email.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(
+        _errorMessage(error),
+        error: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingEmailVerificationCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyEmail() async {
+    final EmailVerificationVerifyCallback? callback =
+        widget.onVerifyEmailVerificationCode;
+    final String email = _emailController.text.trim().toLowerCase();
+    final String code = _emailVerificationCodeController.text.trim();
+
+    if (callback == null || !_emailVerificationCodeSent || _isVerifyingEmail) {
+      return;
+    }
+
+    if (code.length != 6 || int.tryParse(code) == null) {
+      _showMessage('Enter the 6-digit verification code.', error: true);
+      return;
+    }
+
+    setState(() {
+      _isVerifyingEmail = true;
+    });
+
+    try {
+      final String token = await callback(email: email, code: code);
+      if (!mounted) return;
+      setState(() {
+        _emailVerified = true;
+        _emailVerificationToken = token;
+        _emailUsedForVerification = email;
+      });
+      _showMessage('Email verified successfully.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage(
+        _errorMessage(error),
+        error: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVerifyingEmail = false;
         });
       }
     }
@@ -904,6 +1073,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       );
+  }
+
+  String _errorMessage(Object error) {
+    return error
+        .toString()
+        .replaceFirst(RegExp(r'^(FormatException|Exception):\s*'), '');
   }
 
   @override
@@ -1710,28 +1885,111 @@ class _RegisterScreenState extends State<RegisterScreen> {
               prefixIcon:
                   Icons.alternate_email_rounded,
             ),
-            validator: (String? value) {
-              final String email =
-                  value?.trim() ?? '';
-
-              if (email.isEmpty) {
-                return 'Please enter your email.';
-              }
-
-              final RegExp emailPattern =
-                  RegExp(
-                r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-              );
-
-              if (!emailPattern.hasMatch(
-                email,
-              )) {
-                return 'Enter a valid email address.';
-              }
-
-              return null;
-            },
+            onChanged: _onEmailChanged,
+            validator: (String? value) =>
+                _validateEmail(value ?? ''),
           ),
+
+          if (_emailVerificationEnabled) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _isSendingEmailVerificationCode
+                    ? null
+                    : _sendEmailVerificationCode,
+                icon: _isSendingEmailVerificationCode
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.mark_email_read_outlined, size: 18),
+                label: Text(
+                  _emailVerificationCodeSent
+                      ? 'Resend verification code'
+                      : 'Send verification code',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _primary,
+                  side: const BorderSide(color: _border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _FieldLabel(
+              text: 'Email verification code',
+              required: true,
+            ),
+            const SizedBox(height: 7),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _emailVerificationCodeController,
+                    enabled: _emailVerificationCodeSent && !_emailVerified,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: _inputDecoration(
+                      hintText: '6-digit code',
+                      prefixIcon: Icons.password_outlined,
+                    ).copyWith(counterText: ''),
+                    validator: (_) {
+                      if (!_emailVerificationEnabled || _emailVerified) {
+                        return null;
+                      }
+                      if (!_emailVerificationCodeSent) {
+                        return 'Send a verification code first.';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _emailVerificationCodeSent &&
+                            !_emailVerified &&
+                            !_isVerifyingEmail
+                        ? _verifyEmail
+                        : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _isVerifyingEmail
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(_emailVerified ? 'Verified' : 'Verify'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _emailVerified
+                  ? 'Email verified successfully.'
+                  : 'Verify your email before continuing.',
+              style: TextStyle(
+                color: _emailVerified ? const Color(0xFF16794A) : _secondaryText,
+                fontSize: 11,
+              ),
+            ),
+          ],
 
           const SizedBox(
             height: 18,

@@ -69,6 +69,8 @@ class _RiderDeliveryTrackingScreenState
   static const Color _border = Color(0xFFEADCCC);
 
   static const Color _maroon = Color(0xFF561C17);
+  // Warmer maroon used by the route guideline in the rider map preview.
+  static const Color _routeColor = Color(0xFF7A2A22);
   static const Color _riderColor = Color(0xFF1976D2);
 
   static const Color _text = Color(0xFF3B211B);
@@ -634,7 +636,7 @@ class _RiderDeliveryTrackingScreenState
           if (destination != null)
             mapbox.CircleAnnotationOptions(
               geometry: _toMapboxPoint(destination),
-              circleColor: _maroon.toARGB32(),
+              circleColor: _routeColor.toARGB32(),
               circleRadius: 11,
               circleStrokeColor: Colors.white.toARGB32(),
               circleStrokeWidth: 3,
@@ -800,7 +802,7 @@ class _RiderDeliveryTrackingScreenState
       await manager.create(
         mapbox.PolylineAnnotationOptions(
           geometry: mapbox.LineString(coordinates: positions),
-          lineColor: _maroon.toARGB32(),
+          lineColor: _routeColor.toARGB32(),
           lineWidth: 5,
           lineOpacity: 0.85,
           lineBorderColor: Colors.white.toARGB32(),

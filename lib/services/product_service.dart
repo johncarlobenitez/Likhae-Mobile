@@ -144,6 +144,7 @@ class ProductService {
 
   static Future<List<Map<String, dynamic>>> fetchProductRows({
     int perPage = 100,
+    int? sellerProfileId,
   }) async {
     if (!AppConfig.apiEnabled) {
       return _demoProducts()
@@ -169,7 +170,10 @@ class ProductService {
 
     final Response<dynamic> response = await ApiClient.get(
       AppConfig.resolveApiUrl('products'),
-      queryParameters: <String, dynamic>{'per_page': perPage},
+      queryParameters: <String, dynamic>{
+        'per_page': perPage,
+        if (sellerProfileId != null) 'seller_profile_id': sellerProfileId,
+      },
     );
     final int statusCode = response.statusCode ?? 500;
     if (statusCode < 200 || statusCode >= 300) {

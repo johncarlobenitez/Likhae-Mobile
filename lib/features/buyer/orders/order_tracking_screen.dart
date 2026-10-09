@@ -8,6 +8,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 
 import '../../../core/config/app_config.dart';
 import '../../../services/buyer_mobile_service.dart';
+import '../../../services/realtime_service.dart';
 import 'orders_screen.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
@@ -35,6 +36,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   late BuyerOrderData _trackedOrder;
   Timer? _locationRefreshTimer;
+  RealtimeSubscription? _shipmentRealtime;
   bool _refreshingLocation = false;
   bool _locationRefreshErrorShown = false;
 
@@ -52,6 +54,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         const Duration(seconds: 15),
         (_) => unawaited(_refreshOrderLocation()),
       );
+      unawaited(_connectShipmentRealtime());
     }
   }
 
@@ -66,7 +69,55 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   void dispose() {
     _locationRefreshTimer?.cancel();
+    unawaited(_shipmentRealtime?.cancel());
     super.dispose();
+  }
+
+  Future<void> _connectShipmentRealtime() async {
+    final String? shipmentId = order.shipmentId;
+    if (shipmentId == null || shipmentId.isEmpty) return;
+
+    try {
+      final RealtimeSubscription subscription =
+          await LikhaeRealtimeService.subscribe('shipments.$shipmentId');
+      if (!mounted) {
+        await subscription.cancel();
+        return;
+      }
+      _shipmentRealtime = subscription;
+      await for (final RealtimeEvent event in subscription.events) {
+        if (!mounted) return;
+        if (event.name == 'rider.location.updated') {
+          final double? latitude =
+              double.tryParse((event.data['latitude'] ?? '').toString());
+          final double? longitude =
+              double.tryParse((event.data['longitude'] ?? '').toString());
+          if (latitude == null || longitude == null) continue;
+          setState(() {
+            _trackedOrder = order.copyWith(
+              riderLocation: BuyerOrderLocation(
+                latitude: latitude,
+                longitude: longitude,
+                label: 'Rider location',
+              ),
+            );
+          });
+          await _syncMapboxMarkers(recenter: false);
+        } else if (event.name == 'shipment.tracking.updated') {
+          final String status =
+              (event.data['current_status'] ?? '').toString().trim();
+          if (status.isEmpty) continue;
+          setState(() {
+            _trackedOrder = order.copyWith(
+              backendStatus: status,
+              statusLabel: status.replaceAll('_', ' '),
+            );
+          });
+        }
+      }
+    } catch (_) {
+      // The existing location request remains the safe fallback.
+    }
   }
 
   Future<void> _refreshOrderLocation() async {

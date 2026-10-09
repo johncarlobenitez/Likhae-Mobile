@@ -17,6 +17,27 @@ class AppConfig {
   static const String baseUrl = apiBaseUrl;
   static const String storageBaseUrl = '$webBaseUrl/storage';
 
+  // Reverb speaks the Pusher WebSocket protocol. Keep these values as build
+  // defines so the mobile app never needs a server-side .env file.
+  static const String reverbAppKey = String.fromEnvironment(
+    'REVERB_APP_KEY',
+    defaultValue: '',
+  );
+  static const String reverbHost = String.fromEnvironment(
+    'REVERB_HOST',
+    defaultValue: 'likhae.online',
+  );
+  static const int reverbPort = int.fromEnvironment(
+    'REVERB_PORT',
+    defaultValue: 443,
+  );
+  static const String reverbScheme = String.fromEnvironment(
+    'REVERB_SCHEME',
+    defaultValue: 'https',
+  );
+
+  static bool get realtimeEnabled => apiEnabled && reverbAppKey.isNotEmpty;
+
   static String resolveApiUrl(String endpoint) {
     final String normalized = endpoint.trim();
 

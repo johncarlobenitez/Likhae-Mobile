@@ -12,6 +12,7 @@ import '../features/rider/messages/rider_messages_screen.dart';
 import '../features/buyer/notifications/notifications_screen.dart';
 import '../features/rider/pickups/rider_pickups_screen.dart';
 import '../features/rider/profile/rider_profile_screen.dart';
+import 'realtime_service.dart';
 
 class RiderDashboardSnapshot {
   final List<RiderDashboardStatData> stats;
@@ -300,18 +301,37 @@ class RiderMobileService {
   static Stream<RiderMessageData> watchMessages(
     RiderConversationData conversation,
   ) async* {
-    final Set<String> knownIds = (await fetchMessages(
-      conversation,
-    )).map((RiderMessageData message) => message.id).toSet();
-    while (true) {
-      await Future<void>.delayed(const Duration(seconds: 5));
-      for (final RiderMessageData message in await fetchMessages(
-        conversation,
-      )) {
-        if (knownIds.add(message.id)) {
-          yield message;
+    final Set<String> knownIds = (await fetchMessages(conversation))
+        .map((RiderMessageData message) => message.id)
+        .toSet();
+    RealtimeSubscription? subscription;
+    try {
+      subscription = await LikhaeRealtimeService.subscribe(
+        'conversations.${conversation.id}',
+      );
+      await for (final RealtimeEvent event in subscription.events) {
+        if (event.name != 'message.sent') continue;
+        final String id = (event.data['id'] ?? '').toString();
+        if (id.isEmpty || !knownIds.add(id)) continue;
+        yield RiderMessageData(
+          id: id,
+          conversationId: (event.data['conversation_id'] ?? conversation.id)
+              .toString(),
+          body: (event.data['body'] ?? '').toString(),
+          sentAt: DateTime.tryParse((event.data['sent_at'] ?? '').toString()) ??
+              DateTime.now(),
+          fromRider: false,
+        );
+      }
+    } catch (_) {
+      while (true) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        for (final RiderMessageData message in await fetchMessages(conversation)) {
+          if (knownIds.add(message.id)) yield message;
         }
       }
+    } finally {
+      await subscription?.cancel();
     }
   }
 

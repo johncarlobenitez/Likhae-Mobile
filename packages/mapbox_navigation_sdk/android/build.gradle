@@ -2,8 +2,9 @@ group 'dev.etornam.mapboxnavigation'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.9.24'
-    ext.android_gradle_version = '8.6.0'
+    // Keep the local plugin toolchain aligned with the Flutter app.
+    ext.kotlin_version = '2.2.20'
+    ext.android_gradle_version = '8.11.1'
     repositories {
         google()
         mavenCentral()

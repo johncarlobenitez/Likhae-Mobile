@@ -39,13 +39,43 @@ class ProductVariationData {
   /// product price.
   final double? price;
 
+  /// Option values that make up this concrete SKU, for example:
+  /// {"Color": "Black", "Size": "XL"}.
+  final Map<String, String> optionValues;
+
+  /// Image(s) belonging to this concrete SKU. Clothing products commonly
+  /// use these to show a different product photo for every color.
+  final String? imageUrl;
+  final List<String> imageUrls;
+
   const ProductVariationData({
     required this.id,
     required this.name,
     required this.value,
     this.stock,
     this.price,
+    this.optionValues = const <String, String>{},
+    this.imageUrl,
+    this.imageUrls = const <String>[],
   });
+
+  List<String> get galleryImages {
+    final List<String> result = <String>[];
+
+    for (final String image in imageUrls) {
+      final String clean = image.trim();
+      if (clean.isNotEmpty && !result.contains(clean)) {
+        result.add(clean);
+      }
+    }
+
+    final String? main = imageUrl?.trim();
+    if (main != null && main.isNotEmpty && !result.contains(main)) {
+      result.insert(0, main);
+    }
+
+    return result;
+  }
 
   String get label {
     final String cleanName = name.trim();
@@ -61,6 +91,13 @@ class ProductVariationData {
 
     return '$cleanName: $cleanValue';
   }
+}
+
+class ProductOptionData {
+  final String name;
+  final List<String> values;
+
+  const ProductOptionData({required this.name, required this.values});
 }
 
 class ProductReviewData {
@@ -129,6 +166,8 @@ class ProductDetailData {
 
   final List<ProductVariationData> variations;
 
+  final List<ProductOptionData> options;
+
   final Map<String, String> specifications;
 
   final List<ProductReviewData> reviews;
@@ -156,6 +195,7 @@ class ProductDetailData {
     this.sellerLocation,
     this.sellerVerified = false,
     this.variations = const [],
+    this.options = const [],
     this.specifications = const {},
     this.reviews = const [],
     this.wishlisted = false,
@@ -215,6 +255,7 @@ class ProductDetailData {
         primaryImage?['file_path'];
     final dynamic gallery = json['gallery'] ?? json['images'] ?? <dynamic>[];
     final dynamic variations = json['variations'] ?? json['variants'] ?? <String, dynamic>{};
+    final dynamic rawOptions = json['options'] ?? <dynamic>[];
     final dynamic specs =
         json['specs'] ?? json['specifications'] ?? <String, dynamic>{};
     final dynamic rawReviews =
@@ -253,16 +294,34 @@ class ProductDetailData {
         }
         final Map<String, dynamic> value = Map<String, dynamic>.from(item);
         final dynamic rawOptionValues = value['option_values'];
-        final String optionDescription = rawOptionValues is List
-            ? rawOptionValues
-                  .whereType<Map>()
-                  .map((Map option) => option['value']?.toString() ?? '')
-                  .where((String option) => option.isNotEmpty)
-                  .join(' / ')
-            : '';
+        final Map<String, String> optionValues = <String, String>{};
+        if (rawOptionValues is List) {
+          for (final dynamic rawOption in rawOptionValues) {
+            if (rawOption is! Map) {
+              continue;
+            }
+            final String optionName = (rawOption['option'] ??
+                    rawOption['option_name'] ??
+                    rawOption['name'] ??
+                    '')
+                .toString()
+                .trim();
+            final String optionValue = (rawOption['value'] ?? '').toString().trim();
+            if (optionName.isNotEmpty && optionValue.isNotEmpty) {
+              optionValues[optionName] = optionValue;
+            }
+          }
+        }
+        final String optionDescription = optionValues.values.join(' / ');
         final String description = (value['description'] ?? '')
             .toString()
             .trim();
+        final List<String> variationImages = _parseImageUrls(
+          value['images'] ?? value['gallery'] ?? value['photos'],
+        );
+        final String? variationImage = _parseImageUrl(
+          value['image_url'] ?? value['image'] ?? value['photo'],
+        );
         parsedVariations.add(
           ProductVariationData(
             id: int.tryParse(value['id']?.toString() ?? '') ?? 0,
@@ -274,6 +333,9 @@ class ProductDetailData {
                 : 'Default',
             stock: int.tryParse(value['stock']?.toString() ?? ''),
             price: double.tryParse(value['price']?.toString() ?? ''),
+            optionValues: optionValues,
+            imageUrl: variationImage,
+            imageUrls: variationImages,
           ),
         );
       }
@@ -293,6 +355,13 @@ class ProductDetailData {
 
           final Map<String, dynamic> value = Map<String, dynamic>.from(item);
 
+          final List<String> variationImages = _parseImageUrls(
+            value['images'] ?? value['gallery'] ?? value['photos'],
+          );
+          final String? variationImage = _parseImageUrl(
+            value['image_url'] ?? value['image'] ?? value['photo'],
+          );
+
           parsedVariations.add(
             ProductVariationData(
               id: int.tryParse(value['id']?.toString() ?? '') ?? 0,
@@ -300,10 +369,64 @@ class ProductDetailData {
               value: value['value']?.toString() ?? '',
               stock: int.tryParse(value['stock']?.toString() ?? ''),
               price: double.tryParse(value['price']?.toString() ?? ''),
+              optionValues: <String, String>{
+                groupName: value['value']?.toString() ?? '',
+              },
+              imageUrl: variationImage,
+              imageUrls: variationImages,
             ),
           );
         }
       }
+    }
+
+    final List<ProductOptionData> parsedOptions = <ProductOptionData>[];
+    if (rawOptions is List) {
+      for (final dynamic rawOption in rawOptions) {
+        if (rawOption is! Map) {
+          continue;
+        }
+        final String name = (rawOption['name'] ?? '').toString().trim();
+        final dynamic rawValues = rawOption['values'];
+        final List<String> values = rawValues is List
+            ? rawValues
+                  .map((dynamic value) => value is Map
+                      ? (value['value'] ?? '').toString().trim()
+                      : value.toString().trim())
+                  .where((String value) => value.isNotEmpty)
+                  .toSet()
+                  .toList()
+            : <String>[];
+        if (name.isNotEmpty && values.isNotEmpty) {
+          parsedOptions.add(ProductOptionData(name: name, values: values));
+        }
+      }
+    }
+
+    if (parsedOptions.isEmpty) {
+      final Map<String, List<String>> derivedOptions = <String, List<String>>{};
+      for (final ProductVariationData variation in parsedVariations) {
+        final String fallbackName = variation.name.trim().isEmpty
+            ? 'Variant'
+            : variation.name.trim();
+        final Map<String, String> values = variation.optionValues.isNotEmpty
+            ? variation.optionValues
+            : <String, String>{fallbackName: variation.value};
+        for (final MapEntry<String, String> entry in values.entries) {
+          derivedOptions.putIfAbsent(entry.key, () => <String>[]);
+          if (!derivedOptions[entry.key]!.contains(entry.value)) {
+            derivedOptions[entry.key]!.add(entry.value);
+          }
+        }
+      }
+      parsedOptions.addAll(
+        derivedOptions.entries.map(
+          (MapEntry<String, List<String>> entry) => ProductOptionData(
+            name: entry.key,
+            values: entry.value,
+          ),
+        ),
+      );
     }
 
     final Map<String, String> parsedSpecs = <String, String>{};
@@ -382,6 +505,7 @@ class ProductDetailData {
         int.tryParse(
           json['review_count']?.toString() ??
               json['reviews_count']?.toString() ??
+              (json['reviews'] is num ? json['reviews'].toString() : null) ??
               '',
         ) ??
         parsedReviews.length;
@@ -440,10 +564,37 @@ class ProductDetailData {
           json['seller_is_verified'] == true ||
           json['verified'] == true,
       variations: parsedVariations,
+      options: parsedOptions,
       specifications: parsedSpecs,
       reviews: parsedReviews,
       wishlisted: json['wishlisted'] == true,
     );
+  }
+
+  static String? _parseImageUrl(dynamic raw) {
+    if (raw is Map) {
+      raw = raw['url'] ?? raw['image_url'] ?? raw['path'] ?? raw['file_path'];
+    }
+
+    if (raw == null) {
+      return null;
+    }
+
+    final String value = raw.toString().trim();
+    return value.isEmpty ? null : AppConfig.resolveMediaUrl(value);
+  }
+
+  static List<String> _parseImageUrls(dynamic raw) {
+    if (raw is! List) {
+      return const <String>[];
+    }
+
+    return raw
+        .map(_parseImageUrl)
+        .whereType<String>()
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
   }
 
   ProductDetailData copyWith({bool? wishlisted}) {
@@ -468,6 +619,7 @@ class ProductDetailData {
       sellerLocation: sellerLocation,
       sellerVerified: sellerVerified,
       variations: variations,
+      options: options,
       specifications: specifications,
       reviews: reviews,
       wishlisted: wishlisted ?? this.wishlisted,
@@ -610,6 +762,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   ProductVariationData? _selectedVariation;
 
+  Map<String, String> _selectedOptionValues = <String, String>{};
+
   late int _quantity;
 
   late bool _wishlisted;
@@ -633,6 +787,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     _wishlisted = widget.initialWishlisted ?? _product.wishlisted;
 
     _selectedVariation = _resolveInitialVariation();
+    _selectedOptionValues = _selectedVariation == null
+        ? <String, String>{}
+        : _optionValuesForVariation(_selectedVariation!);
 
     _clampQuantity();
   }
@@ -650,6 +807,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       _quantity = widget.initialQuantity.clamp(1, 999999).toInt();
 
       _selectedVariation = _resolveInitialVariation();
+      _selectedOptionValues = _selectedVariation == null
+          ? <String, String>{}
+          : _optionValuesForVariation(_selectedVariation!);
 
       _currentImageIndex = 0;
       _descriptionExpanded = false;
@@ -677,6 +837,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final List<ProductVariationData> variations = _product.variations;
 
     if (variations.isEmpty) {
+      return null;
+    }
+
+    // Do not silently choose the first SKU for products with options. The
+    // buyer must explicitly choose every option before Buy Now can continue.
+    if (_product.options.isNotEmpty || variations.length > 1) {
       return null;
     }
 
@@ -716,6 +882,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return _variationStock(variation);
     }
 
+    if (_hasSelectableOptions) {
+      // Keep the action usable so it can open the option picker. Validation
+      // still blocks checkout until a complete SKU is selected.
+      return _product.stock;
+    }
+
     return _product.stock;
   }
 
@@ -728,7 +900,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   List<String> get _images {
-    return _product.galleryImages;
+    final ProductVariationData? preview =
+        _findVariationForPreview(_selectedOptionValues);
+    final List<String> variantImages = preview?.galleryImages ?? const <String>[];
+
+    if (variantImages.isEmpty) {
+      return _product.galleryImages;
+    }
+
+    final List<String> images = <String>[...variantImages];
+    for (final String image in _product.galleryImages) {
+      if (!images.contains(image)) {
+        images.add(image);
+      }
+    }
+    return images;
   }
 
   Map<String, String> get _selectedVariantMap {
@@ -738,11 +924,149 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return const {};
     }
 
-    final String key = variation.name.trim().isEmpty
-        ? 'variant'
-        : variation.name;
+    return _optionValuesForVariation(variation);
+  }
 
-    return <String, String>{key: variation.value};
+  Map<String, String> _optionValuesForVariation(
+    ProductVariationData variation,
+  ) {
+    if (variation.optionValues.isNotEmpty) {
+      return Map<String, String>.from(variation.optionValues);
+    }
+
+    final String name = variation.name.trim().isEmpty
+        ? 'Variant'
+        : variation.name.trim();
+    return <String, String>{name: variation.value};
+  }
+
+  List<ProductOptionData> get _optionGroups {
+    if (_product.options.isNotEmpty) {
+      return _product.options;
+    }
+
+    final Map<String, List<String>> groups = <String, List<String>>{};
+    for (final ProductVariationData variation in _product.variations) {
+      final Map<String, String> values = _optionValuesForVariation(variation);
+      for (final MapEntry<String, String> entry in values.entries) {
+        groups.putIfAbsent(entry.key, () => <String>[]);
+        if (!groups[entry.key]!.contains(entry.value)) {
+          groups[entry.key]!.add(entry.value);
+        }
+      }
+    }
+
+    return groups.entries
+        .map(
+          (MapEntry<String, List<String>> entry) => ProductOptionData(
+            name: entry.key,
+            values: entry.value,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  bool get _hasSelectableOptions {
+    return _optionGroups.isNotEmpty &&
+        (_product.options.isNotEmpty || _product.variations.length > 1);
+  }
+
+  ProductVariationData? _findVariationForSelections(
+    Map<String, String> selections,
+  ) {
+    final List<ProductOptionData> groups = _optionGroups;
+    if (groups.isEmpty) {
+      return _selectedVariation;
+    }
+
+    for (final ProductVariationData variation in _product.variations) {
+      final Map<String, String> values = _optionValuesForVariation(variation);
+      final bool matches = groups.every(
+        (ProductOptionData group) =>
+            selections[group.name] != null &&
+            values[group.name] == selections[group.name],
+      );
+      if (matches) {
+        return variation;
+      }
+    }
+
+    return null;
+  }
+
+  ProductVariationData? _findVariationForPreview(
+    Map<String, String> selections,
+  ) {
+    if (selections.isEmpty) {
+      return null;
+    }
+
+    final ProductVariationData? exact = _findVariationForSelections(selections);
+    if (exact != null && exact.galleryImages.isNotEmpty) {
+      return exact;
+    }
+
+    // A color can be selected before a size. Use any SKU with that color so
+    // the hero photo changes immediately, even before the full SKU is valid.
+    for (final ProductVariationData variation in _product.variations) {
+      final Map<String, String> values = _optionValuesForVariation(variation);
+      final bool matches = selections.entries.every(
+        (MapEntry<String, String> entry) => values[entry.key] == entry.value,
+      );
+      if (matches && variation.galleryImages.isNotEmpty) {
+        return variation;
+      }
+    }
+
+    return exact;
+  }
+
+  ProductVariationData? _variationForOptionValue(
+    ProductOptionData group,
+    String value,
+    Map<String, String> selections,
+  ) {
+    final Map<String, String> previewSelections =
+        Map<String, String>.from(selections)..[group.name] = value;
+    return _findVariationForPreview(previewSelections);
+  }
+
+  bool _isColorOption(String name) {
+    final String normalized = name.toLowerCase();
+    return normalized.contains('color') || normalized.contains('colour');
+  }
+
+  Color _colorForOption(String value) {
+    final String normalized = value.toLowerCase().trim();
+    if (normalized.contains('black')) return const Color(0xFF252525);
+    if (normalized.contains('white')) return const Color(0xFFF8F8F8);
+    if (normalized.contains('navy')) return const Color(0xFF1E365E);
+    if (normalized.contains('red')) return const Color(0xFFB73535);
+    if (normalized.contains('khaki')) return const Color(0xFFB9A06C);
+    if (normalized.contains('peach')) return const Color(0xFFE7A18E);
+    if (normalized.contains('mocha') || normalized.contains('brown')) {
+      return const Color(0xFF876452);
+    }
+    if (normalized.contains('olive')) return const Color(0xFF7A8156);
+    if (normalized.contains('blue')) return const Color(0xFF557CA8);
+    if (normalized.contains('green')) return const Color(0xFF5D8A63);
+    if (normalized.contains('pink')) return const Color(0xFFD98B9A);
+    if (normalized.contains('orange')) return const Color(0xFFD6813A);
+    if (normalized.contains('yellow')) return const Color(0xFFE0B948);
+    if (normalized.contains('purple')) return const Color(0xFF8B6FA7);
+    if (normalized.contains('gray') || normalized.contains('grey')) {
+      return const Color(0xFF969696);
+    }
+    return const Color(0xFFD7C9BE);
+  }
+
+  void _resetGalleryToSelectedOption() {
+    _currentImageIndex = 0;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _galleryController.hasClients) {
+        _galleryController.jumpToPage(0);
+      }
+    });
   }
 
   ProductPurchaseRequest get _purchaseRequest {
@@ -793,8 +1117,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     setState(() {
       _selectedVariation = variation;
+      _selectedOptionValues = _optionValuesForVariation(variation);
 
       _clampQuantity();
+      _resetGalleryToSelectedOption();
     });
   }
 
@@ -872,6 +1198,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return;
     }
 
+    if (_hasSelectableOptions) {
+      final bool? selected = await _showVariationPicker(
+        actionLabel: 'Add to Cart',
+      );
+      if (selected != true || !mounted) {
+        return;
+      }
+    }
+
     if (!_validatePurchase()) {
       return;
     }
@@ -916,6 +1251,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return;
     }
 
+    if (_hasSelectableOptions) {
+      final bool? selected = await _showVariationPicker();
+      if (selected != true || !mounted) {
+        return;
+      }
+    }
+
     if (!_validatePurchase()) {
       return;
     }
@@ -954,8 +1296,359 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
+  Future<bool?> _showVariationPicker({String actionLabel = 'Continue to checkout'}) {
+    final List<ProductOptionData> groups = _optionGroups;
+    final Map<String, String> pendingSelections =
+        Map<String, String>.from(_selectedOptionValues);
+
+    return showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            final ProductVariationData? matchingVariation =
+                _findVariationForSelections(pendingSelections);
+            final ProductVariationData? previewVariation =
+                _findVariationForPreview(pendingSelections);
+            final List<String> previewImages =
+                previewVariation?.galleryImages ?? _product.galleryImages;
+            final int previewStock = matchingVariation == null
+                ? _product.stock
+                : _variationStock(matchingVariation);
+            final bool canContinue = matchingVariation != null &&
+                previewStock > 0;
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  18,
+                  12,
+                  18,
+                  18 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 650),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Choose product options',
+                              style: TextStyle(
+                                color: _text,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                            color: _muted,
+                          ),
+                        ],
+                      ),
+                      Text(
+                        _product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _muted, fontSize: 13),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 92,
+                            height: 92,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3ECE4),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _border),
+                            ),
+                            child: previewImages.isEmpty
+                                ? const Icon(
+                                    Icons.inventory_2_outlined,
+                                    color: _muted2,
+                                  )
+                                : _ProductImage(url: previewImages.first),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _formatPrice(
+                                    matchingVariation?.price ?? _product.price,
+                                  ),
+                                  style: const TextStyle(
+                                    color: _maroon,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 7),
+                                Text(
+                                  matchingVariation == null
+                                      ? 'Select options'
+                                      : previewStock > 0
+                                      ? 'Stock: $previewStock'
+                                      : 'Out of stock',
+                                  style: TextStyle(
+                                    color: previewStock > 0 ? _muted : _danger,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (matchingVariation != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    matchingVariation.value,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: _brown,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final ProductOptionData group in groups) ...[
+                                Text(
+                                  group.name,
+                                  style: const TextStyle(
+                                    color: _brown,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: group.values.map((String value) {
+                                    final bool selected =
+                                        pendingSelections[group.name] == value;
+                                    final ProductVariationData? optionPreview =
+                                        _variationForOptionValue(
+                                          group,
+                                          value,
+                                          pendingSelections,
+                                        );
+                                    final List<String> optionImages =
+                                        optionPreview?.galleryImages ??
+                                            const <String>[];
+                                    return Material(
+                                      color: selected
+                                          ? const Color(0xFFF5E4DA)
+                                          : const Color(0xFFF8F7F5),
+                                      borderRadius: BorderRadius.circular(9),
+                                      child: InkWell(
+                                        onTap: () {
+                                          setModalState(() {
+                                            pendingSelections[group.name] = value;
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(9),
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: _isColorOption(group.name)
+                                                ? 7
+                                                : 13,
+                                            vertical: 7,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(9),
+                                            border: Border.all(
+                                              color: selected ? _maroon : _border,
+                                              width: selected ? 1.4 : 1,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (_isColorOption(group.name))
+                                                Container(
+                                                  width: 30,
+                                                  height: 30,
+                                                  clipBehavior: Clip.antiAlias,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    color: _colorForOption(value),
+                                                    border: Border.all(
+                                                      color: selected
+                                                          ? _maroon
+                                                          : _border,
+                                                    ),
+                                                  ),
+                                                  child: optionImages.isEmpty
+                                                      ? null
+                                                      : _ProductImage(
+                                                          url: optionImages.first,
+                                                        ),
+                                                ),
+                                              if (_isColorOption(group.name))
+                                                const SizedBox(width: 6),
+                                              Text(
+                                                value,
+                                                style: TextStyle(
+                                                  color: selected ? _maroon : _text,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF8F1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: _border),
+                                ),
+                                child: Text(
+                                  matchingVariation == null
+                                      ? 'Select all options to see the available price and stock.'
+                                      : matchingVariation.stock == null
+                                      ? 'Selected option: ${matchingVariation.value}'
+                                      : '${_formatPrice(matchingVariation.price ?? _product.price)} · ${_variationStock(matchingVariation)} available',
+                                  style: const TextStyle(
+                                    color: _brown,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Quantity',
+                                      style: TextStyle(
+                                        color: _brown,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  _QuantityButton(
+                                    icon: Icons.remove_rounded,
+                                    enabled: _quantity > 1,
+                                    onTap: () {
+                                      setModalState(() {
+                                        if (_quantity > 1) _quantity--;
+                                      });
+                                    },
+                                  ),
+                                  Container(
+                                    width: 42,
+                                    height: 40,
+                                    alignment: Alignment.center,
+                                    decoration: const BoxDecoration(
+                                      color: _surface,
+                                      border: Border.symmetric(
+                                        horizontal: BorderSide(color: _border),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '$_quantity',
+                                      style: const TextStyle(
+                                        color: _text,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                  _QuantityButton(
+                                    icon: Icons.add_rounded,
+                                    enabled: previewStock > 0 &&
+                                        _quantity < previewStock,
+                                    onTap: () {
+                                      setModalState(() {
+                                        if (_quantity < previewStock) _quantity++;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: canContinue
+                              ? () {
+                                  setState(() {
+                                    _selectedOptionValues =
+                                        Map<String, String>.from(
+                                          pendingSelections,
+                                        );
+                                    _selectedVariation = matchingVariation;
+                                    _clampQuantity();
+                                    _resetGalleryToSelectedOption();
+                                  });
+                                  Navigator.of(sheetContext).pop(true);
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            backgroundColor: _maroon,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                _maroon.withValues(alpha: 0.25),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            actionLabel,
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   bool _validatePurchase() {
-    if (_product.variations.isNotEmpty && _selectedVariation == null) {
+    if (_hasSelectableOptions && _selectedVariation == null) {
       _showMessage('Choose a product option first.', error: true);
 
       return false;
@@ -1591,24 +2284,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildInlineVariations() {
-    final Map<String, List<ProductVariationData>> grouped =
-        <String, List<ProductVariationData>>{};
-
-    for (final ProductVariationData variation in _product.variations) {
-      final String group = variation.name.trim().isEmpty
-          ? 'Option'
-          : variation.name.trim();
-
-      grouped.putIfAbsent(group, () => <ProductVariationData>[]).add(variation);
-    }
+    final List<ProductOptionData> groups = _optionGroups;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final MapEntry<String, List<ProductVariationData>> entry
-            in grouped.entries) ...[
+        for (final ProductOptionData group in groups) ...[
           Text(
-            entry.key.toUpperCase(),
+            group.name.toUpperCase(),
             style: const TextStyle(
               color: _brown,
               fontSize: 10,
@@ -1622,17 +2305,28 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: entry.value.map((ProductVariationData variation) {
-              final bool selected = _selectedVariation?.id == variation.id;
-
-              final int stock = _variationStock(variation);
-
+            children: group.values.map((String value) {
+              final bool selected = _selectedOptionValues[group.name] == value;
+              final ProductVariationData? previewVariation =
+                  _variationForOptionValue(group, value, _selectedOptionValues);
+              final List<String> previewImages =
+                  previewVariation?.galleryImages ?? const <String>[];
               return Material(
                 color: selected ? const Color(0xFFF5E4DA) : _surface,
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
                   onTap: () {
-                    _selectVariation(variation);
+                    final Map<String, String> nextSelections =
+                        Map<String, String>.from(_selectedOptionValues)
+                          ..[group.name] = value;
+                    final ProductVariationData? matching =
+                        _findVariationForSelections(nextSelections);
+                    setState(() {
+                      _selectedOptionValues = nextSelections;
+                      _selectedVariation = matching;
+                      _clampQuantity();
+                      _resetGalleryToSelectedOption();
+                    });
                   },
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
@@ -1650,6 +2344,29 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (_isColorOption(group.name)) ...[
+                          Container(
+                            width: 22,
+                            height: 22,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _colorForOption(value),
+                              border: Border.all(
+                                color: selected
+                                    ? _maroon
+                                    : _border,
+                                width: selected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: previewImages.isEmpty
+                                ? null
+                                : _ProductImage(url: previewImages.first),
+                          ),
+
+                          const SizedBox(width: 7),
+                        ],
+
                         if (selected) ...[
                           const Icon(
                             Icons.check_rounded,
@@ -1660,44 +2377,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           const SizedBox(width: 4),
                         ],
 
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              variation.value,
-                              style: TextStyle(
-                                color: stock < 1
-                                    ? _muted2
-                                    : selected
-                                    ? _maroon
-                                    : _text,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-
-                            if (variation.price != null) ...[
-                              const SizedBox(height: 2),
-
-                              Text(
-                                _formatPrice(variation.price!),
-                                style: const TextStyle(
-                                  color: _maroon,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-
-                            if (stock < 1) ...[
-                              const SizedBox(height: 2),
-
-                              const Text(
-                                'Out of stock',
-                                style: TextStyle(color: _danger, fontSize: 9.5),
-                              ),
-                            ],
-                          ],
+                        Text(
+                          value,
+                          style: TextStyle(
+                            color: selected ? _maroon : _text,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ],
                     ),
@@ -1707,7 +2393,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             }).toList(),
           ),
 
-          if (entry.key != grouped.keys.last) const SizedBox(height: 13),
+          if (group.name != groups.last.name) const SizedBox(height: 13),
         ],
       ],
     );
@@ -1847,7 +2533,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
             Expanded(
               child: ElevatedButton(
-                onPressed: busy || _outOfStock ? null : _buyNow,
+                  onPressed: busy || (_outOfStock && !_hasSelectableOptions)
+                      ? null
+                      : _buyNow,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
                   backgroundColor: _maroon,
@@ -1868,7 +2556,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                       )
                     : Text(
-                        _outOfStock ? 'Out of Stock' : 'Buy Now',
+                        _outOfStock && !_hasSelectableOptions
+                            ? 'Out of Stock'
+                            : _hasSelectableOptions && _selectedVariation == null
+                            ? 'Choose Options'
+                            : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
@@ -2527,7 +3219,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
             Expanded(
               child: ElevatedButton(
-                onPressed: busy || _outOfStock ? null : _buyNow,
+                onPressed: busy || (_outOfStock && !_hasSelectableOptions)
+                    ? null
+                    : _buyNow,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
                   backgroundColor: _maroon,
@@ -2548,7 +3242,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                       )
                     : Text(
-                        _outOfStock ? 'Out of Stock' : 'Buy Now',
+                        _outOfStock && !_hasSelectableOptions
+                            ? 'Out of Stock'
+                            : _hasSelectableOptions && _selectedVariation == null
+                            ? 'Choose Options'
+                            : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,

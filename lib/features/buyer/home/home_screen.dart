@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:likhae/core/theme/app_theme.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/services/product_service.dart';
 import 'package:likhae/shared/widgets/buyer_navigation.dart';
@@ -252,17 +253,17 @@ class BuyerHomeScreen extends StatefulWidget {
 }
 
 class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
-  static const Color background = Color(0xFFFBF7F2);
-  static const Color card = Color(0xFFFFFDF9);
-  static const Color border = Color(0xFFEADCCC);
-  static const Color maroon = Color(0xFF561C17);
-  static const Color maroonLight = Color(0xFF7A2A22);
-  static const Color text = Color(0xFF3B211B);
-  static const Color brown = Color(0xFF6C4936);
-  static const Color muted = Color(0xFF987865);
-  static const Color muted2 = Color(0xFFA99386);
-  static const Color tan = Color(0xFFC19771);
-  static const Color star = Color(0xFFC88418);
+  static Color get background => AppTheme.adaptive(const Color(0xFFFBF7F2));
+  static Color get card => AppTheme.adaptive(const Color(0xFFFFFDF9));
+  static Color get border => AppTheme.adaptive(const Color(0xFFEADCCC));
+  static Color get maroon => AppTheme.adaptive(const Color(0xFF561C17));
+  static Color get maroonLight => AppTheme.adaptive(const Color(0xFF7A2A22));
+  static Color get text => AppTheme.adaptive(const Color(0xFF3B211B));
+  static Color get brown => AppTheme.adaptive(const Color(0xFF6C4936));
+  static Color get muted => AppTheme.adaptive(const Color(0xFF987865));
+  static Color get muted2 => AppTheme.adaptive(const Color(0xFFA99386));
+  static Color get tan => AppTheme.adaptive(const Color(0xFFC19771));
+  static Color get star => AppTheme.adaptive(const Color(0xFFC88418));
   final Set<int> _wishlistIds = <int>{};
   final Set<int> _wishlistLoading = <int>{};
   List<BuyerHomeProduct> _loadedProducts = <BuyerHomeProduct>[];
@@ -426,6 +427,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   Widget build(BuildContext context) {
     return BuyerNavigationFrame(
       currentIndex: 0,
+      aiPage: 'home',
+      aiPageTitle: 'Home',
       onHome: () {},
       onOrders: widget.onViewOrders ?? widget.onBrowseProducts ?? () {},
       onMessages: widget.onMessages ?? widget.onBrowseProducts ?? () {},
@@ -460,7 +463,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              const Expanded(
+              Expanded(
                 child: Text(
                   'LIKHAE',
                   style: TextStyle(
@@ -475,13 +478,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               IconButton(
                 tooltip: 'Notifications',
                 onPressed: widget.onNotifications,
-                icon: const Icon(Icons.notifications_none_rounded, color: text),
+                icon: Icon(Icons.notifications_none_rounded, color: text),
               ),
               const SizedBox(width: 4),
               IconButton(
                 tooltip: 'Cart',
                 onPressed: widget.onCart,
-                icon: const Icon(Icons.shopping_bag_outlined, color: text),
+                icon: Icon(Icons.shopping_bag_outlined, color: text),
               ),
             ],
           ),
@@ -497,7 +500,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 borderRadius: BorderRadius.circular(15),
                 border: Border.all(color: border),
               ),
-              child: const Row(
+              child: Row(
                 children: <Widget>[
                   Icon(Icons.search_rounded, size: 21, color: muted),
                   SizedBox(width: 9),
@@ -575,13 +578,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            Color(0xFFFFFDF9),
-            Color(0xFFF6EFE7),
-            Color(0xFFEFE7DE),
+            card,
+            AppTheme.adaptive(const Color(0xFFF6EFE7)),
+            AppTheme.adaptive(const Color(0xFFEFE7DE)),
           ],
         ),
         border: Border.all(color: border),
@@ -589,7 +592,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+          Text(
             'YOUR MARKETPLACE',
             style: TextStyle(
               color: maroonLight,
@@ -602,7 +605,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           Text.rich(
             TextSpan(
               children: <InlineSpan>[
-                const TextSpan(
+                TextSpan(
                   text: 'Discover something\n',
                   style: TextStyle(
                     color: maroon,
@@ -633,7 +636,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 : product.name,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: text, fontSize: 12.5, height: 1.5),
+            style: TextStyle(color: text, fontSize: 12.5, height: 1.5),
           ),
           if (product != null) ...<Widget>[
             const SizedBox(height: 7),
@@ -641,7 +644,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               children: <Widget>[
                 Text(
                   '₱${product.price.toStringAsFixed(2)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: maroon,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -652,7 +655,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   const SizedBox(width: 7),
                   Text(
                     '₱${product.originalPrice!.toStringAsFixed(2)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: muted2,
                       fontSize: 10,
                       decoration: TextDecoration.lineThrough,
@@ -706,7 +709,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             children: <Widget>[
               Text(
                 kicker,
-                style: const TextStyle(
+                style: TextStyle(
                   color: maroon,
                   fontSize: 9,
                   fontWeight: FontWeight.w800,
@@ -716,7 +719,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               const SizedBox(height: 5),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   color: text,
                   fontSize: 25,
                   height: 1.03,
@@ -727,7 +730,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               const SizedBox(height: 7),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   color: muted,
                   fontSize: 10.5,
                   height: 1.45,
@@ -743,14 +746,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             children: <Widget>[
               Text(
                 actionText,
-                style: const TextStyle(
+                style: TextStyle(
                   color: brown,
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.arrow_forward_rounded, size: 14, color: brown),
+              Icon(Icons.arrow_forward_rounded, size: 14, color: brown),
             ],
           ),
         ),
@@ -829,7 +832,7 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final double? discount = product.discountPercentage;
     return Material(
-      color: const Color(0xFFFFFDF9),
+      color: _BuyerHomeScreenState.card,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -837,7 +840,7 @@ class _ProductCard extends StatelessWidget {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFEADCCC)),
+            border: Border.all(color: _BuyerHomeScreenState.border),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -849,7 +852,7 @@ class _ProductCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: <Widget>[
                     Container(
-                      color: const Color(0xFFF3ECE4),
+                      color: AppTheme.adaptive(const Color(0xFFF3ECE4)),
                       child: _ProductGallery(images: product.galleryImages),
                     ),
                     if (discount != null)
@@ -879,7 +882,9 @@ class _ProductCard extends StatelessWidget {
                       right: 8,
                       top: 8,
                       child: Material(
-                        color: Colors.white.withValues(alpha: 0.93),
+                        color: AppTheme.adaptive(
+                          const Color(0xFFFFFDF9),
+                        ).withValues(alpha: 0.93),
                         shape: const CircleBorder(),
                         child: InkWell(
                           onTap: wishlistLoading ? null : onWishlist,
@@ -888,7 +893,7 @@ class _ProductCard extends StatelessWidget {
                             width: 34,
                             height: 34,
                             child: wishlistLoading
-                                ? const Padding(
+                                ? Padding(
                                     padding: EdgeInsets.all(8),
                                     child: CircularProgressIndicator(
                                       strokeWidth: 1.8,
@@ -946,7 +951,7 @@ class _ProductCard extends StatelessWidget {
                         product.category!.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: _BuyerHomeScreenState.brown,
                           fontSize: 9,
                           letterSpacing: 0.7,
@@ -959,7 +964,7 @@ class _ProductCard extends StatelessWidget {
                       product.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _BuyerHomeScreenState.text,
                         fontSize: 13,
                         height: 1.3,
@@ -973,7 +978,7 @@ class _ProductCard extends StatelessWidget {
                         product.sellerName!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: _BuyerHomeScreenState.muted,
                           fontSize: 10,
                         ),
@@ -987,7 +992,7 @@ class _ProductCard extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           '₱${product.price.toStringAsFixed(2)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: _BuyerHomeScreenState.maroon,
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
@@ -997,7 +1002,7 @@ class _ProductCard extends StatelessWidget {
                             product.originalPrice! > product.price)
                           Text(
                             '₱${product.originalPrice!.toStringAsFixed(2)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _BuyerHomeScreenState.muted2,
                               fontSize: 9.5,
                               decoration: TextDecoration.lineThrough,
@@ -1009,7 +1014,7 @@ class _ProductCard extends StatelessWidget {
                     Row(
                       children: <Widget>[
                         if (product.rating != null) ...<Widget>[
-                          const Icon(
+                          Icon(
                             Icons.star_rounded,
                             color: _BuyerHomeScreenState.star,
                             size: 14,
@@ -1017,7 +1022,7 @@ class _ProductCard extends StatelessWidget {
                           const SizedBox(width: 2),
                           Text(
                             product.rating!.toStringAsFixed(1),
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _BuyerHomeScreenState.text,
                               fontSize: 9.5,
                               fontWeight: FontWeight.w700,
@@ -1030,7 +1035,7 @@ class _ProductCard extends StatelessWidget {
                             '${product.soldCount} sold',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _BuyerHomeScreenState.muted,
                               fontSize: 9.5,
                             ),
@@ -1039,7 +1044,7 @@ class _ProductCard extends StatelessWidget {
                         if (product.stock != null && !product.isOutOfStock)
                           Text(
                             '${product.stock} left',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _BuyerHomeScreenState.muted,
                               fontSize: 9,
                             ),
@@ -1073,7 +1078,7 @@ class _ProductGalleryState extends State<_ProductGallery> {
   Widget build(BuildContext context) {
     final List<String> images = widget.images;
     if (images.isEmpty) {
-      return const Center(
+      return Center(
         child: Icon(
           Icons.inventory_2_outlined,
           size: 34,
@@ -1134,7 +1139,7 @@ class _ProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final String imageUrl = url.trim();
     if (imageUrl.isEmpty) {
-      return const Center(
+      return Center(
         child: Icon(
           Icons.inventory_2_outlined,
           size: 34,
@@ -1147,7 +1152,7 @@ class _ProductImage extends StatelessWidget {
       imageUrl,
       fit: BoxFit.contain,
       alignment: Alignment.center,
-      errorBuilder: (_, _, _) => const Center(
+      errorBuilder: (_, _, _) => Center(
         child: Icon(
           Icons.broken_image_outlined,
           size: 34,
@@ -1156,7 +1161,7 @@ class _ProductImage extends StatelessWidget {
       ),
       loadingBuilder: (_, child, progress) {
         if (progress == null) return child;
-        return const Center(
+        return Center(
           child: SizedBox(
             width: 22,
             height: 22,
@@ -1228,7 +1233,7 @@ class _OutlineActionButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: _BuyerHomeScreenState.maroon,
           padding: const EdgeInsets.symmetric(horizontal: 15),
-          side: const BorderSide(color: _BuyerHomeScreenState.tan),
+          side: BorderSide(color: _BuyerHomeScreenState.tan),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
