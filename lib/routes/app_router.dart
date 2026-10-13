@@ -86,6 +86,63 @@ ProductDetailData _toProductDetailFromHome(BuyerHomeProduct product) {
   );
 }
 
+WishlistProduct _wishlistProductFromHome(BuyerHomeProduct product) {
+  return WishlistProduct(
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    category: product.category,
+    sellerName: product.sellerName,
+    sellerSlug: product.sellerSlug,
+    sellerUserId: product.sellerUserId,
+    imageUrl: product.imageUrl,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    rating: product.rating,
+    soldCount: product.soldCount,
+    stock: product.stock,
+  );
+}
+
+WishlistProduct _wishlistProductFromBuyerProduct(BuyerProduct product) {
+  return WishlistProduct(
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    category: product.category,
+    sellerName: product.sellerName,
+    sellerSlug: product.sellerSlug,
+    sellerUserId: product.sellerUserId,
+    imageUrl: product.imageUrl,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    rating: product.rating,
+    soldCount: product.soldCount,
+    stock: product.stock,
+  );
+}
+
+WishlistProduct _wishlistProductFromStoreProduct(
+  StoreProductData product,
+  StoreSellerData seller,
+) {
+  return WishlistProduct(
+    id: product.id,
+    name: product.name,
+    slug: product.slug,
+    category: product.category,
+    sellerName: seller.name,
+    sellerSlug: seller.slug,
+    sellerUserId: seller.id == 0 ? null : seller.id,
+    imageUrl: product.imageUrl,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    rating: product.rating,
+    soldCount: product.soldCount,
+    stock: product.stock,
+  );
+}
+
 ProductDetailData _toProductDetail(BuyerProduct product) {
   final String? imageUrl = product.imageUrl;
 
@@ -340,6 +397,7 @@ CheckoutItemData _toCheckoutItem(
     sellerId: 0,
     seller: product.sellerName ?? 'LIKHAE Seller',
     name: product.name,
+    category: product.category ?? '',
     variant: request.variant ?? '',
     productVariantId: request.productVariationId,
     imageUrl: product.imageUrl,
@@ -356,10 +414,33 @@ CheckoutItemData _checkoutItemFromCart(CartItemData item) {
     sellerId: item.sellerId ?? 0,
     seller: item.seller,
     name: item.name,
+    category: item.category,
     variant: item.variant,
     price: item.price,
     quantity: item.quantity,
     imageUrl: item.imageUrl,
+  );
+}
+
+DeliveryAddressData? _deliveryAddressFromBuyerAddresses(
+  List<BuyerAddressData> addresses,
+) {
+  BuyerAddressData? selected;
+  for (final BuyerAddressData address in addresses) {
+    if (address.isDefault) {
+      selected = address;
+      break;
+    }
+  }
+
+  selected ??= addresses.isEmpty ? null : addresses.first;
+  if (selected == null) return null;
+
+  return DeliveryAddressData(
+    recipientName: selected.recipientName,
+    contactNumber: selected.contactNumber,
+    formattedAddress: selected.displayAddress,
+    isDefault: selected.isDefault,
   );
 }
 
@@ -546,7 +627,9 @@ final GoRouter appRouter = GoRouter(
             if (AppConfig.apiEnabled) {
               await BuyerMobileService.toggleWishlist(product.id);
             } else {
-              await WishlistService.toggleProduct(product.id);
+              await WishlistService.toggleLocalProduct(
+                _wishlistProductFromHome(product),
+              );
             }
           },
         );
@@ -626,7 +709,9 @@ final GoRouter appRouter = GoRouter(
             if (AppConfig.apiEnabled) {
               await BuyerMobileService.toggleWishlist(product.id);
             } else {
-              await WishlistService.toggleProduct(product.id);
+              await WishlistService.toggleLocalProduct(
+                _wishlistProductFromBuyerProduct(product),
+              );
             }
           },
         );
@@ -748,7 +833,9 @@ final GoRouter appRouter = GoRouter(
                 if (AppConfig.apiEnabled) {
                   await BuyerMobileService.toggleWishlist(product.id);
                 } else {
-                  await WishlistService.toggleProduct(product.id);
+                  await WishlistService.toggleLocalProduct(
+                    _wishlistProductFromStoreProduct(product, store.seller),
+                  );
                 }
               },
             );
@@ -770,11 +857,12 @@ final GoRouter appRouter = GoRouter(
               onNotifications: () => context.push('/buyer/notifications'),
               onRefresh: AppConfig.apiEnabled
                   ? BuyerMobileService.fetchWishlist
-                  : null,
+                  : WishlistService.fetchLocalWishlist,
               onRemoveProduct: AppConfig.apiEnabled
                   ? (WishlistProduct product) =>
                         BuyerMobileService.toggleWishlist(product.id)
-                  : null,
+                  : (WishlistProduct product) =>
+                        WishlistService.removeLocalProduct(product.id),
               onClearWishlist: AppConfig.apiEnabled
                   ? () async {
                       final List<WishlistProduct> current =
@@ -783,7 +871,7 @@ final GoRouter appRouter = GoRouter(
                         await BuyerMobileService.toggleWishlist(product.id);
                       }
                     }
-                  : null,
+                  : WishlistService.clearLocalWishlist,
               onProductSelected: (WishlistProduct product) {
                 context.push(
                   '/buyer/product-details',
@@ -807,7 +895,7 @@ final GoRouter appRouter = GoRouter(
             );
 
         if (!AppConfig.apiEnabled) {
-          return buildWishlist(const <WishlistProduct>[]);
+          return buildWishlist(WishlistService.localWishlist);
         }
         return FutureBuilder<List<WishlistProduct>>(
           future: BuyerMobileService.fetchWishlist(),
@@ -930,8 +1018,12 @@ final GoRouter appRouter = GoRouter(
             state.extra is Map<int, String>
             ? Map<int, String>.from(state.extra! as Map<int, String>)
             : const <int, String>{};
-        Widget buildCart(List<CartItemData> items) => CartScreen(
+        Widget buildCart(
+          List<CartItemData> items,
+          DeliveryAddressData? defaultAddress,
+        ) => CartScreen(
           items: items,
+          defaultAddress: defaultAddress,
           onBack: () => safeBack(context, fallback: '/buyer/home'),
           onContinueShopping: () => context.push('/buyer/home'),
           onChangeAddress: () => context.push(
@@ -992,12 +1084,28 @@ final GoRouter appRouter = GoRouter(
               : null,
         );
 
-        if (!AppConfig.apiEnabled) {
-          return buildCart(const <CartItemData>[]);
+        Future<List<Object>> loadCartData() async {
+          final List<CartItemData> items =
+              await BuyerMobileService.fetchCart();
+          try {
+            final List<BuyerAddressData> addresses =
+                await BuyerMobileService.fetchBuyerAddresses();
+            return <Object>[items, addresses];
+          } catch (_) {
+            // Keep the cart usable if the optional address preview fails.
+            return <Object>[items, const <BuyerAddressData>[]];
+          }
         }
-        return FutureBuilder<List<CartItemData>>(
-          future: BuyerMobileService.fetchCart(),
-          builder: (BuildContext context, AsyncSnapshot<List<CartItemData>> snapshot) {
+
+        if (!AppConfig.apiEnabled) {
+          return buildCart(const <CartItemData>[], null);
+        }
+        return FutureBuilder<List<Object>>(
+          future: loadCartData(),
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<Object>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
@@ -1013,11 +1121,23 @@ final GoRouter appRouter = GoRouter(
                   ),
                 ),
                 body: Center(
-                  child: Text('Unable to load your cart: ${snapshot.error}'),
+                  child: Text(
+                    'Unable to load your cart or delivery address: ${snapshot.error}',
+                  ),
                 ),
               );
             }
-            return buildCart(snapshot.data ?? const <CartItemData>[]);
+            final List<Object> data = snapshot.data ?? const <Object>[];
+            final List<CartItemData> items = data.isNotEmpty
+                ? data[0] as List<CartItemData>
+                : const <CartItemData>[];
+            final List<BuyerAddressData> addresses = data.length > 1
+                ? data[1] as List<BuyerAddressData>
+                : const <BuyerAddressData>[];
+            return buildCart(
+              items,
+              _deliveryAddressFromBuyerAddresses(addresses),
+            );
           },
         );
       },
@@ -1062,6 +1182,7 @@ final GoRouter appRouter = GoRouter(
                       addressId: request.addressId,
                       paymentMethod: request.paymentMethod,
                       voucherCodes: routeData.voucherCodes,
+                      protectedProductIds: request.protectedProductIds,
                     );
                     if (context.mounted) {
                       context.go('/buyer/orders');
@@ -1359,6 +1480,7 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/profile',
       name: 'buyer-profile',
       builder: (BuildContext context, GoRouterState state) {
+        final bool separatePage = state.extra is BuyerAccountTab;
         final BuyerAccountTab initialTab = state.extra is BuyerAccountTab
             ? state.extra! as BuyerAccountTab
             : BuyerAccountTab.profile;
@@ -1423,6 +1545,7 @@ final GoRouter appRouter = GoRouter(
                     profile: profile,
                     addresses: addresses,
                     initialTab: initialTab,
+                    showNavigationTabs: !separatePage,
                     onBack: () => safeBack(context, fallback: '/buyer/home'),
                     onPickProfilePhoto: _pickBuyerProfilePhoto,
                     onUpdateProfile: AppConfig.apiEnabled
@@ -1444,6 +1567,18 @@ final GoRouter appRouter = GoRouter(
                         ? BuyerMobileService.changePassword
                         : null,
                     onSystemSettings: () => context.push('/buyer/settings'),
+                    onVouchers: () => context.push('/buyer/rewards'),
+                    onTabChanged: (BuyerAccountTab tab) {
+                      if (tab == BuyerAccountTab.vouchers) {
+                        context.push('/buyer/rewards');
+                        return;
+                      }
+                      if (tab == BuyerAccountTab.settings) {
+                        context.push('/buyer/settings');
+                        return;
+                      }
+                      context.push('/buyer/profile', extra: tab);
+                    },
                     onRefresh: AppConfig.apiEnabled
                         ? BuyerMobileService.fetchAccountSnapshot
                         : null,

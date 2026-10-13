@@ -192,8 +192,22 @@ class LikhaeRealtimeService {
       return;
     }
 
-    if (event == 'pusher:subscription_succeeded') {
+    if (event == 'pusher:subscription_succeeded' ||
+        event == 'pusher_internal:subscription_succeeded') {
       _channels[_normalizeChannel(channel)]?.subscribed = true;
+      return;
+    }
+
+    if (event == 'pusher:error') {
+      final _ChannelState? state = _channels[_normalizeChannel(channel)];
+      if (state != null && !state.closed) {
+        state.controller.addError(
+          RealtimeUnavailableException(
+            data['message']?.toString() ??
+                'Realtime channel subscription failed.',
+          ),
+        );
+      }
       return;
     }
 
@@ -254,6 +268,13 @@ class LikhaeRealtimeService {
     _socketId = null;
     for (final _ChannelState state in _channels.values) {
       state.subscribed = false;
+      if (!state.closed) {
+        state.controller.addError(
+          const RealtimeUnavailableException(
+            'Realtime connection disconnected.',
+          ),
+        );
+      }
     }
     if (_channels.isEmpty || _reconnectTimer != null) return;
     final int exponent = _reconnectAttempt.clamp(0, 4).toInt();

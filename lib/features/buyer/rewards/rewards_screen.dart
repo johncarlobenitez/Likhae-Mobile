@@ -670,10 +670,23 @@ class _RewardsScreenState
             ),
           ],
 
-          TextButton(
+          OutlinedButton.icon(
             onPressed:
                 widget.onBrowseProducts,
-            child:
+            icon: const Icon(
+              Icons.shopping_bag_outlined,
+              size: 14,
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _maroon,
+              minimumSize: const Size(82, 38),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              side: const BorderSide(color: _tan),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(11),
+              ),
+            ),
+            label:
                 const Text(
               'Shop',
               style:
@@ -832,18 +845,15 @@ class _RewardsScreenState
                 height:
                     43,
                 child:
-                    OutlinedButton.icon(
+                    ElevatedButton.icon(
                   onPressed:
                       widget.onBrowseProducts,
                   style:
                       OutlinedButton.styleFrom(
-                    foregroundColor:
-                        _maroon,
-                    side:
-                        const BorderSide(
-                      color:
-                          _tan,
-                    ),
+                    backgroundColor: _maroon,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    minimumSize: const Size(148, 46),
                     shape:
                         RoundedRectangleBorder(
                       borderRadius:
@@ -967,124 +977,74 @@ class _RewardsScreenState
   }
 
   Widget _buildTabs() {
-    return Container(
-      height:
-          53,
-      padding:
-          const EdgeInsets.all(
-        5,
-      ),
-      decoration:
-          BoxDecoration(
-        color:
-            _surface,
-        borderRadius:
-            BorderRadius.circular(
-          15,
-        ),
-        border:
-            Border.all(
-          color:
-              _border,
-        ),
-      ),
-      child:
-          ListView.separated(
-        scrollDirection:
-            Axis.horizontal,
-        itemCount:
-            RewardsTab.values.length,
-        separatorBuilder:
-            (
-          BuildContext context,
-          int index,
-        ) {
-          return const SizedBox(
-            width:
-                5,
-          );
-        },
-        itemBuilder:
-            (
-          BuildContext context,
-          int index,
-        ) {
-          final RewardsTab tab =
-              RewardsTab.values[index];
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double labelSize = constraints.maxWidth < 360 ? 9 : 10.5;
 
-          final bool selected =
-              tab ==
-                  _activeTab;
+        return Container(
+          height: 64,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            children: List<Widget>.generate(RewardsTab.values.length, (int index) {
+              final RewardsTab tab = RewardsTab.values[index];
+              final bool selected = tab == _activeTab;
 
-          return Material(
-            color:
-                selected
-                    ? _maroon
-                    : Colors.transparent,
-            borderRadius:
-                BorderRadius.circular(
-              11,
-            ),
-            child:
-                InkWell(
-              onTap:
-                  () {
-                _changeTab(
-                  tab,
-                );
-              },
-              borderRadius:
-                  BorderRadius.circular(
-                11,
-              ),
-              child:
-                  Container(
-                padding:
-                    const EdgeInsets.symmetric(
-                  horizontal:
-                      14,
-                ),
-                alignment:
-                    Alignment.center,
-                child:
-                    Row(
-                  children: [
-                    Icon(
-                      tab.icon,
-                      size:
-                          15,
-                      color:
-                          selected
-                              ? Colors.white
-                              : _brown,
-                    ),
-
-                    const SizedBox(
-                      width:
-                          6,
-                    ),
-
-                    Text(
-                      tab.label,
-                      style:
-                          TextStyle(
-                        color:
-                            selected
-                                ? Colors.white
-                                : _brown,
-                        fontSize:
-                            10,
-                        fontWeight:
-                            FontWeight.w900,
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Material(
+                    color: selected ? _maroon : Colors.transparent,
+                    borderRadius: BorderRadius.circular(11),
+                    child: InkWell(
+                      onTap: () => _changeTab(tab),
+                      borderRadius: BorderRadius.circular(11),
+                      child: Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(11),
+                          border: Border.all(
+                            color: selected ? _maroon : _border,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              tab.icon,
+                              size: 16,
+                              color: selected ? Colors.white : _brown,
+                            ),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                tab.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: selected ? Colors.white : _brown,
+                                  fontSize: labelSize,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            }),
+          ),
+        );
+      },
     );
   }
 

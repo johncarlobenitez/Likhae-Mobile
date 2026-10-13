@@ -107,7 +107,9 @@ void main() {
           'id': 63,
           'price': '250.00',
           'stock': 8,
-          'image_url': '/storage/products/basket-natural.jpg',
+          'image_urls': <String>[
+            '/storage/products/basket-natural.jpg',
+          ],
           'description': 'Natural, medium',
           'option_values': <Map<String, dynamic>>[
             <String, dynamic>{'value': 'Natural'},

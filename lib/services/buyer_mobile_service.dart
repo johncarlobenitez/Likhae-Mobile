@@ -389,6 +389,7 @@ class BuyerMobileService {
     required int addressId,
     required String paymentMethod,
     Map<int, String> voucherCodes = const <int, String>{},
+    List<int> protectedProductIds = const <int>[],
   }) async {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('buyer/checkout'),
@@ -401,6 +402,8 @@ class BuyerMobileService {
             (int sellerId, String code) =>
                 MapEntry<String, String>(sellerId.toString(), code),
           ),
+        if (protectedProductIds.isNotEmpty)
+          'protected_product_ids': protectedProductIds,
       },
     );
     _requirePayload(response);

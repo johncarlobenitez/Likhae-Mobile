@@ -8,7 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 
-enum BuyerAccountTab { profile, addresses, password, settings }
+enum BuyerAccountTab { profile, addresses, vouchers, password, settings }
 
 extension BuyerAccountTabInfo on BuyerAccountTab {
   String get label {
@@ -18,6 +18,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.addresses:
         return 'Addresses';
+
+      case BuyerAccountTab.vouchers:
+        return 'Vouchers';
 
       case BuyerAccountTab.password:
         return 'Change Password';
@@ -35,6 +38,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
       case BuyerAccountTab.addresses:
         return 'Delivery locations';
 
+      case BuyerAccountTab.vouchers:
+        return 'Discounts and deals';
+
       case BuyerAccountTab.password:
         return 'Account security';
 
@@ -50,6 +56,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.addresses:
         return Icons.location_on_outlined;
+
+      case BuyerAccountTab.vouchers:
+        return Icons.confirmation_number_outlined;
 
       case BuyerAccountTab.password:
         return Icons.lock_outline_rounded;
@@ -382,6 +391,12 @@ class AccountScreen extends StatefulWidget {
 
   final VoidCallback? onSystemSettings;
 
+  final VoidCallback? onVouchers;
+
+  /// When false, this account tab is rendered as a dedicated page without
+  /// showing the Me-section navigation tiles again.
+  final bool showNavigationTabs;
+
   final RefreshBuyerAccountCallback? onRefresh;
 
   final LogoutBuyerCallback? onLogout;
@@ -410,6 +425,8 @@ class AccountScreen extends StatefulWidget {
     this.onSetDefaultAddress,
     this.onChangePassword,
     this.onSystemSettings,
+    this.onVouchers,
+    this.showNavigationTabs = true,
     this.onRefresh,
     this.onLogout,
     this.onProfileChanged,
@@ -769,8 +786,23 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _findAddress() async {
-    final String query = _addressSearchController.text.trim();
-    if (query.isEmpty || _findingAddress) {
+    final String searchText = _addressSearchController.text.trim();
+    final String query = <String>[
+      if (searchText.isNotEmpty) searchText,
+      if (_barangayController.text.trim().isNotEmpty)
+        _barangayController.text.trim(),
+      if (_municipalityController.text.trim().isNotEmpty)
+        _municipalityController.text.trim(),
+      if (_provinceController.text.trim().isNotEmpty)
+        _provinceController.text.trim(),
+      'Philippines',
+    ].join(', ');
+
+    if (query == 'Philippines' || _findingAddress) {
+      setState(() {
+        _addressLocationMessage =
+            'Enter your barangay or address first, then search to place the pin.';
+      });
       return;
     }
 
@@ -889,6 +921,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
   void _changeTab(BuyerAccountTab tab) {
     if (_activeTab == tab) {
+      widget.onTabChanged?.call(tab);
       return;
     }
 
@@ -1544,13 +1577,15 @@ class _AccountScreenState extends State<AccountScreen> {
 
                     const SizedBox(height: 14),
 
-                    _buildSampleMessages(),
+                    if (widget.showNavigationTabs) ...[
+                      _buildSampleMessages(),
 
-                    const SizedBox(height: 14),
+                      const SizedBox(height: 14),
 
-                    _buildTabs(),
+                      _buildTabs(),
 
-                    const SizedBox(height: 13),
+                      const SizedBox(height: 13),
+                    ],
 
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
@@ -1657,12 +1692,12 @@ class _AccountScreenState extends State<AccountScreen> {
 
           const SizedBox(width: 2),
 
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Account',
+                  widget.showNavigationTabs ? 'Account' : _activeTab.label,
                   style: TextStyle(
                     color: _text,
                     fontSize: 22,
@@ -1675,7 +1710,9 @@ class _AccountScreenState extends State<AccountScreen> {
                 SizedBox(height: 2),
 
                 Text(
-                  'Profile, addresses and security',
+                  widget.showNavigationTabs
+                      ? 'Profile, addresses and security'
+                      : _activeTab.description,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: _muted, fontSize: 12.5),
@@ -1933,9 +1970,18 @@ class _AccountScreenState extends State<AccountScreen> {
             borderRadius: BorderRadius.circular(13),
             child: InkWell(
               onTap: () {
+                if (tab == BuyerAccountTab.vouchers &&
+                    widget.onVouchers != null) {
+                  widget.onVouchers!();
+                  return;
+                }
                 if (tab == BuyerAccountTab.settings &&
                     widget.onSystemSettings != null) {
                   widget.onSystemSettings!();
+                  return;
+                }
+                if (widget.onTabChanged != null) {
+                  widget.onTabChanged!(tab);
                   return;
                 }
                 _changeTab(tab);
@@ -1999,6 +2045,18 @@ class _AccountScreenState extends State<AccountScreen> {
 
       case BuyerAccountTab.addresses:
         return _buildAddressesSection();
+
+      case BuyerAccountTab.vouchers:
+        return _AccountPanel(
+          title: 'Vouchers',
+          subtitle: 'View and use your available discounts and deals.',
+          icon: Icons.confirmation_number_outlined,
+          child: FilledButton.icon(
+            onPressed: widget.onVouchers,
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: const Text('Open Vouchers'),
+          ),
+        );
 
       case BuyerAccountTab.password:
         return _buildPasswordSection();
@@ -2666,6 +2724,11 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
                 ),
                 const SizedBox(height: 7),
+                const Text(
+                  'Search your barangay or address, then adjust the pin to the exact location for the rider.',
+                  style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
+                ),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 7,
                   runSpacing: 7,
@@ -2691,7 +2754,7 @@ class _AccountScreenState extends State<AccountScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text(
-                              'Find address',
+                              'Search & pin',
                               style: TextStyle(fontSize: 11.5),
                             ),
                     ),
@@ -2728,7 +2791,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   textInputAction: TextInputAction.search,
                   onSubmitted: (_) => _findAddress(),
                   decoration: _inputDecoration(
-                    hintText: 'Optional: search street, landmark, or address',
+                    hintText: 'Search barangay, street, landmark, or address',
                   ),
                 ),
               ],
@@ -2767,8 +2830,8 @@ class _AccountScreenState extends State<AccountScreen> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
             child: Text(
               selectedLocation == null
-                  ? 'Tap the map, search an address, or use device location to pin the delivery point.'
-                  : 'Pinned: ${selectedLocation.latitude.toStringAsFixed(6)}, ${selectedLocation.longitude.toStringAsFixed(6)}',
+                  ? 'Tap the map, search your barangay, or use device location to pin the delivery point.'
+                  : 'Pinned for rider: ${selectedLocation.latitude.toStringAsFixed(6)}, ${selectedLocation.longitude.toStringAsFixed(6)}',
               style: const TextStyle(color: _muted, fontSize: 11.5, height: 1.4),
             ),
           ),

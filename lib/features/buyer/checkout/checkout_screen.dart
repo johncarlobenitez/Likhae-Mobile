@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({
@@ -33,14 +34,14 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  static const Color _bg = Color(0xFFF7F1EB);
-  static const Color _surface = Color(0xFFFFFCF8);
-  static const Color _surfaceSoft = Color(0xFFF5ECE3);
-  static const Color _border = Color(0xFFE4D6C8);
-  static const Color _text = Color(0xFF3B231C);
-  static const Color _muted = Color(0xFF8D776C);
-  static const Color _primary = Color(0xFF6F2017);
-  static const Color _primaryDark = Color(0xFF541711);
+  static const Color _bg = Color(0xFFF6F6F6);
+  static const Color _surface = Colors.white;
+  static const Color _surfaceSoft = Color(0xFFFFF3EE);
+  static const Color _border = Color(0xFFE8E8E8);
+  static const Color _text = Color(0xFF292929);
+  static const Color _muted = Color(0xFF7E7E7E);
+  static const Color _primary = Color(0xFFE05A3F);
+  static const Color _primaryDark = Color(0xFFB9432E);
   static const Color _danger = Color(0xFFB42318);
   static const Color _disabled = Color(0xFFD8CCC3);
 
@@ -51,6 +52,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   final Map<int, TextEditingController> _shopNoteControllers = {};
   final Map<int, int?> _selectedCouriers = {};
+  final Set<int> _protectedProductIds = <int>{};
 
   int? _selectedAddressId;
   bool _submitting = false;
@@ -67,6 +69,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
 
     _selectedAddressId = _resolveInitialAddressId();
+    _syncSelectedAddressFields();
     _syncShopState();
   }
 
@@ -90,6 +93,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _selectedAddressId = _resolveInitialAddressId();
     }
 
+    _syncSelectedAddressFields();
     _syncShopState();
   }
 
@@ -182,12 +186,65 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return null;
   }
 
+  void _syncSelectedAddressFields() {
+    final CheckoutAddressData? address = _selectedAddress;
+    if (address == null) return;
+
+    if (_recipientController.text.trim().isEmpty &&
+        address.recipient.trim().isNotEmpty) {
+      _recipientController.text = address.recipient;
+    }
+    if (_contactController.text.trim().isEmpty &&
+        address.phone.trim().isNotEmpty) {
+      _contactController.text = address.phone;
+    }
+  }
+
   double get _productTotal {
     return widget.items.fold<double>(
       0,
       (double prev, CheckoutItemData item) => prev + item.lineTotal,
     );
   }
+
+  double get _shippingTotal {
+    double total = 0;
+
+    for (final MapEntry<int, int?> entry in _selectedCouriers.entries) {
+      final int? courierId = entry.value;
+      if (courierId == null) continue;
+
+      final List<CheckoutCourierOption> options =
+          widget.couriersBySeller[entry.key] ?? const <CheckoutCourierOption>[];
+      for (final CheckoutCourierOption option in options) {
+        if (option.id == courierId) {
+          total += option.fee;
+          break;
+        }
+      }
+    }
+
+    return total;
+  }
+
+  double get _electronicProtectionTotal {
+    double total = 0;
+    for (final CheckoutItemData item in widget.items) {
+      if (_protectedProductIds.contains(item.productId) &&
+          item.isProtectionEligible) {
+        total += _protectionFeeFor(item);
+      }
+    }
+    return total;
+  }
+
+  double _protectionFeeFor(CheckoutItemData item) {
+    // Six percent mirrors the protection amount shown in the checkout design.
+    return (item.lineTotal * 0.06).roundToDouble();
+  }
+
+  double get _estimatedTotal =>
+      _productTotal + _shippingTotal + _electronicProtectionTotal;
 
   bool get _hasMissingCourierAvailability {
     if (!widget.requireCourierSelection) {
@@ -280,6 +337,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       addressId: _selectedAddressId!,
       couriersBySeller: couriers,
       notesBySeller: notes,
+      protectedProductIds: _protectedProductIds.toList(growable: false),
       paymentMethod: 'cod',
     );
 
@@ -343,58 +401,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         backgroundColor: _bg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
+        toolbarHeight: 62,
+        leadingWidth: 52,
+        titleSpacing: 0,
         leading: IconButton(
           onPressed: _handleBack,
-          icon: const Icon(Icons.arrow_back_rounded, color: _text),
+          icon: const Icon(Icons.arrow_back_rounded, color: _primary),
         ),
-        titleSpacing: 0,
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Checkout',
-              style: TextStyle(
-                color: _text,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              'Buy Now checkout',
-              style: TextStyle(
-                color: _muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2E6DB),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.lock_outline_rounded, size: 14, color: _primary),
-                SizedBox(width: 6),
-                Text(
-                  'SECURE',
-                  style: TextStyle(
-                    color: _primary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ],
-            ),
+        title: const Text(
+          'Checkout',
+          style: TextStyle(
+            color: _text,
+            fontSize: 19,
+            fontWeight: FontWeight.w700,
           ),
-        ],
+        ),
+        actions: const [SizedBox(width: 52)],
       ),
       body: isEmpty
           ? _buildEmptyState()
@@ -429,18 +452,352 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
           children: [
-            _buildHeroHeader(mobile: true),
-            const SizedBox(height: 16),
-            _buildRecipientCard(),
-            const SizedBox(height: 14),
-            _buildAddressCard(),
-            const SizedBox(height: 14),
-            if (widget.requireCourierSelection) ..._buildSellerSections(),
-            _buildPaymentCard(),
-            const SizedBox(height: 14),
-            _buildSummaryCard(showButton: false),
+            _buildMobileAddressCard(),
+            const SizedBox(height: 8),
+            ..._buildMobileSellerSections(),
+            _buildMobileActionCard(),
+            const SizedBox(height: 8),
+            _buildMobilePaymentSummary(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileAddressCard() {
+    final CheckoutAddressData? address = _selectedAddress;
+
+    if (address == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: _CheckoutCard(
+          title: 'Delivery address',
+          leadingIcon: Icons.location_on_outlined,
+          child: _InfoBanner(
+            icon: Icons.location_off_outlined,
+            text: widget.addresses.isEmpty
+                ? 'Add a delivery address before placing your order.'
+                : 'Choose a delivery address before placing your order.',
+            danger: true,
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Material(
+        color: _surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: _border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _showAddressPicker,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on, color: _primary, size: 25),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              address.recipient.isEmpty
+                                  ? _recipientController.text
+                                  : address.recipient,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _text,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          if (address.phone.isNotEmpty)
+                            Flexible(
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 9),
+                                child: Text(
+                                  address.phone,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _muted,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        address.fullAddress,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _muted,
+                          fontSize: 12.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: _muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddressPicker() async {
+    if (widget.addresses.isEmpty) return;
+
+    final int? selected = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: _surface,
+      showDragHandle: true,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            children: widget.addresses.map((CheckoutAddressData address) {
+              return ListTile(
+                leading: Icon(
+                  address.id == _selectedAddressId
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: address.id == _selectedAddressId ? _primary : _muted,
+                ),
+                title: Text(
+                  address.label,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text('${address.recipient}\n${address.fullAddress}'),
+                isThreeLine: true,
+                onTap: () => Navigator.of(context).pop(address.id),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      CheckoutAddressData? selectedAddress;
+      for (final CheckoutAddressData address in widget.addresses) {
+        if (address.id == selected) {
+          selectedAddress = address;
+          break;
+        }
+      }
+
+      setState(() {
+        _selectedAddressId = selected;
+        if (selectedAddress != null) {
+          _recipientController.text = selectedAddress.recipient;
+          _contactController.text = selectedAddress.phone;
+        }
+      });
+    }
+  }
+
+  List<Widget> _buildMobileSellerSections() {
+    final List<Widget> sections = <Widget>[];
+
+    for (final MapEntry<int, List<CheckoutItemData>> entry
+        in _groupedItems.entries) {
+      final int sellerId = entry.key;
+      final List<CheckoutItemData> items = entry.value;
+      final List<CheckoutCourierOption> options =
+          widget.couriersBySeller[sellerId] ?? const <CheckoutCourierOption>[];
+
+      sections.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: _CheckoutCard(
+            title: items.first.seller,
+            leadingIcon: Icons.storefront_outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (int index = 0; index < items.length; index++) ...[
+                  _MobileCheckoutItem(item: items[index], peso: _peso),
+                  if (items[index].isProtectionEligible)
+                    _ElectronicProtectionTile(
+                      selected: _protectedProductIds.contains(
+                        items[index].productId,
+                      ),
+                      fee: _protectionFeeFor(items[index]),
+                      onChanged: (bool selected) {
+                        setState(() {
+                          if (selected) {
+                            _protectedProductIds.add(items[index].productId);
+                          } else {
+                            _protectedProductIds.remove(items[index].productId);
+                          }
+                        });
+                      },
+                    ),
+                  if (index < items.length - 1)
+                    const Divider(height: 22, color: _border),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Shipping Option',
+                        style: TextStyle(
+                          color: _text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      options.isEmpty ? 'Unavailable' : 'Choose one',
+                      style: const TextStyle(color: _muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                if (options.isEmpty)
+                  const _InfoBanner(
+                    icon: Icons.local_shipping_outlined,
+                    text: 'No approved courier currently serves this address.',
+                    danger: true,
+                  )
+                else
+                  DropdownButtonFormField<int>(
+                    initialValue: _selectedCouriers[sellerId],
+                    isExpanded: true,
+                    decoration: _inputDecoration(
+                      label: 'Delivery method',
+                      hint: 'Select shipping option',
+                    ),
+                    items: options.map((CheckoutCourierOption option) {
+                      return DropdownMenuItem<int>(
+                        value: option.id,
+                        child: Text(
+                          '${option.name} · ${_peso(option.fee)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (int? value) {
+                      setState(() {
+                        _selectedCouriers[sellerId] = value;
+                      });
+                    },
+                    validator: (int? value) {
+                      if (widget.requireCourierSelection && value == null) {
+                        return 'Please choose a shipping option.';
+                      }
+                      return null;
+                    },
+                  ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _shopNoteControllers[sellerId],
+                  maxLength: 500,
+                  maxLines: 1,
+                  decoration: _inputDecoration(
+                    label: 'Message for seller',
+                    hint: 'Optional note',
+                  ).copyWith(counterText: ''),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      sections.add(const SizedBox(height: 8));
+    }
+
+    return sections;
+  }
+
+  Widget _buildMobileActionCard() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: _CheckoutCard(
+        title: 'Order options',
+        child: Column(
+          children: [
+            _CheckoutActionRow(
+              icon: Icons.local_offer_outlined,
+              label: 'Shop Voucher',
+              value: widget.appliedVoucherCodes.isEmpty
+                  ? 'Select or enter code'
+                  : widget.appliedVoucherCodes.values.join(', '),
+            ),
+            const Divider(height: 22, color: _border),
+            const _CheckoutActionRow(
+              icon: Icons.receipt_long_outlined,
+              label: 'E-receipt',
+              value: 'Request later',
+            ),
+            const Divider(height: 22, color: _border),
+            const _CheckoutActionRow(
+              icon: Icons.payments_outlined,
+              label: 'Payment method',
+              value: 'Cash on Delivery',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobilePaymentSummary() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: _CheckoutCard(
+        title: 'Payment Details',
+        child: Column(
+          children: [
+            _CheckoutAmountRow(
+              label: 'Merchandise Subtotal',
+              value: _peso(_productTotal),
+            ),
+            const SizedBox(height: 12),
+            _CheckoutAmountRow(
+              label: 'Shipping Subtotal',
+              value: _shippingTotal == 0 ? '₱0.00' : _peso(_shippingTotal),
+            ),
+            if (_electronicProtectionTotal > 0) ...[
+              const SizedBox(height: 12),
+              _CheckoutAmountRow(
+                label: 'Electronic Protection',
+                value: _peso(_electronicProtectionTotal),
+              ),
+            ],
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Divider(height: 1, color: _border),
+            ),
+            _CheckoutAmountRow(
+              label: 'Total Payment',
+              value: _peso(_estimatedTotal),
+              strong: true,
+            ),
           ],
         ),
       ),
@@ -842,6 +1199,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         children: [
           for (int index = 0; index < widget.items.length; index++) ...[
             _SummaryItem(item: widget.items[index], pesoFormatter: _peso),
+            if (widget.items[index].isProtectionEligible)
+              _ElectronicProtectionTile(
+                selected: _protectedProductIds.contains(
+                  widget.items[index].productId,
+                ),
+                fee: _protectionFeeFor(widget.items[index]),
+                onChanged: (bool selected) {
+                  setState(() {
+                    if (selected) {
+                      _protectedProductIds.add(widget.items[index].productId);
+                    } else {
+                      _protectedProductIds.remove(
+                        widget.items[index].productId,
+                      );
+                    }
+                  });
+                },
+              ),
             if (index < widget.items.length - 1)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
@@ -873,12 +1248,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             children: [
               const Expanded(
                 child: Text(
-                  'Product total',
+                  'Total payment',
                   style: TextStyle(color: _muted, fontSize: 13),
                 ),
               ),
               Text(
-                _peso(_productTotal),
+                _peso(_estimatedTotal),
                 style: const TextStyle(
                   color: _text,
                   fontSize: 15,
@@ -952,12 +1327,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Product total',
+                    'Total',
                     style: TextStyle(color: _muted, fontSize: 11),
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    _peso(_productTotal),
+                    _peso(_estimatedTotal),
                     style: const TextStyle(
                       color: _primaryDark,
                       fontSize: 19,
@@ -1109,6 +1484,248 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 }
 
+class _MobileCheckoutItem extends StatelessWidget {
+  const _MobileCheckoutItem({required this.item, required this.peso});
+
+  final CheckoutItemData item;
+  final String Function(double) peso;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 78,
+            height: 78,
+            color: const Color(0xFFF4F4F4),
+            child: _ProductImage(imageUrl: item.imageUrl),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF292929),
+                  fontSize: 13.5,
+                  height: 1.25,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                item.variant.isEmpty ? 'Standard' : item.variant,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Color(0xFF858585), fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    peso(item.lineTotal),
+                    style: const TextStyle(
+                      color: Color(0xFFE05A3F),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'x${item.safeQuantity}',
+                    style: const TextStyle(
+                      color: Color(0xFF858585),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ElectronicProtectionTile extends StatelessWidget {
+  const _ElectronicProtectionTile({
+    required this.selected,
+    required this.fee,
+    required this.onChanged,
+  });
+
+  final bool selected;
+  final double fee;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Material(
+        color: selected ? const Color(0xFFFFF3EE) : const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          onTap: () => onChanged(!selected),
+          borderRadius: BorderRadius.circular(13),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 9, 8, 9),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: selected,
+                  onChanged: (bool? value) => onChanged(value ?? false),
+                  activeColor: const Color(0xFFE05A3F),
+                  visualDensity: VisualDensity.compact,
+                ),
+                const Icon(
+                  Icons.verified_user_outlined,
+                  size: 19,
+                  color: Color(0xFFE05A3F),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Electronic Protection',
+                        style: TextStyle(
+                          color: Color(0xFF292929),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Protect against accidental damage during delivery.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Color(0xFF858585),
+                          fontSize: 11,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '+₱${fee.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Color(0xFFE05A3F),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckoutActionRow extends StatelessWidget {
+  const _CheckoutActionRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF3EE),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: const Color(0xFFE05A3F)),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF292929),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
+            style: const TextStyle(color: Color(0xFF858585), fontSize: 12),
+          ),
+        ),
+        const SizedBox(width: 4),
+        const Icon(Icons.chevron_right, color: Color(0xFFAAAAAA), size: 20),
+      ],
+    );
+  }
+}
+
+class _CheckoutAmountRow extends StatelessWidget {
+  const _CheckoutAmountRow({
+    required this.label,
+    required this.value,
+    this.strong = false,
+  });
+
+  final String label;
+  final String value;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: strong ? const Color(0xFF292929) : const Color(0xFF666666),
+              fontSize: strong ? 16 : 13,
+              fontWeight: strong ? FontWeight.w800 : FontWeight.w500,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: strong ? const Color(0xFF292929) : const Color(0xFF666666),
+            fontSize: strong ? 17 : 13,
+            fontWeight: strong ? FontWeight.w900 : FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CheckoutCard extends StatelessWidget {
   const _CheckoutCard({
     required this.title,
@@ -1122,12 +1739,12 @@ class _CheckoutCard extends StatelessWidget {
   final IconData? leadingIcon;
   final Widget child;
 
-  static const Color _surface = Color(0xFFFFFCF8);
-  static const Color _border = Color(0xFFE4D6C8);
-  static const Color _text = Color(0xFF3B231C);
-  static const Color _muted = Color(0xFF8D776C);
-  static const Color _surfaceSoft = Color(0xFFF4EAE0);
-  static const Color _primary = Color(0xFF6F2017);
+  static const Color _surface = Colors.white;
+  static const Color _border = Color(0xFFE8E8E8);
+  static const Color _text = Color(0xFF292929);
+  static const Color _muted = Color(0xFF7E7E7E);
+  static const Color _surfaceSoft = Color(0xFFFFF3EE);
+  static const Color _primary = Color(0xFFE05A3F);
 
   @override
   Widget build(BuildContext context) {
@@ -1403,8 +2020,8 @@ class _ProductImage extends StatelessWidget {
       );
     }
 
-    return Image.network(
-      url,
+    return Image(
+      image: CachedNetworkImageProvider(url),
       fit: BoxFit.cover,
       loadingBuilder:
           (
@@ -1446,6 +2063,7 @@ class CheckoutItemData {
     required this.name,
     required this.price,
     required this.quantity,
+    this.category = '',
     this.productVariantId,
     this.variant = '',
     this.imageUrl,
@@ -1457,6 +2075,7 @@ class CheckoutItemData {
   final int sellerId;
   final String seller;
   final String name;
+  final String category;
   final String variant;
   final double price;
   final int quantity;
@@ -1466,6 +2085,31 @@ class CheckoutItemData {
 
   double get lineTotal => price * safeQuantity;
 
+  bool get isProtectionEligible {
+    final String searchable = '$category $name'.toLowerCase();
+    const List<String> keywords = <String>[
+      'electronic',
+      'electronics',
+      'mobile',
+      'smartphone',
+      'phone',
+      'tablet',
+      'laptop',
+      'computer',
+      'monitor',
+      'camera',
+      'television',
+      'tv ',
+      'gadget',
+      'headphone',
+      'earphone',
+      'speaker',
+      'console',
+      'appliance',
+    ];
+    return keywords.any(searchable.contains);
+  }
+
   factory CheckoutItemData.fromJson(Map<String, dynamic> json) {
     return CheckoutItemData(
       id: _asInt(json['id']),
@@ -1474,6 +2118,7 @@ class CheckoutItemData {
       sellerId: _asInt(json['seller_id']),
       seller: (json['seller'] ?? '').toString(),
       name: (json['name'] ?? '').toString(),
+      category: (json['category'] ?? '').toString(),
       variant: (json['variant'] ?? '').toString(),
       price: _asDouble(json['price']),
       quantity: _asInt(json['quantity'], fallback: 1),
@@ -1571,6 +2216,7 @@ class CheckoutPlaceOrderRequest {
     required this.addressId,
     required this.couriersBySeller,
     required this.notesBySeller,
+    this.protectedProductIds = const <int>[],
     this.paymentMethod = 'cod',
   });
 
@@ -1580,6 +2226,7 @@ class CheckoutPlaceOrderRequest {
   final int addressId;
   final Map<int, int> couriersBySeller;
   final Map<int, String> notesBySeller;
+  final List<int> protectedProductIds;
   final String paymentMethod;
 
   Map<String, dynamic> toJson() {
@@ -1595,6 +2242,8 @@ class CheckoutPlaceOrderRequest {
       'notes': notesBySeller.map(
         (int sellerId, String note) => MapEntry(sellerId.toString(), note),
       ),
+      if (protectedProductIds.isNotEmpty)
+        'protected_product_ids': protectedProductIds,
       'payment_method': paymentMethod,
     };
   }

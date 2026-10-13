@@ -231,11 +231,32 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
               width: _launcherSize,
               height: _launcherSize,
               child: Center(
-                child: Icon(
-                  _open ? Icons.close_rounded : Icons.auto_awesome_rounded,
-                  color: Colors.white,
-                  size: 25,
-                ),
+                child: _open
+                    ? const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 25,
+                      )
+                    : SizedBox.square(
+                        dimension: _launcherSize - 4,
+                        child: ClipOval(
+                          child: ColoredBox(
+                            color: Colors.white,
+                            child: Image.asset(
+                              'assets/icons/likhae_ai_logo.png',
+                              width: _launcherSize - 4,
+                              height: _launcherSize - 4,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Icon(
+                                    Icons.auto_awesome_rounded,
+                                    color: AppTheme.maroon(context),
+                                    size: 25,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ),
               ),
             ),
           ),
@@ -264,14 +285,19 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
                 Container(
                   width: 38,
                   height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
+                  decoration: const BoxDecoration(
                     color: Colors.white,
-                    size: 20,
+                    shape: BoxShape.circle,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset(
+                    'assets/icons/likhae_ai_logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.auto_awesome_rounded,
+                      color: AppTheme.maroon(context),
+                      size: 22,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),

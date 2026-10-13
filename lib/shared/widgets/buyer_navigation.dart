@@ -27,34 +27,47 @@ class BuyerNavigationFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: BuyerSystemSettingsController.instance,
-      builder: (BuildContext context, Widget? childWidget) {
-        final bool showAssistant =
-            BuyerSystemSettingsController.instance.showAiAssistant;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            child,
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: 18,
-              child: BuyerBottomNavigation(
-                currentIndex: currentIndex,
-                onHome: onHome,
-                onOrders: onOrders,
-                onMessages: onMessages,
-                onProfile: onProfile,
-              ),
-            ),
-            if (showAssistant)
+    final Color background = Theme.of(context).scaffoldBackgroundColor;
+
+    return ColoredBox(
+      color: background,
+      child: AnimatedBuilder(
+        animation: BuyerSystemSettingsController.instance,
+        child: child,
+        builder: (BuildContext context, Widget? childWidget) {
+          final bool showAssistant =
+              BuyerSystemSettingsController.instance.showAiAssistant;
+          final double bottomNavigationSpace =
+              72 + 18 + MediaQuery.of(context).padding.bottom;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
               Positioned.fill(
-                child: BuyerAiAssistant(page: aiPage, pageTitle: aiPageTitle),
+                bottom: bottomNavigationSpace,
+                child: childWidget ?? child,
               ),
-          ],
-        );
-      },
+              Positioned(
+                left: 18,
+                right: 18,
+                bottom: 18 + MediaQuery.of(context).padding.bottom,
+                child: RepaintBoundary(
+                  child: BuyerBottomNavigation(
+                    currentIndex: currentIndex,
+                    onHome: onHome,
+                    onOrders: onOrders,
+                    onMessages: onMessages,
+                    onProfile: onProfile,
+                  ),
+                ),
+              ),
+              if (showAssistant)
+                Positioned.fill(
+                  child: BuyerAiAssistant(page: aiPage, pageTitle: aiPageTitle),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -77,59 +90,73 @@ class BuyerBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color surface = Theme.of(context).colorScheme.surface;
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    // An opaque surface avoids an expensive BackdropFilter during scrolling.
+    final Color navigationSurface = (isDark ? Colors.black : Colors.white)
+        .withValues(alpha: isDark ? 0.88 : 0.94);
 
-    return Material(
-      color: surface,
-      borderRadius: BorderRadius.circular(36),
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        height: 72,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(36),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).shadowColor.withValues(alpha: 0.10),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(38),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(alpha: 0.18),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(38),
+        child: Container(
+          height: 72,
+          decoration: BoxDecoration(
+            color: navigationSurface,
+            border: Border.all(
+              color: (isDark ? Colors.white : Colors.black)
+                  .withValues(alpha: isDark ? 0.14 : 0.08),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _NavigationItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                active: currentIndex == 0,
-                onTap: onHome,
-              ),
-            ),
-            Expanded(
-              child: _NavigationItem(
-                icon: Icons.shopping_bag_outlined,
-                label: 'My Orders',
-                active: currentIndex == 1,
-                onTap: onOrders,
-              ),
-            ),
-            Expanded(
-              child: _NavigationItem(
-                icon: Icons.chat_bubble_outline_rounded,
-                label: 'Messages',
-                active: currentIndex == 2,
-                onTap: onMessages,
-              ),
-            ),
-            Expanded(
-              child: _NavigationItem(
-                icon: Icons.person_rounded,
-                label: 'Me',
-                active: currentIndex == 3,
-                onTap: onProfile,
-              ),
-            ),
-          ],
+          ),
+          child: Row(
+            children: [
+                Expanded(
+                  child: _NavigationItem(
+                    icon: Icons.home_rounded,
+                    label: 'Home',
+                    active: currentIndex == 0,
+                    onTap: onHome,
+                  ),
+                ),
+                Expanded(
+                  child: _NavigationItem(
+                    icon: Icons.shopping_bag_outlined,
+                    label: 'My Orders',
+                    active: currentIndex == 1,
+                    onTap: onOrders,
+                  ),
+                ),
+                Expanded(
+                  child: _NavigationItem(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    label: 'Messages',
+                    active: currentIndex == 2,
+                    onTap: onMessages,
+                  ),
+                ),
+                Expanded(
+                  child: Transform.translate(
+                    offset: const Offset(-10, 0),
+                    child: _NavigationItem(
+                      icon: Icons.person_rounded,
+                      label: 'Me',
+                      active: currentIndex == 3,
+                      onTap: onProfile,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -157,29 +184,35 @@ class _NavigationItem extends StatelessWidget {
         .onSurface
         .withValues(alpha: 0.62);
 
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: active ? activeColor : inactiveColor,
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
                 color: active ? activeColor : inactiveColor,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                size: 20,
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: active ? activeColor : inactiveColor,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

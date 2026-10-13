@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/theme/app_theme.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/services/product_service.dart';
+import 'package:likhae/services/wishlist_service.dart';
 import 'package:likhae/shared/widgets/buyer_navigation.dart';
 
 typedef BuyerHomeProductCallback = void Function(BuyerHomeProduct product);
@@ -254,6 +256,7 @@ class BuyerHomeScreen extends StatefulWidget {
 
 class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   static Color get background => AppTheme.adaptive(const Color(0xFFFBF7F2));
+  static Color get backgroundSoft => AppTheme.adaptive(const Color(0xFFF3E8DC));
   static Color get card => AppTheme.adaptive(const Color(0xFFFFFDF9));
   static Color get border => AppTheme.adaptive(const Color(0xFFEADCCC));
   static Color get maroon => AppTheme.adaptive(const Color(0xFF561C17));
@@ -267,14 +270,26 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   final Set<int> _wishlistIds = <int>{};
   final Set<int> _wishlistLoading = <int>{};
   List<BuyerHomeProduct> _loadedProducts = <BuyerHomeProduct>[];
+  List<BuyerHomeProduct>? _featuredProductsCache;
+  List<BuyerHomeProduct>? _recommendedProductsCache;
+  BuyerHomeProduct? _heroProductCache;
+  bool _heroProductCacheReady = false;
 
   @override
   void initState() {
     super.initState();
     _syncWishlistState();
+    _invalidateProductCaches();
     if (widget.products.isEmpty) {
       _loadProducts();
     }
+  }
+
+  void _invalidateProductCaches() {
+    _featuredProductsCache = null;
+    _recommendedProductsCache = null;
+    _heroProductCache = null;
+    _heroProductCacheReady = false;
   }
 
   Future<void> _loadProducts() async {
@@ -284,6 +299,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       if (!mounted) return;
       setState(() {
         _loadedProducts = fetched;
+        _invalidateProductCaches();
       });
     } catch (_) {
       if (mounted) {
@@ -302,6 +318,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         oldWidget.recommendedProducts != widget.recommendedProducts ||
         oldWidget.heroProduct != widget.heroProduct) {
       _syncWishlistState();
+      _invalidateProductCaches();
     }
   }
 
@@ -319,6 +336,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     for (final BuyerHomeProduct product in _allKnownProducts) {
       if (product.wishlisted) incoming.add(product.id);
     }
+    if (!AppConfig.apiEnabled) {
+      incoming.addAll(WishlistService.localProductIds);
+    }
     _wishlistIds
       ..clear()
       ..addAll(incoming);
@@ -331,55 +351,77 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   }
 
   List<BuyerHomeProduct> get _featuredProducts {
-    if (widget.featuredProducts.isNotEmpty) {
-      return _shuffledProducts(widget.featuredProducts).take(4).toList();
-    }
+    final List<BuyerHomeProduct>? cached = _featuredProductsCache;
+    if (cached != null) return cached;
 
-    final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[
-      ...widget.products,
-      ..._loadedProducts,
-    ];
-    final List<BuyerHomeProduct> featured = baseProducts
-        .where((BuyerHomeProduct product) => product.isFeatured)
-        .toList();
-    if (featured.isNotEmpty) {
-      return _shuffledProducts(featured).take(4).toList();
+    late final List<BuyerHomeProduct> result;
+    if (widget.featuredProducts.isNotEmpty) {
+      result = _shuffledProducts(widget.featuredProducts).take(4).toList();
+    } else {
+      final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[
+        ...widget.products,
+        ..._loadedProducts,
+      ];
+      final List<BuyerHomeProduct> featured = baseProducts
+          .where((BuyerHomeProduct product) => product.isFeatured)
+          .toList();
+      if (featured.isNotEmpty) {
+        result = _shuffledProducts(featured).take(4).toList();
+      } else if (baseProducts.isNotEmpty) {
+        result = _shuffledProducts(baseProducts).take(4).toList();
+      } else {
+        result = <BuyerHomeProduct>[];
+      }
     }
-    if (baseProducts.isNotEmpty) {
-      return _shuffledProducts(baseProducts).take(4).toList();
-    }
-    return <BuyerHomeProduct>[];
+    return _featuredProductsCache = result;
   }
 
   List<BuyerHomeProduct> get _recommendedProducts {
-    if (widget.recommendedProducts.isNotEmpty) {
-      return _shuffledProducts(widget.recommendedProducts).take(4).toList();
-    }
+    final List<BuyerHomeProduct>? cached = _recommendedProductsCache;
+    if (cached != null) return cached;
 
-    final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[
-      ...widget.products,
-      ..._loadedProducts,
-    ];
-    final List<BuyerHomeProduct> recs = baseProducts
-        .where((BuyerHomeProduct product) => product.isRecommended)
-        .toList();
-    if (recs.isNotEmpty) return _shuffledProducts(recs).take(4).toList();
-    if (baseProducts.isNotEmpty) {
-      return _shuffledProducts(baseProducts).take(4).toList();
+    late final List<BuyerHomeProduct> result;
+    if (widget.recommendedProducts.isNotEmpty) {
+      result = _shuffledProducts(widget.recommendedProducts).take(4).toList();
+    } else {
+      final List<BuyerHomeProduct> baseProducts = <BuyerHomeProduct>[
+        ...widget.products,
+        ..._loadedProducts,
+      ];
+      final List<BuyerHomeProduct> recs = baseProducts
+          .where((BuyerHomeProduct product) => product.isRecommended)
+          .toList();
+      if (recs.isNotEmpty) {
+        result = _shuffledProducts(recs).take(4).toList();
+      } else if (baseProducts.isNotEmpty) {
+        result = _shuffledProducts(baseProducts).take(4).toList();
+      } else {
+        result = <BuyerHomeProduct>[];
+      }
     }
-    return <BuyerHomeProduct>[];
+    return _recommendedProductsCache = result;
   }
 
   BuyerHomeProduct? get _heroProduct {
-    if (widget.heroProduct != null) return widget.heroProduct;
+    if (_heroProductCacheReady) return _heroProductCache;
+
+    if (widget.heroProduct != null) {
+      _heroProductCache = widget.heroProduct;
+      _heroProductCacheReady = true;
+      return _heroProductCache;
+    }
     final List<BuyerHomeProduct> featured = _featuredProducts;
-    if (featured.isNotEmpty) return featured.first;
-    final List<BuyerHomeProduct> base = <BuyerHomeProduct>[
-      ...widget.products,
-      ..._loadedProducts,
-    ];
-    if (base.isNotEmpty) return _shuffledProducts(base).first;
-    return null;
+    if (featured.isNotEmpty) {
+      _heroProductCache = featured.first;
+    } else {
+      final List<BuyerHomeProduct> base = <BuyerHomeProduct>[
+        ...widget.products,
+        ..._loadedProducts,
+      ];
+      _heroProductCache = base.isEmpty ? null : _shuffledProducts(base).first;
+    }
+    _heroProductCacheReady = true;
+    return _heroProductCache;
   }
 
   Future<void> _toggleWishlist(BuyerHomeProduct product) async {
@@ -396,28 +438,27 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       _wishlistLoading.add(product.id);
     });
 
+    bool completed = false;
     try {
       if (asyncCallback != null) {
         await asyncCallback(product);
       } else {
         syncCallback!.call(product);
       }
-
-      if (!mounted) return;
-      final bool wasWishlisted = _wishlistIds.contains(product.id);
-      setState(() {
-        if (wasWishlisted) {
-          _wishlistIds.remove(product.id);
-        } else {
-          _wishlistIds.add(product.id);
-        }
-      });
+      completed = true;
     } catch (_) {
       // ignore for offline layout mode
     } finally {
       if (mounted) {
         setState(() {
           _wishlistLoading.remove(product.id);
+          if (completed) {
+            if (_wishlistIds.contains(product.id)) {
+              _wishlistIds.remove(product.id);
+            } else {
+              _wishlistIds.add(product.id);
+            }
+          }
         });
       }
     }
@@ -531,6 +572,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          _buildQuickActions(),
+          const SizedBox(height: 22),
           _buildHero(product),
           const SizedBox(height: 30),
           _buildHeaderRow(
@@ -570,6 +613,52 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    final List<_BuyerQuickAction> actions = <_BuyerQuickAction>[
+      _BuyerQuickAction(
+        label: 'Wishlist',
+        description: 'Saved products',
+        icon: Icons.favorite_border_rounded,
+        onTap: widget.onWishlist,
+      ),
+      _BuyerQuickAction(
+        label: 'Vouchers',
+        description: 'Deals and rewards',
+        icon: Icons.card_giftcard_outlined,
+        onTap: widget.onVouchers,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        if (constraints.maxWidth >= 680) {
+          return Row(
+            children: <Widget>[
+              for (int index = 0; index < actions.length; index++) ...<Widget>[
+                if (index > 0) const SizedBox(width: 14),
+                Expanded(child: _BuyerQuickActionCard(action: actions[index])),
+              ],
+            ],
+          );
+        }
+
+        final double cardWidth = (constraints.maxWidth - 10) / 2;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: actions
+              .map(
+                (_BuyerQuickAction action) => SizedBox(
+                  width: cardWidth,
+                  child: _BuyerQuickActionCard(action: action),
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 
@@ -674,11 +763,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 label: 'Shop Now',
                 icon: Icons.arrow_forward_rounded,
                 onTap: widget.onBrowseProducts,
-              ),
-              _OutlineActionButton(
-                label: 'My Orders',
-                icon: Icons.receipt_long_outlined,
-                onTap: widget.onViewOrders,
               ),
               if (product != null && widget.onProductSelected != null)
                 _OutlineActionButton(
@@ -940,11 +1024,13 @@ class _ProductCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(11, 11, 11, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
+              SizedBox(
+                height: 154,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(11, 11, 11, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
                     if (product.category?.trim().isNotEmpty ==
                         true) ...<Widget>[
                       Text(
@@ -985,12 +1071,16 @@ class _ProductCard extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 8),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 4,
-                      runSpacing: 3,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: <Widget>[
-                        Text(
+                        Expanded(
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 4,
+                            runSpacing: 3,
+                            children: <Widget>[
+                              Text(
                           '₱${product.price.toStringAsFixed(2)}',
                           style: TextStyle(
                             color: _BuyerHomeScreenState.maroon,
@@ -1008,6 +1098,19 @@ class _ProductCard extends StatelessWidget {
                               decoration: TextDecoration.lineThrough,
                             ),
                           ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${product.soldCount} sold',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _BuyerHomeScreenState.muted,
+                            fontSize: 9.5,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -1030,28 +1133,29 @@ class _ProductCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 5),
                         ],
-                        Expanded(
-                          child: Text(
-                            '${product.soldCount} sold',
+                        if (product.stock != null) ...<Widget>[
+                          const Spacer(),
+                          Text(
+                            product.isOutOfStock
+                                ? 'Out of stock'
+                                : '${product.stock} left',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: _BuyerHomeScreenState.muted,
-                              fontSize: 9.5,
-                            ),
-                          ),
-                        ),
-                        if (product.stock != null && !product.isOutOfStock)
-                          Text(
-                            '${product.stock} left',
-                            style: TextStyle(
-                              color: _BuyerHomeScreenState.muted,
+                              color: product.isOutOfStock
+                                  ? _BuyerHomeScreenState.maroon
+                                  : _BuyerHomeScreenState.muted,
                               fontSize: 9,
+                              fontWeight: product.isOutOfStock
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
                           ),
+                        ],
                       ],
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1148,8 +1252,8 @@ class _ProductImage extends StatelessWidget {
       );
     }
 
-    return Image.network(
-      imageUrl,
+    return Image(
+      image: CachedNetworkImageProvider(imageUrl),
       fit: BoxFit.contain,
       alignment: Alignment.center,
       errorBuilder: (_, _, _) => Center(
@@ -1172,6 +1276,97 @@ class _ProductImage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _BuyerQuickAction {
+  final String label;
+  final String description;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _BuyerQuickAction({
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.onTap,
+  });
+}
+
+class _BuyerQuickActionCard extends StatelessWidget {
+  final _BuyerQuickAction action;
+
+  const _BuyerQuickActionCard({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '${action.label}, ${action.description}',
+      child: Material(
+        color: _BuyerHomeScreenState.card,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: action.onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 92,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: _BuyerHomeScreenState.border),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _BuyerHomeScreenState.backgroundSoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    action.icon,
+                    size: 22,
+                    color: _BuyerHomeScreenState.maroon,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        action.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _BuyerHomeScreenState.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        action.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _BuyerHomeScreenState.muted,
+                          fontSize: 10.5,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

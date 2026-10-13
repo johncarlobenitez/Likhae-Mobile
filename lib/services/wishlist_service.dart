@@ -2,8 +2,42 @@ import 'package:dio/dio.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
+import '../features/buyer/wishlist/wishlist_screen.dart';
 
 class WishlistService {
+  static final Map<int, WishlistProduct> _localWishlist =
+      <int, WishlistProduct>{};
+
+  static Set<int> get localProductIds => _localWishlist.keys.toSet();
+
+  static List<WishlistProduct> get localWishlist {
+    return _localWishlist.values.toList().reversed.toList(growable: false);
+  }
+
+  static Future<void> toggleLocalProduct(WishlistProduct product) {
+    if (_localWishlist.containsKey(product.id)) {
+      _localWishlist.remove(product.id);
+    } else {
+      _localWishlist[product.id] = product;
+    }
+
+    return Future<void>.value();
+  }
+
+  static Future<List<WishlistProduct>> fetchLocalWishlist() {
+    return Future<List<WishlistProduct>>.value(localWishlist);
+  }
+
+  static Future<void> removeLocalProduct(int productId) {
+    _localWishlist.remove(productId);
+    return Future<void>.value();
+  }
+
+  static Future<void> clearLocalWishlist() {
+    _localWishlist.clear();
+    return Future<void>.value();
+  }
+
   static Future<void> toggleProduct(int productId) async {
     final List<String> candidatePaths = <String>[
       'wishlist/toggle',

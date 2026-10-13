@@ -317,7 +317,10 @@ class ProductDetailData {
             .toString()
             .trim();
         final List<String> variationImages = _parseImageUrls(
-          value['images'] ?? value['gallery'] ?? value['photos'],
+          value['image_urls'] ??
+              value['images'] ??
+              value['gallery'] ??
+              value['photos'],
         );
         final String? variationImage = _parseImageUrl(
           value['image_url'] ?? value['image'] ?? value['photo'],
@@ -356,7 +359,10 @@ class ProductDetailData {
           final Map<String, dynamic> value = Map<String, dynamic>.from(item);
 
           final List<String> variationImages = _parseImageUrls(
-            value['images'] ?? value['gallery'] ?? value['photos'],
+            value['image_urls'] ??
+                value['images'] ??
+                value['gallery'] ??
+                value['photos'],
           );
           final String? variationImage = _parseImageUrl(
             value['image_url'] ?? value['image'] ?? value['photo'],
@@ -908,13 +914,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return _product.galleryImages;
     }
 
-    final List<String> images = <String>[...variantImages];
-    for (final String image in _product.galleryImages) {
-      if (!images.contains(image)) {
-        images.add(image);
-      }
-    }
-    return images;
+    // Once a variant is selected, show only that variant's photos so a
+    // Black selection cannot still display the default Beige gallery.
+    return variantImages;
   }
 
   Map<String, String> get _selectedVariantMap {

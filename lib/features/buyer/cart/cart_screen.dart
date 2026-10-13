@@ -314,6 +314,40 @@ class _CartScreenState extends State<CartScreen> {
     return _selectedItems.isNotEmpty && !_allSelected;
   }
 
+  List<_CartSellerGroup> get _sellerGroups {
+    final Map<String, _CartSellerGroup> groups =
+        <String, _CartSellerGroup>{};
+
+    for (final CartItemData item in _items) {
+      final String key = _sellerGroupKey(item);
+      final _CartSellerGroup group = groups.putIfAbsent(
+        key,
+        () => _CartSellerGroup(
+          name: item.seller.trim().isEmpty ? 'Seller' : item.seller.trim(),
+        ),
+      );
+      group.items.add(item);
+    }
+
+    return groups.values.toList(growable: false);
+  }
+
+  String _sellerGroupKey(CartItemData item) {
+    final int? sellerId = item.sellerId;
+    if (sellerId != null && sellerId > 0) {
+      return 'id:$sellerId';
+    }
+
+    final String sellerName = item.seller.trim().toLowerCase();
+    if (sellerName.isNotEmpty && sellerName != 'seller') {
+      return 'name:$sellerName';
+    }
+
+    // Do not accidentally merge unrelated items when the backend did not
+    // include enough seller information to identify the owner.
+    return 'item:${item.id}';
+  }
+
   int get _selectedQuantity {
     return _selectedItems.fold<int>(
       0,
@@ -364,6 +398,45 @@ class _CartScreenState extends State<CartScreen> {
         _selectedIds.remove(item.id);
       } else {
         _selectedIds.add(item.id);
+      }
+    });
+  }
+
+  bool _isSellerGroupSelected(_CartSellerGroup group) {
+    final List<CartItemData> availableItems = group.items
+        .where((CartItemData item) => item.isAvailable)
+        .toList(growable: false);
+    return availableItems.isNotEmpty &&
+        availableItems.every(
+          (CartItemData item) => _selectedIds.contains(item.id),
+        );
+  }
+
+  bool _isSellerGroupPartiallySelected(_CartSellerGroup group) {
+    final List<CartItemData> availableItems = group.items
+        .where((CartItemData item) => item.isAvailable)
+        .toList(growable: false);
+    final bool hasSelected = availableItems.any(
+      (CartItemData item) => _selectedIds.contains(item.id),
+    );
+    return hasSelected && !_isSellerGroupSelected(group);
+  }
+
+  void _toggleSellerGroup(_CartSellerGroup group) {
+    final List<String> availableIds = group.items
+        .where((CartItemData item) => item.isAvailable)
+        .map((CartItemData item) => item.id)
+        .toList(growable: false);
+
+    if (availableIds.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      if (_isSellerGroupSelected(group)) {
+        _selectedIds.removeAll(availableIds);
+      } else {
+        _selectedIds.addAll(availableIds);
       }
     });
   }
@@ -1060,35 +1133,13 @@ class _CartScreenState extends State<CartScreen> {
               BuildContext context,
               int index,
             ) {
-              final CartItemData item = _items[index];
-
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: index == _items.length - 1 ? 0 : 10,
+                  bottom: index == _sellerGroups.length - 1 ? 0 : 12,
                 ),
-                child: _CartItemCard(
-                  item: item,
-                  selected: _selectedIds.contains(item.id),
-                  updating: _updatingIds.contains(item.id),
-                  removing: _removingIds.contains(item.id),
-                  onSelectionChanged: () {
-                    _toggleItemSelection(item);
-                  },
-                  onProductTap: () {
-                    widget.onProductSelected?.call(item);
-                  },
-                  onRemove: () {
-                    _removeItem(item);
-                  },
-                  onDecrease: () {
-                    _changeQuantity(item, item.quantity - 1);
-                  },
-                  onIncrease: () {
-                    _changeQuantity(item, item.quantity + 1);
-                  },
-                ),
+                child: _buildSellerGroup(_sellerGroups[index]),
               );
-            }, childCount: _items.length),
+            }, childCount: _sellerGroups.length),
           ),
         ),
 
@@ -1109,6 +1160,124 @@ class _CartScreenState extends State<CartScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSellerGroup(_CartSellerGroup group) {
+    final bool groupSelected = _isSellerGroupSelected(group);
+    final bool groupPartiallySelected = _isSellerGroupPartiallySelected(group);
+    final bool hasAvailableItem = group.items.any(
+      (CartItemData item) => item.isAvailable,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+          decoration: BoxDecoration(
+            color: _soft,
+            border: Border.all(color: _border),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: <Widget>[
+              Checkbox(
+                tristate: true,
+                value: groupSelected
+                    ? true
+                    : groupPartiallySelected
+                    ? null
+                    : false,
+                activeColor: _maroon,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                onChanged: hasAvailableItem
+                    ? (_) {
+                        _toggleSellerGroup(group);
+                      }
+                    : null,
+              ),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEAD8C7),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.storefront_outlined,
+                  color: _maroon,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      group.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _text,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${group.items.length} ${group.items.length == 1 ? 'item' : 'items'} from this seller',
+                      style: const TextStyle(color: _muted, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasAvailableItem)
+                Text(
+                  groupSelected ? 'Selected' : 'Select all',
+                  style: const TextStyle(
+                    color: _brown,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (int index = 0; index < group.items.length; index++) ...<Widget>[
+          if (index > 0) const SizedBox(height: 8),
+          _buildCartItem(group.items[index]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCartItem(CartItemData item) {
+    return _CartItemCard(
+      item: item,
+      selected: _selectedIds.contains(item.id),
+      updating: _updatingIds.contains(item.id),
+      removing: _removingIds.contains(item.id),
+      onSelectionChanged: () {
+        _toggleItemSelection(item);
+      },
+      onProductTap: () {
+        widget.onProductSelected?.call(item);
+      },
+      onRemove: () {
+        _removeItem(item);
+      },
+      onDecrease: () {
+        _changeQuantity(item, item.quantity - 1);
+      },
+      onIncrease: () {
+        _changeQuantity(item, item.quantity + 1);
+      },
     );
   }
 
@@ -1908,6 +2077,13 @@ class _CartItemCard extends StatelessWidget {
   static String _price(double value) {
     return '₱${value.toStringAsFixed(2)}';
   }
+}
+
+class _CartSellerGroup {
+  final String name;
+  final List<CartItemData> items = <CartItemData>[];
+
+  _CartSellerGroup({required this.name});
 }
 
 class _QuantityControl extends StatelessWidget {

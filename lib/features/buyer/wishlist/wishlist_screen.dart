@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/config/app_config.dart';
 
 typedef WishlistProductCallback = Future<void> Function(
@@ -1008,64 +1009,15 @@ class _WishlistScreenState
           ),
 
           const Expanded(
-            child: Row(
-              children: [
-                Text(
-                  'LIKHAE',
-                  style:
-                      TextStyle(
-                    color:
-                        _maroon,
-                    fontSize:
-                        18,
-                    letterSpacing:
-                        1,
-                    fontWeight:
-                        FontWeight.w900,
-                  ),
-                ),
-
-                SizedBox(
-                  width: 7,
-                ),
-
-                SizedBox(
-                  width: 4,
-                  height: 4,
-                  child:
-                      DecoratedBox(
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          _tan,
-                      shape:
-                          BoxShape.circle,
-                    ),
-                  ),
-                ),
-
-                SizedBox(
-                  width: 7,
-                ),
-
-                Flexible(
-                  child:
-                      Text(
-                    'Wishlist',
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style:
-                        TextStyle(
-                      color:
-                          _muted,
-                      fontSize:
-                          10,
-                      fontWeight:
-                          FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              'Wishlist',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _maroon,
+                fontSize: 18,
+                letterSpacing: 0.2,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
 
@@ -2754,8 +2706,8 @@ class _WishlistProductImage
 
     final String resolvedUrl = AppConfig.resolveMediaUrl(url);
 
-    return Image.network(
-      resolvedUrl,
+    return Image(
+      image: CachedNetworkImageProvider(resolvedUrl),
       fit:
           BoxFit.cover,
       loadingBuilder:

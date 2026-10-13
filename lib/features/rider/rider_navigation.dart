@@ -22,24 +22,34 @@ class RiderNavigationFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        child,
-        Positioned(
-          left: 18,
-          right: 18,
-          bottom: 18,
-          child: RiderBottomNavigation(
-            currentIndex: currentIndex,
-            onDashboard: onDashboard,
-            onAssignments: onAssignments,
-            onHistory: onHistory,
-            onEarnings: onEarnings,
-            onProfile: onProfile,
-          ),
-        ),
-      ],
+    final MediaQueryData mediaQuery = MediaQuery.of(context);
+    final bool keyboardVisible = mediaQuery.viewInsets.bottom > 0;
+    final double navigationClearance = keyboardVisible
+        ? 0
+        : 72 + 18 + mediaQuery.padding.bottom;
+
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(bottom: navigationClearance, child: child),
+          if (!keyboardVisible)
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 18 + mediaQuery.padding.bottom,
+              child: RiderBottomNavigation(
+                currentIndex: currentIndex,
+                onDashboard: onDashboard,
+                onAssignments: onAssignments,
+                onHistory: onHistory,
+                onEarnings: onEarnings,
+                onProfile: onProfile,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

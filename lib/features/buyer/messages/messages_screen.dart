@@ -823,6 +823,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   void _appendMessage(BuyerMessageData message) {
+    if (message.body.trim().isEmpty && !message.hasAttachment) {
+      return;
+    }
+
     final String id = message.id.trim();
 
     if (id.isNotEmpty && _seenMessageIds.contains(id)) {
@@ -1346,36 +1350,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
       children: [
         _buildPageHeader(),
 
-        Expanded(child: _buildConversationPanel()),
+        Expanded(child: _buildConversationPanel(mobile: true)),
       ],
     );
   }
 
   Widget _buildPageHeader() {
-    final bool showingPreview =
-        _conversations.isEmpty && widget.showPreviewWhenEmpty;
-
-    final int displayConversationCount = showingPreview
-        ? _demoConversations.length
-        : _conversations.length;
-
-    final int unreadCount = showingPreview
-        ? _demoConversations.fold<int>(
-            0,
-            (int total, _DemoConversation conversation) =>
-                total + conversation.unread,
-          )
-        : _conversations.fold<int>(
-            0,
-            (int total, BuyerConversationData conversation) =>
-                total + conversation.unread,
-          );
-
     return Container(
-      padding: const EdgeInsets.fromLTRB(7, 5, 12, 7),
+      padding: const EdgeInsets.fromLTRB(4, 0, 8, 0),
+      constraints: const BoxConstraints(minHeight: 56),
       decoration: const BoxDecoration(
         color: _background,
-        border: Border(bottom: BorderSide(color: Color(0xFFF0E8DF))),
+        border: Border(bottom: BorderSide(color: _border)),
       ),
       child: Row(
         children: [
@@ -1389,156 +1375,63 @@ class _MessagesScreenState extends State<MessagesScreen> {
             icon: const Icon(Icons.arrow_back_rounded, color: _text),
           ),
 
-          const SizedBox(width: 2),
-
           const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Messages',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 21,
-                    height: 1.1,
-                    letterSpacing: -0.4,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                SizedBox(height: 2),
-
-                Text(
-                  'Conversations with LIKHAE sellers',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: _muted, fontSize: 12),
-                ),
-              ],
+            child: Text(
+              'Messages',
+              style: TextStyle(
+                color: _text,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-            decoration: BoxDecoration(
-              color: _surface,
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(color: _border),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.chat_bubble_outline_rounded,
+          if (_refreshingConversations)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
                   color: _maroon,
-                  size: 13,
                 ),
-
-                const SizedBox(width: 4),
-
-                Text(
-                  '$displayConversationCount',
-                  style: const TextStyle(
-                    color: _maroon,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                if (unreadCount > 0) ...[
-                  const SizedBox(width: 6),
-
-                  Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 18,
-                      minHeight: 18,
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: _maroon,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      unreadCount > 99 ? '99+' : '$unreadCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
+              ),
+            )
+          else
+            IconButton(
+              tooltip: 'Refresh conversations',
+              onPressed: widget.onRefreshConversations == null
+                  ? null
+                  : _refreshConversations,
+              icon: const Icon(Icons.refresh_rounded),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildConversationPanel() {
+  Widget _buildConversationPanel({bool mobile = false}) {
     return Container(
       color: _surface,
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
-            decoration: const BoxDecoration(
-              color: _surface,
-              border: Border(bottom: BorderSide(color: _border)),
-            ),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'COMMUNICATION',
-                        style: TextStyle(
-                          color: _maroon,
-                          fontSize: 10.5,
-                          letterSpacing: 1.4,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-
-                      SizedBox(height: 4),
-
-                      Text(
-                        'Conversations',
-                        style: TextStyle(
-                          color: _text,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
+          if (!mobile)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
+              decoration: const BoxDecoration(
+                color: _surface,
+                border: Border(bottom: BorderSide(color: _border)),
+              ),
+              child: const Text(
+                'Conversations',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
                 ),
-
-                if (_refreshingConversations)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _maroon,
-                    ),
-                  )
-                else
-                  Text(
-                    '${_conversations.isEmpty && widget.showPreviewWhenEmpty ? _demoConversations.length : _conversations.length}',
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-              ],
+              ),
             ),
-          ),
 
           Expanded(
             child: RefreshIndicator(
@@ -1550,13 +1443,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   ? _buildEmptyConversationList()
                   : ListView.separated(
                       physics: const AlwaysScrollableScrollPhysics(),
+                      padding: mobile
+                          ? const EdgeInsets.fromLTRB(14, 12, 14, 110)
+                          : EdgeInsets.zero,
                       itemCount: _conversations.length,
                       separatorBuilder: (BuildContext context, int index) {
-                        return const Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: Color(0xFFEFE1D5),
-                        );
+                        return mobile
+                            ? const SizedBox(height: 8)
+                            : const Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: _border,
+                              );
                       },
                       itemBuilder: (BuildContext context, int index) {
                         final BuyerConversationData conversation =
@@ -1709,17 +1607,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Widget _buildEmptyConversationList() {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(24, 90, 24, 120),
       children: const <Widget>[
-        SizedBox(height: 120),
-        Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(
-              'No conversations yet',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _muted, fontWeight: FontWeight.w600),
-            ),
+        Icon(Icons.forum_outlined, size: 54, color: _maroon),
+        SizedBox(height: 18),
+        Text(
+          'No conversations yet',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _text,
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
           ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Messages from sellers will appear here.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
         ),
       ],
     );
@@ -1728,24 +1633,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Widget _buildDemoConversationList() {
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 110),
       itemCount: _demoConversations.length + 1,
       separatorBuilder: (BuildContext context, int index) {
-        if (index == 0) {
-          return const SizedBox.shrink();
-        }
-
-        return const Divider(height: 1, thickness: 1, color: Color(0xFFEFE1D5));
+        return const SizedBox(height: 8);
       },
       itemBuilder: (BuildContext context, int index) {
         if (index == 0) {
           return Container(
             width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            margin: const EdgeInsets.only(bottom: 2),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: _backgroundSoft,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(15),
               border: Border.all(color: _border),
             ),
             child: const Row(
@@ -1755,7 +1656,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    'Preview mode — tap any sample conversation to see the full Messenger-style chat layout. These messages are not saved to Laravel.',
+                    'Preview mode — sample messages are not saved to Laravel.',
                     style: TextStyle(
                       color: _muted,
                       fontSize: 12,
@@ -1793,11 +1694,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
     required bool mobile,
   }) {
     return Container(
-      color: _backgroundSoft,
+      color: _background,
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.fromLTRB(7, 8, 11, 8),
+            padding: EdgeInsets.fromLTRB(mobile ? 4 : 12, 4, 12, 4),
+            constraints: const BoxConstraints(minHeight: 56),
             decoration: const BoxDecoration(
               color: _surface,
               border: Border(bottom: BorderSide(color: _border)),
@@ -1812,10 +1714,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         _demoConversationIndex = null;
                       });
                     },
-                    icon: const Icon(Icons.arrow_back_rounded, color: _text),
+                    icon: const Icon(Icons.chevron_left, color: _text),
                   ),
 
-                _DemoAvatar(initials: conversation.initials, size: 44),
+                _DemoAvatar(initials: conversation.initials, size: 38),
 
                 const SizedBox(width: 10),
 
@@ -1829,7 +1731,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _text,
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
@@ -1882,39 +1784,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ];
 
                 return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(13, 18, 13, 22),
-                  itemCount: messages.length + 1,
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+                  itemCount: messages.length,
                   itemBuilder: (BuildContext context, int index) {
-                    if (index == 0) {
-                      return Center(
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _surface,
-                            border: Border.all(color: _border),
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: const Text(
-                            'Sample conversation',
-                            style: TextStyle(
-                              color: _muted,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-
-                    final _DemoMessage message = messages[index - 1];
+                    final _DemoMessage message = messages[index];
 
                     return _DemoMessageBubble(
                       message: message,
-                      sellerInitials: conversation.initials,
                     );
                   },
                 );
@@ -1922,20 +1798,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ),
           ),
 
-          _buildDemoComposer(conversation, mobile: mobile),
+          _buildDemoComposer(conversation),
         ],
       ),
     );
   }
 
-  Widget _buildDemoComposer(
-    _DemoConversation conversation, {
-    required bool mobile,
-  }) {
+  Widget _buildDemoComposer(_DemoConversation conversation) {
     return _buildMessageBox(
       hintText: 'Message ${conversation.name}...',
       onSend: () => _sendDemoMessage(conversation),
-      mobile: mobile,
     );
   }
 
@@ -1947,14 +1819,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
     }
 
     return Container(
-      color: _backgroundSoft,
+      color: _background,
       child: Column(
         children: [
           _buildChatHeader(seller, mobile: mobile),
 
           Expanded(child: _buildMessageStream(seller)),
 
-          _buildComposer(seller, mobile: mobile),
+          _buildComposer(seller),
         ],
       ),
     );
@@ -1965,7 +1837,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
     required bool mobile,
   }) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 9, 12, 9),
+      padding: EdgeInsets.fromLTRB(mobile ? 4 : 12, 4, 12, 4),
+      constraints: const BoxConstraints(minHeight: 56),
       decoration: const BoxDecoration(
         color: _surface,
         border: Border(bottom: BorderSide(color: _border)),
@@ -1980,10 +1853,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   _mobileShowingChat = false;
                 });
               },
-              icon: const Icon(Icons.arrow_back_rounded, color: _text),
+              icon: const Icon(Icons.chevron_left, color: _text),
             ),
 
-          _SellerAvatar(seller: seller, size: 43),
+          _SellerAvatar(seller: seller, size: 38),
 
           const SizedBox(width: 10),
 
@@ -1997,7 +1870,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _text,
-                    fontSize: 15,
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2025,34 +1898,31 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ),
           ),
 
-          const SizedBox(width: 7),
-
-          SizedBox(
-            height: 38,
-            child: OutlinedButton.icon(
-              onPressed: widget.onViewStore == null
-                  ? null
-                  : () {
-                      widget.onViewStore!(seller);
-                    },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _maroon,
-                side: const BorderSide(color: _tan),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+          if (widget.onViewStore != null) ...[
+            const SizedBox(width: 7),
+            SizedBox(
+              height: 38,
+              child: OutlinedButton.icon(
+                onPressed: () => widget.onViewStore!(seller),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _maroon,
+                  side: const BorderSide(color: _border),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                 ),
-              ),
-              icon: const Icon(Icons.storefront_outlined, size: 15),
-              label: Text(
-                mobile ? 'Store' : 'View Store',
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w800,
+                icon: const Icon(Icons.storefront_outlined, size: 15),
+                label: Text(
+                  mobile ? 'Store' : 'View Store',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -2075,29 +1945,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
       child: ListView(
         controller: _messageScrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(13, 17, 13, 20),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
         children: [
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-              decoration: BoxDecoration(
-                color: _surface,
-                border: Border.all(color: _border),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Text(
-                'Conversation',
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-
           if (_activeProductReference != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 4),
 
             _ProductInquiryCard(
               product: _activeProductReference!,
@@ -2175,39 +2026,31 @@ class _MessagesScreenState extends State<MessagesScreen> {
             const SizedBox(height: 5),
 
             for (final BuyerMessageData message in _messages)
-              _MessageBubble(message: message, seller: seller),
+              _MessageBubble(message: message),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildComposer(BuyerConversationData seller, {required bool mobile}) {
+  Widget _buildComposer(BuyerConversationData seller) {
     return _buildMessageBox(
       hintText: 'Message ${seller.name}...',
       onSend: _sendMessage,
-      mobile: mobile,
     );
   }
 
   Widget _buildMessageBox({
     required String hintText,
     required Future<void> Function() onSend,
-    required bool mobile,
   }) {
     final XFile? attachment = _pendingAttachment;
 
-    final bool keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-
-    // BuyerNavigation uses a floating bottom bar on mobile.
-    // Keep only the composer above that bar without changing
-    // the chat/header/message layout. When the keyboard opens,
-    // the extra clearance is removed so the composer stays close
-    // to the keyboard.
-    final double navigationClearance = mobile && !keyboardOpen ? 74 : 0;
-
     return Container(
-      padding: EdgeInsets.fromLTRB(11, 8, 11, 10 + navigationClearance),
+      // BuyerNavigationFrame already reserves space for the floating bottom
+      // navigation. Adding another clearance here creates the large empty
+      // gap visible between the composer and the navigation bar.
+      padding: const EdgeInsets.fromLTRB(11, 8, 11, 10),
       decoration: const BoxDecoration(
         color: _surface,
         border: Border(top: BorderSide(color: _border)),
@@ -2296,18 +2139,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
               children: [
                 SizedBox(
                   width: 44,
-                  height: 48,
+                  height: 44,
                   child: IconButton(
                     tooltip: 'Attach photo',
                     onPressed: _sendingMessage || _pickingAttachment
                         ? null
                         : _pickAttachment,
                     style: IconButton.styleFrom(
-                      backgroundColor: _backgroundSoft,
+                      backgroundColor: _surface,
                       foregroundColor: _maroon,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: const BorderSide(color: _border),
+                      shape: const CircleBorder(
+                        side: BorderSide(color: _border),
                       ),
                     ),
                     icon: _pickingAttachment
@@ -2344,21 +2186,21 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       hintStyle: const TextStyle(color: _muted2, fontSize: 13),
                       counterText: '',
                       filled: true,
-                      fillColor: _backgroundSoft,
+                      fillColor: _surface,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 12,
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: const BorderSide(color: _border),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: const BorderSide(color: _border),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: const BorderSide(color: _tan, width: 1.3),
                       ),
                     ),
@@ -2370,19 +2212,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 SizedBox(
                   width: 48,
                   height: 48,
-                  child: ElevatedButton(
+                  child: IconButton.filled(
+                    tooltip: 'Send message',
                     onPressed: _sendingMessage ? null : onSend,
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
+                    style: IconButton.styleFrom(
                       backgroundColor: _maroon,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0x73561C17),
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                      shape: const CircleBorder(),
                     ),
-                    child: _sendingMessage
+                    icon: _sendingMessage
                         ? const SizedBox(
                             width: 19,
                             height: 19,
@@ -2507,14 +2345,16 @@ class _DemoConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFFFFFDF9),
+      borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.all(14),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _DemoAvatar(initials: conversation.initials, size: 50),
+              _DemoAvatar(initials: conversation.initials, size: 44),
 
               const SizedBox(width: 12),
 
@@ -2610,17 +2450,13 @@ class _DemoConversationTile extends StatelessWidget {
 
 class _DemoMessageBubble extends StatelessWidget {
   final _DemoMessage message;
-  final String sellerInitials;
 
-  const _DemoMessageBubble({
-    required this.message,
-    required this.sellerInitials,
-  });
+  const _DemoMessageBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.only(top: 9),
       child: Align(
         alignment: message.fromBuyer
             ? Alignment.centerRight
@@ -2629,11 +2465,6 @@ class _DemoMessageBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!message.fromBuyer) ...[
-              _DemoAvatar(initials: sellerInitials, size: 30),
-              const SizedBox(width: 7),
-            ],
-
             Flexible(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 285),
@@ -2647,12 +2478,7 @@ class _DemoMessageBubble extends StatelessWidget {
                         ? const Color(0xFF561C17)
                         : const Color(0xFFEADCCC),
                   ),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(message.fromBuyer ? 17 : 5),
-                    topRight: Radius.circular(message.fromBuyer ? 5 : 17),
-                    bottomLeft: const Radius.circular(17),
-                    bottomRight: const Radius.circular(17),
-                  ),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: Column(
                   crossAxisAlignment: message.fromBuyer
@@ -2687,8 +2513,8 @@ class _DemoMessageBubble extends StatelessWidget {
                           color: message.fromBuyer
                               ? Colors.white
                               : const Color(0xFF3B211B),
-                          fontSize: 13,
-                          height: 1.5,
+                          fontSize: 14,
+                          height: 1.45,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -2699,10 +2525,9 @@ class _DemoMessageBubble extends StatelessWidget {
                       message.time,
                       style: TextStyle(
                         color: message.fromBuyer
-                            ? const Color(0xFFE8C8B2)
-                            : const Color(0xFFA99386),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
+                            ? Colors.white70
+                            : const Color(0xFF987865),
+                        fontSize: 10,
                       ),
                     ),
                   ],
@@ -2769,17 +2594,12 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? const Color(0xFFF3E4DE) : const Color(0xFFFFFDF9),
+      borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
-          decoration: BoxDecoration(
-            border: selected
-                ? const Border(
-                    left: BorderSide(color: Color(0xFF561C17), width: 4),
-                  )
-                : null,
-          ),
+          padding: const EdgeInsets.all(14),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2883,20 +2703,26 @@ class _ConversationTile extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
+  static const Color _maroon = Color(0xFF561C17);
+  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _border = Color(0xFFEADCCC);
+
   final BuyerMessageData message;
 
-  final BuyerConversationData seller;
-
-  const _MessageBubble({required this.message, required this.seller});
+  const _MessageBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
+    if (message.body.trim().isEmpty && !message.hasAttachment) {
+      return const SizedBox.shrink();
+    }
+
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double maxBubbleWidth = constraints.maxWidth * 0.80;
+        final double maxBubbleWidth = constraints.maxWidth * 0.78;
 
         return Padding(
-          padding: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.only(top: 9),
           child: Align(
             alignment: message.fromBuyer
                 ? Alignment.centerRight
@@ -2905,51 +2731,17 @@ class _MessageBubble extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!message.fromBuyer) ...[
-                  _SellerAvatar(seller: seller, size: 30),
-
-                  const SizedBox(width: 7),
-                ],
-
                 Flexible(
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                     child: Container(
                       padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
                       decoration: BoxDecoration(
-                        gradient: message.fromBuyer
-                            ? const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: <Color>[
-                                  Color(0xFF561C17),
-                                  Color(0xFF642920),
-                                ],
-                              )
-                            : null,
-                        color: message.fromBuyer
-                            ? null
-                            : const Color(0xFFFFFDF9),
+                        color: message.fromBuyer ? _maroon : _surface,
                         border: Border.all(
-                          color: message.fromBuyer
-                              ? const Color(0xFF561C17)
-                              : const Color(0xFFEADCCC),
+                          color: message.fromBuyer ? _maroon : _border,
                         ),
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(message.fromBuyer ? 17 : 5),
-                          topRight: Radius.circular(message.fromBuyer ? 5 : 17),
-                          bottomLeft: const Radius.circular(17),
-                          bottomRight: const Radius.circular(17),
-                        ),
-                        boxShadow: <BoxShadow>[
-                          BoxShadow(
-                            color: const Color(
-                              0xFF561C17,
-                            ).withValues(alpha: 0.05),
-                            blurRadius: 16,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
+                        borderRadius: BorderRadius.circular(15),
                       ),
                       child: Column(
                         crossAxisAlignment: message.fromBuyer
@@ -3025,8 +2817,8 @@ class _MessageBubble extends StatelessWidget {
                                 color: message.fromBuyer
                                     ? Colors.white
                                     : const Color(0xFF3B211B),
-                                fontSize: 13,
-                                height: 1.55,
+                                fontSize: 14,
+                                height: 1.45,
                               ),
                             ),
 
@@ -3037,10 +2829,9 @@ class _MessageBubble extends StatelessWidget {
                               message.time,
                               style: TextStyle(
                                 color: message.fromBuyer
-                                    ? const Color(0xFFE8C8B2)
-                                    : const Color(0xFFA99386),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
+                                    ? Colors.white70
+                                    : const Color(0xFF987865),
+                                fontSize: 10,
                               ),
                             ),
                           ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/services/product_service.dart';
 
@@ -1340,8 +1341,8 @@ class _ProductImage extends StatelessWidget {
 
     final String resolvedUrl = AppConfig.resolveMediaUrl(url);
 
-    return Image.network(
-      resolvedUrl,
+    return Image(
+      image: CachedNetworkImageProvider(resolvedUrl),
       fit: BoxFit.cover,
       loadingBuilder:
           (BuildContext context, Widget child, ImageChunkEvent? progress) {
