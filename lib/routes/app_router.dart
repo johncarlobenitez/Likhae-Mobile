@@ -1171,6 +1171,10 @@ final GoRouter appRouter = GoRouter(
             requireCourierSelection: false,
             appliedVoucherCodes:
                 routeData?.voucherCodes ?? const <int, String>{},
+            loadAvailableVouchers: AppConfig.apiEnabled
+                ? () async =>
+                      (await BuyerMobileService.fetchRewards()).activeVouchers
+                : null,
             initialRecipientName: defaultAddress?.recipient ?? '',
             initialContactNumber: defaultAddress?.phone ?? '',
             onBackToCart: () => context.go('/buyer/cart'),
@@ -1181,7 +1185,7 @@ final GoRouter appRouter = GoRouter(
                       cartItemIds: routeData.cartItemIds,
                       addressId: request.addressId,
                       paymentMethod: request.paymentMethod,
-                      voucherCodes: routeData.voucherCodes,
+                      voucherCodes: request.voucherCodes,
                       protectedProductIds: request.protectedProductIds,
                     );
                     if (context.mounted) {

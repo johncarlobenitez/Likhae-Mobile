@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+
+import '../rewards/rewards_screen.dart';
+import 'shop_voucher_picker.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({
@@ -9,6 +14,7 @@ class CheckoutScreen extends StatefulWidget {
     required this.addresses,
     required this.couriersBySeller,
     this.appliedVoucherCodes = const <int, String>{},
+    this.loadAvailableVouchers,
     this.requireCourierSelection = true,
     this.defaultAddressId,
     this.initialRecipientName = '',
@@ -22,6 +28,7 @@ class CheckoutScreen extends StatefulWidget {
   final List<CheckoutAddressData> addresses;
   final Map<int, List<CheckoutCourierOption>> couriersBySeller;
   final Map<int, String> appliedVoucherCodes;
+  final Future<List<RewardVoucherData>> Function()? loadAvailableVouchers;
   final bool requireCourierSelection;
   final int? defaultAddressId;
   final String initialRecipientName;
@@ -52,10 +59,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   final Map<int, TextEditingController> _shopNoteControllers = {};
   final Map<int, int?> _selectedCouriers = {};
+  final Map<int, String> _selectedVoucherCodes = <int, String>{};
   final Set<int> _protectedProductIds = <int>{};
 
   int? _selectedAddressId;
   bool _submitting = false;
+  bool _loadingVouchers = false;
 
   @override
   void initState() {
@@ -69,8 +78,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
 
     _selectedAddressId = _resolveInitialAddressId();
+    _selectedVoucherCodes.addAll(widget.appliedVoucherCodes);
     _syncSelectedAddressFields();
     _syncShopState();
+    if (_selectedVoucherCodes.isNotEmpty &&
+        widget.loadAvailableVouchers != null) {
+      unawaited(_loadVoucherMetadata());
+    }
   }
 
   @override
@@ -83,6 +97,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (oldWidget.initialContactNumber != widget.initialContactNumber) {
       _contactController.text = widget.initialContactNumber;
+    }
+
+    if (oldWidget.appliedVoucherCodes != widget.appliedVoucherCodes) {
+      _selectedVoucherCodes
+        ..clear()
+        ..addAll(widget.appliedVoucherCodes);
     }
 
     final bool stillExists = widget.addresses.any(
@@ -227,6 +247,53 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return total;
   }
 
+  double get _shopVoucherDiscount {
+    final Future<List<RewardVoucherData>> Function()? loader =
+        widget.loadAvailableVouchers;
+    if (loader == null || _selectedVoucherCodes.isEmpty) return 0;
+
+    // Voucher details are cached after the picker opens so the displayed
+    // savings use the same rules Laravel will apply when placing the order.
+    double total = 0;
+    for (final MapEntry<int, String> selection
+        in _selectedVoucherCodes.entries) {
+      final List<CheckoutItemData> sellerItems =
+          _groupedItems[selection.key] ?? const <CheckoutItemData>[];
+      if (sellerItems.isEmpty) continue;
+
+      RewardVoucherData? voucher;
+      for (final RewardVoucherData item in _loadedVouchers) {
+        if (item.sellerId == selection.key &&
+            item.code.toUpperCase() == selection.value.toUpperCase()) {
+          voucher = item;
+          break;
+        }
+      }
+      if (voucher == null ||
+          voucher.discountAmount == null ||
+          voucher.minimumOrderAmount == null) {
+        continue;
+      }
+
+      final double subtotal = sellerItems.fold<double>(
+        0,
+        (double value, CheckoutItemData item) => value + item.lineTotal,
+      );
+      if (subtotal < voucher.minimumOrderAmount!) continue;
+
+      double discount = voucher.discountType?.toUpperCase() == 'PERCENT'
+          ? subtotal * voucher.discountAmount! / 100
+          : voucher.discountAmount!;
+      final double? maximum = voucher.maximumDiscountAmount;
+      if (maximum != null) discount = discount.clamp(0, maximum).toDouble();
+      final double cappedDiscount = discount.clamp(0, subtotal).toDouble();
+      total += (cappedDiscount * 100).roundToDouble() / 100;
+    }
+    return total;
+  }
+
+  List<RewardVoucherData> _loadedVouchers = const <RewardVoucherData>[];
+
   double get _electronicProtectionTotal {
     double total = 0;
     for (final CheckoutItemData item in widget.items) {
@@ -244,7 +311,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   double get _estimatedTotal =>
-      _productTotal + _shippingTotal + _electronicProtectionTotal;
+      (_productTotal - _shopVoucherDiscount) +
+      _shippingTotal +
+      _electronicProtectionTotal;
 
   bool get _hasMissingCourierAvailability {
     if (!widget.requireCourierSelection) {
@@ -338,6 +407,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       couriersBySeller: couriers,
       notesBySeller: notes,
       protectedProductIds: _protectedProductIds.toList(growable: false),
+      voucherCodes: Map<int, String>.from(_selectedVoucherCodes),
       paymentMethod: 'cod',
     );
 
@@ -363,6 +433,73 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openShopVoucherPicker() async {
+    final Future<List<RewardVoucherData>> Function()? loader =
+        widget.loadAvailableVouchers;
+    if (loader == null) {
+      _showSnack('Shop vouchers are available when the Laravel API is enabled.');
+      return;
+    }
+    if (_loadingVouchers) return;
+
+    setState(() => _loadingVouchers = true);
+    try {
+      final List<RewardVoucherData> vouchers = await loader();
+      if (!mounted) return;
+      _loadedVouchers = vouchers;
+
+      final Map<int, String> sellerNames = <int, String>{
+        for (final MapEntry<int, List<CheckoutItemData>> entry
+            in _groupedItems.entries)
+          entry.key: entry.value.first.seller,
+      };
+      final Map<int, double> sellerSubtotals = <int, double>{
+        for (final MapEntry<int, List<CheckoutItemData>> entry
+            in _groupedItems.entries)
+          entry.key: entry.value.fold<double>(
+            0,
+            (double total, CheckoutItemData item) => total + item.lineTotal,
+          ),
+      };
+      final Map<int, String>? result =
+          await showModalBottomSheet<Map<int, String>>(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            backgroundColor: Colors.transparent,
+            builder: (BuildContext context) => ShopVoucherPicker(
+              vouchers: vouchers,
+              sellerNames: sellerNames,
+              sellerSubtotals: sellerSubtotals,
+              initialCodes: _selectedVoucherCodes,
+            ),
+          );
+      if (!mounted || result == null) return;
+      setState(() {
+        _selectedVoucherCodes
+          ..clear()
+          ..addAll(result);
+      });
+    } catch (error) {
+      if (mounted) _showSnack('Unable to load shop vouchers: $error');
+    } finally {
+      if (mounted) setState(() => _loadingVouchers = false);
+    }
+  }
+
+  Future<void> _loadVoucherMetadata() async {
+    try {
+      final Future<List<RewardVoucherData>> Function()? loader =
+          widget.loadAvailableVouchers;
+      if (loader == null) return;
+      final List<RewardVoucherData> vouchers = await loader();
+      if (!mounted) return;
+      setState(() => _loadedVouchers = vouchers);
+    } catch (_) {
+      // The order request still validates selected vouchers on the server.
+    }
   }
 
   void _handleBack() {
@@ -741,12 +878,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         title: 'Order options',
         child: Column(
           children: [
-            _CheckoutActionRow(
-              icon: Icons.local_offer_outlined,
-              label: 'Shop Voucher',
-              value: widget.appliedVoucherCodes.isEmpty
-                  ? 'Select or enter code'
-                  : widget.appliedVoucherCodes.values.join(', '),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _showSnack(
+                  'Platform vouchers are not available yet.',
+                ),
+                borderRadius: BorderRadius.circular(12),
+                child: const _CheckoutActionRow(
+                  icon: Icons.confirmation_number_outlined,
+                  label: 'Platform Voucher',
+                  value: 'Unavailable',
+                  trailing: Icon(Icons.info_outline_rounded, color: _muted),
+                ),
+              ),
+            ),
+            const Divider(height: 22, color: _border),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _loadingVouchers ? null : _openShopVoucherPicker,
+                borderRadius: BorderRadius.circular(12),
+                child: _CheckoutActionRow(
+                  icon: Icons.local_offer_outlined,
+                  label: 'Shop Voucher',
+                  value: _loadingVouchers
+                      ? 'Loading…'
+                      : _selectedVoucherCodes.isEmpty
+                      ? 'Select or enter code'
+                      : _selectedVoucherCodes.values.join(', '),
+                  trailing: _loadingVouchers
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.chevron_right_rounded,
+                          color: _muted,
+                        ),
+                ),
+              ),
             ),
             const Divider(height: 22, color: _border),
             const _CheckoutActionRow(
@@ -777,6 +949,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               label: 'Merchandise Subtotal',
               value: _peso(_productTotal),
             ),
+            if (_shopVoucherDiscount > 0) ...[
+              const SizedBox(height: 12),
+              _CheckoutAmountRow(
+                label: 'Shop Voucher Discount',
+                value: '-${_peso(_shopVoucherDiscount)}',
+              ),
+            ],
             const SizedBox(height: 12),
             _CheckoutAmountRow(
               label: 'Shipping Subtotal',
@@ -1224,7 +1403,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
           ],
           const SizedBox(height: 16),
-          if (widget.appliedVoucherCodes.isNotEmpty) ...[
+          if (_selectedVoucherCodes.isNotEmpty) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -1233,7 +1412,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Voucher applied: ${widget.appliedVoucherCodes.values.join(', ')}',
+                'Voucher applied: ${_selectedVoucherCodes.values.join(', ')}',
                 style: const TextStyle(
                   color: _primary,
                   fontWeight: FontWeight.w700,
@@ -1244,6 +1423,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
           const Divider(height: 1, color: _border),
           const SizedBox(height: 14),
+          if (_shopVoucherDiscount > 0) ...[
+            _CheckoutAmountRow(
+              label: 'Shop voucher discount',
+              value: '-${_peso(_shopVoucherDiscount)}',
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(
             children: [
               const Expanded(
@@ -1642,11 +1828,13 @@ class _CheckoutActionRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1682,7 +1870,12 @@ class _CheckoutActionRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
-        const Icon(Icons.chevron_right, color: Color(0xFFAAAAAA), size: 20),
+        trailing ??
+            const Icon(
+              Icons.chevron_right,
+              color: Color(0xFFAAAAAA),
+              size: 20,
+            ),
       ],
     );
   }
@@ -2216,6 +2409,7 @@ class CheckoutPlaceOrderRequest {
     required this.addressId,
     required this.couriersBySeller,
     required this.notesBySeller,
+    this.voucherCodes = const <int, String>{},
     this.protectedProductIds = const <int>[],
     this.paymentMethod = 'cod',
   });
@@ -2226,6 +2420,7 @@ class CheckoutPlaceOrderRequest {
   final int addressId;
   final Map<int, int> couriersBySeller;
   final Map<int, String> notesBySeller;
+  final Map<int, String> voucherCodes;
   final List<int> protectedProductIds;
   final String paymentMethod;
 
@@ -2242,6 +2437,10 @@ class CheckoutPlaceOrderRequest {
       'notes': notesBySeller.map(
         (int sellerId, String note) => MapEntry(sellerId.toString(), note),
       ),
+      if (voucherCodes.isNotEmpty)
+        'voucher_codes': voucherCodes.map(
+          (int sellerId, String code) => MapEntry(sellerId.toString(), code),
+        ),
       if (protectedProductIds.isNotEmpty)
         'protected_product_ids': protectedProductIds,
       'payment_method': paymentMethod,

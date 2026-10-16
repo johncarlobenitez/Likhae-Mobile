@@ -279,8 +279,16 @@ class BuyerMobileService {
           expires: (item['expires'] ?? '').toString(),
           campaignName: item['campaign_name']?.toString(),
           sellerName: item['seller_name']?.toString(),
-          canUse: item['can_use'] == true,
+          canUse: item.containsKey('can_use')
+              ? item['can_use'] == true
+              : null,
           sellerId: int.tryParse((item['seller_id'] ?? '').toString()),
+          discountType: item['discount_type']?.toString(),
+          discountAmount: _asDouble(item['discount_value']),
+          minimumOrderAmount: _asDouble(item['minimum_order_amount']),
+          maximumDiscountAmount: item['maximum_discount_amount'] == null
+              ? null
+              : _asDouble(item['maximum_discount_amount']),
         ),
       ),
       voucherHistory: mapRows<VoucherHistoryData>(

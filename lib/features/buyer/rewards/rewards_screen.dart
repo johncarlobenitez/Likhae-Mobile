@@ -70,6 +70,10 @@ class RewardVoucherData {
   final String? campaignName;
   final String? sellerName;
   final int? sellerId;
+  final String? discountType;
+  final double? discountAmount;
+  final double? minimumOrderAmount;
+  final double? maximumDiscountAmount;
 
   /// Optional explicit usability supplied by Laravel.
   ///
@@ -87,6 +91,10 @@ class RewardVoucherData {
     this.campaignName,
     this.sellerName,
     this.sellerId,
+    this.discountType,
+    this.discountAmount,
+    this.minimumOrderAmount,
+    this.maximumDiscountAmount,
     this.canUse,
   });
 }
