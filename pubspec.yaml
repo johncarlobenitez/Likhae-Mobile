@@ -35,6 +35,8 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   dio: ^5.11.1
+  crypto: ^3.0.7
+  flutter_web_auth_2: ^5.1.0
   flutter_secure_storage: ^11.2.0
   provider: ^6.1.5+1
   go_router: ^14.6.3
@@ -76,6 +78,7 @@ flutter:
 
   assets:
     - assets/icons/likhae_ai_logo.png
+    - assets/icons/google_g_logo.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

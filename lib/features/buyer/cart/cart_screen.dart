@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:likhae/core/config/app_config.dart';
 
 class CartItemData {
@@ -217,23 +219,23 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _soft = Color(0xFFF6EFE7);
+  static const Color _soft = ShopColors.soft;
 
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon = Color(0xFF561C17);
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroonDark = Color(0xFF3E130F);
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text = Color(0xFF3B211B);
+  static const Color _text = ShopColors.text;
 
-  static const Color _muted = Color(0xFF987865);
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _brown = Color(0xFF6C4936);
+  static const Color _brown = ShopColors.secondaryText;
 
   static const Color _danger = Color(0xFFB42318);
 
@@ -554,7 +556,7 @@ class _CartScreenState extends State<CartScreen> {
         return AlertDialog(
           backgroundColor: _surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
           title: const Text(
             'Remove item?',
@@ -603,7 +605,7 @@ class _CartScreenState extends State<CartScreen> {
         return AlertDialog(
           backgroundColor: _surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
           title: const Text(
             'Remove selected items?',
@@ -841,67 +843,10 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(7, 5, 12, 7),
-      decoration: const BoxDecoration(
-        color: _background,
-        border: Border(bottom: BorderSide(color: Color(0xFFF0E8DF))),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(context).maybePop();
-                },
-            icon: const Icon(Icons.arrow_back_rounded, color: _text),
-          ),
-
-          const SizedBox(width: 2),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Shopping Cart',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 22,
-                    height: 1.1,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-
-                SizedBox(height: 2),
-
-                Text(
-                  'Select products to continue to checkout',
-                  style: TextStyle(color: _muted, fontSize: 12.5),
-                ),
-              ],
-            ),
-          ),
-
-          TextButton(
-            onPressed: widget.onContinueShopping,
-            child: const Text(
-              'Shop',
-              style: TextStyle(
-                color: _maroon,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar() => ShopPageHeader(
+    title: 'Your bag', subtitle: 'A few good finds, ready for you.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [GlassIconButton(icon: Icons.add_rounded, label: 'Continue shopping', onPressed: widget.onContinueShopping)],
+  );
 
   Widget _buildEmptyCart() {
     return ListView(
@@ -915,7 +860,7 @@ class _CartScreenState extends State<CartScreen> {
             width: 82,
             height: 82,
             decoration: const BoxDecoration(
-              color: Color(0xFFF1E4D7),
+              color: ShopColors.accentSoft,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -935,7 +880,7 @@ class _CartScreenState extends State<CartScreen> {
           style: TextStyle(
             color: _text,
             fontSize: 24,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -980,7 +925,7 @@ class _CartScreenState extends State<CartScreen> {
           style: TextStyle(
             color: _text,
             fontSize: 16,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -1009,7 +954,7 @@ class _CartScreenState extends State<CartScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _border),
       ),
       child: Row(
@@ -1170,90 +1115,104 @@ class _CartScreenState extends State<CartScreen> {
       (CartItemData item) => item.isAvailable,
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Container(
-          padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
-          decoration: BoxDecoration(
-            color: _soft,
-            border: Border.all(color: _border),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: <Widget>[
-              Checkbox(
-                tristate: true,
-                value: groupSelected
-                    ? true
-                    : groupPartiallySelected
-                    ? null
-                    : false,
-                activeColor: _maroon,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: _surface,
+        border: Border.all(
+          color: groupSelected || groupPartiallySelected
+              ? const Color(0xFFD9B99D)
+              : _border,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+            decoration: const BoxDecoration(
+              color: _soft,
+              border: Border(bottom: BorderSide(color: _border)),
+            ),
+            child: Row(
+              children: <Widget>[
+                Checkbox(
+                  tristate: true,
+                  value: groupSelected
+                      ? true
+                      : groupPartiallySelected
+                      ? null
+                      : false,
+                  activeColor: _maroon,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  onChanged: hasAvailableItem
+                      ? (_) {
+                          _toggleSellerGroup(group);
+                        }
+                      : null,
                 ),
-                onChanged: hasAvailableItem
-                    ? (_) {
-                        _toggleSellerGroup(group);
-                      }
-                    : null,
-              ),
-              Container(
-                width: 34,
-                height: 34,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEAD8C7),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.storefront_outlined,
-                  color: _maroon,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      group.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _text,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${group.items.length} ${group.items.length == 1 ? 'item' : 'items'} from this seller',
-                      style: const TextStyle(color: _muted, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-              if (hasAvailableItem)
-                Text(
-                  groupSelected ? 'Selected' : 'Select all',
-                  style: const TextStyle(
-                    color: _brown,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEAD8C7),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.storefront_outlined,
+                    color: _maroon,
+                    size: 18,
                   ),
                 ),
-            ],
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        group.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${group.items.length} ${group.items.length == 1 ? 'item' : 'items'} from this seller',
+                        style: const TextStyle(color: _muted, fontSize: 11.5),
+                      ),
+                    ],
+                  ),
+                ),
+                if (hasAvailableItem)
+                  Text(
+                    groupSelected ? 'Selected' : 'Select all',
+                    style: const TextStyle(
+                      color: _brown,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        for (int index = 0; index < group.items.length; index++) ...<Widget>[
-          if (index > 0) const SizedBox(height: 8),
-          _buildCartItem(group.items[index]),
+          for (int index = 0; index < group.items.length; index++) ...<Widget>[
+            if (index > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Divider(color: ShopColors.border, height: 1),
+              ),
+            _buildCartItem(group.items[index]),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -1295,7 +1254,7 @@ class _CartScreenState extends State<CartScreen> {
                   color: _maroon,
                   fontSize: 12,
                   letterSpacing: 1.6,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
@@ -1500,7 +1459,7 @@ class _CartScreenState extends State<CartScreen> {
                     width: 40,
                     height: 40,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF1E4D7),
+                      color: ShopColors.accentSoft,
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
@@ -1547,7 +1506,7 @@ class _CartScreenState extends State<CartScreen> {
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF1E4D7),
+                                  color: ShopColors.accentSoft,
                                   borderRadius: BorderRadius.circular(100),
                                 ),
                                 child: const Text(
@@ -1556,7 +1515,7 @@ class _CartScreenState extends State<CartScreen> {
                                     color: _maroon,
                                     fontSize: 11,
                                     letterSpacing: 0.5,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ),
@@ -1621,7 +1580,7 @@ class _CartScreenState extends State<CartScreen> {
                 style: const TextStyle(
                   color: _maroon,
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: -0.3,
                 ),
               ),
@@ -1688,7 +1647,7 @@ class _CartScreenState extends State<CartScreen> {
                     style: const TextStyle(
                       color: _maroon,
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
@@ -1787,18 +1746,8 @@ class _CartItemCard extends StatelessWidget {
       opacity: removing ? 0.55 : 1,
       duration: const Duration(milliseconds: 160),
       child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFDF9),
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(
-            color: selected
-                ? const Color(0xFFD9B99D)
-                : unavailable
-                ? const Color(0xFFF0CFC8)
-                : const Color(0xFFEADCCC),
-          ),
-        ),
+        padding: const EdgeInsets.fromLTRB(8, 10, 10, 10),
+        color: unavailable ? const Color(0xFFFFFBF8) : ShopColors.surface,
         child: Column(
           children: [
             Row(
@@ -1806,7 +1755,7 @@ class _CartItemCard extends StatelessWidget {
               children: [
                 Checkbox(
                   value: selected,
-                  activeColor: const Color(0xFF561C17),
+                  activeColor: ShopColors.accent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -1826,9 +1775,9 @@ class _CartItemCard extends StatelessWidget {
                         height: 82,
                         clipBehavior: Clip.antiAlias,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3ECE4),
+                          color: ShopColors.soft,
                           borderRadius: BorderRadius.circular(13),
-                          border: Border.all(color: const Color(0xFFEADCCC)),
+                          border: Border.all(color: ShopColors.border),
                         ),
                         child: _CartProductImage(imageUrl: item.imageUrl),
                       ),
@@ -1848,7 +1797,7 @@ class _CartItemCard extends StatelessWidget {
                                 color: Colors.white,
                                 fontSize: 11.5,
                                 height: 1.2,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1878,7 +1827,7 @@ class _CartItemCard extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        color: Color(0xFF6C4936),
+                                        color: ShopColors.secondaryText,
                                         fontSize: 11.5,
                                         letterSpacing: 0.7,
                                         fontWeight: FontWeight.w800,
@@ -1893,7 +1842,7 @@ class _CartItemCard extends StatelessWidget {
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      color: Color(0xFF3B211B),
+                                      color: ShopColors.text,
                                       fontSize: 14,
                                       height: 1.25,
                                       fontWeight: FontWeight.w800,
@@ -1940,7 +1889,7 @@ class _CartItemCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Color(0xFF987865),
+                            color: ShopColors.muted,
                             fontSize: 12,
                           ),
                         ),
@@ -1954,7 +1903,7 @@ class _CartItemCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Color(0xFFA99386),
+                            color: ShopColors.faint,
                             fontSize: 12,
                           ),
                         ),
@@ -1980,7 +1929,7 @@ class _CartItemCard extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            const Divider(color: Color(0xFFF0E8DF), height: 1),
+            const Divider(color: ShopColors.border, height: 1),
 
             const SizedBox(height: 11),
 
@@ -1997,9 +1946,9 @@ class _CartItemCard extends StatelessWidget {
                           Text(
                             _price(item.price),
                             style: const TextStyle(
-                              color: Color(0xFF561C17),
+                              color: ShopColors.accent,
                               fontSize: 15,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
 
@@ -2008,7 +1957,7 @@ class _CartItemCard extends StatelessWidget {
                             Text(
                               _price(item.oldPrice!),
                               style: const TextStyle(
-                                color: Color(0xFFA99386),
+                                color: ShopColors.faint,
                                 fontSize: 11.5,
                                 decoration: TextDecoration.lineThrough,
                               ),
@@ -2025,7 +1974,7 @@ class _CartItemCard extends StatelessWidget {
                         style: TextStyle(
                           color: unavailable
                               ? const Color(0xFFB42318)
-                              : const Color(0xFFA99386),
+                              : ShopColors.faint,
                           fontSize: 11.5,
                           fontWeight: unavailable
                               ? FontWeight.w700
@@ -2053,7 +2002,7 @@ class _CartItemCard extends StatelessWidget {
               children: [
                 const Text(
                   'Item subtotal',
-                  style: TextStyle(color: Color(0xFF987865), fontSize: 12),
+                  style: TextStyle(color: ShopColors.muted, fontSize: 12),
                 ),
 
                 const Spacer(),
@@ -2061,7 +2010,7 @@ class _CartItemCard extends StatelessWidget {
                 Text(
                   _price(item.lineTotal),
                   style: const TextStyle(
-                    color: Color(0xFF3B211B),
+                    color: ShopColors.text,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2129,8 +2078,8 @@ class _QuantityControl extends StatelessWidget {
             alignment: Alignment.center,
             decoration: const BoxDecoration(
               border: Border(
-                left: BorderSide(color: Color(0xFFEADCCC)),
-                right: BorderSide(color: Color(0xFFEADCCC)),
+                left: BorderSide(color: ShopColors.border),
+                right: BorderSide(color: ShopColors.border),
               ),
             ),
             child: loading
@@ -2139,13 +2088,13 @@ class _QuantityControl extends StatelessWidget {
                     height: 15,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Color(0xFF561C17),
+                      color: ShopColors.accent,
                     ),
                   )
                 : Text(
                     '$quantity',
                     style: const TextStyle(
-                      color: Color(0xFF3B211B),
+                      color: ShopColors.text,
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
@@ -2175,7 +2124,7 @@ class _QuantityControl extends StatelessWidget {
         child: Icon(
           icon,
           size: 15,
-          color: enabled ? const Color(0xFF561C17) : const Color(0xFFC9C2BA),
+          color: enabled ? ShopColors.accent : const Color(0xFFC9C2BA),
         ),
       ),
     );
@@ -2200,9 +2149,9 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ShopColors.border),
       ),
       child: Column(
         children: [
@@ -2217,7 +2166,7 @@ class _SectionCard extends StatelessWidget {
                       Text(
                         title,
                         style: const TextStyle(
-                          color: Color(0xFF3B211B),
+                          color: ShopColors.text,
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2228,7 +2177,7 @@ class _SectionCard extends StatelessWidget {
                       Text(
                         subtitle,
                         style: const TextStyle(
-                          color: Color(0xFF987865),
+                          color: ShopColors.muted,
                           fontSize: 12.5,
                           height: 1.35,
                         ),
@@ -2242,7 +2191,7 @@ class _SectionCard extends StatelessWidget {
             ),
           ),
 
-          const Divider(color: Color(0xFFF0E8DF), height: 1),
+          const Divider(color: ShopColors.border, height: 1),
 
           Padding(padding: const EdgeInsets.all(15), child: child),
         ],
@@ -2264,14 +2213,14 @@ class _SummaryRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(color: Color(0xFF987865), fontSize: 13),
+            style: const TextStyle(color: ShopColors.muted, fontSize: 13),
           ),
         ),
 
         Text(
           value,
           style: const TextStyle(
-            color: Color(0xFF3B211B),
+            color: ShopColors.text,
             fontSize: 13,
             fontWeight: FontWeight.w700,
           ),
@@ -2292,7 +2241,7 @@ class _CartProductImage extends StatelessWidget {
 
     if (url == null || url.isEmpty) {
       return const Center(
-        child: Icon(Icons.image_outlined, color: Color(0xFFA99386), size: 31),
+        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 31),
       );
     }
 
@@ -2313,7 +2262,7 @@ class _CartProductImage extends StatelessWidget {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF561C17),
+                  color: ShopColors.accent,
                 ),
               ),
             );
@@ -2323,7 +2272,7 @@ class _CartProductImage extends StatelessWidget {
             return const Center(
               child: Icon(
                 Icons.broken_image_outlined,
-                color: Color(0xFFA99386),
+                color: ShopColors.faint,
                 size: 31,
               ),
             );

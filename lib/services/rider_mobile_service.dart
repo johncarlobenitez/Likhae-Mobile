@@ -15,10 +15,12 @@ import '../features/rider/profile/rider_profile_screen.dart';
 import 'realtime_service.dart';
 
 class RiderDashboardSnapshot {
+  final String riderName;
   final List<RiderDashboardStatData> stats;
   final List<RiderDashboardParcelData> recentParcels;
 
   const RiderDashboardSnapshot({
+    this.riderName = '',
     required this.stats,
     required this.recentParcels,
   });
@@ -43,9 +45,25 @@ class RiderPickupsSnapshot {
 
 class RiderEarningsSnapshot {
   final List<RiderEarningRowData> rows;
+  final RiderEarningsSummary summary;
+  final String riderName;
   final String notice;
 
-  const RiderEarningsSnapshot({required this.rows, required this.notice});
+  const RiderEarningsSnapshot({
+    required this.rows,
+    required this.summary,
+    this.riderName = '',
+    required this.notice,
+  });
+}
+
+class RiderApiException implements Exception {
+  final String message;
+
+  const RiderApiException(this.message);
+
+  @override
+  String toString() => message;
 }
 
 class RiderMobileService {
@@ -55,11 +73,19 @@ class RiderMobileService {
     String endpoint, {
     int page = 1,
   }) async {
-    final Response<dynamic> response = await ApiClient.get(
-      AppConfig.resolveApiUrl(endpoint),
-      queryParameters: <String, dynamic>{'page': page, 'per_page': 100},
-    );
-    return _requirePayload(response);
+    try {
+      final Response<dynamic> response = await ApiClient.get(
+        AppConfig.resolveApiUrl(endpoint),
+        queryParameters: <String, dynamic>{'page': page, 'per_page': 20},
+        // The tunnel shares the origin with the web app. Allow a slow origin
+        // to finish, without retrying writes or sending duplicate requests.
+        options: Options(receiveTimeout: const Duration(seconds: 60)),
+      );
+      return _requirePayload(response);
+    } on DioException catch (error) {
+      final String requestPath = error.requestOptions.uri.path;
+      throw RiderApiException('$requestPath: ${ApiClient.formatError(error)}');
+    }
   }
 
   static Future<List<dynamic>> _getRows(String endpoint) async {
@@ -89,7 +115,7 @@ class RiderMobileService {
       final String message = body is Map && body['message'] != null
           ? body['message'].toString()
           : 'Rider API request failed (HTTP $statusCode).';
-      throw Exception(message);
+      throw RiderApiException(message);
     }
     if (response.data is! Map) {
       throw const FormatException('Invalid response from the rider API.');
@@ -120,15 +146,17 @@ class RiderMobileService {
       'dashboard',
     );
     return RiderDashboardSnapshot(
+      riderName: data['rider'] is Map
+          ? (data['rider']['name'] ?? '').toString()
+          : '',
       stats: _maps(
         data['stats'] ?? <dynamic>[],
         'dashboard stats',
       ).map(RiderDashboardStatData.fromApi).toList(growable: false),
-      recentParcels:
-          _maps(data['recent_parcels'] ?? <dynamic>[], 'recent parcels')
-              .map(_withResolvedImage)
-              .map(RiderDashboardParcelData.fromApi)
-              .toList(growable: false),
+      recentParcels: _maps(
+        data['recent_parcels'] ?? <dynamic>[],
+        'recent parcels',
+      ).map(RiderDashboardParcelData.fromApi).toList(growable: false),
     );
   }
 
@@ -145,7 +173,6 @@ class RiderMobileService {
       deliveries: rawRows
           .whereType<Map>()
           .map((Map row) => Map<String, dynamic>.from(row))
-          .map(_withResolvedImage)
           .map(RiderDeliveryData.fromApi)
           .toList(growable: false),
       stats: RiderDeliveryStatsData.fromApi(
@@ -166,7 +193,6 @@ class RiderMobileService {
       pickups: rawRows
           .whereType<Map>()
           .map((Map row) => Map<String, dynamic>.from(row))
-          .map(_withResolvedImage)
           .map(RiderPickupData.fromApi)
           .toList(growable: false),
       stats: data['stats'] is Map
@@ -177,30 +203,45 @@ class RiderMobileService {
     );
   }
 
+  static Future<RiderPickupData?> fetchPickupBatch(int batchId) async {
+    final RiderPickupsSnapshot snapshot = await fetchPickups();
+    for (final RiderPickupData pickup in snapshot.pickups) {
+      if (pickup.id == batchId) return pickup;
+    }
+    return null;
+  }
+
   static Future<List<RiderHistoryData>> fetchHistory() async {
     return (await _getRows('rider/history'))
         .whereType<Map>()
         .map((Map row) => Map<String, dynamic>.from(row))
-        .map(_withResolvedImage)
         .map(RiderHistoryData.fromApi)
         .toList(growable: false);
   }
 
   static Future<RiderEarningsSnapshot> fetchEarnings() async {
     final Map<String, dynamic> payload = await _getPayload('rider/earnings');
-    final dynamic rawData = payload['data'];
-    final Map<String, dynamic> data = rawData is Map
-        ? Map<String, dynamic>.from(rawData)
+    final Map<String, dynamic> data = payload['data'] is Map
+        ? Map<String, dynamic>.from(payload['data'] as Map)
         : payload;
-    final List<dynamic> rows = data['records'] is List
-        ? data['records'] as List<dynamic>
-        : _rowsFromPayload(payload);
+    final List<RiderEarningRowData> rows =
+        (await _getAllRows('rider/earnings', payload))
+            .whereType<Map>()
+            .map(
+              (row) =>
+                  RiderEarningRowData.fromApi(Map<String, dynamic>.from(row)),
+            )
+            .toList(growable: false);
     return RiderEarningsSnapshot(
-      rows: rows
-          .whereType<Map>()
-          .map((Map row) => Map<String, dynamic>.from(row))
-          .map(RiderEarningRowData.fromApi)
-          .toList(growable: false),
+      rows: rows,
+      summary: data['summary'] is Map
+          ? RiderEarningsSummary.fromApi(
+              Map<String, dynamic>.from(data['summary'] as Map),
+            )
+          : RiderEarningsSummary.fromRows(rows),
+      riderName: data['rider'] is Map
+          ? (data['rider']['name'] ?? '').toString()
+          : '',
       notice: (data['notice'] ?? '').toString(),
     );
   }
@@ -301,9 +342,9 @@ class RiderMobileService {
   static Stream<RiderMessageData> watchMessages(
     RiderConversationData conversation,
   ) async* {
-    final Set<String> knownIds = (await fetchMessages(conversation))
-        .map((RiderMessageData message) => message.id)
-        .toSet();
+    final Set<String> knownIds = (await fetchMessages(
+      conversation,
+    )).map((RiderMessageData message) => message.id).toSet();
     RealtimeSubscription? subscription;
     try {
       subscription = await LikhaeRealtimeService.subscribe(
@@ -318,7 +359,8 @@ class RiderMobileService {
           conversationId: (event.data['conversation_id'] ?? conversation.id)
               .toString(),
           body: (event.data['body'] ?? '').toString(),
-          sentAt: DateTime.tryParse((event.data['sent_at'] ?? '').toString()) ??
+          sentAt:
+              DateTime.tryParse((event.data['sent_at'] ?? '').toString()) ??
               DateTime.now(),
           fromRider: false,
         );
@@ -326,7 +368,9 @@ class RiderMobileService {
     } catch (_) {
       while (true) {
         await Future<void>.delayed(const Duration(seconds: 5));
-        for (final RiderMessageData message in await fetchMessages(conversation)) {
+        for (final RiderMessageData message in await fetchMessages(
+          conversation,
+        )) {
           if (knownIds.add(message.id)) yield message;
         }
       }
@@ -415,12 +459,67 @@ class RiderMobileService {
     required int assignmentId,
     required double latitude,
     required double longitude,
+    required double accuracy,
+    required DateTime recordedAt,
   }) async {
     final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl(
-        'rider/assignments/$assignmentId/location',
-      ),
-      <String, dynamic>{'latitude': latitude, 'longitude': longitude},
+      AppConfig.resolveApiUrl('rider/assignments/$assignmentId/location'),
+      <String, dynamic>{
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy,
+        'recorded_at': recordedAt.toUtc().toIso8601String(),
+      },
+    );
+    _requirePayload(response);
+  }
+
+  static Future<void> acceptPickupBatch(int batchId) async {
+    await _postPickupBatchAction(batchId, 'accept');
+  }
+
+  static Future<void> startPickupBatch(int batchId) async {
+    await _postPickupBatchAction(batchId, 'start');
+  }
+
+  static Future<void> scanPickupBatch(
+    int batchId,
+    String trackingCode, {
+    String scanMethod = 'MANUAL',
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('rider/pickups/batches/$batchId/scan'),
+      <String, dynamic>{
+        'tracking_code': trackingCode.trim(),
+        'scan_method': scanMethod,
+      },
+    );
+    _requirePayload(response);
+  }
+
+  static Future<void> markPickupNotCollected({
+    required int batchId,
+    required int assignmentId,
+    required String reason,
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('rider/pickups/batches/$batchId/not-collected'),
+      <String, dynamic>{
+        'rider_assignment_id': assignmentId,
+        'reason': reason.trim(),
+      },
+    );
+    _requirePayload(response);
+  }
+
+  static Future<void> finishPickupBatch(int batchId) async {
+    await _postPickupBatchAction(batchId, 'finish');
+  }
+
+  static Future<void> _postPickupBatchAction(int batchId, String action) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('rider/pickups/batches/$batchId/$action'),
+      <String, dynamic>{},
     );
     _requirePayload(response);
   }
@@ -447,13 +546,21 @@ class RiderMobileService {
       await sendAction('accept');
       currentStatus = 'ACCEPTED';
     }
+
+    final String targetStatus = request.status.trim().toLowerCase();
+    if (targetStatus == 'accepted' && currentStatus == 'ACCEPTED') return;
+
     if (currentStatus == 'ACCEPTED') {
+      if (targetStatus == 'accepted') return;
       await sendAction('start');
       currentStatus = 'IN_PROGRESS';
     }
 
-    if (request.status.trim().toLowerCase() != 'picked_up' ||
-        currentStatus != 'IN_PROGRESS') {
+    if (targetStatus == 'in_progress' && currentStatus == 'IN_PROGRESS') {
+      return;
+    }
+
+    if (targetStatus != 'picked_up' || currentStatus != 'IN_PROGRESS') {
       throw FormatException(
         'Pickup cannot transition from $currentStatus to ${request.status}.',
       );
@@ -507,16 +614,5 @@ class RiderMobileService {
       }
     }
     throw const FormatException('Invalid list response from the rider API.');
-  }
-
-  static Map<String, dynamic> _withResolvedImage(Map<String, dynamic> row) {
-    final dynamic image = row['image_url'] ?? row['image'];
-    if (image == null) {
-      return row;
-    }
-    return <String, dynamic>{
-      ...row,
-      'image_url': AppConfig.resolveMediaUrl(image.toString()),
-    };
   }
 }

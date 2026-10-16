@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../rider_product_image.dart';
+
 class RiderHistoryData {
   final int? id;
   final String trackingCode;
@@ -47,10 +49,7 @@ class RiderHistoryData {
       failureReason: _nullableString(
         json['failure_reason'],
       ),
-      imageUrl: _nullableString(
-        json['image'] ??
-            json['image_url'],
-      ),
+      imageUrl: riderProductImageUrl(json),
     );
   }
 

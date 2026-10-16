@@ -80,6 +80,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
   static const Color _background = Color(0xFFFBF7F2);
   static const Color _surface = Color(0xFFFFFDF9);
   static const Color _soft = Color(0xFFF6EFE7);
+  static const Color _selectedRow = Color(0xFFF3E4DC);
   static const Color _border = Color(0xFFEADCCC);
   static const Color _maroon = Color(0xFF561C17);
   static const Color _text = Color(0xFF3B211B);
@@ -355,56 +356,89 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
             )
           : ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 110),
+              padding: const EdgeInsets.fromLTRB(4, 10, 4, 110),
               itemCount: _conversations.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 5),
               itemBuilder: (BuildContext context, int index) {
                 final RiderConversationData conversation =
                     _conversations[index];
+                final bool highlighted =
+                    index == 0 || conversation.unreadCount > 0;
                 return Material(
-                  color: _surface,
+                  color: highlighted ? _selectedRow : Colors.transparent,
                   borderRadius: BorderRadius.circular(15),
                   child: InkWell(
                     onTap: () => _openConversation(conversation),
                     borderRadius: BorderRadius.circular(15),
                     child: Padding(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       child: Row(
                         children: [
-                          CircleAvatar(
-                            backgroundColor: _soft,
-                            foregroundColor: _maroon,
-                            child: Text(
-                              _initials(conversation.buyerName),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
+                          PhysicalShape(
+                            clipper: _OctagonClipper(),
+                            color: _maroon,
+                            elevation: 3,
+                            shadowColor: _maroon.withValues(alpha: 0.22),
+                            child: SizedBox(
+                              width: 38,
+                              height: 38,
+                              child: Center(
+                                child: Text(
+                                  _initials(conversation.buyerName),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 11),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  conversation.buyerName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: _text,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        conversation.buyerName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _text,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _formatRelativeTime(
+                                        conversation.lastMessageAt,
+                                      ),
+                                      maxLines: 1,
+                                      style: const TextStyle(
+                                        color: _muted,
+                                        fontSize: 9,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 5),
                                 Text(
-                                  conversation.orderId == null
-                                      ? conversation.lastMessage
-                                      : 'Order ${conversation.orderId} · ${conversation.lastMessage}',
+                                  conversation.lastMessage.isEmpty
+                                      ? 'No messages yet'
+                                      : conversation.lastMessage,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
                                     color: _muted,
-                                    fontSize: 12,
+                                    fontSize: 10.5,
                                   ),
                                 ),
                               ],
@@ -611,4 +645,41 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
     final String minute = local.minute.toString().padLeft(2, '0');
     return '$hour:$minute ${local.hour >= 12 ? 'PM' : 'AM'}';
   }
+
+  static String _formatRelativeTime(DateTime? value) {
+    if (value == null) return '';
+    final Duration age = DateTime.now().difference(value);
+    if (age.inMinutes < 1) return 'Just now';
+    if (age.inHours < 1) return '${age.inMinutes}m ago';
+    if (age.inDays < 1) {
+      final int hours = age.inHours;
+      return '$hours ${hours == 1 ? 'hour' : 'hours'} ago';
+    }
+    if (age.inDays < 7) {
+      final int days = age.inDays;
+      return '$days ${days == 1 ? 'day' : 'days'} ago';
+    }
+    final DateTime local = value.toLocal();
+    return '${local.month}/${local.day}/${local.year}';
+  }
+}
+
+class _OctagonClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final double cut = size.shortestSide * 0.24;
+    return Path()
+      ..moveTo(cut, 0)
+      ..lineTo(size.width - cut, 0)
+      ..lineTo(size.width, cut)
+      ..lineTo(size.width, size.height - cut)
+      ..lineTo(size.width - cut, size.height)
+      ..lineTo(cut, size.height)
+      ..lineTo(0, size.height - cut)
+      ..lineTo(0, cut)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(covariant _OctagonClipper oldClipper) => false;
 }

@@ -436,6 +436,8 @@ class _RiderDeliveryTrackingScreenState
         assignmentId: assignmentId,
         latitude: position.latitude,
         longitude: position.longitude,
+        accuracy: position.accuracy,
+        recordedAt: position.timestamp,
       );
       _lastSyncedRiderLocation = location;
       _locationSyncErrorShown = false;

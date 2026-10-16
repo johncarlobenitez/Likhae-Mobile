@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:likhae/core/config/app_config.dart';
 
 typedef ProductActionCallback =
@@ -736,25 +738,25 @@ class ProductDetailsScreen extends StatefulWidget {
 }
 
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon = Color(0xFF561C17);
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroonDark = Color(0xFF3E130F);
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text = Color(0xFF3B211B);
+  static const Color _text = ShopColors.text;
 
-  static const Color _brown = Color(0xFF6C4936);
+  static const Color _brown = ShopColors.secondaryText;
 
-  static const Color _muted = Color(0xFF987865);
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _muted2 = Color(0xFFA99386);
+  static const Color _muted2 = ShopColors.faint;
 
-  static const Color _tan = Color(0xFFC19771);
+  static const Color _tan = ShopColors.tan;
 
   static const Color _star = Color(0xFFC88418);
 
@@ -1347,7 +1349,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               style: TextStyle(
                                 color: _text,
                                 fontSize: 19,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1373,7 +1375,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             height: 92,
                             clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF3ECE4),
+                              color: ShopColors.soft,
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: _border),
                             ),
@@ -1396,7 +1398,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   style: const TextStyle(
                                     color: _maroon,
                                     fontSize: 24,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                                 const SizedBox(height: 7),
@@ -1441,7 +1443,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   style: const TextStyle(
                                     color: _brown,
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -1584,7 +1586,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                       '$_quantity',
                                       style: const TextStyle(
                                         color: _text,
-                                        fontWeight: FontWeight.w900,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                   ),
@@ -1634,7 +1636,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           ),
                           child: Text(
                             actionLabel,
-                            style: TextStyle(fontWeight: FontWeight.w900),
+                            style: TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
                       ),
@@ -1797,91 +1799,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      height: 62,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      decoration: const BoxDecoration(
-        color: _background,
-        border: Border(bottom: BorderSide(color: Color(0xFFF0E6DC))),
+  Widget _buildTopBar() => ShopPageHeader(
+    title: 'A closer look', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [
+      if (_updatingWishlist) const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+      else GlassIconButton(
+        icon: _wishlisted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+        label: _wishlisted ? 'Remove from wishlist' : 'Save to wishlist', onPressed: _toggleWishlist,
       ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(context).maybePop();
-                },
-            icon: const Icon(Icons.arrow_back_rounded, color: _text, size: 22),
-          ),
-
-          const SizedBox(width: 2),
-
-          const Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Product Details',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.25,
-                  ),
-                ),
-
-                SizedBox(height: 1),
-
-                Text(
-                  'LIKHAE Marketplace',
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          IconButton(
-            tooltip: 'Wishlist',
-            onPressed: _updatingWishlist ? null : _toggleWishlist,
-            icon: _updatingWishlist
-                ? const SizedBox(
-                    width: 19,
-                    height: 19,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _maroon,
-                    ),
-                  )
-                : Icon(
-                    _wishlisted
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    color: _maroon,
-                    size: 21,
-                  ),
-          ),
-
-          IconButton(
-            tooltip: 'Cart',
-            onPressed: widget.onCart,
-            icon: const Icon(
-              Icons.shopping_bag_outlined,
-              color: _maroon,
-              size: 21,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+      GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Cart', onPressed: widget.onCart),
+    ],
+  );
 
   Widget _buildBreadcrumb() {
     final String category = _product.category?.trim() ?? '';
@@ -1942,7 +1870,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
@@ -1957,12 +1885,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           AspectRatio(
             aspectRatio: 1.03,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(17),
+              borderRadius: BorderRadius.circular(20),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   Container(
-                    color: const Color(0xFFF3ECE4),
+                    color: ShopColors.soft,
                     child: images.isEmpty
                         ? const Center(
                             child: Icon(
@@ -2004,7 +1932,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             color: Colors.white,
                             fontSize: 10.5,
                             letterSpacing: 0.4,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -2090,7 +2018,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
@@ -2116,7 +2044,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   color: _maroon,
                   fontSize: 9.5,
                   letterSpacing: 0.9,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -2228,7 +2156,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   fontSize: 25,
                   height: 1,
                   letterSpacing: -0.6,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
@@ -2298,7 +2226,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               color: _brown,
               fontSize: 10,
               letterSpacing: 0.8,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -2414,7 +2342,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   color: _brown,
                   fontSize: 10,
                   letterSpacing: 0.8,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
@@ -2447,7 +2375,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             style: const TextStyle(
               color: _text,
               fontSize: 12,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -2525,7 +2453,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         'Add to Cart',
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
               ),
@@ -2565,7 +2493,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
               ),
@@ -2620,7 +2548,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _border),
       ),
       child: LayoutBuilder(
@@ -2652,7 +2580,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   : _muted,
                               fontSize: 9.5,
                               letterSpacing: 0.8,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
@@ -2678,7 +2606,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       style: const TextStyle(
                         color: _text,
                         fontSize: 12.5,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
@@ -2939,7 +2867,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _border),
       ),
       child: Column(
@@ -2958,7 +2886,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         color: _maroon,
                         fontSize: 9.5,
                         letterSpacing: 1.2,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
@@ -2969,7 +2897,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       style: TextStyle(
                         color: _text,
                         fontSize: 15,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
@@ -2985,7 +2913,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       color: _maroon,
                       fontSize: 24,
                       height: 1,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
 
@@ -3050,7 +2978,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             color: _maroon,
             fontSize: 9.5,
             letterSpacing: 1.4,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -3211,7 +3139,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         'Add to Cart',
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
               ),
@@ -3251,7 +3179,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
               ),
@@ -3304,9 +3232,9 @@ class _EditorialCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: ShopColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3314,10 +3242,10 @@ class _EditorialCard extends StatelessWidget {
           Text(
             eyebrow,
             style: const TextStyle(
-              color: Color(0xFF561C17),
+              color: ShopColors.accent,
               fontSize: 9.5,
               letterSpacing: 1.2,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -3326,9 +3254,9 @@ class _EditorialCard extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              color: Color(0xFF3B211B),
+              color: ShopColors.text,
               fontSize: 15,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -3365,7 +3293,7 @@ class _SmallInfoTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(9),
           ),
           alignment: Alignment.center,
-          child: Icon(icon, color: const Color(0xFF561C17), size: 15),
+          child: Icon(icon, color: ShopColors.accent, size: 15),
         ),
 
         const SizedBox(width: 8),
@@ -3377,7 +3305,7 @@ class _SmallInfoTile extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color: Color(0xFF3B211B),
+                  color: ShopColors.text,
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                 ),
@@ -3388,7 +3316,7 @@ class _SmallInfoTile extends StatelessWidget {
               Text(
                 body,
                 style: const TextStyle(
-                  color: Color(0xFF987865),
+                  color: ShopColors.muted,
                   fontSize: 9.5,
                   height: 1.45,
                 ),
@@ -3437,7 +3365,7 @@ class _QuantityButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: enabled ? const Color(0xFFFFFDF9) : const Color(0xFFF3ECE4),
+      color: enabled ? ShopColors.surface : ShopColors.soft,
       borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: enabled ? onTap : null,
@@ -3448,11 +3376,11 @@ class _QuantityButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: const Color(0xFFEADCCC)),
+            border: Border.all(color: ShopColors.border),
           ),
           child: Icon(
             icon,
-            color: enabled ? const Color(0xFF561C17) : const Color(0xFFA99386),
+            color: enabled ? ShopColors.accent : ShopColors.faint,
             size: 17,
           ),
         ),
@@ -3477,7 +3405,7 @@ class _SellerAvatar extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(13),
         color: const Color(0xFF6A2019),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: ShopColors.border),
       ),
       child: url == null || url.trim().isEmpty
           ? _SellerInitial(value: product.sellerInitial)
@@ -3548,7 +3476,7 @@ class _ReviewCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: showDivider
-            ? const Border(bottom: BorderSide(color: Color(0xFFF0E8DF)))
+            ? const Border(bottom: BorderSide(color: ShopColors.border))
             : null,
       ),
       child: Row(
@@ -3570,7 +3498,7 @@ class _ReviewCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFF3B211B),
+                          color: ShopColors.text,
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -3581,7 +3509,7 @@ class _ReviewCard extends StatelessWidget {
                       Text(
                         review.date,
                         style: const TextStyle(
-                          color: Color(0xFFA99386),
+                          color: ShopColors.faint,
                           fontSize: 9.5,
                         ),
                       ),
@@ -3608,7 +3536,7 @@ class _ReviewCard extends StatelessWidget {
                   Text(
                     review.body,
                     style: const TextStyle(
-                      color: Color(0xFF6C4936),
+                      color: ShopColors.secondaryText,
                       fontSize: 10.5,
                       height: 1.5,
                     ),
@@ -3622,7 +3550,7 @@ class _ReviewCard extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.photo_outlined,
-                        color: Color(0xFF987865),
+                        color: ShopColors.muted,
                         size: 13,
                       ),
 
@@ -3631,7 +3559,7 @@ class _ReviewCard extends StatelessWidget {
                       Text(
                         'Review includes a photo',
                         style: TextStyle(
-                          color: Color(0xFF987865),
+                          color: ShopColors.muted,
                           fontSize: 9.5,
                         ),
                       ),
@@ -3662,16 +3590,16 @@ class _ReviewAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        color: Color(0xFFF1E4D7),
+        color: ShopColors.accentSoft,
       ),
       child: url == null || url.trim().isEmpty
           ? Center(
               child: Text(
                 review.buyerInitial,
                 style: const TextStyle(
-                  color: Color(0xFF561C17),
+                  color: ShopColors.accent,
                   fontSize: 11,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             )
@@ -3684,9 +3612,9 @@ class _ReviewAvatar extends StatelessWidget {
                       child: Text(
                         review.buyerInitial,
                         style: const TextStyle(
-                          color: Color(0xFF561C17),
+                          color: ShopColors.accent,
                           fontSize: 11,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     );
@@ -3707,7 +3635,7 @@ class _RelatedProductCard extends StatelessWidget {
     final List<String> images = product.galleryImages;
 
     return Material(
-      color: const Color(0xFFFFFDF9),
+      color: ShopColors.surface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -3715,7 +3643,7 @@ class _RelatedProductCard extends StatelessWidget {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFEADCCC)),
+            border: Border.all(color: ShopColors.border),
             borderRadius: BorderRadius.circular(15),
           ),
           child: Column(
@@ -3725,11 +3653,11 @@ class _RelatedProductCard extends StatelessWidget {
                 aspectRatio: 1,
                 child: Container(
                   width: double.infinity,
-                  color: const Color(0xFFF3ECE4),
+                  color: ShopColors.soft,
                   child: images.isEmpty
                       ? const Icon(
                           Icons.inventory_2_outlined,
-                          color: Color(0xFFA99386),
+                          color: ShopColors.faint,
                         )
                       : _ProductImage(url: images.first),
                 ),
@@ -3746,7 +3674,7 @@ class _RelatedProductCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFF6C4936),
+                          color: ShopColors.secondaryText,
                           fontSize: 10,
                           letterSpacing: 0.6,
                           fontWeight: FontWeight.w800,
@@ -3761,7 +3689,7 @@ class _RelatedProductCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF3B211B),
+                        color: ShopColors.text,
                         fontSize: 13,
                         height: 1.3,
                         fontWeight: FontWeight.w800,
@@ -3773,9 +3701,9 @@ class _RelatedProductCard extends StatelessWidget {
                     Text(
                       _ProductDetailsScreenState._formatPrice(product.price),
                       style: const TextStyle(
-                        color: Color(0xFF561C17),
+                        color: ShopColors.accent,
                         fontSize: 14,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
@@ -3795,7 +3723,7 @@ class _RelatedProductCard extends StatelessWidget {
                           Text(
                             product.rating!.toStringAsFixed(1),
                             style: const TextStyle(
-                              color: Color(0xFF6C4936),
+                              color: ShopColors.secondaryText,
                               fontSize: 10,
                             ),
                           ),
@@ -3809,7 +3737,7 @@ class _RelatedProductCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: Color(0xFF987865),
+                              color: ShopColors.muted,
                               fontSize: 10,
                             ),
                           ),
@@ -3840,7 +3768,7 @@ class _ProductImage extends StatelessWidget {
       return const Center(
         child: Icon(
           Icons.inventory_2_outlined,
-          color: Color(0xFFA99386),
+          color: ShopColors.faint,
           size: 38,
         ),
       );
@@ -3865,7 +3793,7 @@ class _ProductImage extends StatelessWidget {
                 height: 23,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF561C17),
+                  color: ShopColors.accent,
                 ),
               ),
             );
@@ -3875,7 +3803,7 @@ class _ProductImage extends StatelessWidget {
             return const Center(
               child: Icon(
                 Icons.broken_image_outlined,
-                color: Color(0xFFA99386),
+                color: ShopColors.faint,
                 size: 38,
               ),
             );

@@ -19,7 +19,7 @@ class RiderApiLoader<T> extends StatefulWidget {
     super.key,
     required this.load,
     required this.builder,
-    this.refreshInterval,
+    this.refreshInterval = const Duration(seconds: 30),
   });
 
   @override
@@ -82,7 +82,8 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
       return;
     }
     _refreshTimer = Timer.periodic(interval, (_) {
-      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+          ModalRoute.of(context)?.isCurrent != false) {
         unawaited(_refresh());
       }
     });
@@ -110,13 +111,85 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
         if (snapshot.hasData) {
           _data = snapshot.data;
         }
-        return widget.builder(
-          context,
-          _data,
-          snapshot.error ?? _error,
-          _refresh,
-        );
+
+        if (_data == null &&
+            snapshot.connectionState == ConnectionState.waiting) {
+          return _statusPage(
+            children: const <Widget>[
+              SizedBox(
+                width: 30,
+                height: 30,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF561C17),
+                  strokeWidth: 3,
+                  semanticsLabel: 'Loading rider data',
+                ),
+              ),
+              SizedBox(height: 14),
+              Text('Loading rider data...', textAlign: TextAlign.center),
+            ],
+          );
+        }
+
+        final Object? error = snapshot.error ?? _error;
+        if (_data == null && error != null) {
+          return _statusPage(
+            children: <Widget>[
+              const Icon(
+                Icons.cloud_off_rounded,
+                size: 36,
+                color: Color(0xFF561C17),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Unable to load rider data',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF3B211B),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error.toString().replaceFirst('Exception: ', ''),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () => unawaited(_refresh()),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          );
+        }
+
+        return widget.builder(context, _data, error, _refresh);
       },
+    );
+  }
+
+  Widget _statusPage({required List<Widget> children}) {
+    // These states replace the screen's Scaffold, so provide a Material text
+    // style here too (otherwise Flutter shows its red/yellow fallback style).
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(28),
+            child: DefaultTextStyle(
+              style: const TextStyle(
+                color: Color(0xFF987865),
+                fontSize: 14,
+                height: 1.5,
+                decoration: TextDecoration.none,
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: children),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

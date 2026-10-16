@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/core/config/app_config.dart';
 
@@ -255,25 +257,25 @@ class MessagesScreen extends StatefulWidget {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _backgroundSoft = Color(0xFFF6EFE7);
+  static const Color _backgroundSoft = ShopColors.soft;
 
-  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon = Color(0xFF561C17);
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroonDark = Color(0xFF3E130F);
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text = Color(0xFF3B211B);
+  static const Color _text = ShopColors.text;
 
-  static const Color _muted = Color(0xFF987865);
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _muted2 = Color(0xFFA99386);
+  static const Color _muted2 = ShopColors.faint;
 
-  static const Color _tan = Color(0xFFC19771);
+  static const Color _tan = ShopColors.tan;
 
   static const Color _danger = Color(0xFFB42318);
 
@@ -1296,7 +1298,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: _surface,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: _border),
                 boxShadow: <BoxShadow>[
                   BoxShadow(
@@ -1355,60 +1357,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  Widget _buildPageHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(4, 0, 8, 0),
-      constraints: const BoxConstraints(minHeight: 56),
-      decoration: const BoxDecoration(
-        color: _background,
-        border: Border(bottom: BorderSide(color: _border)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(context).maybePop();
-                },
-            icon: const Icon(Icons.arrow_back_rounded, color: _text),
-          ),
-
-          const Expanded(
-            child: Text(
-              'Messages',
-              style: TextStyle(
-                color: _text,
-                fontSize: 19,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          if (_refreshingConversations)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: _maroon,
-                ),
-              ),
-            )
-          else
-            IconButton(
-              tooltip: 'Refresh conversations',
-              onPressed: widget.onRefreshConversations == null
-                  ? null
-                  : _refreshConversations,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _buildPageHeader() => ShopPageHeader(
+    title: 'Conversations', subtitle: 'A little closer to your sellers.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [
+      if (_refreshingConversations) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+      else GlassIconButton(icon: Icons.refresh_rounded, label: 'Refresh conversations',
+        onPressed: widget.onRefreshConversations == null ? null : _refreshConversations),
+    ],
+  );
 
   Widget _buildConversationPanel({bool mobile = false}) {
     return Container(
@@ -1428,7 +1384,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 style: TextStyle(
                   color: _text,
                   fontSize: 17,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -1617,7 +1573,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           style: TextStyle(
             color: _text,
             fontSize: 21,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
         SizedBox(height: 8),
@@ -1732,7 +1688,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         style: const TextStyle(
                           color: _text,
                           fontSize: 18,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1766,7 +1722,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       color: _maroon,
                       fontSize: 10.5,
                       letterSpacing: 0.4,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -1871,7 +1827,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   style: const TextStyle(
                     color: _text,
                     fontSize: 18,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
 
@@ -2011,7 +1967,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               style: TextStyle(
                 color: _text,
                 fontSize: 17,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
               ),
             ),
 
@@ -2273,7 +2229,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 style: const TextStyle(
                   color: _text,
                   fontSize: 19,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
@@ -2344,7 +2300,7 @@ class _DemoConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFFFFFDF9),
+      color: ShopColors.surface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -2370,10 +2326,10 @@ class _DemoConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: const Color(0xFF3B211B),
+                              color: ShopColors.text,
                               fontSize: 14,
                               fontWeight: conversation.unread > 0
-                                  ? FontWeight.w900
+                                  ? FontWeight.w800
                                   : FontWeight.w800,
                             ),
                           ),
@@ -2384,7 +2340,7 @@ class _DemoConversationTile extends StatelessWidget {
                         Text(
                           conversation.time,
                           style: const TextStyle(
-                            color: Color(0xFFA99386),
+                            color: ShopColors.faint,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -2402,7 +2358,7 @@ class _DemoConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: const Color(0xFF987865),
+                              color: ShopColors.muted,
                               fontSize: 12.5,
                               fontWeight: conversation.unread > 0
                                   ? FontWeight.w700
@@ -2422,7 +2378,7 @@ class _DemoConversationTile extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                             alignment: Alignment.center,
                             decoration: const BoxDecoration(
-                              color: Color(0xFF561C17),
+                              color: ShopColors.accent,
                               shape: BoxShape.circle,
                             ),
                             child: Text(
@@ -2430,7 +2386,7 @@ class _DemoConversationTile extends StatelessWidget {
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10.5,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -2471,12 +2427,12 @@ class _DemoMessageBubble extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
                 decoration: BoxDecoration(
                   color: message.fromBuyer
-                      ? const Color(0xFF561C17)
-                      : const Color(0xFFFFFDF9),
+                      ? ShopColors.accent
+                      : ShopColors.surface,
                   border: Border.all(
                     color: message.fromBuyer
-                        ? const Color(0xFF561C17)
-                        : const Color(0xFFEADCCC),
+                        ? ShopColors.accent
+                        : ShopColors.border,
                   ),
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -2512,7 +2468,7 @@ class _DemoMessageBubble extends StatelessWidget {
                         style: TextStyle(
                           color: message.fromBuyer
                               ? Colors.white
-                              : const Color(0xFF3B211B),
+                              : ShopColors.text,
                           fontSize: 14,
                           height: 1.45,
                           fontWeight: FontWeight.w500,
@@ -2526,7 +2482,7 @@ class _DemoMessageBubble extends StatelessWidget {
                       style: TextStyle(
                         color: message.fromBuyer
                             ? Colors.white70
-                            : const Color(0xFF987865),
+                            : ShopColors.muted,
                         fontSize: 10,
                       ),
                     ),
@@ -2555,11 +2511,11 @@ class _DemoAvatar extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF561C17),
+        color: ShopColors.accent,
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: const Color(0xFF561C17).withValues(alpha: 0.12),
+            color: ShopColors.accent.withValues(alpha: 0.12),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2570,7 +2526,7 @@ class _DemoAvatar extends StatelessWidget {
         style: TextStyle(
           color: Colors.white,
           fontSize: size >= 44 ? 14 : 10,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -2593,7 +2549,7 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? const Color(0xFFF3E4DE) : const Color(0xFFFFFDF9),
+      color: selected ? const Color(0xFFF3E4DE) : ShopColors.surface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -2619,10 +2575,10 @@ class _ConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: const Color(0xFF3B211B),
+                              color: ShopColors.text,
                               fontSize: 13.5,
                               fontWeight: conversation.unread > 0
-                                  ? FontWeight.w900
+                                  ? FontWeight.w800
                                   : FontWeight.w800,
                             ),
                           ),
@@ -2634,7 +2590,7 @@ class _ConversationTile extends StatelessWidget {
                           Text(
                             conversation.time,
                             style: const TextStyle(
-                              color: Color(0xFFA99386),
+                              color: ShopColors.faint,
                               fontSize: 10.5,
                             ),
                           ),
@@ -2654,7 +2610,7 @@ class _ConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: const Color(0xFF987865),
+                              color: ShopColors.muted,
                               fontSize: 12,
                               fontWeight: conversation.unread > 0
                                   ? FontWeight.w700
@@ -2673,7 +2629,7 @@ class _ConversationTile extends StatelessWidget {
                             ),
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                             decoration: const BoxDecoration(
-                              color: Color(0xFF561C17),
+                              color: ShopColors.accent,
                               shape: BoxShape.circle,
                             ),
                             alignment: Alignment.center,
@@ -2684,7 +2640,7 @@ class _ConversationTile extends StatelessWidget {
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10.5,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -2703,9 +2659,9 @@ class _ConversationTile extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  static const Color _maroon = Color(0xFF561C17);
-  static const Color _surface = Color(0xFFFFFDF9);
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _maroon = ShopColors.accent;
+  static const Color _surface = ShopColors.surface;
+  static const Color _border = ShopColors.border;
 
   final BuyerMessageData message;
 
@@ -2770,7 +2726,7 @@ class _MessageBubble extends StatelessWidget {
                                         decoration: BoxDecoration(
                                           color: message.fromBuyer
                                               ? const Color(0x22FFFFFF)
-                                              : const Color(0xFFF6EFE7),
+                                              : ShopColors.soft,
                                           borderRadius: BorderRadius.circular(
                                             10,
                                           ),
@@ -2781,7 +2737,7 @@ class _MessageBubble extends StatelessWidget {
                                               Icons.attachment_rounded,
                                               color: message.fromBuyer
                                                   ? Colors.white
-                                                  : const Color(0xFF561C17),
+                                                  : ShopColors.accent,
                                             ),
                                             const SizedBox(width: 8),
                                             Expanded(
@@ -2793,7 +2749,7 @@ class _MessageBubble extends StatelessWidget {
                                                 style: TextStyle(
                                                   color: message.fromBuyer
                                                       ? Colors.white
-                                                      : const Color(0xFF3B211B),
+                                                      : ShopColors.text,
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w700,
                                                 ),
@@ -2816,7 +2772,7 @@ class _MessageBubble extends StatelessWidget {
                               style: TextStyle(
                                 color: message.fromBuyer
                                     ? Colors.white
-                                    : const Color(0xFF3B211B),
+                                    : ShopColors.text,
                                 fontSize: 14,
                                 height: 1.45,
                               ),
@@ -2830,7 +2786,7 @@ class _MessageBubble extends StatelessWidget {
                               style: TextStyle(
                                 color: message.fromBuyer
                                     ? Colors.white70
-                                    : const Color(0xFF987865),
+                                    : ShopColors.muted,
                                 fontSize: 10,
                               ),
                             ),
@@ -2862,10 +2818,10 @@ class _ProductInquiryCard extends StatelessWidget {
       alignment: Alignment.centerRight,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(17),
+          borderRadius: BorderRadius.circular(20),
           child: Container(
             width: double.infinity,
             constraints: const BoxConstraints(maxWidth: 420),
@@ -2874,12 +2830,12 @@ class _ProductInquiryCard extends StatelessWidget {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: <Color>[Color(0xFF561C17), Color(0xFF642920)],
+                colors: <Color>[ShopColors.accent, Color(0xFF642920)],
               ),
-              borderRadius: BorderRadius.circular(17),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: <BoxShadow>[
                 BoxShadow(
-                  color: const Color(0xFF561C17).withValues(alpha: 0.15),
+                  color: ShopColors.accent.withValues(alpha: 0.15),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -2935,7 +2891,7 @@ class _ProductInquiryCard extends StatelessWidget {
                           color: Color(0xFFE8C8B2),
                           fontSize: 10.5,
                           letterSpacing: 1,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
 
@@ -2998,7 +2954,7 @@ class _SellerStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color textColor = isOnline == true
         ? const Color(0xFF256F4A)
-        : const Color(0xFF987865);
+        : ShopColors.muted;
 
     return Row(
       children: [
@@ -3009,7 +2965,7 @@ class _SellerStatus extends StatelessWidget {
             decoration: BoxDecoration(
               color: isOnline == true
                   ? const Color(0xFF256F4A)
-                  : const Color(0xFFA99386),
+                  : ShopColors.faint,
               shape: BoxShape.circle,
             ),
           ),
@@ -3051,11 +3007,11 @@ class _SellerAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF561C17),
+        color: ShopColors.accent,
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: const Color(0xFF561C17).withValues(alpha: 0.12),
+            color: ShopColors.accent.withValues(alpha: 0.12),
             blurRadius: 12,
             offset: const Offset(0, 5),
           ),
@@ -3104,14 +3060,14 @@ class _InitialAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF561C17),
+      color: ShopColors.accent,
       alignment: Alignment.center,
       child: Text(
         initials,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 13,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

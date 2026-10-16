@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/core/config/app_config.dart';
@@ -770,25 +772,25 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _soft = Color(0xFFF6EFE7);
+  static const Color _soft = ShopColors.soft;
 
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon = Color(0xFF561C17);
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroonDark = Color(0xFF3E130F);
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text = Color(0xFF3B211B);
+  static const Color _text = ShopColors.text;
 
-  static const Color _muted = Color(0xFF987865);
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _muted2 = Color(0xFFA99386);
+  static const Color _muted2 = ShopColors.faint;
 
-  static const Color _tan = Color(0xFFC19771);
+  static const Color _tan = ShopColors.tan;
 
   static const Color _danger = Color(0xFFB42318);
 
@@ -1490,7 +1492,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return AlertDialog(
           backgroundColor: _surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
           title: const Text(
             'Confirm receipt?',
@@ -1688,7 +1690,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             color: _maroon,
                             fontSize: 11,
                             letterSpacing: 1.6,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
 
@@ -2086,80 +2088,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
-  Widget _buildTopBar() {
-    final bool innerPage =
-        _mode != BuyerOrdersMode.overview && _mode != BuyerOrdersMode.success;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(7, 5, 12, 7),
-      decoration: const BoxDecoration(
-        color: _background,
-        border: Border(bottom: BorderSide(color: Color(0xFFF0E8DF))),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed: () {
-              if (innerPage) {
-                _openIndex();
-                return;
-              }
-
-              if (widget.onBack != null) {
-                widget.onBack!();
-                return;
-              }
-
-              Navigator.of(context).maybePop();
-            },
-            icon: const Icon(Icons.arrow_back_rounded, color: _text),
-          ),
-
-          const SizedBox(width: 2),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _modeTitle,
-                  style: const TextStyle(
-                    color: _text,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                if (_modeSubtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    _modeSubtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _muted, fontSize: 11.5),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          if (_mode == BuyerOrdersMode.overview)
-            TextButton(
-              onPressed: widget.onShopProducts,
-              child: const Text(
-                'Shop',
-                style: TextStyle(
-                  color: _maroon,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar() => ShopPageHeader(
+    title: _modeTitle, subtitle: _modeSubtitle,
+    onBack: () {
+      if (_mode != BuyerOrdersMode.overview && _mode != BuyerOrdersMode.success) { _openIndex(); return; }
+      if (widget.onBack != null) { widget.onBack!(); return; }
+      Navigator.of(context).maybePop();
+    },
+    actions: [
+      if (_mode == BuyerOrdersMode.overview)
+        GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Shop products', onPressed: widget.onShopProducts),
+    ],
+  );
 
   String get _modeTitle {
     switch (_mode) {
@@ -2307,7 +2247,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   color: _maroon,
                   fontSize: 11,
                   letterSpacing: 1.7,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
@@ -2319,7 +2259,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   color: _text,
                   fontSize: 28,
                   letterSpacing: -0.7,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
@@ -2422,7 +2362,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               width: 70,
               height: 70,
               decoration: const BoxDecoration(
-                color: Color(0xFFF1E4D7),
+                color: ShopColors.accentSoft,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
@@ -2441,7 +2381,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               style: TextStyle(
                 color: _text,
                 fontSize: 19,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
               ),
             ),
 
@@ -2485,7 +2425,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             width: 70,
             height: 70,
             decoration: BoxDecoration(
-              color: const Color(0xFFF1E4D7),
+              color: ShopColors.accentSoft,
               borderRadius: BorderRadius.circular(21),
             ),
             alignment: Alignment.center,
@@ -2502,7 +2442,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             color: _maroon,
             fontSize: 11,
             letterSpacing: 1.8,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -2514,7 +2454,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           style: TextStyle(
             color: _text,
             fontSize: 25,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -2817,7 +2757,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   style: const TextStyle(
                     color: _maroon,
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -3161,7 +3101,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               _reviewPhotos.removeAt(index);
                             });
                           },
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(24),
                           child: const CircleAvatar(
                             radius: 12,
                             backgroundColor: _maroon,
@@ -3221,7 +3161,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               color: _maroon,
               fontSize: 11,
               letterSpacing: 1.6,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -3232,7 +3172,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             style: TextStyle(
               color: _text,
               fontSize: 27,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -3250,7 +3190,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             decoration: BoxDecoration(
               color: _surface,
               border: Border.all(color: _border),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3442,7 +3382,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               color: _maroon,
               fontSize: 11,
               letterSpacing: 1.6,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -3453,7 +3393,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             style: TextStyle(
               color: _text,
               fontSize: 25,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -3471,7 +3411,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             decoration: BoxDecoration(
               color: _surface,
               border: Border.all(color: _border),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3721,7 +3661,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           style: TextStyle(
             color: _text,
             fontSize: 20,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -3829,9 +3769,9 @@ class _OrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
-        border: Border.all(color: const Color(0xFFEADCCC)),
-        borderRadius: BorderRadius.circular(18),
+        color: ShopColors.surface,
+        border: Border.all(color: ShopColors.border),
+        borderRadius: BorderRadius.circular(20),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -3852,15 +3792,15 @@ class _OrderCard extends StatelessWidget {
                       Text(
                         'Order #${order.id}',
                         style: const TextStyle(
-                          color: Color(0xFF3B211B),
+                          color: ShopColors.text,
                           fontSize: 13.5,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       Text(
                         _placedLabel(order.createdAt),
                         style: const TextStyle(
-                          color: Color(0xFF987865),
+                          color: ShopColors.muted,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w500,
                         ),
@@ -3883,7 +3823,7 @@ class _OrderCard extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'No products recorded for this order.',
-                  style: TextStyle(color: Color(0xFF987865), fontSize: 12.5),
+                  style: TextStyle(color: ShopColors.muted, fontSize: 12.5),
                 ),
               ),
             )
@@ -3899,7 +3839,7 @@ class _OrderCard extends StatelessWidget {
               }, growable: false),
             ),
 
-          const Divider(height: 1, color: Color(0xFFF0E8DF)),
+          const Divider(height: 1, color: ShopColors.border),
 
           Padding(
             padding: const EdgeInsets.all(13),
@@ -3916,14 +3856,14 @@ class _OrderCard extends StatelessWidget {
                             TextSpan(
                               text: _price(order.total),
                               style: const TextStyle(
-                                color: Color(0xFF3B211B),
-                                fontWeight: FontWeight.w900,
+                                color: ShopColors.text,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ],
                         ),
                         style: const TextStyle(
-                          color: Color(0xFF987865),
+                          color: ShopColors.muted,
                           fontSize: 12.5,
                           height: 1.4,
                         ),
@@ -4058,9 +3998,9 @@ class _OrderProductRow extends StatelessWidget {
                 height: 72,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3ECE4),
+                  color: ShopColors.soft,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFEADCCC)),
+                  border: Border.all(color: ShopColors.border),
                 ),
                 child: _OrderProductGallery(images: product.galleryImages),
               ),
@@ -4076,7 +4016,7 @@ class _OrderProductRow extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF3B211B),
+                        color: ShopColors.text,
                         fontSize: 13.5,
                         height: 1.3,
                         fontWeight: FontWeight.w800,
@@ -4090,7 +4030,7 @@ class _OrderProductRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFF987865),
+                          color: ShopColors.muted,
                           fontSize: 11.5,
                         ),
                       ),
@@ -4101,7 +4041,7 @@ class _OrderProductRow extends StatelessWidget {
                     Text(
                       'Qty ${product.safeQuantity}',
                       style: const TextStyle(
-                        color: Color(0xFFA99386),
+                        color: ShopColors.faint,
                         fontSize: 11.5,
                       ),
                     ),
@@ -4111,9 +4051,9 @@ class _OrderProductRow extends StatelessWidget {
                     Text(
                       '₱${product.lineTotal.toStringAsFixed(2)}',
                       style: const TextStyle(
-                        color: Color(0xFF561C17),
+                        color: ShopColors.accent,
                         fontSize: 13,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
@@ -4123,7 +4063,7 @@ class _OrderProductRow extends StatelessWidget {
           ),
         ),
 
-        if (showDivider) const Divider(height: 1, color: Color(0xFFF0E8DF)),
+        if (showDivider) const Divider(height: 1, color: ShopColors.border),
       ],
     );
   }
@@ -4153,7 +4093,7 @@ class _SmallActionButton extends StatelessWidget {
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: const Color(0xFF561C17),
+            backgroundColor: ShopColors.accent,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 13),
             shape: RoundedRectangleBorder(
@@ -4175,9 +4115,9 @@ class _SmallActionButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: danger
               ? const Color(0xFFB42318)
-              : const Color(0xFF561C17),
+              : ShopColors.accent,
           side: BorderSide(
-            color: danger ? const Color(0xFFE5B4A9) : const Color(0xFFC19771),
+            color: danger ? const Color(0xFFE5B4A9) : ShopColors.tan,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(
@@ -4234,9 +4174,9 @@ class _StatusBadge extends StatelessWidget {
         break;
 
       default:
-        background = const Color(0xFFF1E4D7);
+        background = ShopColors.accentSoft;
 
-        foreground = const Color(0xFF561C17);
+        foreground = ShopColors.accent;
     }
 
     return Container(
@@ -4250,7 +4190,7 @@ class _StatusBadge extends StatelessWidget {
         style: TextStyle(
           color: foreground,
           fontSize: 10.5,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -4272,9 +4212,9 @@ class _BuyerDetailCard extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
-        border: Border.all(color: const Color(0xFFEADCCC)),
-        borderRadius: BorderRadius.circular(17),
+        color: ShopColors.surface,
+        border: Border.all(color: ShopColors.border),
+        borderRadius: BorderRadius.circular(20),
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
@@ -4313,7 +4253,7 @@ class _BuyerDetailActionRow extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      color: Color(0xFF3B211B),
+                      color: ShopColors.text,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -4323,7 +4263,7 @@ class _BuyerDetailActionRow extends StatelessWidget {
                     Text(
                       subtitle!,
                       style: const TextStyle(
-                        color: Color(0xFF987865),
+                        color: ShopColors.muted,
                         fontSize: 11.5,
                         height: 1.35,
                       ),
@@ -4337,7 +4277,7 @@ class _BuyerDetailActionRow extends StatelessWidget {
               padding: EdgeInsets.only(top: 1),
               child: Icon(
                 Icons.chevron_right_rounded,
-                color: Color(0xFFA99386),
+                color: ShopColors.faint,
                 size: 23,
               ),
             ),
@@ -4364,7 +4304,7 @@ class _BuyerDetailBottomButton extends StatelessWidget {
     final ButtonStyle style = filled
         ? ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: const Color(0xFF561C17),
+            backgroundColor: ShopColors.accent,
             foregroundColor: Colors.white,
             disabledBackgroundColor: const Color(0xFFD8CBC3),
             shape: RoundedRectangleBorder(
@@ -4372,8 +4312,8 @@ class _BuyerDetailBottomButton extends StatelessWidget {
             ),
           )
         : OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF561C17),
-            side: const BorderSide(color: Color(0xFF561C17)),
+            foregroundColor: ShopColors.accent,
+            side: const BorderSide(color: ShopColors.accent),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -4411,7 +4351,7 @@ class _SelectedProduct extends StatelessWidget {
           height: 64,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: const Color(0xFFF3ECE4),
+            color: ShopColors.soft,
             borderRadius: BorderRadius.circular(12),
           ),
           child: _OrderProductGallery(images: product.galleryImages),
@@ -4426,7 +4366,7 @@ class _SelectedProduct extends StatelessWidget {
               Text(
                 product.name,
                 style: const TextStyle(
-                  color: Color(0xFF3B211B),
+                  color: ShopColors.text,
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
@@ -4438,7 +4378,7 @@ class _SelectedProduct extends StatelessWidget {
                 Text(
                   product.variant!,
                   style: const TextStyle(
-                    color: Color(0xFF987865),
+                    color: ShopColors.muted,
                     fontSize: 11,
                   ),
                 ),
@@ -4448,7 +4388,7 @@ class _SelectedProduct extends StatelessWidget {
 
               Text(
                 'Qty ${product.safeQuantity}',
-                style: const TextStyle(color: Color(0xFFA99386), fontSize: 11),
+                style: const TextStyle(color: ShopColors.faint, fontSize: 11),
               ),
             ],
           ),
@@ -4457,9 +4397,9 @@ class _SelectedProduct extends StatelessWidget {
         Text(
           '₱${product.lineTotal.toStringAsFixed(2)}',
           style: const TextStyle(
-            color: Color(0xFF561C17),
+            color: ShopColors.accent,
             fontSize: 12.5,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -4484,7 +4424,7 @@ class _OrderProductGalleryState extends State<_OrderProductGallery> {
     final List<String> images = widget.images;
     if (images.isEmpty) {
       return const Center(
-        child: Icon(Icons.image_outlined, color: Color(0xFFA99386), size: 28),
+        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 28),
       );
     }
 
@@ -4518,8 +4458,8 @@ class _OrderProductGalleryState extends State<_OrderProductGallery> {
                   height: 3,
                   decoration: BoxDecoration(
                     color: active
-                        ? const Color(0xFF561C17)
-                        : const Color(0xFFA99386).withValues(alpha: 0.55),
+                        ? ShopColors.accent
+                        : ShopColors.faint.withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 );
@@ -4541,7 +4481,7 @@ class _OrderProductImage extends StatelessWidget {
     final String imageUrl = url.trim();
     if (imageUrl.isEmpty) {
       return const Center(
-        child: Icon(Icons.image_outlined, color: Color(0xFFA99386), size: 28),
+        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 28),
       );
     }
 
@@ -4552,7 +4492,7 @@ class _OrderProductImage extends StatelessWidget {
         return const Center(
           child: Icon(
             Icons.broken_image_outlined,
-            color: Color(0xFFA99386),
+            color: ShopColors.faint,
             size: 27,
           ),
         );
@@ -4569,7 +4509,7 @@ class _OrderProductImage extends StatelessWidget {
             height: 18,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Color(0xFF561C17),
+              color: ShopColors.accent,
             ),
           ),
         );
@@ -4592,7 +4532,7 @@ class _DetailRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(color: Color(0xFF987865), fontSize: 12),
+            style: const TextStyle(color: ShopColors.muted, fontSize: 12),
           ),
         ),
 
@@ -4603,7 +4543,7 @@ class _DetailRow extends StatelessWidget {
             value,
             textAlign: TextAlign.right,
             style: const TextStyle(
-              color: Color(0xFF3B211B),
+              color: ShopColors.text,
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),
@@ -4636,7 +4576,7 @@ class _InputLabel extends StatelessWidget {
         ],
       ),
       style: const TextStyle(
-        color: Color(0xFF3B211B),
+        color: ShopColors.text,
         fontSize: 12.5,
         fontWeight: FontWeight.w700,
       ),
@@ -4663,7 +4603,7 @@ class _NoticeCard extends StatelessWidget {
         children: [
           const Icon(
             Icons.info_outline_rounded,
-            color: Color(0xFF561C17),
+            color: ShopColors.accent,
             size: 18,
           ),
 
@@ -4673,7 +4613,7 @@ class _NoticeCard extends StatelessWidget {
             child: Text(
               message,
               style: const TextStyle(
-                color: Color(0xFF561C17),
+                color: ShopColors.accent,
                 fontSize: 12,
                 height: 1.5,
                 fontWeight: FontWeight.w600,

@@ -1,21 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import '../rider_product_image.dart';
 
 class RiderPickupStatsData {
   final int ready;
   final int accepted;
   final int pickedUp;
+  final int completedToday;
 
   const RiderPickupStatsData({
     required this.ready,
     required this.accepted,
     required this.pickedUp,
+    this.completedToday = 0,
   });
 
   factory RiderPickupStatsData.fromApi(Map<String, dynamic> json) {
     return RiderPickupStatsData(
-      ready: _toInt(json['ready']),
+      ready: _toInt(json['assigned'] ?? json['ready']),
       accepted: _toInt(json['accepted']),
-      pickedUp: _toInt(json['picked_up']),
+      pickedUp: _toInt(json['in_progress'] ?? json['picked_up']),
+      completedToday: _toInt(json['completed_today']),
     );
   }
 
@@ -43,6 +49,18 @@ class RiderPickupData {
   final String status;
   final String statusLabel;
   final String? imageUrl;
+  final String batchNumber;
+  final String logisticsCenter;
+  final String destinationAddress;
+  final String shipmentStatus;
+  final double? sellerLatitude;
+  final double? sellerLongitude;
+  final double? logisticsCenterLatitude;
+  final double? logisticsCenterLongitude;
+  final bool isBatch;
+  final int approvedCapacity;
+  final int collectedCount;
+  final List<RiderPickupBatchItemData> parcels;
 
   const RiderPickupData({
     required this.id,
@@ -55,21 +73,91 @@ class RiderPickupData {
     required this.status,
     required this.statusLabel,
     this.imageUrl,
+    this.batchNumber = '',
+    this.logisticsCenter = '',
+    this.destinationAddress = '',
+    this.shipmentStatus = '',
+    this.sellerLatitude,
+    this.sellerLongitude,
+    this.logisticsCenterLatitude,
+    this.logisticsCenterLongitude,
+    this.isBatch = false,
+    this.approvedCapacity = 0,
+    this.collectedCount = 0,
+    this.parcels = const <RiderPickupBatchItemData>[],
   });
 
   factory RiderPickupData.fromApi(Map<String, dynamic> json) {
+    final dynamic rawCenter = json['logistics_center'];
+    final Map<String, dynamic>? center = rawCenter is Map
+        ? Map<String, dynamic>.from(rawCenter)
+        : null;
+    final Map<String, dynamic>? centerAddress = center?['address'] is Map
+        ? Map<String, dynamic>.from(center!['address'] as Map)
+        : null;
+    final String status = (json['assignment_status'] ?? json['status'] ?? '')
+        .toString();
+    final List<RiderPickupBatchItemData> parcels = json['items'] is List
+        ? (json['items'] as List)
+              .whereType<Map>()
+              .map(
+                (Map item) => RiderPickupBatchItemData.fromApi(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList(growable: false)
+        : const <RiderPickupBatchItemData>[];
+    final String trackingCode =
+        (json['tracking'] ??
+                json['tracking_code'] ??
+                json['batch_number'] ??
+                'P-${json['id'] ?? ''}')
+            .toString();
+    final String centerName =
+        (json['logistics_center_name'] ??
+                center?['business_name'] ??
+                center?['name'] ??
+                (rawCenter is String ? rawCenter : ''))
+            .toString();
+    final dynamic rawSellerLatitude =
+        json['seller_latitude'] ?? json['delivery_latitude'];
+    final dynamic rawSellerLongitude =
+        json['seller_longitude'] ?? json['delivery_longitude'];
     return RiderPickupData(
       id: _toInt(json['id']),
-      trackingCode: (json['tracking'] ?? json['tracking_code'] ?? '')
-          .toString(),
+      trackingCode: trackingCode,
       sellerName: (json['seller'] ?? json['seller_name'] ?? '').toString(),
-      buyerName: (json['buyer'] ?? json['buyer_name'] ?? '').toString(),
-      address: (json['address'] ?? '').toString(),
-      itemCount: _toInt(json['items'] ?? json['item_count']),
+      buyerName: (json['buyer_name'] ?? json['buyer'] ?? centerName).toString(),
+      address: (json['pickup_address'] ?? json['address'] ?? '').toString(),
+      itemCount: _toInt(
+        json['parcel_count'] ?? json['item_count'] ??
+            (json['items'] is num ? json['items'] : null),
+      ),
       amount: _amountLabel(json['amount']),
-      status: (json['status'] ?? '').toString(),
-      statusLabel: (json['status_label'] ?? json['status'] ?? '').toString(),
-      imageUrl: _nullableString(json['image'] ?? json['image_url']),
+      status: status,
+      statusLabel: (json['status_label'] ?? _statusLabel(status)).toString(),
+      imageUrl: riderProductImageUrl(json),
+      batchNumber: (json['batch_number'] ?? trackingCode).toString(),
+      logisticsCenter: centerName,
+      destinationAddress: (json['logistics_center_address'] ??
+              json['destination_address'] ??
+              centerAddress?['formatted_address'] ??
+              _formatCoordinatesAddress(centerAddress))
+          .toString(),
+      shipmentStatus: (json['shipment_status'] ?? json['current_status'] ?? '')
+          .toString(),
+      sellerLatitude: _toDouble(rawSellerLatitude),
+      sellerLongitude: _toDouble(rawSellerLongitude),
+      logisticsCenterLatitude: _toDouble(
+        json['logistics_center_latitude'] ?? centerAddress?['latitude'],
+      ),
+      logisticsCenterLongitude: _toDouble(
+        json['logistics_center_longitude'] ?? centerAddress?['longitude'],
+      ),
+      isBatch: json['batch_number'] != null || json['items'] is List,
+      approvedCapacity: _toInt(json['approved_capacity']),
+      collectedCount: _toInt(json['collected_count']),
+      parcels: parcels,
     );
   }
 
@@ -82,13 +170,24 @@ class RiderPickupData {
       'PICKUP_ASSIGNED',
       'ASSIGNED',
       'ACCEPTED',
+      'LOADING',
+      'READY',
       'IN_PROGRESS',
+      'EN_ROUTE_TO_HUB',
     }.contains(normalizedStatus);
   }
 
   bool get isPickedUp {
-    return normalizedStatus == 'PICKED_UP';
+    return normalizedStatus == 'PICKED_UP' ||
+        normalizedStatus == 'COMPLETED' ||
+        normalizedStatus == 'EN_ROUTE_TO_HUB' ||
+        shipmentStatus.trim().toUpperCase() == 'PICKED_UP';
   }
+
+  bool get isAccepted =>
+      normalizedStatus == 'ACCEPTED' || normalizedStatus == 'IN_PROGRESS';
+
+  bool get isInProgress => normalizedStatus == 'IN_PROGRESS';
 
   RiderPickupData copyWith({
     int? id,
@@ -101,6 +200,7 @@ class RiderPickupData {
     String? status,
     String? statusLabel,
     String? imageUrl,
+    String? shipmentStatus,
   }) {
     return RiderPickupData(
       id: id ?? this.id,
@@ -113,6 +213,18 @@ class RiderPickupData {
       status: status ?? this.status,
       statusLabel: statusLabel ?? this.statusLabel,
       imageUrl: imageUrl ?? this.imageUrl,
+      batchNumber: batchNumber,
+      logisticsCenter: logisticsCenter,
+      destinationAddress: destinationAddress,
+      shipmentStatus: shipmentStatus ?? this.shipmentStatus,
+      sellerLatitude: sellerLatitude,
+      sellerLongitude: sellerLongitude,
+      logisticsCenterLatitude: logisticsCenterLatitude,
+      logisticsCenterLongitude: logisticsCenterLongitude,
+      isBatch: isBatch,
+      approvedCapacity: approvedCapacity,
+      collectedCount: collectedCount,
+      parcels: parcels,
     );
   }
 
@@ -126,6 +238,37 @@ class RiderPickupData {
     }
 
     return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double? _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  static String _formatCoordinatesAddress(Map<String, dynamic>? address) {
+    if (address == null) return '';
+    return <String>[
+      address['house_number'],
+      address['street_address'] ?? address['street'],
+      address['barangay_name'] ?? address['barangay'],
+      address['municipality_name'] ?? address['municipality'],
+      address['province_name'] ?? address['province'],
+    ].where((dynamic value) => value?.toString().trim().isNotEmpty == true)
+        .join(', ');
+  }
+
+  static String _statusLabel(String status) {
+    return switch (status.trim().toUpperCase()) {
+      'LOADING' => 'Waiting for acceptance',
+      'READY' => 'Accepted',
+      'IN_PROGRESS' => 'Pickup in progress',
+      'ACCEPTED' => 'Accepted',
+      'ASSIGNED' => 'Assigned',
+      'EN_ROUTE_TO_HUB' => 'On the way to hub',
+      'COMPLETED' => 'Completed',
+      '' => 'Unknown',
+      final value => value.replaceAll('_', ' '),
+    };
   }
 
   static String _amountLabel(dynamic value) {
@@ -157,15 +300,65 @@ class RiderPickupData {
 
     return raw;
   }
+}
+
+class RiderPickupBatchItemData {
+  final int assignmentId;
+  final String trackingCode;
+  final String sellerOrderNumber;
+  final List<String> products;
+  final String assignmentStatus;
+  final String shipmentStatus;
+  final String? notCollectedReason;
+  final String? imageUrl;
+
+  const RiderPickupBatchItemData({
+    required this.assignmentId,
+    required this.trackingCode,
+    required this.sellerOrderNumber,
+    required this.products,
+    required this.assignmentStatus,
+    required this.shipmentStatus,
+    this.notCollectedReason,
+    this.imageUrl,
+  });
+
+  factory RiderPickupBatchItemData.fromApi(Map<String, dynamic> json) {
+    return RiderPickupBatchItemData(
+      assignmentId: _toInt(json['assignment_id']),
+      trackingCode: (json['tracking'] ?? '').toString(),
+      sellerOrderNumber: (json['seller_order_number'] ?? '').toString(),
+      products: json['products'] is List
+          ? (json['products'] as List)
+                .map((dynamic product) => product.toString())
+                .toList(growable: false)
+          : const <String>[],
+      assignmentStatus: (json['assignment_status'] ?? '').toString(),
+      shipmentStatus: (json['shipment_status'] ?? '').toString(),
+      notCollectedReason: _nullableString(json['not_collected_reason']),
+      imageUrl: riderProductImageUrl(json),
+    );
+  }
+
+  String get normalizedStatus => assignmentStatus.trim().toUpperCase();
+
+  bool get isResolved => const <String>{
+    'COMPLETED',
+    'REJECTED',
+    'CANCELLED',
+  }.contains(normalizedStatus);
+
+  bool get wasCollected => normalizedStatus == 'COMPLETED';
+
+  static int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
 
   static String? _nullableString(dynamic value) {
     final String text = value?.toString().trim() ?? '';
-
-    if (text.isEmpty) {
-      return null;
-    }
-
-    return text;
+    return text.isEmpty ? null : text;
   }
 }
 
@@ -197,7 +390,7 @@ class RiderPickupsScreen extends StatefulWidget {
 
   final String? statusMessage;
 
-  final RiderPickupCallback? onViewPickup;
+  final Future<void> Function(RiderPickupData pickup)? onViewPickup;
 
   final RiderPickupRefreshCallback? onRefresh;
 
@@ -236,9 +429,9 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
 
   static const Color _warningSoft = Color(0xFFFFF3DC);
 
-  static const Color _success = Color(0xFF237A44);
+  static const Color _danger = Color(0xFF9E3328);
 
-  static const Color _successSoft = Color(0xFFEAF6EE);
+  static const Color _dangerSoft = Color(0xFFFFF1F0);
 
   Future<void> _refresh() async {
     final RiderPickupRefreshCallback? callback = widget.onRefresh;
@@ -258,10 +451,12 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         title: const Text(
-          'Pickup Assignments',
+          'Pickups',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: _text,
-            fontSize: 19,
+            fontSize: 18,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -307,7 +502,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
           onRefresh: _refresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
             children: <Widget>[
               if (widget.statusMessage?.trim().isNotEmpty == true) ...<Widget>[
                 _buildStatusMessage(widget.statusMessage!),
@@ -317,11 +512,11 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
 
               _buildHeader(),
 
-              const SizedBox(height: 22),
+              const SizedBox(height: 18),
 
               _buildStats(),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               _buildPickupTasks(),
             ],
@@ -348,10 +543,10 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
         const SizedBox(height: 8),
 
         const Text(
-          'Pickup Assignments',
+          'Seller Pickup Batches',
           style: TextStyle(
             color: _text,
-            fontSize: 27,
+            fontSize: 26,
             height: 1.12,
             letterSpacing: -0.4,
             fontWeight: FontWeight.w900,
@@ -361,7 +556,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
         const SizedBox(height: 9),
 
         const Text(
-          'Accept seller pickup requests, confirm parcel pickup, then deliver to the sorting center.',
+          'Accept a seller batch, scan each parcel, then take the collected items to the logistics center.',
           style: TextStyle(color: _muted, fontSize: 13.5, height: 1.55),
         ),
 
@@ -374,7 +569,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
             borderRadius: BorderRadius.circular(100),
           ),
           child: Text(
-            '${widget.stats.ready} Ready Pickup',
+            '${widget.stats.ready} Assigned Batch${widget.stats.ready == 1 ? '' : 'es'}',
             style: const TextStyle(
               color: _warning,
               fontSize: 12.5,
@@ -389,7 +584,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
   Widget _buildStats() {
     final List<_PickupStatData> stats = <_PickupStatData>[
       _PickupStatData(
-        label: 'Ready For Pickup',
+        label: 'Assigned',
         value: widget.stats.ready,
         icon: Icons.inventory_2_outlined,
       ),
@@ -399,7 +594,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
         icon: Icons.assignment_turned_in_outlined,
       ),
       _PickupStatData(
-        label: 'Picked Up',
+        label: 'In Progress',
         value: widget.stats.pickedUp,
         icon: Icons.local_shipping_outlined,
       ),
@@ -410,15 +605,16 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
         final bool compact = constraints.maxWidth < 500;
 
         if (compact) {
-          return Column(
-            children: stats
-                .map(
-                  (_PickupStatData stat) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _PickupStatCard(stat: stat),
-                  ),
-                )
-                .toList(growable: false),
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (int index = 0; index < stats.length; index++) ...<Widget>[
+                Expanded(
+                  child: _PickupStatCard(stat: stats[index], compact: true),
+                ),
+                if (index != stats.length - 1) const SizedBox(width: 8),
+              ],
+            ],
           );
         }
 
@@ -464,7 +660,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
                 SizedBox(height: 5),
 
                 Text(
-                  'Only real delivery records from seller pickup requests are listed.',
+                  'Each card groups parcels from the same seller into one pickup batch.',
                   style: TextStyle(color: _muted, fontSize: 12.5, height: 1.45),
                 ),
               ],
@@ -485,9 +681,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
                     pickup: pickup,
                     onView: widget.onViewPickup == null
                         ? null
-                        : () {
-                            widget.onViewPickup!(pickup);
-                          },
+                        : () => unawaited(widget.onViewPickup!(pickup)),
                   ),
 
                   if (index != widget.pickups.length - 1)
@@ -505,18 +699,14 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _successSoft,
+        color: _dangerSoft,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB7DFC5)),
+        border: Border.all(color: const Color(0xFFF1B7B2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(
-            Icons.check_circle_outline_rounded,
-            color: _success,
-            size: 20,
-          ),
+          const Icon(Icons.error_outline_rounded, color: _danger, size: 20),
 
           const SizedBox(width: 9),
 
@@ -524,7 +714,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
             child: Text(
               message,
               style: const TextStyle(
-                color: _success,
+                color: _danger,
                 fontSize: 13,
                 height: 1.45,
                 fontWeight: FontWeight.w700,
@@ -551,43 +741,72 @@ class _PickupStatData {
 
 class _PickupStatCard extends StatelessWidget {
   final _PickupStatData stat;
+  final bool compact;
 
-  const _PickupStatCard({required this.stat});
+  const _PickupStatCard({required this.stat, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 118),
-      padding: const EdgeInsets.all(16),
+      constraints: BoxConstraints(minHeight: compact ? 76 : 118),
+      padding: EdgeInsets.all(compact ? 12 : 16),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFDF9),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(compact ? 16 : 18),
         border: Border.all(color: const Color(0xFFEADCCC)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(stat.icon, color: const Color(0xFF561C17), size: 22),
-
-          const SizedBox(height: 16),
-
-          Text(
-            stat.label,
-            style: const TextStyle(color: Color(0xFF987865), fontSize: 12),
-          ),
-
-          const SizedBox(height: 5),
-
-          Text(
-            stat.value.toString(),
-            style: const TextStyle(
-              color: Color(0xFF3B211B),
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
+        children: compact
+            ? <Widget>[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Icon(stat.icon, color: const Color(0xFF561C17), size: 18),
+                    Text(
+                      stat.value.toString(),
+                      style: const TextStyle(
+                        color: Color(0xFF3B211B),
+                        fontSize: 22,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  stat.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF987865),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ]
+            : <Widget>[
+                Icon(stat.icon, color: const Color(0xFF561C17), size: 22),
+                const SizedBox(height: 16),
+                Text(
+                  stat.label,
+                  style: const TextStyle(
+                    color: Color(0xFF987865),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  stat.value.toString(),
+                  style: const TextStyle(
+                    color: Color(0xFF3B211B),
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
       ),
     );
   }
@@ -619,9 +838,9 @@ class _PickupTaskCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      pickup.trackingCode.isEmpty
-                          ? 'No tracking code'
-                          : pickup.trackingCode,
+                      pickup.batchNumber.isEmpty
+                          ? 'Pickup batch ${pickup.trackingCode}'
+                          : 'Pickup batch ${pickup.batchNumber}',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -788,7 +1007,7 @@ class _PickupEmptyState extends StatelessWidget {
             SizedBox(height: 13),
 
             Text(
-              'No pickup requests are available.',
+              'No seller pickup batches are available.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF987865), fontSize: 13),
             ),

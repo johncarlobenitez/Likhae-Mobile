@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'theme_controller.dart';
+import 'shop_colors.dart';
 
 class AppTheme {
   AppTheme._();
@@ -9,47 +10,33 @@ class AppTheme {
   // LIKHAE LIGHT PALETTE
   // ============================================================
 
-  static const Color lightBackground =
-      Color(0xFFFBF7F2);
+  static const Color lightBackground = ShopColors.canvas;
 
-  static const Color lightSurface =
-      Color(0xFFFFFDF9);
+  static const Color lightSurface = ShopColors.surface;
 
-  static const Color lightSurfaceSoft =
-      Color(0xFFF6EFE7);
+  static const Color lightSurfaceSoft = ShopColors.soft;
 
-  static const Color lightSurfaceStrong =
-      Color(0xFFF1E4D7);
+  static const Color lightSurfaceStrong = ShopColors.accentSoft;
 
-  static const Color lightMaroon =
-      Color(0xFF561C17);
+  static const Color lightMaroon = ShopColors.accent;
 
-  static const Color lightMaroonDark =
-      Color(0xFF3E130F);
+  static const Color lightMaroonDark = ShopColors.accentDark;
 
-  static const Color lightMaroonSoft =
-      Color(0xFF7A2A22);
+  static const Color lightMaroonSoft = ShopColors.accentLight;
 
-  static const Color lightTan =
-      Color(0xFFC19771);
+  static const Color lightTan = ShopColors.tan;
 
-  static const Color lightText =
-      Color(0xFF3B211B);
+  static const Color lightText = ShopColors.text;
 
-  static const Color lightBrown =
-      Color(0xFF6C4936);
+  static const Color lightBrown = ShopColors.secondaryText;
 
-  static const Color lightMuted =
-      Color(0xFF987865);
+  static const Color lightMuted = ShopColors.muted;
 
-  static const Color lightMutedSoft =
-      Color(0xFFA99386);
+  static const Color lightMutedSoft = ShopColors.faint;
 
-  static const Color lightBorder =
-      Color(0xFFEADCCC);
+  static const Color lightBorder = ShopColors.border;
 
-  static const Color lightBorderStrong =
-      Color(0xFFD8C2AC);
+  static const Color lightBorderStrong = ShopColors.borderStrong;
 
   static const Color lightDanger =
       Color(0xFFB42318);
@@ -185,7 +172,6 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      fontFamily: 'Poppins',
 
       scaffoldBackgroundColor:
           lightBackground,
@@ -264,9 +250,7 @@ class AppTheme {
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
+                BorderRadius.circular(16),
           ),
           textStyle:
               const TextStyle(
@@ -301,9 +285,7 @@ class AppTheme {
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
+                BorderRadius.circular(16),
           ),
           textStyle:
               const TextStyle(
@@ -332,9 +314,7 @@ class AppTheme {
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
+                BorderRadius.circular(16),
           ),
           textStyle:
               const TextStyle(
@@ -558,7 +538,6 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      fontFamily: 'Poppins',
 
       scaffoldBackgroundColor:
           darkBackground,
@@ -639,9 +618,7 @@ class AppTheme {
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
+                BorderRadius.circular(16),
           ),
           textStyle:
               const TextStyle(
@@ -678,9 +655,7 @@ class AppTheme {
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
+                BorderRadius.circular(16),
           ),
           textStyle:
               const TextStyle(
@@ -709,9 +684,7 @@ class AppTheme {
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              12,
-            ),
+                BorderRadius.circular(16),
           ),
           textStyle:
               const TextStyle(
@@ -969,9 +942,7 @@ class AppTheme {
       border:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -982,9 +953,7 @@ class AppTheme {
       enabledBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -995,9 +964,7 @@ class AppTheme {
       focusedBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1009,9 +976,7 @@ class AppTheme {
       errorBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1022,9 +987,7 @@ class AppTheme {
       focusedErrorBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1082,9 +1045,7 @@ class AppTheme {
       border:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1095,9 +1056,7 @@ class AppTheme {
       enabledBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1108,9 +1067,7 @@ class AppTheme {
       focusedBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1122,9 +1079,7 @@ class AppTheme {
       errorBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1135,9 +1090,7 @@ class AppTheme {
       focusedErrorBorder:
           OutlineInputBorder(
         borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+            BorderRadius.circular(16),
         borderSide:
             const BorderSide(
           color:
@@ -1166,7 +1119,21 @@ class AppTheme {
   static Color adaptive(Color lightColor) {
     if (!ThemeController.instance.usesDarkPalette) return lightColor;
 
-    switch (lightColor.value) {
+    switch (lightColor.toARGB32()) {
+      case 0xFFF6F4F1: return darkBackground;
+      case 0xFFFFFEFC: return darkSurface;
+      case 0xFFF0ECE8: return darkSurfaceSoft;
+      case 0xFFF0E3E0: return darkSurfaceStrong;
+      case 0xFF662A34: return darkMaroon;
+      case 0xFF431D25: return darkMaroonDark;
+      case 0xFF8C4651: return darkMaroonSoft;
+      case 0xFFB29379: return darkTan;
+      case 0xFF30272A: return darkText;
+      case 0xFF68575C: return darkBrown;
+      case 0xFF7B7071: return darkMuted;
+      case 0xFF95878A: return darkMutedSoft;
+      case 0xFFE7E1DD: return darkBorder;
+      case 0xFFD4C7C1: return darkBorderStrong;
       case 0xFFFBF7F2:
         return darkBackground;
       case 0xFFFFFDF9:

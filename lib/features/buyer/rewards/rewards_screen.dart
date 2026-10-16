@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/shop_ui.dart';
+
 enum RewardsTab {
   vouchers,
   points,
@@ -254,40 +256,40 @@ class RewardsScreen extends StatefulWidget {
 class _RewardsScreenState
     extends State<RewardsScreen> {
   static const Color _background =
-      Color(0xFFFBF7F2);
+      ShopColors.canvas;
 
   static const Color _backgroundSoft =
-      Color(0xFFF6EFE7);
+      ShopColors.soft;
 
   static const Color _backgroundAlt =
-      Color(0xFFEFE7DE);
+      ShopColors.soft;
 
   static const Color _surface =
-      Color(0xFFFFFDF9);
+      ShopColors.surface;
 
   static const Color _border =
-      Color(0xFFEADCCC);
+      ShopColors.border;
 
   static const Color _maroon =
-      Color(0xFF561C17);
+      ShopColors.accent;
 
   static const Color _maroon2 =
       Color(0xFF642920);
 
   static const Color _maroonDark =
-      Color(0xFF3E130F);
+      ShopColors.accentDark;
 
   static const Color _text =
-      Color(0xFF3B211B);
+      ShopColors.text;
 
   static const Color _brown =
-      Color(0xFF6C4936);
+      ShopColors.secondaryText;
 
   static const Color _muted =
-      Color(0xFF987865);
+      ShopColors.muted;
 
   static const Color _tan =
-      Color(0xFFC19771);
+      ShopColors.tan;
 
   static const Color _warning =
       Color(0xFF9A5B11);
@@ -562,156 +564,13 @@ class _RewardsScreenState
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        7,
-        5,
-        12,
-        7,
-      ),
-      decoration:
-          const BoxDecoration(
-        color:
-            _background,
-        border:
-            Border(
-          bottom:
-              BorderSide(
-            color:
-                Color(
-              0xFFF0E8DF,
-            ),
-          ),
-        ),
-      ),
-      child:
-          Row(
-        children: [
-          IconButton(
-            tooltip:
-                'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(
-                    context,
-                  ).maybePop();
-                },
-            icon:
-                const Icon(
-              Icons
-                  .arrow_back_rounded,
-              color:
-                  _text,
-            ),
-          ),
-
-          const SizedBox(
-            width: 2,
-          ),
-
-          const Expanded(
-            child:
-                Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Rewards & Vouchers',
-                  style:
-                      TextStyle(
-                    color:
-                        _text,
-                    fontSize:
-                        19,
-                    height:
-                        1.1,
-                    letterSpacing:
-                        -0.4,
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
-                ),
-
-                SizedBox(
-                  height: 2,
-                ),
-
-                Text(
-                  'Seller vouchers, reward points and cashback',
-                  maxLines:
-                      1,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style:
-                      TextStyle(
-                    color:
-                        _muted,
-                    fontSize:
-                        9.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          if (_refreshing) ...[
-            const SizedBox(
-              width:
-                  17,
-              height:
-                  17,
-              child:
-                  CircularProgressIndicator(
-                strokeWidth:
-                    2,
-                color:
-                    _maroon,
-              ),
-            ),
-
-            const SizedBox(
-              width:
-                  8,
-            ),
-          ],
-
-          OutlinedButton.icon(
-            onPressed:
-                widget.onBrowseProducts,
-            icon: const Icon(
-              Icons.shopping_bag_outlined,
-              size: 14,
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _maroon,
-              minimumSize: const Size(82, 38),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              side: const BorderSide(color: _tan),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(11),
-              ),
-            ),
-            label:
-                const Text(
-              'Shop',
-              style:
-                  TextStyle(
-                color:
-                    _maroon,
-                fontSize:
-                    11,
-                fontWeight:
-                    FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar() => ShopPageHeader(
+    title: 'Little extras', subtitle: 'Your rewards & vouchers.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [
+      if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+      GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Shop products', onPressed: widget.onBrowseProducts),
+    ],
+  );
 
   Widget _buildHeader() {
     return Container(
@@ -724,9 +583,7 @@ class _RewardsScreenState
       decoration:
           BoxDecoration(
         borderRadius:
-            BorderRadius.circular(
-          22,
-        ),
+            BorderRadius.circular(24),
         border:
             Border.all(
           color:
@@ -803,7 +660,7 @@ class _RewardsScreenState
                   letterSpacing:
                       1.7,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
 
@@ -824,7 +681,7 @@ class _RewardsScreenState
                   letterSpacing:
                       -0.8,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
 
@@ -1038,7 +895,7 @@ class _RewardsScreenState
                                 style: TextStyle(
                                   color: selected ? Colors.white : _brown,
                                   fontSize: labelSize,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
@@ -1175,9 +1032,7 @@ class _RewardsScreenState
               _border,
         ),
         borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+            BorderRadius.circular(20),
       ),
       child:
           Column(
@@ -1194,9 +1049,7 @@ class _RewardsScreenState
                 decoration:
                     BoxDecoration(
                   color:
-                      const Color(
-                    0xFFF1E4D7,
-                  ),
+                      ShopColors.accentSoft,
                   borderRadius:
                       BorderRadius.circular(
                     15,
@@ -1214,7 +1067,7 @@ class _RewardsScreenState
                     fontSize:
                         18,
                     fontWeight:
-                        FontWeight.w900,
+                        FontWeight.w800,
                   ),
                 ),
               ),
@@ -1241,7 +1094,7 @@ class _RewardsScreenState
                         letterSpacing:
                             1,
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight.w800,
                       ),
                     ),
 
@@ -1259,7 +1112,7 @@ class _RewardsScreenState
                         fontSize:
                             15,
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight.w800,
                       ),
                     ),
 
@@ -1464,7 +1317,7 @@ class _RewardsScreenState
                   letterSpacing:
                       -1.2,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
 
@@ -1683,9 +1536,7 @@ class _RewardsScreenState
             color:
                 _surface,
             borderRadius:
-                BorderRadius.circular(
-              19,
-            ),
+                BorderRadius.circular(24),
             border:
                 Border.all(
               color:
@@ -1748,7 +1599,7 @@ class _RewardsScreenState
                   letterSpacing:
                       -0.8,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
 
@@ -2079,9 +1930,7 @@ class _RewardStatCard
       decoration:
           BoxDecoration(
         color:
-            const Color(
-          0xFFFFFDF9,
-        ),
+            ShopColors.surface,
         borderRadius:
             BorderRadius.circular(
           15,
@@ -2089,9 +1938,7 @@ class _RewardStatCard
         border:
             Border.all(
           color:
-              const Color(
-            0xFFEADCCC,
-          ),
+              ShopColors.border,
         ),
       ),
       child:
@@ -2104,9 +1951,7 @@ class _RewardStatCard
           Icon(
             icon,
             color:
-                const Color(
-              0xFF561C17,
-            ),
+                ShopColors.accent,
             size:
                 19,
           ),
@@ -2125,13 +1970,11 @@ class _RewardStatCard
             style:
                 const TextStyle(
               color:
-                  Color(
-                0xFF3B211B,
-              ),
+                  ShopColors.text,
               fontSize:
                   15,
               fontWeight:
-                  FontWeight.w900,
+                  FontWeight.w800,
             ),
           ),
 
@@ -2149,9 +1992,7 @@ class _RewardStatCard
             style:
                 const TextStyle(
               color:
-                  Color(
-                0xFF987865,
-              ),
+                  ShopColors.muted,
               fontSize:
                   8.5,
             ),
@@ -2187,15 +2028,13 @@ class _SectionHeading
           style:
               const TextStyle(
             color:
-                Color(
-              0xFF561C17,
-            ),
+                ShopColors.accent,
             fontSize:
                 8.5,
             letterSpacing:
                 1.5,
             fontWeight:
-                FontWeight.w900,
+                FontWeight.w800,
           ),
         ),
 
@@ -2209,9 +2048,7 @@ class _SectionHeading
           style:
               const TextStyle(
             color:
-                Color(
-              0xFF3B211B,
-            ),
+                ShopColors.text,
             fontSize:
                 24,
             height:
@@ -2219,7 +2056,7 @@ class _SectionHeading
             letterSpacing:
                 -0.6,
             fontWeight:
-                FontWeight.w900,
+                FontWeight.w800,
           ),
         ),
 
@@ -2233,9 +2070,7 @@ class _SectionHeading
           style:
               const TextStyle(
             color:
-                Color(
-              0xFF987865,
-            ),
+                ShopColors.muted,
             fontSize:
                 10.5,
             height:
@@ -2273,27 +2108,19 @@ class _VoucherCard
       decoration:
           BoxDecoration(
         color:
-            const Color(
-          0xFFFFFDF9,
-        ),
+            ShopColors.surface,
         borderRadius:
-            BorderRadius.circular(
-          19,
-        ),
+            BorderRadius.circular(24),
         border:
             Border.all(
           color:
-              const Color(
-            0xFFEADCCC,
-          ),
+              ShopColors.border,
         ),
         boxShadow:
             <BoxShadow>[
           BoxShadow(
             color:
-                const Color(
-              0xFF561C17,
-            ).withValues(
+                ShopColors.accent.withValues(
               alpha: 0.045,
             ),
             blurRadius:
@@ -2327,9 +2154,7 @@ class _VoucherCard
                   decoration:
                       BoxDecoration(
                     color:
-                        const Color(
-                      0xFFF1E4D7,
-                    ),
+                        ShopColors.accentSoft,
                     borderRadius:
                         BorderRadius.circular(
                       15,
@@ -2347,13 +2172,11 @@ class _VoucherCard
                     style:
                         const TextStyle(
                       color:
-                          Color(
-                        0xFF561C17,
-                      ),
+                          ShopColors.accent,
                       fontSize:
                           17,
                       fontWeight:
-                          FontWeight.w900,
+                          FontWeight.w800,
                     ),
                   ),
                 ),
@@ -2376,18 +2199,14 @@ class _VoucherCard
                             TextStyle(
                           color:
                               explicitlyUnavailable
-                                  ? const Color(
-                                      0xFF987865,
-                                    )
-                                  : const Color(
-                                      0xFF561C17,
-                                    ),
+                                  ? ShopColors.muted
+                                  : ShopColors.accent,
                           fontSize:
                               7.5,
                           letterSpacing:
                               1.1,
                           fontWeight:
-                              FontWeight.w900,
+                              FontWeight.w800,
                         ),
                       ),
 
@@ -2401,15 +2220,13 @@ class _VoucherCard
                         style:
                             const TextStyle(
                           color:
-                              Color(
-                            0xFF3B211B,
-                          ),
+                              ShopColors.text,
                           fontSize:
                               18,
                           height:
                               1.1,
                           fontWeight:
-                              FontWeight.w900,
+                              FontWeight.w800,
                         ),
                       ),
 
@@ -2431,9 +2248,7 @@ class _VoucherCard
                           style:
                               const TextStyle(
                             color:
-                                Color(
-                              0xFF6C4936,
-                            ),
+                                ShopColors.secondaryText,
                             fontSize:
                                 9.5,
                             fontWeight:
@@ -2460,9 +2275,7 @@ class _VoucherCard
                           style:
                               const TextStyle(
                             color:
-                                Color(
-                              0xFF987865,
-                            ),
+                                ShopColors.muted,
                             fontSize:
                                 8.5,
                           ),
@@ -2479,9 +2292,7 @@ class _VoucherCard
                         style:
                             const TextStyle(
                           color:
-                              Color(
-                            0xFF987865,
-                          ),
+                              ShopColors.muted,
                           fontSize:
                               9.5,
                           height:
@@ -2499,9 +2310,7 @@ class _VoucherCard
             height:
                 1,
             color:
-                Color(
-              0xFFEADCCC,
-            ),
+                ShopColors.border,
           ),
 
           Padding(
@@ -2525,9 +2334,7 @@ class _VoucherCard
                   decoration:
                       BoxDecoration(
                     color:
-                        const Color(
-                      0xFFF6EFE7,
-                    ),
+                        ShopColors.soft,
                     borderRadius:
                         BorderRadius.circular(
                       9,
@@ -2535,9 +2342,7 @@ class _VoucherCard
                     border:
                         Border.all(
                       color:
-                          const Color(
-                        0xFFEADCCC,
-                      ),
+                          ShopColors.border,
                     ),
                   ),
                   child:
@@ -2547,9 +2352,7 @@ class _VoucherCard
                         Icons
                             .local_offer_outlined,
                         color:
-                            Color(
-                          0xFF561C17,
-                        ),
+                            ShopColors.accent,
                         size:
                             16,
                       ),
@@ -2570,15 +2373,13 @@ class _VoucherCard
                           style:
                               const TextStyle(
                             color:
-                                Color(
-                              0xFF561C17,
-                            ),
+                                ShopColors.accent,
                             fontSize:
                                 10,
                             letterSpacing:
                                 0.7,
                             fontWeight:
-                                FontWeight.w900,
+                                FontWeight.w800,
                           ),
                         ),
                       ),
@@ -2599,9 +2400,7 @@ class _VoucherCard
                     style:
                         const TextStyle(
                       color:
-                          Color(
-                        0xFFA99386,
-                      ),
+                          ShopColors.faint,
                       fontSize:
                           8.5,
                     ),
@@ -2624,9 +2423,7 @@ class _VoucherCard
                       style:
                           ElevatedButton.styleFrom(
                         backgroundColor:
-                            const Color(
-                          0xFF561C17,
-                        ),
+                            ShopColors.accent,
                         foregroundColor:
                             Colors.white,
                         elevation:
@@ -2672,9 +2469,7 @@ class _VoucherCard
                     style:
                         TextStyle(
                       color:
-                          Color(
-                        0xFFA99386,
-                      ),
+                          ShopColors.faint,
                       fontSize:
                           8,
                       height:
@@ -2717,19 +2512,13 @@ class _RewardPanel
       decoration:
           BoxDecoration(
         color:
-            const Color(
-          0xFFFFFDF9,
-        ),
+            ShopColors.surface,
         borderRadius:
-            BorderRadius.circular(
-          19,
-        ),
+            BorderRadius.circular(24),
         border:
             Border.all(
           color:
-              const Color(
-            0xFFEADCCC,
-          ),
+              ShopColors.border,
         ),
       ),
       child:
@@ -2747,9 +2536,7 @@ class _RewardPanel
                 decoration:
                     BoxDecoration(
                   color:
-                      const Color(
-                    0xFFF1E4D7,
-                  ),
+                      ShopColors.accentSoft,
                   borderRadius:
                       BorderRadius.circular(
                     11,
@@ -2761,9 +2548,7 @@ class _RewardPanel
                     Icon(
                   icon,
                   color:
-                      const Color(
-                    0xFF561C17,
-                  ),
+                      ShopColors.accent,
                   size:
                       18,
                 ),
@@ -2781,13 +2566,11 @@ class _RewardPanel
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFF3B211B,
-                    ),
+                        ShopColors.text,
                     fontSize:
                         14,
                     fontWeight:
-                        FontWeight.w900,
+                        FontWeight.w800,
                   ),
                 ),
               ),
@@ -2851,13 +2634,11 @@ class _VoucherHistoryRow
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFF3B211B,
-                    ),
+                        ShopColors.text,
                     fontSize:
                         11,
                     fontWeight:
-                        FontWeight.w900,
+                        FontWeight.w800,
                   ),
                 ),
               ),
@@ -2872,9 +2653,7 @@ class _VoucherHistoryRow
                 style:
                     const TextStyle(
                   color:
-                      Color(
-                    0xFF987865,
-                  ),
+                      ShopColors.muted,
                   fontSize:
                       8.5,
                   fontWeight:
@@ -2894,9 +2673,7 @@ class _VoucherHistoryRow
             style:
                 const TextStyle(
               color:
-                  Color(
-                0xFF6C4936,
-              ),
+                  ShopColors.secondaryText,
               fontSize:
                   9.5,
             ),
@@ -2915,9 +2692,7 @@ class _VoucherHistoryRow
               style:
                   const TextStyle(
                 color:
-                    Color(
-                  0xFFA99386,
-                ),
+                    ShopColors.faint,
                 fontSize:
                     8.5,
               ),
@@ -2954,9 +2729,7 @@ class _EarnPointCard
       decoration:
           BoxDecoration(
         color:
-            const Color(
-          0xFFFFFDF9,
-        ),
+            ShopColors.surface,
         borderRadius:
             BorderRadius.circular(
           14,
@@ -2964,9 +2737,7 @@ class _EarnPointCard
         border:
             Border.all(
           color:
-              const Color(
-            0xFFEADCCC,
-          ),
+              ShopColors.border,
         ),
       ),
       child:
@@ -2980,9 +2751,7 @@ class _EarnPointCard
             decoration:
                 const BoxDecoration(
               color:
-                  Color(
-                0xFFF1E4D7,
-              ),
+                  ShopColors.accentSoft,
               shape:
                   BoxShape.circle,
             ),
@@ -2992,9 +2761,7 @@ class _EarnPointCard
                 Icon(
               icon,
               color:
-                  const Color(
-                0xFF561C17,
-              ),
+                  ShopColors.accent,
               size:
                   18,
             ),
@@ -3012,9 +2779,7 @@ class _EarnPointCard
               style:
                   const TextStyle(
                 color:
-                    Color(
-                  0xFF987865,
-                ),
+                    ShopColors.muted,
                 fontSize:
                     10,
               ),
@@ -3031,13 +2796,11 @@ class _EarnPointCard
             style:
                 const TextStyle(
               color:
-                  Color(
-                0xFF561C17,
-              ),
+                  ShopColors.accent,
               fontSize:
                   18,
               fontWeight:
-                  FontWeight.w900,
+                  FontWeight.w800,
             ),
           ),
         ],
@@ -3088,9 +2851,7 @@ class _PointsActivityRow
             decoration:
                 const BoxDecoration(
               color:
-                  Color(
-                0xFFF6EFE7,
-              ),
+                  ShopColors.soft,
               shape:
                   BoxShape.circle,
             ),
@@ -3105,12 +2866,8 @@ class _PointsActivityRow
                       .add_rounded,
               color:
                   activity.negative
-                      ? const Color(
-                          0xFF987865,
-                        )
-                      : const Color(
-                          0xFF561C17,
-                        ),
+                      ? ShopColors.muted
+                      : ShopColors.accent,
               size:
                   17,
             ),
@@ -3132,9 +2889,7 @@ class _PointsActivityRow
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFF3B211B,
-                    ),
+                        ShopColors.text,
                     fontSize:
                         10.5,
                     fontWeight:
@@ -3155,9 +2910,7 @@ class _PointsActivityRow
                     style:
                         const TextStyle(
                       color:
-                          Color(
-                        0xFFA99386,
-                      ),
+                          ShopColors.faint,
                       fontSize:
                           8.5,
                     ),
@@ -3178,16 +2931,12 @@ class _PointsActivityRow
                 TextStyle(
               color:
                   activity.negative
-                      ? const Color(
-                          0xFF987865,
-                        )
-                      : const Color(
-                          0xFF561C17,
-                        ),
+                      ? ShopColors.muted
+                      : ShopColors.accent,
               fontSize:
                   10.5,
               fontWeight:
-                  FontWeight.w900,
+                  FontWeight.w800,
             ),
           ),
         ],
@@ -3225,12 +2974,8 @@ class _CashbackBalanceRow
           BoxDecoration(
         color:
             emphasized
-                ? const Color(
-                    0xFFF6EFE7,
-                  )
-                : const Color(
-                    0xFFFFFDF9,
-                  ),
+                ? ShopColors.soft
+                : ShopColors.surface,
         borderRadius:
             BorderRadius.circular(
           13,
@@ -3238,9 +2983,7 @@ class _CashbackBalanceRow
         border:
             Border.all(
           color:
-              const Color(
-            0xFFEADCCC,
-          ),
+              ShopColors.border,
         ),
       ),
       child:
@@ -3254,9 +2997,7 @@ class _CashbackBalanceRow
             decoration:
                 const BoxDecoration(
               color:
-                  Color(
-                0xFFF1E4D7,
-              ),
+                  ShopColors.accentSoft,
               shape:
                   BoxShape.circle,
             ),
@@ -3266,9 +3007,7 @@ class _CashbackBalanceRow
                 Icon(
               icon,
               color:
-                  const Color(
-                0xFF561C17,
-              ),
+                  ShopColors.accent,
               size:
                   18,
             ),
@@ -3286,9 +3025,7 @@ class _CashbackBalanceRow
               style:
                   const TextStyle(
                 color:
-                    Color(
-                  0xFF987865,
-                ),
+                    ShopColors.muted,
                 fontSize:
                     10,
                 fontWeight:
@@ -3307,13 +3044,11 @@ class _CashbackBalanceRow
             style:
                 const TextStyle(
               color:
-                  Color(
-                0xFF561C17,
-              ),
+                  ShopColors.accent,
               fontSize:
                   12,
               fontWeight:
-                  FontWeight.w900,
+                  FontWeight.w800,
             ),
           ),
         ],
@@ -3371,13 +3106,11 @@ class _CashbackActivityRow
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFF3B211B,
-                    ),
+                        ShopColors.text,
                     fontSize:
                         10.5,
                     fontWeight:
-                        FontWeight.w900,
+                        FontWeight.w800,
                   ),
                 ),
               ),
@@ -3392,13 +3125,11 @@ class _CashbackActivityRow
                 style:
                     const TextStyle(
                   color:
-                      Color(
-                    0xFF561C17,
-                  ),
+                      ShopColors.accent,
                   fontSize:
                       10.5,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
             ],
@@ -3418,9 +3149,7 @@ class _CashbackActivityRow
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFF987865,
-                    ),
+                        ShopColors.muted,
                     fontSize:
                         9,
                   ),
@@ -3435,9 +3164,7 @@ class _CashbackActivityRow
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFFA99386,
-                    ),
+                        ShopColors.faint,
                     fontSize:
                         8.5,
                   ),
@@ -3483,9 +3210,7 @@ class _SimpleEmptyRow
             decoration:
                 const BoxDecoration(
               color:
-                  Color(
-                0xFFF6EFE7,
-              ),
+                  ShopColors.soft,
               shape:
                   BoxShape.circle,
             ),
@@ -3496,9 +3221,7 @@ class _SimpleEmptyRow
               Icons
                   .history_rounded,
               color:
-                  Color(
-                0xFF987865,
-              ),
+                  ShopColors.muted,
               size:
                   19,
             ),
@@ -3520,9 +3243,7 @@ class _SimpleEmptyRow
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFF3B211B,
-                    ),
+                        ShopColors.text,
                     fontSize:
                         10.5,
                     fontWeight:
@@ -3540,9 +3261,7 @@ class _SimpleEmptyRow
                   style:
                       const TextStyle(
                     color:
-                        Color(
-                      0xFF987865,
-                    ),
+                        ShopColors.muted,
                     fontSize:
                         8.5,
                     height:
@@ -3565,9 +3284,7 @@ class _SimpleEmptyRow
               style:
                   const TextStyle(
                 color:
-                    Color(
-                  0xFF561C17,
-                ),
+                    ShopColors.accent,
                 fontSize:
                     9.5,
                 fontWeight:

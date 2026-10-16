@@ -1,3 +1,5 @@
+import '../rider_product_image.dart';
+
 class RiderDeliveryData {
   final int id;
 
@@ -98,7 +100,7 @@ class RiderDeliveryData {
       ),
       status: (json['status'] ?? '').toString(),
       statusLabel: (json['status_label'] ?? json['status'] ?? '').toString(),
-      imageUrl: (json['image'] ?? json['image_url'])?.toString(),
+      imageUrl: riderProductImageUrl(json),
       failureReason: (json['failure_reason'] ?? json['failure_note'])
           ?.toString(),
       deliveryLatitude: _parseCoordinate(

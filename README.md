@@ -37,6 +37,15 @@ default selection, wishlist, rewards, notifications, seller conversations and
 image attachments, and profile name/contact/birthday/gender/photo and password
 changes use authenticated Laravel APIs. Messages and notifications use
 targeted Reverb subscriptions when configured, with API polling as fallback.
+Buyer and rider notifications stay subscribed across their app screens and show
+as a dismissible banner at the top while the app is open. If Reverb is not
+configured or cannot connect, the foreground banner checks the notification
+API every 15 seconds. This in-app banner does not deliver operating-system
+push notifications while the app is closed.
+Buyer notification category switches are saved on the device and control which
+order, delivery, chat, and reward banners appear while the app is open. Delivery
+updates have their own notification type and inbox filter. The notification and
+AI response sound switches play a platform alert sound when those events arrive.
 Wishlist records and profile photos require applying the new Laravel migration.
 
 Email changes remain unavailable: they need a verified email-change flow, not

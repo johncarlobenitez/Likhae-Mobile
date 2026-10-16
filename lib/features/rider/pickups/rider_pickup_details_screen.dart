@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../rider_stage_navigation_screen.dart';
 import 'rider_pickups_screen.dart';
 
 class RiderPickupDetailsScreen extends StatefulWidget {
@@ -213,11 +214,67 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
         _pickup = _pickup.copyWith(
           status: 'PICKED_UP',
           statusLabel: 'Picked Up',
+          shipmentStatus: 'PICKED_UP',
         );
 
         _verified = false;
       });
     }
+  }
+
+  Future<void> _changePickupStatus(String status, String label) async {
+    final bool updated = await _transition(status);
+    if (!updated || !mounted) return;
+    setState(() {
+      _pickup = _pickup.copyWith(status: status, statusLabel: label);
+    });
+  }
+
+  Future<void> _openStageNavigation({required bool toLogisticsCenter}) async {
+    final double? latitude = toLogisticsCenter
+        ? _pickup.logisticsCenterLatitude
+        : _pickup.sellerLatitude;
+    final double? longitude = toLogisticsCenter
+        ? _pickup.logisticsCenterLongitude
+        : _pickup.sellerLongitude;
+    final bool validCoordinates = latitude != null &&
+        longitude != null &&
+        latitude.isFinite &&
+        longitude.isFinite &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180 &&
+        (latitude != 0 || longitude != 0);
+    if (!validCoordinates) {
+      _showMessage(
+        toLogisticsCenter
+            ? 'The logistics center location is not available for this pickup.'
+            : 'The seller has not confirmed an exact map pin yet.',
+      );
+      return;
+    }
+
+    if (!toLogisticsCenter && !_pickup.isInProgress) {
+      final bool started = await _transition('in_progress');
+      if (!started || !mounted) return;
+      setState(() {
+        _pickup = _pickup.copyWith(
+          status: 'IN_PROGRESS',
+          statusLabel: 'Pickup in progress',
+        );
+      });
+    }
+
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => RiderStageNavigationScreen(
+          pickup: _pickup,
+          toLogisticsCenter: toLogisticsCenter,
+        ),
+      ),
+    );
   }
 
   Future<bool> _transition(String status) async {
@@ -322,7 +379,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
             _buildPickupActions(),
 
-            if (_pickup.isPickupAssigned) ...<Widget>[
+            if (_pickup.isInProgress) ...<Widget>[
               const SizedBox(height: 14),
 
               _buildScannerSection(),
@@ -405,7 +462,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           const SizedBox(height: 12),
 
-          _PickupInfoRow(label: 'Delivery Address', value: _pickup.address),
+          _PickupInfoRow(label: 'Seller Pickup Address', value: _pickup.address),
 
           const SizedBox(height: 12),
 
@@ -442,7 +499,52 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           const SizedBox(height: 14),
 
-          if (_pickup.isPickupAssigned && _verified) ...<Widget>[
+          if (_pickup.normalizedStatus == 'ASSIGNED') ...<Widget>[
+            _PickupPrimaryButton(
+              label: 'Accept Pickup',
+              icon: Icons.check_circle_outline_rounded,
+              loading: _submitting,
+              onPressed: () => _changePickupStatus('accepted', 'Accepted'),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          if (_pickup.normalizedStatus == 'ACCEPTED') ...<Widget>[
+            _PickupPrimaryButton(
+              label: 'Start Seller Pickup',
+              icon: Icons.play_arrow_rounded,
+              loading: _submitting,
+              onPressed: () => _changePickupStatus(
+                'in_progress',
+                'Pickup in progress',
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          if (_pickup.isAccepted && !_pickup.isPickedUp) ...<Widget>[
+            _PickupPrimaryButton(
+              label: 'Navigate to Seller',
+              icon: Icons.navigation_outlined,
+              loading: _submitting,
+              onPressed: () => _openStageNavigation(toLogisticsCenter: false),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          if (_pickup.isPickedUp &&
+              _pickup.logisticsCenterLatitude != null &&
+              _pickup.logisticsCenterLongitude != null) ...<Widget>[
+            _PickupPrimaryButton(
+              label: 'Navigate to Logistics Center',
+              icon: Icons.local_shipping_outlined,
+              loading: _submitting,
+              onPressed: () => _openStageNavigation(toLogisticsCenter: true),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          if (_pickup.isInProgress && _verified) ...<Widget>[
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
@@ -482,7 +584,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
             ),
           ],
 
-          if (_pickup.isPickupAssigned && !_verified)
+          if (_pickup.isInProgress && !_verified)
             const Text(
               'Scan and verify the seller\'s waybill below before confirming collection.',
               style: TextStyle(color: _muted, fontSize: 13, height: 1.5),

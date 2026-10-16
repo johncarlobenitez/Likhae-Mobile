@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/services/product_service.dart';
@@ -317,23 +319,23 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon = Color(0xFF561C17);
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroonDark = Color(0xFF3E130F);
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text = Color(0xFF3B211B);
+  static const Color _text = ShopColors.text;
 
-  static const Color _muted = Color(0xFF987865);
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _mutedLight = Color(0xFFA99386);
+  static const Color _mutedLight = ShopColors.faint;
 
-  static const Color _tan = Color(0xFFC19771);
+  static const Color _tan = ShopColors.tan;
 
   static const Color _danger = Color(0xFFB42318);
 
@@ -738,65 +740,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 5, 12, 8),
-      color: _background,
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(context).maybePop();
-                },
-            icon: const Icon(Icons.arrow_back_rounded, color: _text),
-          ),
-
-          const SizedBox(width: 2),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Products',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 21,
-                    height: 1.1,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-
-                SizedBox(height: 3),
-
-                Text(
-                  'Find products from trusted local sellers.',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: _muted, fontSize: 10.5),
-                ),
-              ],
-            ),
-          ),
-
-          _HeaderButton(
-            icon: Icons.notifications_none_rounded,
-            tooltip: 'Notifications',
-            onTap: widget.onNotifications,
-          ),
-
-          const SizedBox(width: 7),
-
-          _HeaderButton(
-            icon: Icons.shopping_bag_outlined,
-            tooltip: 'Cart',
-            onTap: widget.onCart,
-          ),
-        ],
-      ),
+    return ShopPageHeader(
+      title: 'Discover', subtitle: 'Good things, made closer to home.',
+      onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+      actions: [
+        GlassIconButton(icon: Icons.notifications_none_rounded, label: 'Notifications', onPressed: widget.onNotifications),
+        GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Cart', onPressed: widget.onCart),
+      ],
     );
   }
 
@@ -913,7 +863,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1E4D7),
+              color: ShopColors.accentSoft,
               borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
@@ -932,50 +882,29 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   Widget _buildProductGrid(List<BuyerProduct> products) {
     return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      sliver: SliverLayoutBuilder(
-        builder: (BuildContext context, constraints) {
-          final double width = constraints.crossAxisExtent;
-
-          final int columns;
-
-          if (width < 340) {
-            columns = 1;
-          } else if (width >= 900) {
-            columns = 4;
-          } else if (width >= 700) {
-            columns = 3;
-          } else {
-            columns = 2;
-          }
-
-          return SliverGrid(
-            delegate: SliverChildBuilderDelegate((
-              BuildContext context,
-              int index,
-            ) {
-              final BuyerProduct product = products[index];
-
-              return _ProductCard(
-                product: product,
-                wishlistLoading: _wishlistLoading.contains(product.id),
-                onWishlist: () {
-                  _toggleWishlist(product);
-                },
-                onTap: () {
-                  widget.onProductSelected?.call(product);
-                },
-              );
-            }, childCount: products.length),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 12,
-              childAspectRatio: columns == 1 ? 1.65 : 0.64,
-            ),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      sliver: SliverLayoutBuilder(builder: (context, constraints) {
+        final width = constraints.crossAxisExtent;
+        final columns = width >= 1000 ? 4 : width >= 700 ? 3
+            : width < 290 || MediaQuery.textScalerOf(context).scale(14) > 24 ? 1 : 2;
+        return SliverList(delegate: SliverChildBuilderDelegate((context, row) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              for (int column = 0; column < columns; column++) ...[
+                if (column > 0) const SizedBox(width: 12),
+                Expanded(child: row * columns + column >= products.length ? const SizedBox.shrink()
+                    : _ProductCard(
+                        product: products[row * columns + column],
+                        wishlistLoading: _wishlistLoading.contains(products[row * columns + column].id),
+                        onWishlist: () => _toggleWishlist(products[row * columns + column]),
+                        onTap: () => widget.onProductSelected?.call(products[row * columns + column]),
+                      )),
+              ],
+            ]),
           );
-        },
-      ),
+        }, childCount: (products.length / columns).ceil()));
+      }),
     );
   }
 
@@ -992,7 +921,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               width: 68,
               height: 68,
               decoration: const BoxDecoration(
-                color: Color(0xFFF1E4D7),
+                color: ShopColors.accentSoft,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
@@ -1054,270 +983,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
 class _ProductCard extends StatelessWidget {
   final BuyerProduct product;
-
   final bool wishlistLoading;
-
   final VoidCallback onWishlist;
   final VoidCallback onTap;
 
-  const _ProductCard({
-    required this.product,
-    required this.wishlistLoading,
-    required this.onWishlist,
-    required this.onTap,
-  });
+  const _ProductCard({required this.product, required this.wishlistLoading, required this.onWishlist, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    final double? discount = product.discountPercentage;
-
-    return Material(
-      color: const Color(0xFFFFFDF9),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFFDF9),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFEADCCC)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(
-                      color: const Color(0xFFF3ECE4),
-                      child: _ProductImage(imageUrl: product.imageUrl),
-                    ),
-
-                    if (discount != null)
-                      Positioned(
-                        left: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF561C17),
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Text(
-                            '-${discount.round()}%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    Positioned(
-                      right: 7,
-                      top: 7,
-                      child: Material(
-                        color: Colors.white.withValues(alpha: 0.94),
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          onTap: wishlistLoading ? null : onWishlist,
-                          customBorder: const CircleBorder(),
-                          child: SizedBox(
-                            width: 34,
-                            height: 34,
-                            child: wishlistLoading
-                                ? const Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.8,
-                                      color: Color(0xFF561C17),
-                                    ),
-                                  )
-                                : Icon(
-                                    product.wishlisted
-                                        ? Icons.favorite_rounded
-                                        : Icons.favorite_border_rounded,
-                                    color: const Color(0xFF561C17),
-                                    size: 18,
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    if (product.isOutOfStock)
-                      Positioned.fill(
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.42),
-                          alignment: Alignment.center,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.64),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'OUT OF STOCK',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                letterSpacing: 0.7,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.fromLTRB(11, 10, 11, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (product.category?.trim().isNotEmpty == true) ...[
-                      Text(
-                        product.category!.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF6C4936),
-                          fontSize: 9,
-                          letterSpacing: 0.7,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-
-                      const SizedBox(height: 5),
-                    ],
-
-                    Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF3B211B),
-                        fontSize: 13,
-                        height: 1.25,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-
-                    if (product.sellerName?.trim().isNotEmpty == true) ...[
-                      const SizedBox(height: 5),
-
-                      Text(
-                        product.sellerName!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF987865),
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 8),
-
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 5,
-                      runSpacing: 2,
-                      children: [
-                        Text(
-                          _price(product.price),
-                          style: const TextStyle(
-                            color: Color(0xFF561C17),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-
-                        if (product.originalPrice != null &&
-                            product.originalPrice! > product.price)
-                          Text(
-                            _price(product.originalPrice!),
-                            style: const TextStyle(
-                              color: Color(0xFFA99386),
-                              fontSize: 9.5,
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 7),
-
-                    Row(
-                      children: [
-                        if (product.rating != null) ...[
-                          const Icon(
-                            Icons.star_rounded,
-                            color: Color(0xFFC88418),
-                            size: 13,
-                          ),
-
-                          const SizedBox(width: 2),
-
-                          Text(
-                            product.rating!.toStringAsFixed(1),
-                            style: const TextStyle(
-                              color: Color(0xFF3B211B),
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-
-                          const SizedBox(width: 5),
-                        ],
-
-                        Expanded(
-                          child: Text(
-                            '${product.soldCount} sold',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF987865),
-                              fontSize: 9.5,
-                            ),
-                          ),
-                        ),
-
-                        if (product.stock != null && !product.isOutOfStock)
-                          Text(
-                            '${product.stock} left',
-                            style: const TextStyle(
-                              color: Color(0xFF987865),
-                              fontSize: 9,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _price(double price) {
-    return '₱${price.toStringAsFixed(2)}';
-  }
+  Widget build(BuildContext context) => ShopProductCard(
+    image: _ProductImage(imageUrl: product.imageUrl),
+    name: product.name, category: product.category, seller: product.sellerName,
+    price: product.price, originalPrice: product.originalPrice, rating: product.rating,
+    soldCount: product.soldCount, outOfStock: product.isOutOfStock,
+    wishlisted: product.wishlisted, wishlistLoading: wishlistLoading,
+    onTap: onTap, onWishlist: onWishlist,
+  );
 }
 
 class _ProductImage extends StatelessWidget {
@@ -1333,7 +1013,7 @@ class _ProductImage extends StatelessWidget {
       return const Center(
         child: Icon(
           Icons.inventory_2_outlined,
-          color: Color(0xFFA99386),
+          color: ShopColors.faint,
           size: 36,
         ),
       );
@@ -1356,7 +1036,7 @@ class _ProductImage extends StatelessWidget {
                 height: 22,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF561C17),
+                  color: ShopColors.accent,
                 ),
               ),
             );
@@ -1366,7 +1046,7 @@ class _ProductImage extends StatelessWidget {
             return const Center(
               child: Icon(
                 Icons.broken_image_outlined,
-                color: Color(0xFFA99386),
+                color: ShopColors.faint,
                 size: 36,
               ),
             );
@@ -1375,41 +1055,7 @@ class _ProductImage extends StatelessWidget {
   }
 }
 
-class _HeaderButton extends StatelessWidget {
-  final IconData icon;
 
-  final String tooltip;
-
-  final VoidCallback? onTap;
-
-  const _HeaderButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFFFFDF9),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFEADCCC)),
-          ),
-          child: Icon(icon, color: const Color(0xFF561C17), size: 19),
-        ),
-      ),
-    );
-  }
-}
 
 class _SortOption extends StatelessWidget {
   final BuyerProductSort sort;
@@ -1430,13 +1076,13 @@ class _SortOption extends StatelessWidget {
       title: Text(
         sort.label,
         style: TextStyle(
-          color: const Color(0xFF3B211B),
+          color: ShopColors.text,
           fontSize: 13,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
         ),
       ),
       trailing: selected
-          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF561C17))
+          ? const Icon(Icons.check_circle_rounded, color: ShopColors.accent)
           : null,
     );
   }

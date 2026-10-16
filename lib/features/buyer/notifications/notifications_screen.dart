@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/shop_ui.dart';
+
 import '../../../services/realtime_service.dart';
 
 enum BuyerNotificationType {
   orders,
+  deliveries,
   messages,
   rewards,
   account,
@@ -17,6 +20,9 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
     switch (this) {
       case BuyerNotificationType.orders:
         return 'orders';
+
+      case BuyerNotificationType.deliveries:
+        return 'deliveries';
 
       case BuyerNotificationType.messages:
         return 'messages';
@@ -37,6 +43,9 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
       case BuyerNotificationType.orders:
         return 'Orders';
 
+      case BuyerNotificationType.deliveries:
+        return 'Delivery';
+
       case BuyerNotificationType.messages:
         return 'Messages';
 
@@ -56,6 +65,9 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
       case BuyerNotificationType.orders:
         return Icons.inventory_2_outlined;
 
+      case BuyerNotificationType.deliveries:
+        return Icons.local_shipping_outlined;
+
       case BuyerNotificationType.messages:
         return Icons.mail_outline_rounded;
 
@@ -74,6 +86,7 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
 enum NotificationFilter {
   all,
   orders,
+  deliveries,
   messages,
   rewards,
   account,
@@ -88,6 +101,9 @@ extension NotificationFilterInfo on NotificationFilter {
 
       case NotificationFilter.orders:
         return 'Orders';
+
+      case NotificationFilter.deliveries:
+        return 'Delivery';
 
       case NotificationFilter.messages:
         return 'Messages';
@@ -110,6 +126,9 @@ extension NotificationFilterInfo on NotificationFilter {
 
       case NotificationFilter.orders:
         return BuyerNotificationType.orders;
+
+      case NotificationFilter.deliveries:
+        return BuyerNotificationType.deliveries;
 
       case NotificationFilter.messages:
         return BuyerNotificationType.messages;
@@ -200,13 +219,16 @@ class BuyerNotificationData {
     switch (normalized) {
       case 'order':
       case 'orders':
+        return BuyerNotificationType.orders;
+
       case 'shipment':
+      case 'shipments':
       case 'shipping':
       case 'delivery':
       case 'deliveries':
       case 'parcel':
       case 'parcels':
-        return BuyerNotificationType.orders;
+        return BuyerNotificationType.deliveries;
 
       case 'message':
       case 'messages':
@@ -234,10 +256,18 @@ class BuyerNotificationData {
         return BuyerNotificationType.general;
     }
 
-    if (normalized.contains('order') ||
-        normalized.contains('shipment') ||
-        normalized.contains('delivery') ||
-        normalized.contains('parcel')) {
+    if (normalized.contains('shipment') ||
+        normalized.contains('deliver') ||
+        normalized.contains('parcel') ||
+        normalized.contains('shipping') ||
+        normalized.contains('shipped') ||
+        normalized.contains('pickup') ||
+        normalized.contains('pick_up') ||
+        normalized.contains('sort')) {
+      return BuyerNotificationType.deliveries;
+    }
+
+    if (normalized.contains('order')) {
       return BuyerNotificationType.orders;
     }
 
@@ -249,7 +279,11 @@ class BuyerNotificationData {
     if (normalized.contains('reward') ||
         normalized.contains('voucher') ||
         normalized.contains('point') ||
-        normalized.contains('cashback')) {
+        normalized.contains('cashback') ||
+        normalized.contains('promotion') ||
+        normalized.contains('promo') ||
+        normalized.contains('discount') ||
+        normalized.contains('coupon')) {
       return BuyerNotificationType.rewards;
     }
 
@@ -331,25 +365,25 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon = Color(0xFF561C17);
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroonDark = Color(0xFF3E130F);
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text = Color(0xFF3B211B);
+  static const Color _text = ShopColors.text;
 
-  static const Color _brown = Color(0xFF6C4936);
+  static const Color _brown = ShopColors.secondaryText;
 
-  static const Color _muted = Color(0xFF987865);
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _muted2 = Color(0xFFA99386);
+  static const Color _muted2 = ShopColors.faint;
 
-  static const Color _tan = Color(0xFFC19771);
+  static const Color _tan = ShopColors.tan;
 
   static const Color _danger = Color(0xFFB42318);
 
@@ -809,279 +843,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        7,
-        5,
-        12,
-        7,
-      ),
-      decoration: const BoxDecoration(
-        color: _background,
-        border: Border(
-          bottom: BorderSide(
-            color: Color(
-              0xFFF0E8DF,
-            ),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed: widget.onBack ??
-                () {
-                  Navigator.of(
-                    context,
-                  ).maybePop();
-                },
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: _text,
-            ),
-          ),
-
-          const SizedBox(
-            width: 2,
-          ),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Notifications',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 22,
-                    height: 1.1,
-                    letterSpacing: -0.4,
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
-                ),
-
-                SizedBox(
-                  height: 2,
-                ),
-
-                Text(
-                  'Orders, messages, rewards and account updates',
-                  maxLines: 1,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _muted,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          if (_refreshing) ...[
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: _maroon,
-              ),
-            ),
-
-            const SizedBox(
-              width: 9,
-            ),
-          ],
-
-          if (_unreadCount > 0)
-            Container(
-              constraints: const BoxConstraints(
-                minWidth: 28,
-                minHeight: 28,
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-              ),
-              decoration: const BoxDecoration(
-                color: _maroon,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                _unreadCount > 99
-                    ? '99+'
-                    : '$_unreadCount',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar() => ShopPageHeader(
+    title: 'Updates', subtitle: 'Everything you need to know.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [
+      if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+      if (_unreadCount > 0) Badge.count(count: _unreadCount, child: const Icon(Icons.notifications_none_rounded, color: ShopColors.accent)),
+    ],
+  );
 
   Widget _buildHeading() {
-    final bool canMarkAll =
-        widget.onMarkAllAsRead != null &&
-        _unreadCount > 0 &&
-        !_markingAllRead;
-
+    final canMarkAll = widget.onMarkAllAsRead != null && _unreadCount > 0 && !_markingAllRead;
     return Container(
-      padding: const EdgeInsets.all(
-        19,
-      ),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(
-          20,
-        ),
-        border: Border.all(
-          color: _border,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _maroon.withValues(
-              alpha: 0.045,
-            ),
-            blurRadius: 20,
-            offset: const Offset(
-              0,
-              8,
-            ),
+        color: _surface, borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: ShopColors.accentSoft, borderRadius: BorderRadius.circular(16)),
+            child: Icon(_unreadCount == 0 ? Icons.done_all_rounded : Icons.notifications_active_outlined, color: _maroon, size: 24)),
+          const SizedBox(width: 14),
+          Expanded(child: Text(_unreadCount == 0 ? 'You’re all caught up' : '$_unreadCount unread updates',
+            style: const TextStyle(color: _text, fontSize: 20, letterSpacing: -.5, fontWeight: FontWeight.w700))),
+        ]),
+        const SizedBox(height: 13),
+        const Text('Your orders, conversations, and rewards, all in one place.',
+          style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5)),
+        if (_unreadCount > 0) ...[
+          const SizedBox(height: 13),
+          TextButton.icon(
+            onPressed: canMarkAll ? _markAllAsRead : null,
+            icon: _markingAllRead ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.done_all_rounded, size: 18),
+            label: const Text('Mark all as read'),
           ),
         ],
-      ),
-      child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.notifications_none_rounded,
-                color: _maroon,
-                size: 18,
-              ),
-
-              SizedBox(
-                width: 7,
-              ),
-
-              Text(
-                'NOTIFICATION CENTER',
-                style: TextStyle(
-                  color: _maroon,
-                  fontSize: 11.5,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(
-            height: 8,
-          ),
-
-          const Text(
-            'Important activity from your LIKHAE account.',
-            style: TextStyle(
-              color: _text,
-              fontSize: 20,
-              height: 1.25,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-
-          const SizedBox(
-            height: 6,
-          ),
-
-          Text(
-            _unreadCount == 0
-                ? 'You have no unread notifications.'
-                : '$_unreadCount ${_unreadCount == 1 ? 'notification is' : 'notifications are'} waiting for your attention.',
-            style: const TextStyle(
-              color: _muted,
-              fontSize: 13.5,
-              height: 1.55,
-            ),
-          ),
-
-          const SizedBox(
-            height: 16,
-          ),
-
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: OutlinedButton.icon(
-              onPressed:
-                  canMarkAll ? _markAllAsRead : null,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _maroon,
-                disabledForegroundColor: _muted2,
-                side: BorderSide(
-                  color: canMarkAll
-                      ? _tan
-                      : _border,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    12,
-                  ),
-                ),
-              ),
-              icon: _markingAllRead
-                  ? const SizedBox(
-                      width: 17,
-                      height: 17,
-                      child:
-                          CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _maroon,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.done_all_rounded,
-                      size: 17,
-                    ),
-              label: Text(
-                _unreadCount == 0
-                    ? 'All notifications read'
-                    : 'Mark all as read',
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-
-          if (widget.onMarkAllAsRead == null &&
-              _unreadCount > 0) ...[
-            const SizedBox(
-              height: 8,
-            ),
-
-            const Text(
-              'Mark-all-read will become available when the Laravel notification action is connected.',
-              style: TextStyle(
-                color: _muted,
-                fontSize: 12,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ],
-      ),
+      ]),
     );
   }
 
@@ -1218,9 +1017,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(
-          18,
-        ),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: _border,
         ),
@@ -1286,9 +1083,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(
-          18,
-        ),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: _border,
         ),
@@ -1299,9 +1094,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             width: 68,
             height: 68,
             decoration: const BoxDecoration(
-              color: Color(
-                0xFFF1E4D7,
-              ),
+              color: ShopColors.accentSoft,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -1322,7 +1115,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             style: TextStyle(
               color: _text,
               fontSize: 20,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
@@ -1380,9 +1173,7 @@ class _NotificationTile extends StatelessWidget {
           ? const Color(
               0xFFFFF4F0,
             )
-          : const Color(
-              0xFFFFFDF9,
-            ),
+          : ShopColors.surface,
       child: InkWell(
         onTap: canOpen
             ? onTap
@@ -1398,9 +1189,7 @@ class _NotificationTile extends StatelessWidget {
             border: showDivider
                 ? const Border(
                     bottom: BorderSide(
-                      color: Color(
-                        0xFFF0E8DF,
-                      ),
+                      color: ShopColors.border,
                     ),
                   )
                 : null,
@@ -1414,9 +1203,7 @@ class _NotificationTile extends StatelessWidget {
                 height: 43,
                 decoration: BoxDecoration(
                   color: unread
-                      ? const Color(
-                          0xFF561C17,
-                        )
+                      ? ShopColors.accent
                       : const Color(
                           0xFFF1ECE7,
                         ),
@@ -1430,9 +1217,7 @@ class _NotificationTile extends StatelessWidget {
                   notification.type.icon,
                   color: unread
                       ? Colors.white
-                      : const Color(
-                          0xFF987865,
-                        ),
+                      : ShopColors.muted,
                   size: 19,
                 ),
               ),
@@ -1454,13 +1239,11 @@ class _NotificationTile extends StatelessWidget {
                           child: Text(
                             notification.title,
                             style: TextStyle(
-                              color: const Color(
-                                0xFF3B211B,
-                              ),
+                              color: ShopColors.text,
                               fontSize: 14,
                               height: 1.25,
                               fontWeight: unread
-                                  ? FontWeight.w900
+                                  ? FontWeight.w800
                                   : FontWeight.w700,
                             ),
                           ),
@@ -1476,9 +1259,7 @@ class _NotificationTile extends StatelessWidget {
                           Text(
                             notification.time,
                             style: const TextStyle(
-                              color: Color(
-                                0xFFA99386,
-                              ),
+                              color: ShopColors.faint,
                               fontSize: 11.5,
                             ),
                           ),
@@ -1496,9 +1277,7 @@ class _NotificationTile extends StatelessWidget {
                       Text(
                         notification.message,
                         style: const TextStyle(
-                          color: Color(
-                            0xFF987865,
-                          ),
+                          color: ShopColors.muted,
                           fontSize: 13,
                           height: 1.55,
                         ),
@@ -1518,9 +1297,7 @@ class _NotificationTile extends StatelessWidget {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFF6EFE7,
-                            ),
+                            color: ShopColors.soft,
                             borderRadius:
                                 BorderRadius.circular(
                               100,
@@ -1529,9 +1306,7 @@ class _NotificationTile extends StatelessWidget {
                           child: Text(
                             notification.type.label,
                             style: const TextStyle(
-                              color: Color(
-                                0xFF6C4936,
-                              ),
+                              color: ShopColors.secondaryText,
                               fontSize: 11.5,
                               fontWeight:
                                   FontWeight.w800,
@@ -1562,13 +1337,11 @@ class _NotificationTile extends StatelessWidget {
                             child: const Text(
                               'UNREAD',
                               style: TextStyle(
-                                color: Color(
-                                  0xFF561C17,
-                                ),
+                                color: ShopColors.accent,
                                 fontSize: 11,
                                 letterSpacing: 0.4,
                                 fontWeight:
-                                    FontWeight.w900,
+                                    FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1583,17 +1356,13 @@ class _NotificationTile extends StatelessWidget {
                             child:
                                 CircularProgressIndicator(
                               strokeWidth: 1.8,
-                              color: Color(
-                                0xFF561C17,
-                              ),
+                              color: ShopColors.accent,
                             ),
                           )
                         else if (enabled)
                           const Icon(
                             Icons.chevron_right_rounded,
-                            color: Color(
-                              0xFFA99386,
-                            ),
+                            color: ShopColors.faint,
                             size: 18,
                           ),
                       ],
@@ -1614,9 +1383,7 @@ class _NotificationTile extends StatelessWidget {
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(
-                    color: Color(
-                      0xFF561C17,
-                    ),
+                    color: ShopColors.accent,
                     shape: BoxShape.circle,
                   ),
                 ),

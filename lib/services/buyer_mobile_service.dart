@@ -789,20 +789,44 @@ class BuyerMobileService {
         await LikhaeRealtimeService.subscribe('App.Models.User.${user.id}');
     try {
       await for (final RealtimeEvent event in subscription.events) {
-        if (event.name != 'notification.created') continue;
+        final bool isCreatedNotification =
+            event.name == 'notification.created' ||
+            event.name.endsWith('BroadcastNotificationCreated');
+        if (!isCreatedNotification) continue;
+
+        final dynamic rawPayload = event.data['data'];
+        final Map<String, dynamic> notificationData = rawPayload is Map
+            ? Map<String, dynamic>.from(rawPayload)
+            : event.data;
         final DateTime? createdAt =
-            DateTime.tryParse((event.data['created_at'] ?? '').toString());
+            DateTime.tryParse(
+              (event.data['created_at'] ?? notificationData['created_at'] ?? '')
+                  .toString(),
+            );
         yield BuyerNotificationData(
-          id: (event.data['id'] ?? '').toString(),
+          id: (event.data['id'] ?? notificationData['id'] ?? '').toString(),
           type: BuyerNotificationData.resolveType(
-            event.data['type']?.toString(),
+            (notificationData['type'] ?? event.data['type'])?.toString(),
           ),
-          title: (event.data['title'] ?? '').toString(),
-          message: (event.data['message'] ?? '').toString(),
+          title: (notificationData['title'] ??
+                  notificationData['subject'] ??
+                  event.data['title'] ??
+                  '')
+              .toString(),
+          message: (notificationData['message'] ??
+                  notificationData['body'] ??
+                  notificationData['content'] ??
+                  event.data['message'] ??
+                  '')
+              .toString(),
           time: createdAt == null ? 'Just now' : _displayTime(createdAt),
           unread: true,
           createdAt: createdAt,
-          actionUrl: event.data['action_url']?.toString(),
+          actionUrl: (notificationData['action_url'] ??
+                  notificationData['actionUrl'] ??
+                  notificationData['url'] ??
+                  event.data['action_url'])
+              ?.toString(),
         );
       }
     } finally {

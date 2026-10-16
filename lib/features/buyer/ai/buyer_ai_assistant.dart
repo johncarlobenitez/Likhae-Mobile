@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../shared/widgets/shop_ui.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../settings/buyer_system_settings_controller.dart';
 import '../../../services/buyer_ai_service.dart';
 
 class BuyerAiAssistant extends StatefulWidget {
@@ -84,6 +89,11 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
         page: widget.page,
       );
       if (!mounted) return;
+      if (BuyerSystemSettingsController.instance.aiResponseSound) {
+        unawaited(
+          SystemSound.play(SystemSoundType.alert).catchError((Object _) {}),
+        );
+      }
       setState(() {
         _messages.add(
           _BuyerAiMessage(
@@ -273,7 +283,7 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
     return Material(
       color: surface,
       elevation: 12,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(24),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: <Widget>[

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'routes/app_router.dart';
+import 'shared/widgets/app_notification_host.dart';
 
 class LikhaeApp extends StatelessWidget {
   const LikhaeApp({
@@ -27,6 +28,13 @@ class LikhaeApp extends StatelessWidget {
 
           routerConfig:
               appRouter,
+
+          builder: (BuildContext context, Widget? child) {
+            return AppNotificationHost(
+              router: appRouter,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
 
           theme:
               AppTheme.lightTheme,

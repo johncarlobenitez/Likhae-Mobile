@@ -1,35 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-enum MobileAccountType {
-  buyer,
-  rider,
-}
+enum MobileAccountType { buyer, rider }
 
-enum RegistrationDocumentType {
-  validId,
-  vehicleOrCr,
-  driversLicense,
-}
+enum RegistrationDocumentType { validId, vehicleOrCr, driversLicense }
 
 class AddressOption {
   final String code;
   final String name;
 
-  const AddressOption({
-    required this.code,
-    required this.name,
-  });
+  const AddressOption({required this.code, required this.name});
 }
 
 class RegistrationDocument {
   final String name;
   final String? path;
 
-  const RegistrationDocument({
-    required this.name,
-    this.path,
-  });
+  const RegistrationDocument({required this.name, this.path});
 }
 
 class RegisterFormData {
@@ -95,35 +82,32 @@ class RegisterFormData {
   });
 }
 
-typedef RegistrationSubmitCallback = Future<void> Function(
-  RegisterFormData data,
-);
+typedef RegistrationSubmitCallback =
+    Future<void> Function(RegisterFormData data);
 
 typedef EmailVerificationSendCallback = Future<void> Function(String email);
 
-typedef EmailVerificationVerifyCallback = Future<String> Function({
-  required String email,
-  required String code,
-});
+typedef EmailVerificationVerifyCallback =
+    Future<String> Function({required String email, required String code});
 
 typedef AddressLoader = Future<List<AddressOption>> Function();
 
-typedef ChildAddressLoader = Future<List<AddressOption>> Function(
-  String parentCode,
-);
+typedef ChildAddressLoader =
+    Future<List<AddressOption>> Function(String parentCode);
 
-typedef PostalCodeLoader = Future<String?> Function({
-  required String municipalityCode,
-  required String barangayCode,
-  required String provinceName,
-  required String municipalityName,
-});
+typedef PostalCodeLoader =
+    Future<String?> Function({
+      required String municipalityCode,
+      required String barangayCode,
+      required String provinceName,
+      required String municipalityName,
+    });
 
-typedef DocumentPickerCallback = Future<RegistrationDocument?> Function(
-  RegistrationDocumentType type,
-);
+typedef DocumentPickerCallback =
+    Future<RegistrationDocument?> Function(RegistrationDocumentType type);
 
 class RegisterScreen extends StatefulWidget {
+  final Map<String, dynamic>? googleProfile;
   final RegistrationSubmitCallback? onSubmit;
 
   final EmailVerificationSendCallback? onSendEmailVerificationCode;
@@ -140,6 +124,7 @@ class RegisterScreen extends StatefulWidget {
 
   const RegisterScreen({
     super.key,
+    this.googleProfile,
     this.onSubmit,
     this.onSendEmailVerificationCode,
     this.onVerifyEmailVerificationCode,
@@ -170,50 +155,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final GlobalKey<FormState> _contactFormKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _addressFormKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _vehicleFormKey = GlobalKey<FormState>();
-  final GlobalKey<FormState> _verificationFormKey =
-      GlobalKey<FormState>();
+  final GlobalKey<FormState> _verificationFormKey = GlobalKey<FormState>();
 
-  final TextEditingController _firstNameController =
-      TextEditingController();
+  final TextEditingController _firstNameController = TextEditingController();
 
-  final TextEditingController _middleNameController =
-      TextEditingController();
+  final TextEditingController _middleNameController = TextEditingController();
 
-  final TextEditingController _lastNameController =
-      TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
 
-  final TextEditingController _birthdayController =
-      TextEditingController();
+  final TextEditingController _birthdayController = TextEditingController();
 
-  final TextEditingController _ageController =
-      TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
 
-  final TextEditingController _emailController =
-      TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
 
   final TextEditingController _emailVerificationCodeController =
       TextEditingController();
 
-  final TextEditingController _contactController =
-      TextEditingController();
+  final TextEditingController _contactController = TextEditingController();
 
-  final TextEditingController _streetController =
-      TextEditingController();
+  final TextEditingController _streetController = TextEditingController();
 
-  final TextEditingController _houseNumberController =
-      TextEditingController();
+  final TextEditingController _houseNumberController = TextEditingController();
 
-  final TextEditingController _postalController =
-      TextEditingController();
+  final TextEditingController _postalController = TextEditingController();
 
-  final TextEditingController _landmarkController =
-      TextEditingController();
+  final TextEditingController _landmarkController = TextEditingController();
 
-  final TextEditingController _plateNumberController =
-      TextEditingController();
+  final TextEditingController _plateNumberController = TextEditingController();
 
-  final TextEditingController _passwordController =
-      TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   final TextEditingController _confirmPasswordController =
       TextEditingController();
@@ -268,6 +239,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void initState() {
     super.initState();
+
+    final Map<String, dynamic>? googleProfile = widget.googleProfile;
+    if (googleProfile != null) {
+      _firstNameController.text = googleProfile['first_name']?.toString() ?? '';
+      _lastNameController.text = googleProfile['last_name']?.toString() ?? '';
+      _emailController.text = googleProfile['email']?.toString() ?? '';
+
+      final String verificationToken =
+          googleProfile['email_verification_token']?.toString() ?? '';
+      if (verificationToken.isNotEmpty) {
+        _emailVerificationToken = verificationToken;
+        _emailVerified = true;
+        _emailUsedForVerification = _emailController.text.trim().toLowerCase();
+      }
+    }
 
     _loadRegions();
   }
@@ -379,10 +365,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _regions = result;
       });
     } catch (_) {
-      _showMessage(
-        'Unable to load regions.',
-        error: true,
-      );
+      _showMessage('Unable to load regions.', error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -392,9 +375,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _onRegionChanged(
-    AddressOption? region,
-  ) async {
+  Future<void> _onRegionChanged(AddressOption? region) async {
     setState(() {
       _region = region;
 
@@ -418,9 +399,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final result = await widget.loadProvinces!(
-        region.code,
-      );
+      final result = await widget.loadProvinces!(region.code);
 
       if (!mounted) {
         return;
@@ -430,10 +409,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _provinces = result;
       });
     } catch (_) {
-      _showMessage(
-        'Unable to load provinces.',
-        error: true,
-      );
+      _showMessage('Unable to load provinces.', error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -443,9 +419,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _onProvinceChanged(
-    AddressOption? province,
-  ) async {
+  Future<void> _onProvinceChanged(AddressOption? province) async {
     setState(() {
       _province = province;
 
@@ -458,8 +432,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _postalController.clear();
     });
 
-    if (province == null ||
-        widget.loadMunicipalities == null) {
+    if (province == null || widget.loadMunicipalities == null) {
       return;
     }
 
@@ -468,9 +441,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final result = await widget.loadMunicipalities!(
-        province.code,
-      );
+      final result = await widget.loadMunicipalities!(province.code);
 
       if (!mounted) {
         return;
@@ -480,10 +451,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _municipalities = result;
       });
     } catch (_) {
-      _showMessage(
-        'Unable to load municipalities.',
-        error: true,
-      );
+      _showMessage('Unable to load municipalities.', error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -493,9 +461,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _onMunicipalityChanged(
-    AddressOption? municipality,
-  ) async {
+  Future<void> _onMunicipalityChanged(AddressOption? municipality) async {
     setState(() {
       _municipality = municipality;
       _barangay = null;
@@ -503,8 +469,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _postalController.clear();
     });
 
-    if (municipality == null ||
-        widget.loadBarangays == null) {
+    if (municipality == null || widget.loadBarangays == null) {
       return;
     }
 
@@ -513,9 +478,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      final result = await widget.loadBarangays!(
-        municipality.code,
-      );
+      final result = await widget.loadBarangays!(municipality.code);
 
       if (!mounted) {
         return;
@@ -525,10 +488,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _barangays = result;
       });
     } catch (_) {
-      _showMessage(
-        'Unable to load barangays.',
-        error: true,
-      );
+      _showMessage('Unable to load barangays.', error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -538,9 +498,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _onBarangayChanged(
-    AddressOption? barangay,
-  ) async {
+  Future<void> _onBarangayChanged(AddressOption? barangay) async {
     setState(() {
       _barangay = barangay;
       _postalController.clear();
@@ -553,8 +511,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     try {
-      final String? postal =
-          await widget.loadPostalCode!(
+      final String? postal = await widget.loadPostalCode!(
         municipalityCode: _municipality!.code,
         barangayCode: barangay.code,
         provinceName: _province?.name ?? '',
@@ -567,10 +524,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       _postalController.text = postal ?? '';
     } catch (_) {
-      _showMessage(
-        'Postal code could not be loaded.',
-        error: true,
-      );
+      _showMessage('Postal code could not be loaded.', error: true);
     }
   }
 
@@ -578,12 +532,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final DateTime today = DateTime.now();
 
     final DateTime initialDate =
-        _birthday ??
-        DateTime(
-          today.year - 18,
-          today.month,
-          today.day,
-        );
+        _birthday ?? DateTime(today.year - 18, today.month, today.day);
 
     final DateTime? selected = await showDatePicker(
       context: context,
@@ -618,8 +567,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final bool birthdayNotReached =
         now.month < birthday.month ||
-        (now.month == birthday.month &&
-            now.day < birthday.day);
+        (now.month == birthday.month && now.day < birthday.day);
 
     if (birthdayNotReached) {
       age--;
@@ -628,21 +576,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return age;
   }
 
-  Future<void> _pickDocument(
-    RegistrationDocumentType type,
-  ) async {
+  Future<void> _pickDocument(RegistrationDocumentType type) async {
     if (widget.onPickDocument == null) {
-      _showMessage(
-        'Document picker will be connected next.',
-      );
+      _showMessage('Document picker will be connected next.');
       return;
     }
 
     try {
-      final RegistrationDocument? document =
-          await widget.onPickDocument!(
-        type,
-      );
+      final RegistrationDocument? document = await widget.onPickDocument!(type);
 
       if (!mounted || document == null) {
         return;
@@ -664,16 +605,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
       });
     } catch (_) {
-      _showMessage(
-        'Unable to select the document.',
-        error: true,
-      );
+      _showMessage('Unable to select the document.', error: true);
     }
   }
 
-  void _changeAccountType(
-    MobileAccountType type,
-  ) {
+  void _changeAccountType(MobileAccountType type) {
     if (_accountType == type) {
       return;
     }
@@ -688,8 +624,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _validateCurrentStep() {
     if (_currentStep == 0) {
-      return _personalFormKey.currentState?.validate() ??
-          false;
+      return _personalFormKey.currentState?.validate() ?? false;
     }
 
     if (_currentStep == 1) {
@@ -711,9 +646,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (_currentStep == 2) {
-      final bool valid =
-          _addressFormKey.currentState?.validate() ??
-          false;
+      final bool valid = _addressFormKey.currentState?.validate() ?? false;
 
       if (!valid) {
         return false;
@@ -734,10 +667,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return true;
     }
 
-    if (_accountType == MobileAccountType.rider &&
-        _currentStep == 3) {
-      return _vehicleFormKey.currentState?.validate() ??
-          false;
+    if (_accountType == MobileAccountType.rider && _currentStep == 3) {
+      return _vehicleFormKey.currentState?.validate() ?? false;
     }
 
     return _validateVerification();
@@ -745,37 +676,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool _validateVerification() {
     final bool fieldsValid =
-        _verificationFormKey.currentState?.validate() ??
-        false;
+        _verificationFormKey.currentState?.validate() ?? false;
 
     if (!fieldsValid) {
       return false;
     }
 
     if (_validId == null) {
-      _showMessage(
-        'Please upload your valid ID.',
-        error: true,
-      );
+      _showMessage('Please upload your valid ID.', error: true);
 
       return false;
     }
 
     if (_accountType == MobileAccountType.rider) {
       if (_vehicleOrCr == null) {
-        _showMessage(
-          'Please upload the vehicle OR / CR.',
-          error: true,
-        );
+        _showMessage('Please upload the vehicle OR / CR.', error: true);
 
         return false;
       }
 
       if (_driversLicense == null) {
-        _showMessage(
-          'Please upload your driver\'s license.',
-          error: true,
-        );
+        _showMessage('Please upload your driver\'s license.', error: true);
 
         return false;
       }
@@ -811,9 +732,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     await _pageController.animateToPage(
       _currentStep,
-      duration: const Duration(
-        milliseconds: 280,
-      ),
+      duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
     );
   }
@@ -832,9 +751,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     await _pageController.animateToPage(
       _currentStep,
-      duration: const Duration(
-        milliseconds: 250,
-      ),
+      duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
     );
   }
@@ -854,9 +771,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (widget.onSubmit == null) {
-      _showMessage(
-        'Registration API will be connected to Laravel next.',
-      );
+      _showMessage('Registration API will be connected to Laravel next.');
       return;
     }
 
@@ -883,21 +798,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
         houseNumber: _houseNumberController.text.trim(),
         postalCode: _postalController.text.trim(),
         landmark: _landmarkController.text.trim(),
-        vehicleType:
-            _accountType == MobileAccountType.rider
+        vehicleType: _accountType == MobileAccountType.rider
             ? _vehicleType
             : null,
-        plateNumber:
-            _accountType == MobileAccountType.rider
+        plateNumber: _accountType == MobileAccountType.rider
             ? _plateNumberController.text.trim()
             : null,
         validId: _validId!,
-        vehicleOrCr:
-            _accountType == MobileAccountType.rider
+        vehicleOrCr: _accountType == MobileAccountType.rider
             ? _vehicleOrCr
             : null,
-        driversLicense:
-            _accountType == MobileAccountType.rider
+        driversLicense: _accountType == MobileAccountType.rider
             ? _driversLicense
             : null,
         password: _passwordController.text,
@@ -910,10 +821,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
 
-      _showMessage(
-        _errorMessage(error),
-        error: true,
-      );
+      _showMessage(_errorMessage(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -989,10 +897,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _showMessage('Verification code sent. Check your email.');
     } catch (error) {
       if (!mounted) return;
-      _showMessage(
-        _errorMessage(error),
-        error: true,
-      );
+      _showMessage(_errorMessage(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -1032,10 +937,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _showMessage('Email verified successfully.');
     } catch (error) {
       if (!mounted) return;
-      _showMessage(
-        _errorMessage(error),
-        error: true,
-      );
+      _showMessage(_errorMessage(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -1045,10 +947,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  void _showMessage(
-    String message, {
-    bool error = false,
-  }) {
+  void _showMessage(String message, {bool error = false}) {
     if (!mounted) {
       return;
     }
@@ -1058,8 +957,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor:
-              error ? const Color(0xFFB42318) : _primary,
+          backgroundColor: error ? const Color(0xFFB42318) : _primary,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -1076,20 +974,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   String _errorMessage(Object error) {
-    return error
-        .toString()
-        .replaceFirst(RegExp(r'^(FormatException|Exception):\s*'), '');
+    return error.toString().replaceFirst(
+      RegExp(r'^(FormatException|Exception):\s*'),
+      '',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final MediaQueryData media =
-        MediaQuery.of(context);
+    final MediaQueryData media = MediaQuery.of(context);
 
     final double screenWidth = media.size.width;
 
-    final double horizontalPadding =
-        screenWidth < 370 ? 14 : 18;
+    final double horizontalPadding = screenWidth < 370 ? 14 : 18;
 
     return Scaffold(
       backgroundColor: _background,
@@ -1107,53 +1004,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 padding: EdgeInsets.only(
                   left: horizontalPadding,
                   right: horizontalPadding,
-                  bottom:
-                      media.viewInsets.bottom > 0
+                  bottom: media.viewInsets.bottom > 0
                       ? 30
                       : media.padding.bottom + 24,
                 ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: 560,
-                    ),
+                    constraints: const BoxConstraints(maxWidth: 560),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.stretch,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(
-                          height: 8,
-                        ),
+                        const SizedBox(height: 8),
 
                         _buildHeader(),
 
-                        const SizedBox(
-                          height: 24,
-                        ),
+                        const SizedBox(height: 24),
 
                         _buildAccountType(),
 
-                        const SizedBox(
-                          height: 22,
-                        ),
+                        const SizedBox(height: 22),
 
                         _buildProgress(),
 
-                        const SizedBox(
-                          height: 18,
-                        ),
+                        const SizedBox(height: 18),
 
                         _buildFormCard(),
 
-                        const SizedBox(
-                          height: 16,
-                        ),
+                        const SizedBox(height: 16),
 
                         _buildNavigation(),
 
-                        const SizedBox(
-                          height: 18,
-                        ),
+                        const SizedBox(height: 18),
 
                         _buildSignInLink(),
                       ],
@@ -1170,41 +1051,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildTopBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        10,
-        6,
-        14,
-        4,
-      ),
+      padding: const EdgeInsets.fromLTRB(10, 6, 14, 4),
       child: Row(
         children: [
           IconButton(
             tooltip: 'Back',
             onPressed: _back,
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-            ),
+            icon: const Icon(Icons.arrow_back_rounded),
           ),
 
-          const SizedBox(
-            width: 2,
-          ),
+          const SizedBox(width: 2),
 
           const _LikhaeBrand(),
 
           const Spacer(),
 
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(100),
-              border: Border.all(
-                color: _border,
-              ),
+              border: Border.all(color: _border),
             ),
             child: const Row(
               mainAxisSize: MainAxisSize.min,
@@ -1214,9 +1081,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   size: 13,
                   color: _secondaryText,
                 ),
-                SizedBox(
-                  width: 4,
-                ),
+                SizedBox(width: 4),
                 Text(
                   'Secure',
                   style: TextStyle(
@@ -1235,12 +1100,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildHeader() {
     return const Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 4,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: 4),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'ACCOUNT REGISTRATION',
@@ -1252,9 +1114,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
 
-          SizedBox(
-            height: 7,
-          ),
+          SizedBox(height: 7),
 
           Text(
             'Create your account',
@@ -1267,17 +1127,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
 
-          SizedBox(
-            height: 8,
-          ),
+          SizedBox(height: 8),
 
           Text(
             'Choose how you will use LIKHAE and complete each registration step.',
-            style: TextStyle(
-              color: _secondaryText,
-              fontSize: 13,
-              height: 1.45,
-            ),
+            style: TextStyle(color: _secondaryText, fontSize: 13, height: 1.45),
           ),
         ],
       ),
@@ -1295,36 +1149,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           Expanded(
             child: _AccountTypeButton(
-              selected:
-                  _accountType ==
-                  MobileAccountType.buyer,
+              selected: _accountType == MobileAccountType.buyer,
               icon: Icons.shopping_bag_outlined,
               title: 'Buyer',
               subtitle: 'Shop & manage orders',
               onTap: () {
-                _changeAccountType(
-                  MobileAccountType.buyer,
-                );
+                _changeAccountType(MobileAccountType.buyer);
               },
             ),
           ),
 
-          const SizedBox(
-            width: 5,
-          ),
+          const SizedBox(width: 5),
 
           Expanded(
             child: _AccountTypeButton(
-              selected:
-                  _accountType ==
-                  MobileAccountType.rider,
+              selected: _accountType == MobileAccountType.rider,
               icon: Icons.two_wheeler_rounded,
               title: 'Rider',
               subtitle: 'Pickup & delivery',
               onTap: () {
-                _changeAccountType(
-                  MobileAccountType.rider,
-                );
+                _changeAccountType(MobileAccountType.rider);
               },
             ),
           ),
@@ -1334,31 +1178,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildProgress() {
-    final List<_RegistrationStep> steps =
-        _steps;
+    final List<_RegistrationStep> steps = _steps;
 
-    final double progress =
-        (_currentStep + 1) / steps.length;
+    final double progress = (_currentStep + 1) / steps.length;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _border,
-        ),
+        border: Border.all(color: _border),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       'Registration progress',
@@ -1369,9 +1207,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
 
-                    const SizedBox(
-                      height: 3,
-                    ),
+                    const SizedBox(height: 3),
 
                     Text(
                       steps[_currentStep].title,
@@ -1396,100 +1232,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ],
           ),
 
-          const SizedBox(
-            height: 14,
-          ),
+          const SizedBox(height: 14),
 
           ClipRRect(
             borderRadius: BorderRadius.circular(100),
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 5,
-              backgroundColor:
-                  const Color(0xFFEDE9E3),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(
-                _primary,
-              ),
+              backgroundColor: const Color(0xFFEDE9E3),
+              valueColor: const AlwaysStoppedAnimation<Color>(_primary),
             ),
           ),
 
-          const SizedBox(
-            height: 16,
-          ),
+          const SizedBox(height: 16),
 
           Row(
-            children: List.generate(
-              steps.length,
-              (int index) {
-                final bool active =
-                    index == _currentStep;
+            children: List.generate(steps.length, (int index) {
+              final bool active = index == _currentStep;
 
-                final bool completed =
-                    index < _currentStep;
+              final bool completed = index < _currentStep;
 
-                return Expanded(
-                  child: Column(
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(
-                          milliseconds: 200,
-                        ),
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color:
-                              active || completed
-                              ? _primary
-                              : const Color(
-                                  0xFFF3F0EB,
-                                ),
-                        ),
-                        alignment: Alignment.center,
-                        child: completed
-                            ? const Icon(
-                                Icons.check_rounded,
-                                size: 16,
-                                color: Colors.white,
-                              )
-                            : Text(
-                                '${index + 1}',
-                                style: TextStyle(
-                                  color: active
-                                      ? Colors.white
-                                      : _secondaryText,
-                                  fontSize: 11,
-                                  fontWeight:
-                                      FontWeight.w800,
-                                ),
+              return Expanded(
+                child: Column(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: active || completed
+                            ? _primary
+                            : const Color(0xFFF3F0EB),
+                      ),
+                      alignment: Alignment.center,
+                      child: completed
+                          ? const Icon(
+                              Icons.check_rounded,
+                              size: 16,
+                              color: Colors.white,
+                            )
+                          : Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                color: active ? Colors.white : _secondaryText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
                               ),
-                      ),
+                            ),
+                    ),
 
-                      const SizedBox(
-                        height: 5,
-                      ),
+                    const SizedBox(height: 5),
 
-                      Text(
-                        steps[index].shortTitle,
-                        maxLines: 1,
-                        overflow:
-                            TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: active
-                              ? _primary
-                              : _secondaryText,
-                          fontSize: 8.5,
-                          fontWeight: active
-                              ? FontWeight.w800
-                              : FontWeight.w500,
-                        ),
+                    Text(
+                      steps[index].shortTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: active ? _primary : _secondaryText,
+                        fontSize: 8.5,
+                        fontWeight: active ? FontWeight.w800 : FontWeight.w500,
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    ),
+                  ],
+                ),
+              );
+            }),
           ),
         ],
       ),
@@ -1514,28 +1322,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        18,
-        20,
-        18,
-        22,
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 22),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: _border,
-        ),
+        border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(
-              alpha: 0.035,
-            ),
+            color: Colors.black.withValues(alpha: 0.035),
             blurRadius: 20,
-            offset: const Offset(
-              0,
-              8,
-            ),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1554,37 +1350,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required IconData icon,
   }) {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 42,
               height: 42,
               decoration: BoxDecoration(
                 color: const Color(0xFFF2EFEA),
-                borderRadius:
-                    BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(13),
               ),
               alignment: Alignment.center,
-              child: Icon(
-                icon,
-                color: _primary,
-                size: 20,
-              ),
+              child: Icon(icon, color: _primary, size: 20),
             ),
 
-            const SizedBox(
-              width: 12,
-            ),
+            const SizedBox(width: 12),
 
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'STEP $number',
@@ -1596,9 +1382,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
 
-                  const SizedBox(
-                    height: 2,
-                  ),
+                  const SizedBox(height: 2),
 
                   Text(
                     title,
@@ -1609,9 +1393,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
 
-                  const SizedBox(
-                    height: 3,
-                  ),
+                  const SizedBox(height: 3),
 
                   Text(
                     subtitle,
@@ -1627,9 +1409,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ],
         ),
 
-        const SizedBox(
-          height: 24,
-        ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -1638,123 +1418,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Form(
       key: _personalFormKey,
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _stepHeader(
             number: '01',
             title: 'Personal Information',
-            subtitle:
-                'Tell us a little about yourself.',
+            subtitle: 'Tell us a little about yourself.',
             icon: Icons.person_outline_rounded,
           ),
 
-          _FieldLabel(
-            text: 'First Name',
-            required: true,
-          ),
+          _FieldLabel(text: 'First Name', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
             controller: _firstNameController,
-            textInputAction:
-                TextInputAction.next,
-            textCapitalization:
-                TextCapitalization.words,
-            autofillHints: const [
-              AutofillHints.givenName,
-            ],
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            autofillHints: const [AutofillHints.givenName],
             decoration: _inputDecoration(
               hintText: 'Juan',
-              prefixIcon:
-                  Icons.person_outline_rounded,
+              prefixIcon: Icons.person_outline_rounded,
             ),
             validator: _requiredTextValidator,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          const _FieldLabel(
-            text: 'Middle Name / Initial',
-          ),
+          const _FieldLabel(text: 'Middle Name / Initial'),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
-            controller:
-                _middleNameController,
-            textInputAction:
-                TextInputAction.next,
-            textCapitalization:
-                TextCapitalization.words,
-            decoration: _inputDecoration(
-              hintText: 'Santos',
-            ),
+            controller: _middleNameController,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            decoration: _inputDecoration(hintText: 'Santos'),
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Last Name',
-            required: true,
-          ),
+          _FieldLabel(text: 'Last Name', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
             controller: _lastNameController,
-            textInputAction:
-                TextInputAction.next,
-            textCapitalization:
-                TextCapitalization.words,
-            autofillHints: const [
-              AutofillHints.familyName,
-            ],
-            decoration: _inputDecoration(
-              hintText: 'Dela Cruz',
-            ),
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            autofillHints: const [AutofillHints.familyName],
+            decoration: _inputDecoration(hintText: 'Dela Cruz'),
             validator: _requiredTextValidator,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Sex',
-            required: true,
-          ),
+          _FieldLabel(text: 'Sex', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           DropdownButtonFormField<String>(
             initialValue: _sex,
             isExpanded: true,
-            decoration: _inputDecoration(
-              hintText: 'Select sex',
-            ),
+            decoration: _inputDecoration(hintText: 'Select sex'),
             items: const [
-              DropdownMenuItem(
-                value: 'Male',
-                child: Text('Male'),
-              ),
-              DropdownMenuItem(
-                value: 'Female',
-                child: Text('Female'),
-              ),
+              DropdownMenuItem(value: 'Male', child: Text('Male')),
+              DropdownMenuItem(value: 'Female', child: Text('Female')),
             ],
             onChanged: (String? value) {
               setState(() {
@@ -1762,8 +1491,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               });
             },
             validator: (String? value) {
-              if (value == null ||
-                  value.isEmpty) {
+              if (value == null || value.isEmpty) {
                 return 'Please select your sex.';
               }
 
@@ -1771,31 +1499,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
             },
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Birthday',
-            required: true,
-          ),
+          _FieldLabel(text: 'Birthday', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
-            controller:
-                _birthdayController,
+            controller: _birthdayController,
             readOnly: true,
             onTap: _chooseBirthday,
             decoration: _inputDecoration(
               hintText: 'Select birthday',
-              prefixIcon:
-                  Icons.calendar_month_outlined,
-              suffix: const Icon(
-                Icons.keyboard_arrow_down_rounded,
-              ),
+              prefixIcon: Icons.calendar_month_outlined,
+              suffix: const Icon(Icons.keyboard_arrow_down_rounded),
             ),
             validator: (_) {
               if (_birthday == null) {
@@ -1806,40 +1523,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
             },
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Age',
-            required: true,
-          ),
+          _FieldLabel(text: 'Age', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
             controller: _ageController,
             readOnly: true,
             decoration: _inputDecoration(
-              hintText:
-                  'Automatically calculated',
-              prefixIcon:
-                  Icons.cake_outlined,
+              hintText: 'Automatically calculated',
+              prefixIcon: Icons.cake_outlined,
             ),
           ),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           const Text(
             'Automatically calculated from your birthday.',
-            style: TextStyle(
-              color: _secondaryText,
-              fontSize: 10,
-            ),
+            style: TextStyle(color: _secondaryText, fontSize: 10),
           ),
         ],
       ),
@@ -1850,8 +1553,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Form(
       key: _contactFormKey,
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _stepHeader(
             number: '02',
@@ -1861,36 +1563,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
             icon: Icons.phone_outlined,
           ),
 
-          _FieldLabel(
-            text: 'Email Address',
-            required: true,
-          ),
+          _FieldLabel(text: 'Email Address', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
             controller: _emailController,
-            keyboardType:
-                TextInputType.emailAddress,
-            textInputAction:
-                TextInputAction.next,
+            readOnly: widget.googleProfile != null,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
             autocorrect: false,
-            autofillHints: const [
-              AutofillHints.email,
-            ],
+            autofillHints: const [AutofillHints.email],
             decoration: _inputDecoration(
               hintText: 'juan@email.com',
-              prefixIcon:
-                  Icons.alternate_email_rounded,
+              prefixIcon: Icons.alternate_email_rounded,
             ),
             onChanged: _onEmailChanged,
-            validator: (String? value) =>
-                _validateEmail(value ?? ''),
+            validator: (String? value) => _validateEmail(value ?? ''),
           ),
 
-          if (_emailVerificationEnabled) ...[
+          if (widget.googleProfile != null && _emailVerified) ...[
+            const SizedBox(height: 10),
+            const Row(
+              children: [
+                Icon(Icons.verified_rounded, color: Color(0xFF16794A), size: 18),
+                SizedBox(width: 7),
+                Text(
+                  'Email verified with Google',
+                  style: TextStyle(
+                    color: Color(0xFF16794A),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ] else if (_emailVerificationEnabled) ...[
             const SizedBox(height: 10),
             Align(
               alignment: Alignment.centerLeft,
@@ -1920,10 +1628,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _FieldLabel(
-              text: 'Email verification code',
-              required: true,
-            ),
+            _FieldLabel(text: 'Email verification code', required: true),
             const SizedBox(height: 7),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1953,7 +1658,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   height: 52,
                   child: FilledButton(
-                    onPressed: _emailVerificationCodeSent &&
+                    onPressed:
+                        _emailVerificationCodeSent &&
                             !_emailVerified &&
                             !_isVerifyingEmail
                         ? _verifyEmail
@@ -1985,40 +1691,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ? 'Email verified successfully.'
                   : 'Verify your email before continuing.',
               style: TextStyle(
-                color: _emailVerified ? const Color(0xFF16794A) : _secondaryText,
+                color: _emailVerified
+                    ? const Color(0xFF16794A)
+                    : _secondaryText,
                 fontSize: 11,
               ),
             ),
           ],
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Contact Number',
-            required: true,
-          ),
+          _FieldLabel(text: 'Contact Number', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
             controller: _contactController,
-            keyboardType:
-                TextInputType.phone,
-            textInputAction:
-                TextInputAction.done,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
             decoration: _inputDecoration(
               hintText: '917 123 4567',
               prefixText: '+63 ',
-              prefixIcon:
-                  Icons.phone_outlined,
+              prefixIcon: Icons.phone_outlined,
             ),
             validator: (String? value) {
-              final String digits =
-                  (value ?? '').replaceAll(
+              final String digits = (value ?? '').replaceAll(
                 RegExp(r'[^0-9]'),
                 '',
               );
@@ -2043,221 +1740,138 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Form(
       key: _addressFormKey,
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _stepHeader(
             number: '03',
             title: 'Address',
             subtitle:
                 'Select your Philippine location and enter your detailed address.',
-            icon:
-                Icons.location_on_outlined,
+            icon: Icons.location_on_outlined,
           ),
 
-          if (widget.loadRegions == null)
-            _buildApiNotice(),
+          if (widget.loadRegions == null) _buildApiNotice(),
 
-          if (widget.loadRegions == null)
-            const SizedBox(
-              height: 18,
-            ),
+          if (widget.loadRegions == null) const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Region',
-            required: true,
-          ),
+          _FieldLabel(text: 'Region', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           _AddressDropdown(
             value: _region,
             items: _regions,
-            enabled:
-                widget.loadRegions != null,
+            enabled: widget.loadRegions != null,
             loading: _loadingRegions,
             hint: 'Select region',
             onChanged: _onRegionChanged,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Province',
-            required: true,
-          ),
+          _FieldLabel(text: 'Province', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           _AddressDropdown(
             value: _province,
             items: _provinces,
-            enabled: _region != null &&
-                widget.loadProvinces != null,
+            enabled: _region != null && widget.loadProvinces != null,
             loading: _loadingProvinces,
             hint: 'Select province',
-            onChanged:
-                _onProvinceChanged,
+            onChanged: _onProvinceChanged,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Municipality / City',
-            required: true,
-          ),
+          _FieldLabel(text: 'Municipality / City', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           _AddressDropdown(
             value: _municipality,
             items: _municipalities,
-            enabled: _province != null &&
-                widget.loadMunicipalities !=
-                    null,
-            loading:
-                _loadingMunicipalities,
-            hint:
-                'Select municipality / city',
-            onChanged:
-                _onMunicipalityChanged,
+            enabled: _province != null && widget.loadMunicipalities != null,
+            loading: _loadingMunicipalities,
+            hint: 'Select municipality / city',
+            onChanged: _onMunicipalityChanged,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Barangay',
-            required: true,
-          ),
+          _FieldLabel(text: 'Barangay', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           _AddressDropdown(
             value: _barangay,
             items: _barangays,
-            enabled: _municipality !=
-                    null &&
-                widget.loadBarangays != null,
+            enabled: _municipality != null && widget.loadBarangays != null,
             loading: _loadingBarangays,
             hint: 'Select barangay',
-            onChanged:
-                _onBarangayChanged,
+            onChanged: _onBarangayChanged,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Street / Purok',
-            required: true,
-          ),
+          _FieldLabel(text: 'Street / Purok', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
             controller: _streetController,
-            textCapitalization:
-                TextCapitalization.words,
-            textInputAction:
-                TextInputAction.next,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
             decoration: _inputDecoration(
-              hintText:
-                  'e.g. Mahogany Street / Purok 3',
-              prefixIcon:
-                  Icons.signpost_outlined,
+              hintText: 'e.g. Mahogany Street / Purok 3',
+              prefixIcon: Icons.signpost_outlined,
             ),
             validator: _requiredTextValidator,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          const _FieldLabel(
-            text: 'House / Unit Number',
-          ),
+          const _FieldLabel(text: 'House / Unit Number'),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
-            controller:
-                _houseNumberController,
-            textInputAction:
-                TextInputAction.next,
+            controller: _houseNumberController,
+            textInputAction: TextInputAction.next,
             decoration: _inputDecoration(
               hintText: 'e.g. Blk 12 Lot 3',
-              prefixIcon:
-                  Icons.home_outlined,
+              prefixIcon: Icons.home_outlined,
             ),
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          const _FieldLabel(
-            text: 'Postal Code',
-          ),
+          const _FieldLabel(text: 'Postal Code'),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
             controller: _postalController,
             readOnly: true,
             decoration: _inputDecoration(
-              hintText:
-                  'Auto-filled after barangay',
-              prefixIcon:
-                  Icons.markunread_mailbox_outlined,
+              hintText: 'Auto-filled after barangay',
+              prefixIcon: Icons.markunread_mailbox_outlined,
             ),
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          const _FieldLabel(
-            text:
-                'Landmark / Additional Details',
-          ),
+          const _FieldLabel(text: 'Landmark / Additional Details'),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
-            controller:
-                _landmarkController,
-            textCapitalization:
-                TextCapitalization.sentences,
-            textInputAction:
-                TextInputAction.done,
+            controller: _landmarkController,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.done,
             decoration: _inputDecoration(
-              hintText:
-                  'e.g. Near barangay hall',
-              prefixIcon:
-                  Icons.flag_outlined,
+              hintText: 'e.g. Near barangay hall',
+              prefixIcon: Icons.flag_outlined,
             ),
           ),
         ],
@@ -2269,52 +1883,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Form(
       key: _vehicleFormKey,
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _stepHeader(
             number: '04',
             title: 'Vehicle Information',
-            subtitle:
-                'Enter the vehicle you will use for deliveries.',
+            subtitle: 'Enter the vehicle you will use for deliveries.',
             icon: Icons.two_wheeler_rounded,
           ),
 
-          _FieldLabel(
-            text: 'Vehicle Type',
-            required: true,
-          ),
+          _FieldLabel(text: 'Vehicle Type', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           DropdownButtonFormField<String>(
             initialValue: _vehicleType,
             isExpanded: true,
             decoration: _inputDecoration(
-              hintText:
-                  'Select vehicle type',
-              prefixIcon:
-                  Icons.local_shipping_outlined,
+              hintText: 'Select vehicle type',
+              prefixIcon: Icons.local_shipping_outlined,
             ),
             items: const [
-              DropdownMenuItem(
-                value: 'motorcycle',
-                child: Text('Motorcycle'),
-              ),
-              DropdownMenuItem(
-                value: 'car',
-                child: Text('Car'),
-              ),
-              DropdownMenuItem(
-                value: 'van',
-                child: Text('Van'),
-              ),
-              DropdownMenuItem(
-                value: 'truck',
-                child: Text('Truck'),
-              ),
+              DropdownMenuItem(value: 'motorcycle', child: Text('Motorcycle')),
+              DropdownMenuItem(value: 'car', child: Text('Car')),
+              DropdownMenuItem(value: 'van', child: Text('Van')),
+              DropdownMenuItem(value: 'truck', child: Text('Truck')),
             ],
             onChanged: (String? value) {
               setState(() {
@@ -2322,8 +1915,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               });
             },
             validator: (String? value) {
-              if (value == null ||
-                  value.isEmpty) {
+              if (value == null || value.isEmpty) {
                 return 'Select your vehicle type.';
               }
 
@@ -2331,32 +1923,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
             },
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Plate Number',
-            required: true,
-          ),
+          _FieldLabel(text: 'Plate Number', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
-            controller:
-                _plateNumberController,
-            textCapitalization:
-                TextCapitalization.characters,
+            controller: _plateNumberController,
+            textCapitalization: TextCapitalization.characters,
             maxLength: 30,
             decoration: _inputDecoration(
               hintText: 'ABC 1234',
-              prefixIcon:
-                  Icons.pin_outlined,
-            ).copyWith(
-              counterText: '',
-            ),
+              prefixIcon: Icons.pin_outlined,
+            ).copyWith(counterText: ''),
             validator: _requiredTextValidator,
           ),
         ],
@@ -2365,190 +1945,128 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildVerificationStep() {
-    final String stepNumber =
-        _accountType ==
-            MobileAccountType.rider
+    final String stepNumber = _accountType == MobileAccountType.rider
         ? '05'
         : '04';
 
     return Form(
       key: _verificationFormKey,
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _stepHeader(
             number: stepNumber,
             title: 'Account Verification',
-            subtitle:
-                'Upload the required documents and secure your account.',
-            icon:
-                Icons.verified_user_outlined,
+            subtitle: 'Upload the required documents and secure your account.',
+            icon: Icons.verified_user_outlined,
           ),
 
           _DocumentUploadCard(
             title: 'Valid ID',
-            description:
-                'JPG, JPEG, PNG or PDF',
+            description: 'JPG, JPEG, PNG or PDF',
             required: true,
             document: _validId,
-            icon:
-                Icons.badge_outlined,
+            icon: Icons.badge_outlined,
             onTap: () {
-              _pickDocument(
-                RegistrationDocumentType
-                    .validId,
-              );
+              _pickDocument(RegistrationDocumentType.validId);
             },
           ),
 
-          if (_accountType ==
-              MobileAccountType.rider) ...[
-            const SizedBox(
-              height: 12,
-            ),
+          if (_accountType == MobileAccountType.rider) ...[
+            const SizedBox(height: 12),
 
             _DocumentUploadCard(
               title: 'Vehicle OR / CR',
-              description:
-                  'JPG, JPEG, PNG or PDF',
+              description: 'JPG, JPEG, PNG or PDF',
               required: true,
               document: _vehicleOrCr,
-              icon:
-                  Icons.description_outlined,
+              icon: Icons.description_outlined,
               onTap: () {
-                _pickDocument(
-                  RegistrationDocumentType
-                      .vehicleOrCr,
-                );
+                _pickDocument(RegistrationDocumentType.vehicleOrCr);
               },
             ),
 
-            const SizedBox(
-              height: 12,
-            ),
+            const SizedBox(height: 12),
 
             _DocumentUploadCard(
               title: 'Driver\'s License',
-              description:
-                  'JPG, JPEG, PNG or PDF',
+              description: 'JPG, JPEG, PNG or PDF',
               required: true,
               document: _driversLicense,
-              icon:
-                  Icons.credit_card_outlined,
+              icon: Icons.credit_card_outlined,
               onTap: () {
-                _pickDocument(
-                  RegistrationDocumentType
-                      .driversLicense,
-                );
+                _pickDocument(RegistrationDocumentType.driversLicense);
               },
             ),
           ],
 
-          const SizedBox(
-            height: 24,
-          ),
+          const SizedBox(height: 24),
 
-          _FieldLabel(
-            text: 'Password',
-            required: true,
-          ),
+          _FieldLabel(text: 'Password', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
-            controller:
-                _passwordController,
-            obscureText:
-                _obscurePassword,
-            textInputAction:
-                TextInputAction.next,
-            autofillHints: const [
-              AutofillHints.newPassword,
-            ],
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.newPassword],
             decoration: _inputDecoration(
-              hintText:
-                  'Min. 8 chars, uppercase, number',
-              prefixIcon:
-                  Icons.lock_outline_rounded,
+              hintText: 'Min. 8 chars, uppercase, number',
+              prefixIcon: Icons.lock_outline_rounded,
               suffix: IconButton(
                 onPressed: () {
                   setState(() {
-                    _obscurePassword =
-                        !_obscurePassword;
+                    _obscurePassword = !_obscurePassword;
                   });
                 },
                 icon: Icon(
                   _obscurePassword
-                      ? Icons
-                            .visibility_outlined
-                      : Icons
-                            .visibility_off_outlined,
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                   size: 20,
                   color: _secondaryText,
                 ),
               ),
             ),
-            validator:
-                _passwordValidator,
+            validator: _passwordValidator,
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
-          _FieldLabel(
-            text: 'Confirm Password',
-            required: true,
-          ),
+          _FieldLabel(text: 'Confirm Password', required: true),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           TextFormField(
-            controller:
-                _confirmPasswordController,
-            obscureText:
-                _obscureConfirmation,
-            textInputAction:
-                TextInputAction.done,
-            autofillHints: const [
-              AutofillHints.newPassword,
-            ],
+            controller: _confirmPasswordController,
+            obscureText: _obscureConfirmation,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.newPassword],
             decoration: _inputDecoration(
-              hintText:
-                  'Re-enter your password',
-              prefixIcon:
-                  Icons.lock_outline_rounded,
+              hintText: 'Re-enter your password',
+              prefixIcon: Icons.lock_outline_rounded,
               suffix: IconButton(
                 onPressed: () {
                   setState(() {
-                    _obscureConfirmation =
-                        !_obscureConfirmation;
+                    _obscureConfirmation = !_obscureConfirmation;
                   });
                 },
                 icon: Icon(
                   _obscureConfirmation
-                      ? Icons
-                            .visibility_outlined
-                      : Icons
-                            .visibility_off_outlined,
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                   size: 20,
                   color: _secondaryText,
                 ),
               ),
             ),
             validator: (String? value) {
-              if (value == null ||
-                  value.isEmpty) {
+              if (value == null || value.isEmpty) {
                 return 'Confirm your password.';
               }
 
-              if (value !=
-                  _passwordController.text) {
+              if (value != _passwordController.text) {
                 return 'Passwords do not match.';
               }
 
@@ -2556,69 +2074,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
             },
           ),
 
-          const SizedBox(
-            height: 22,
-          ),
+          const SizedBox(height: 22),
 
           Container(
-            padding: const EdgeInsets.all(
-              14,
-            ),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(
-                0xFFFFF7E8,
-              ),
-              borderRadius:
-                  BorderRadius.circular(15),
-              border: Border.all(
-                color: const Color(
-                  0xFFF2DFC0,
-                ),
-              ),
+              color: const Color(0xFFFFF7E8),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: const Color(0xFFF2DFC0)),
             ),
             child: const Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   Icons.info_outline_rounded,
-                  color: Color(
-                    0xFF8B6425,
-                  ),
+                  color: Color(0xFF8B6425),
                   size: 20,
                 ),
 
-                SizedBox(
-                  width: 10,
-                ),
+                SizedBox(width: 10),
 
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Administrator approval required',
                         style: TextStyle(
-                          color: Color(
-                            0xFF6E4C18,
-                          ),
+                          color: Color(0xFF6E4C18),
                           fontSize: 12.5,
-                          fontWeight:
-                              FontWeight.w800,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
 
-                      SizedBox(
-                        height: 4,
-                      ),
+                      SizedBox(height: 4),
 
                       Text(
                         'After submitting your registration, wait for administrator approval before signing in.',
                         style: TextStyle(
-                          color: Color(
-                            0xFF846B45,
-                          ),
+                          color: Color(0xFF846B45),
                           fontSize: 10.5,
                           height: 1.4,
                         ),
@@ -2630,63 +2124,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
 
-          const SizedBox(
-            height: 18,
-          ),
+          const SizedBox(height: 18),
 
           InkWell(
-            borderRadius:
-                BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(12),
             onTap: () {
               setState(() {
-                _termsAccepted =
-                    !_termsAccepted;
+                _termsAccepted = !_termsAccepted;
               });
             },
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Checkbox(
                     value: _termsAccepted,
                     activeColor: _primary,
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        4,
-                      ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    onChanged: (
-                      bool? value,
-                    ) {
+                    onChanged: (bool? value) {
                       setState(() {
-                        _termsAccepted =
-                            value ?? false;
+                        _termsAccepted = value ?? false;
                       });
                     },
                   ),
 
-                  const SizedBox(
-                    width: 2,
-                  ),
+                  const SizedBox(width: 2),
 
                   const Expanded(
                     child: Padding(
-                      padding:
-                          EdgeInsets.only(
-                        top: 10,
-                      ),
+                      padding: EdgeInsets.only(top: 10),
                       child: Text(
                         'I confirm that the information provided is correct and I agree to LIKHAE\'s terms and marketplace policies.',
                         style: TextStyle(
-                          color:
-                              _secondaryText,
+                          color: _secondaryText,
                           fontSize: 11,
                           height: 1.45,
                         ),
@@ -2710,112 +2183,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: SizedBox(
               height: 52,
               child: OutlinedButton.icon(
-                onPressed:
-                    _isSubmitting
-                    ? null
-                    : _back,
-                icon: const Icon(
-                  Icons
-                      .arrow_back_rounded,
-                  size: 18,
-                ),
-                label: const Text(
-                  'Back',
-                ),
-                style:
-                    OutlinedButton.styleFrom(
-                  foregroundColor:
-                      _primary,
-                  side: const BorderSide(
-                    color: _border,
-                  ),
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      14,
-                    ),
+                onPressed: _isSubmitting ? null : _back,
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text('Back'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _primary,
+                  side: const BorderSide(color: _border),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
             ),
           ),
 
-        if (_currentStep > 0)
-          const SizedBox(
-            width: 10,
-          ),
+        if (_currentStep > 0) const SizedBox(width: 10),
 
         Expanded(
-          flex: _currentStep > 0
-              ? 2
-              : 1,
+          flex: _currentStep > 0 ? 2 : 1,
           child: SizedBox(
             height: 52,
             child: ElevatedButton(
-              onPressed: _isSubmitting
-                  ? null
-                  : _next,
-              style:
-                  ElevatedButton.styleFrom(
+              onPressed: _isSubmitting ? null : _next,
+              style: ElevatedButton.styleFrom(
                 elevation: 0,
                 backgroundColor: _primary,
-                foregroundColor:
-                    Colors.white,
-                disabledBackgroundColor:
-                    _primary.withValues(
-                  alpha: 0.55,
-                ),
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    14,
-                  ),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: _primary.withValues(alpha: 0.55),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
               child: _isSubmitting
                   ? const SizedBox(
                       width: 21,
                       height: 21,
-                      child:
-                          CircularProgressIndicator(
+                      child: CircularProgressIndicator(
                         strokeWidth: 2,
                         color: Colors.white,
                       ),
                     )
                   : Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment
-                              .center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           _isLastStep
-                              ? _accountType ==
-                                      MobileAccountType
-                                          .rider
-                                  ? 'Submit Rider Application'
-                                  : 'Submit Buyer Application'
+                              ? _accountType == MobileAccountType.rider
+                                    ? 'Submit Rider Application'
+                                    : 'Submit Buyer Application'
                               : 'Continue',
-                          textAlign:
-                              TextAlign.center,
-                          style:
-                              const TextStyle(
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
                             fontSize: 12.5,
-                            fontWeight:
-                                FontWeight.w800,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
 
-                        const SizedBox(
-                          width: 7,
-                        ),
+                        const SizedBox(width: 7),
 
-                        const Icon(
-                          Icons
-                              .arrow_forward_rounded,
-                          size: 18,
-                        ),
+                        const Icon(Icons.arrow_forward_rounded, size: 18),
                       ],
                     ),
             ),
@@ -2827,15 +2253,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildSignInLink() {
     return Row(
-      mainAxisAlignment:
-          MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Text(
           'Already registered? ',
-          style: TextStyle(
-            color: _secondaryText,
-            fontSize: 12,
-          ),
+          style: TextStyle(color: _secondaryText, fontSize: 12),
         ),
 
         TextButton(
@@ -2845,9 +2267,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
             minimumSize: Size.zero,
-            tapTargetSize:
-                MaterialTapTargetSize
-                    .shrinkWrap,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: const Text(
             'Sign in',
@@ -2864,46 +2284,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildApiNotice() {
     return Container(
-      padding: const EdgeInsets.all(
-        13,
-      ),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: const Color(0xFFF1F5FA),
-        borderRadius:
-            BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(
-            0xFFD9E2ED,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD9E2ED)),
       ),
       child: const Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.cloud_outlined,
-            size: 18,
-            color: Color(
-              0xFF51677F,
-            ),
-          ),
+          Icon(Icons.cloud_outlined, size: 18, color: Color(0xFF51677F)),
 
-          SizedBox(
-            width: 9,
-          ),
+          SizedBox(width: 9),
 
           Expanded(
             child: Text(
               'The Philippine address dropdowns will become active after the existing Laravel address API is connected to Flutter.',
               style: TextStyle(
-                color: Color(
-                  0xFF51677F,
-                ),
+                color: Color(0xFF51677F),
                 fontSize: 10.5,
                 height: 1.4,
-                fontWeight:
-                    FontWeight.w500,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -2912,43 +2313,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  String? _requiredTextValidator(
-    String? value,
-  ) {
-    if (value == null ||
-        value.trim().isEmpty) {
+  String? _requiredTextValidator(String? value) {
+    if (value == null || value.trim().isEmpty) {
       return 'This field is required.';
     }
 
     return null;
   }
 
-  String? _passwordValidator(
-    String? value,
-  ) {
+  String? _passwordValidator(String? value) {
     final String password = value ?? '';
 
     if (password.isEmpty) {
       return 'Please enter a password.';
     }
 
-    if (password.length < 8 ||
-        password.length > 72) {
+    if (password.length < 8 || password.length > 72) {
       return 'Use 8–72 characters.';
     }
 
-    if (!RegExp(r'[A-Z]')
-        .hasMatch(password)) {
+    if (!RegExp(r'[A-Z]').hasMatch(password)) {
       return 'Include at least one uppercase letter.';
     }
 
-    if (!RegExp(r'[a-z]')
-        .hasMatch(password)) {
+    if (!RegExp(r'[a-z]').hasMatch(password)) {
       return 'Include at least one lowercase letter.';
     }
 
-    if (!RegExp(r'[0-9]')
-        .hasMatch(password)) {
+    if (!RegExp(r'[0-9]').hasMatch(password)) {
       return 'Include at least one number.';
     }
 
@@ -2966,69 +2358,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
       prefixText: prefixText,
       prefixIcon: prefixIcon == null
           ? null
-          : Icon(
-              prefixIcon,
-              size: 19,
-              color: const Color(
-                0xFF6D6862,
-              ),
-            ),
+          : Icon(prefixIcon, size: 19, color: const Color(0xFF6D6862)),
       suffixIcon: suffix,
       filled: true,
       fillColor: _fieldBackground,
-      hintStyle: const TextStyle(
-        color: Color(0xFFA39E98),
-        fontSize: 12.5,
-      ),
-      contentPadding:
-          const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 16,
-      ),
+      hintStyle: const TextStyle(color: Color(0xFFA39E98), fontSize: 12.5),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       border: OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: _border,
-        ),
+        borderRadius: BorderRadius.circular(13),
+        borderSide: const BorderSide(color: _border),
       ),
-      enabledBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: _border,
-        ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(13),
+        borderSide: const BorderSide(color: _border),
       ),
-      focusedBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: _primary,
-          width: 1.3,
-        ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(13),
+        borderSide: const BorderSide(color: _primary, width: 1.3),
       ),
-      errorBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: _accent,
-        ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(13),
+        borderSide: const BorderSide(color: _accent),
       ),
-      focusedErrorBorder:
-          OutlineInputBorder(
-        borderRadius:
-            BorderRadius.circular(13),
-        borderSide: const BorderSide(
-          color: _accent,
-          width: 1.3,
-        ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(13),
+        borderSide: const BorderSide(color: _accent, width: 1.3),
       ),
-      errorStyle: const TextStyle(
-        fontSize: 10,
-      ),
+      errorStyle: const TextStyle(fontSize: 10),
     );
   }
 }
@@ -3063,9 +2419,7 @@ class _LikhaeBrand extends StatelessWidget {
           ),
         ),
 
-        SizedBox(
-          width: 7,
-        ),
+        SizedBox(width: 7),
 
         Container(
           width: 4,
@@ -3076,9 +2430,7 @@ class _LikhaeBrand extends StatelessWidget {
           ),
         ),
 
-        SizedBox(
-          width: 7,
-        ),
+        SizedBox(width: 7),
 
         Text(
           'Marketplace',
@@ -3097,10 +2449,7 @@ class _FieldLabel extends StatelessWidget {
   final String text;
   final bool required;
 
-  const _FieldLabel({
-    required this.text,
-    this.required = false,
-  });
+  const _FieldLabel({required this.text, this.required = false});
 
   @override
   Widget build(BuildContext context) {
@@ -3112,15 +2461,11 @@ class _FieldLabel extends StatelessWidget {
           fontWeight: FontWeight.w700,
         ),
         children: [
-          TextSpan(
-            text: text,
-          ),
+          TextSpan(text: text),
           if (required)
             const TextSpan(
               text: ' *',
-              style: TextStyle(
-                color: Color(0xFFD94343),
-              ),
+              style: TextStyle(color: Color(0xFFD94343)),
             ),
         ],
       ),
@@ -3128,8 +2473,7 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-class _AccountTypeButton
-    extends StatelessWidget {
+class _AccountTypeButton extends StatelessWidget {
   final bool selected;
   final IconData icon;
   final String title;
@@ -3147,35 +2491,22 @@ class _AccountTypeButton
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? Colors.white
-          : Colors.transparent,
-      borderRadius:
-          BorderRadius.circular(13),
+      color: selected ? Colors.white : Colors.transparent,
+      borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
-        borderRadius:
-            BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(13),
         child: AnimatedContainer(
-          duration: const Duration(
-            milliseconds: 180,
-          ),
-          padding:
-              const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 11,
-          ),
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(13),
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: Colors.black
-                          .withValues(alpha: 0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
-                      offset:
-                          const Offset(0, 3),
+                      offset: const Offset(0, 3),
                     ),
                   ]
                 : null,
@@ -3187,68 +2518,41 @@ class _AccountTypeButton
                 height: 34,
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(
-                          0xFF191816,
-                        )
-                      : const Color(
-                          0xFFDCD7CF,
-                        ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    10,
-                  ),
+                      ? const Color(0xFF191816)
+                      : const Color(0xFFDCD7CF),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                alignment:
-                    Alignment.center,
+                alignment: Alignment.center,
                 child: Icon(
                   icon,
                   size: 17,
-                  color: selected
-                      ? Colors.white
-                      : const Color(
-                          0xFF706A64,
-                        ),
+                  color: selected ? Colors.white : const Color(0xFF706A64),
                 ),
               ),
 
-              const SizedBox(
-                width: 8,
-              ),
+              const SizedBox(width: 8),
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
                       style: TextStyle(
-                        color:
-                            const Color(
-                          0xFF191816,
-                        ),
+                        color: const Color(0xFF191816),
                         fontSize: 11.5,
-                        fontWeight:
-                            FontWeight.w800,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
-                    const SizedBox(
-                      height: 2,
-                    ),
+                    const SizedBox(height: 2),
 
                     Text(
                       subtitle,
                       maxLines: 1,
-                      overflow:
-                          TextOverflow
-                              .ellipsis,
-                      style:
-                          const TextStyle(
-                        color: Color(
-                          0xFF847E78,
-                        ),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF847E78),
                         fontSize: 8.5,
                       ),
                     ),
@@ -3258,12 +2562,9 @@ class _AccountTypeButton
 
               if (selected)
                 const Icon(
-                  Icons
-                      .check_circle_rounded,
+                  Icons.check_circle_rounded,
                   size: 17,
-                  color: Color(
-                    0xFF227A42,
-                  ),
+                  color: Color(0xFF227A42),
                 ),
             ],
           ),
@@ -3273,8 +2574,7 @@ class _AccountTypeButton
   }
 }
 
-class _AddressDropdown
-    extends StatelessWidget {
+class _AddressDropdown extends StatelessWidget {
   final AddressOption? value;
 
   final List<AddressOption> items;
@@ -3284,8 +2584,7 @@ class _AddressDropdown
 
   final String hint;
 
-  final ValueChanged<AddressOption?>
-  onChanged;
+  final ValueChanged<AddressOption?> onChanged;
 
   const _AddressDropdown({
     required this.value,
@@ -3298,107 +2597,53 @@ class _AddressDropdown
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<
-      AddressOption
-    >(
+    return DropdownButtonFormField<AddressOption>(
       initialValue: value,
       isExpanded: true,
       decoration: InputDecoration(
         filled: true,
-        fillColor:
-            const Color(0xFFFBFAF8),
+        fillColor: const Color(0xFFFBFAF8),
         prefixIcon: loading
             ? const Padding(
-                padding:
-                    EdgeInsets.all(14),
-                child:
-                    SizedBox(
+                padding: EdgeInsets.all(14),
+                child: SizedBox(
                   width: 16,
                   height: 16,
-                  child:
-                      CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               )
             : const Icon(
-                Icons
-                    .location_on_outlined,
+                Icons.location_on_outlined,
                 size: 19,
-                color:
-                    Color(0xFF6D6862),
+                color: Color(0xFF6D6862),
               ),
-        hintText: loading
-            ? 'Loading...'
-            : hint,
-        hintStyle: const TextStyle(
-          color: Color(0xFFA39E98),
-          fontSize: 12.5,
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(
+        hintText: loading ? 'Loading...' : hint,
+        hintStyle: const TextStyle(color: Color(0xFFA39E98), fontSize: 12.5),
+        contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 16,
         ),
         border: OutlineInputBorder(
-          borderRadius:
-              BorderRadius.circular(13),
-          borderSide:
-              const BorderSide(
-            color: Color(
-              0xFFE4E0DA,
-            ),
-          ),
+          borderRadius: BorderRadius.circular(13),
+          borderSide: const BorderSide(color: Color(0xFFE4E0DA)),
         ),
-        enabledBorder:
-            OutlineInputBorder(
-          borderRadius:
-              BorderRadius.circular(13),
-          borderSide:
-              const BorderSide(
-            color: Color(
-              0xFFE4E0DA,
-            ),
-          ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: const BorderSide(color: Color(0xFFE4E0DA)),
         ),
-        focusedBorder:
-            OutlineInputBorder(
-          borderRadius:
-              BorderRadius.circular(13),
-          borderSide:
-              const BorderSide(
-            color: Color(
-              0xFF191816,
-            ),
-            width: 1.3,
-          ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: const BorderSide(color: Color(0xFF191816), width: 1.3),
         ),
       ),
-      items: items
-          .map(
-            (
-              AddressOption option,
-            ) {
-              return DropdownMenuItem<
-                AddressOption
-              >(
-                value: option,
-                child: Text(
-                  option.name,
-                  overflow:
-                      TextOverflow.ellipsis,
-                ),
-              );
-            },
-          )
-          .toList(),
-      onChanged:
-          enabled && !loading
-          ? onChanged
-          : null,
-      validator: (
-        AddressOption? selected,
-      ) {
+      items: items.map((AddressOption option) {
+        return DropdownMenuItem<AddressOption>(
+          value: option,
+          child: Text(option.name, overflow: TextOverflow.ellipsis),
+        );
+      }).toList(),
+      onChanged: enabled && !loading ? onChanged : null,
+      validator: (AddressOption? selected) {
         if (selected == null) {
           return 'This field is required.';
         }
@@ -3409,8 +2654,7 @@ class _AddressDropdown
   }
 }
 
-class _DocumentUploadCard
-    extends StatelessWidget {
+class _DocumentUploadCard extends StatelessWidget {
   final String title;
   final String description;
   final bool required;
@@ -3432,34 +2676,22 @@ class _DocumentUploadCard
 
   @override
   Widget build(BuildContext context) {
-    final bool selected =
-        document != null;
+    final bool selected = document != null;
 
     return Material(
-      color: selected
-          ? const Color(0xFFF2F8F4)
-          : const Color(0xFFFBFAF8),
-      borderRadius:
-          BorderRadius.circular(16),
+      color: selected ? const Color(0xFFF2F8F4) : const Color(0xFFFBFAF8),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius:
-            BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(
-            15,
-          ),
+          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: selected
-                  ? const Color(
-                      0xFFCFE4D5,
-                    )
-                  : const Color(
-                      0xFFE4E0DA,
-                    ),
+                  ? const Color(0xFFCFE4D5)
+                  : const Color(0xFFE4E0DA),
             ),
           ),
           child: Row(
@@ -3469,89 +2701,51 @@ class _DocumentUploadCard
                 height: 44,
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(
-                          0xFFDFF0E4,
-                        )
-                      : const Color(
-                          0xFFF0ECE6,
-                        ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    13,
-                  ),
+                      ? const Color(0xFFDFF0E4)
+                      : const Color(0xFFF0ECE6),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                alignment:
-                    Alignment.center,
+                alignment: Alignment.center,
                 child: Icon(
-                  selected
-                      ? Icons
-                            .check_rounded
-                      : icon,
+                  selected ? Icons.check_rounded : icon,
                   color: selected
-                      ? const Color(
-                          0xFF227A42,
-                        )
-                      : const Color(
-                          0xFF65605A,
-                        ),
+                      ? const Color(0xFF227A42)
+                      : const Color(0xFF65605A),
                 ),
               ),
 
-              const SizedBox(
-                width: 12,
-              ),
+              const SizedBox(width: 12),
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     RichText(
                       text: TextSpan(
-                        style:
-                            const TextStyle(
-                          color: Color(
-                            0xFF292724,
-                          ),
+                        style: const TextStyle(
+                          color: Color(0xFF292724),
                           fontSize: 12.5,
-                          fontWeight:
-                              FontWeight.w800,
+                          fontWeight: FontWeight.w800,
                         ),
                         children: [
-                          TextSpan(
-                            text: title,
-                          ),
+                          TextSpan(text: title),
                           if (required)
                             const TextSpan(
                               text: ' *',
-                              style:
-                                  TextStyle(
-                                color: Color(
-                                  0xFFD94343,
-                                ),
-                              ),
+                              style: TextStyle(color: Color(0xFFD94343)),
                             ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(
-                      height: 3,
-                    ),
+                    const SizedBox(height: 3),
 
                     Text(
-                      document?.name ??
-                          description,
+                      document?.name ?? description,
                       maxLines: 2,
-                      overflow:
-                          TextOverflow
-                              .ellipsis,
-                      style:
-                          const TextStyle(
-                        color: Color(
-                          0xFF7F7973,
-                        ),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF7F7973),
                         fontSize: 10,
                         height: 1.3,
                       ),
@@ -3560,23 +2754,15 @@ class _DocumentUploadCard
                 ),
               ),
 
-              const SizedBox(
-                width: 8,
-              ),
+              const SizedBox(width: 8),
 
               Icon(
                 selected
-                    ? Icons
-                          .check_circle_rounded
-                    : Icons
-                          .upload_file_outlined,
+                    ? Icons.check_circle_rounded
+                    : Icons.upload_file_outlined,
                 color: selected
-                    ? const Color(
-                        0xFF227A42,
-                      )
-                    : const Color(
-                        0xFF77716B,
-                      ),
+                    ? const Color(0xFF227A42)
+                    : const Color(0xFF77716B),
                 size: 20,
               ),
             ],

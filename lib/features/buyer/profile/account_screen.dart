@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
@@ -442,27 +444,27 @@ class _AccountScreenState extends State<AccountScreen> {
   static const String _mapboxAccessToken =
       String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
 
-  static const Color _background = Color(0xFFFBF7F2);
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _surface = Color(0xFFFFFDF9);
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _soft = Color(0xFFF6EFE7);
+  static const Color _soft = ShopColors.soft;
 
-  static const Color _border = Color(0xFFEADCCC);
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon = Color(0xFF561C17);
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroonDark = Color(0xFF3E130F);
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text = Color(0xFF3B211B);
+  static const Color _text = ShopColors.text;
 
-  static const Color _brown = Color(0xFF6C4936);
+  static const Color _brown = ShopColors.secondaryText;
 
-  static const Color _muted = Color(0xFF987865);
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _muted2 = Color(0xFFA99386);
+  static const Color _muted2 = ShopColors.faint;
 
-  static const Color _tan = Color(0xFFC19771);
+  static const Color _tan = ShopColors.tan;
 
   static const Color _danger = Color(0xFFB42318);
 
@@ -1102,7 +1104,7 @@ class _AccountScreenState extends State<AccountScreen> {
         return AlertDialog(
           backgroundColor: _surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
           title: const Text(
             'Remove profile photo?',
@@ -1334,7 +1336,7 @@ class _AccountScreenState extends State<AccountScreen> {
         return AlertDialog(
           backgroundColor: _surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(24),
           ),
           title: const Text(
             'Delete address?',
@@ -1671,72 +1673,15 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(7, 5, 12, 7),
-      decoration: const BoxDecoration(
-        color: _background,
-        border: Border(bottom: BorderSide(color: Color(0xFFF0E8DF))),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(context).maybePop();
-                },
-            icon: const Icon(Icons.arrow_back_rounded, color: _text),
-          ),
-
-          const SizedBox(width: 2),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.showNavigationTabs ? 'Account' : _activeTab.label,
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 22,
-                    height: 1.1,
-                    letterSpacing: -0.4,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                SizedBox(height: 2),
-
-                Text(
-                  widget.showNavigationTabs
-                      ? 'Profile, addresses and security'
-                      : _activeTab.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: _muted, fontSize: 12.5),
-                ),
-              ],
-            ),
-          ),
-
-          if (_refreshing) ...[
-            const SizedBox(
-              width: 17,
-              height: 17,
-              child: CircularProgressIndicator(strokeWidth: 2, color: _maroon),
-            ),
-
-            const SizedBox(width: 9),
-          ],
-
-          if (widget.accountActive != null)
-            _AccountStatusBadge(active: widget.accountActive!),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar() => ShopPageHeader(
+    title: widget.showNavigationTabs ? 'My account' : _activeTab.label,
+    subtitle: widget.showNavigationTabs ? 'Your own little corner of LIKHAE.' : _activeTab.description,
+    onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [
+      if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+      if (widget.accountActive != null) _AccountStatusBadge(active: widget.accountActive!),
+    ],
+  );
 
   Widget _buildHeading() {
     return const Column(
@@ -1748,7 +1693,7 @@ class _AccountScreenState extends State<AccountScreen> {
             color: _maroon,
             fontSize: 12,
             letterSpacing: 1.7,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -1761,7 +1706,7 @@ class _AccountScreenState extends State<AccountScreen> {
             fontSize: 30,
             height: 1.05,
             letterSpacing: -0.7,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
@@ -1780,7 +1725,7 @@ class _AccountScreenState extends State<AccountScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _border),
       ),
       child: Row(
@@ -1804,7 +1749,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   style: const TextStyle(
                     color: _text,
                     fontSize: 15,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
 
@@ -1862,7 +1807,7 @@ class _AccountScreenState extends State<AccountScreen> {
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _border),
       ),
       child: Column(
@@ -1874,7 +1819,7 @@ class _AccountScreenState extends State<AccountScreen> {
               color: _maroon,
               fontSize: 11.5,
               letterSpacing: 1.35,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 5),
@@ -1883,7 +1828,7 @@ class _AccountScreenState extends State<AccountScreen> {
             style: TextStyle(
               color: _text,
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 12),
@@ -1910,7 +1855,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       height: 38,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1E4D7),
+                        color: ShopColors.accentSoft,
                         borderRadius: BorderRadius.circular(11),
                       ),
                       child: Icon(item.icon, color: _maroon, size: 20),
@@ -1966,7 +1911,7 @@ class _AccountScreenState extends State<AccountScreen> {
           final bool selected = tab == _activeTab;
 
           return Material(
-            color: selected ? const Color(0xFFF1E4D7) : _surface,
+            color: selected ? ShopColors.accentSoft : _surface,
             borderRadius: BorderRadius.circular(13),
             child: InkWell(
               onTap: () {
@@ -2489,7 +2434,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         style: TextStyle(
                           color: _text,
                           fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ],
@@ -2720,7 +2665,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     color: _brown,
                     fontSize: 11,
                     letterSpacing: 1.4,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 7),
@@ -3137,10 +3082,10 @@ class _AccountStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: active ? const Color(0xFFEEF8F1) : const Color(0xFFF6EFE7),
+        color: active ? const Color(0xFFEEF8F1) : ShopColors.soft,
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
-          color: active ? const Color(0xFFCDE5D4) : const Color(0xFFEADCCC),
+          color: active ? const Color(0xFFCDE5D4) : ShopColors.border,
         ),
       ),
       child: Row(
@@ -3150,7 +3095,7 @@ class _AccountStatusBadge extends StatelessWidget {
             width: 7,
             height: 7,
             decoration: BoxDecoration(
-              color: active ? const Color(0xFF256F4A) : const Color(0xFFA99386),
+              color: active ? const Color(0xFF256F4A) : ShopColors.faint,
               shape: BoxShape.circle,
             ),
           ),
@@ -3160,7 +3105,7 @@ class _AccountStatusBadge extends StatelessWidget {
           Text(
             active ? 'Active' : 'Inactive',
             style: TextStyle(
-              color: active ? const Color(0xFF256F4A) : const Color(0xFF987865),
+              color: active ? const Color(0xFF256F4A) : ShopColors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -3190,12 +3135,12 @@ class _AccountPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
-        borderRadius: BorderRadius.circular(19),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: ShopColors.border),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: const Color(0xFF561C17).withValues(alpha: 0.035),
+            color: ShopColors.accent.withValues(alpha: 0.035),
             blurRadius: 18,
             offset: const Offset(0, 7),
           ),
@@ -3211,11 +3156,11 @@ class _AccountPanel extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1E4D7),
+                    color: ShopColors.accentSoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: const Color(0xFF561C17), size: 19),
+                  child: Icon(icon, color: ShopColors.accent, size: 19),
                 ),
 
                 const SizedBox(width: 10),
@@ -3227,9 +3172,9 @@ class _AccountPanel extends StatelessWidget {
                       Text(
                         title,
                         style: const TextStyle(
-                          color: Color(0xFF3B211B),
+                          color: ShopColors.text,
                           fontSize: 15.5,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
 
@@ -3238,7 +3183,7 @@ class _AccountPanel extends StatelessWidget {
                       Text(
                         subtitle,
                         style: const TextStyle(
-                          color: Color(0xFF987865),
+                          color: ShopColors.muted,
                           fontSize: 12.5,
                           height: 1.5,
                         ),
@@ -3250,7 +3195,7 @@ class _AccountPanel extends StatelessWidget {
             ),
           ),
 
-          const Divider(height: 1, color: Color(0xFFF0E8DF)),
+          const Divider(height: 1, color: ShopColors.border),
 
           Padding(padding: const EdgeInsets.all(15), child: child),
         ],
@@ -3283,9 +3228,9 @@ class _ProfileAvatar extends StatelessWidget {
       height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFFF1E4D7),
+        color: ShopColors.accentSoft,
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: ShopColors.border),
       ),
       child: local != null
           ? Image.memory(
@@ -3320,7 +3265,7 @@ class _ProfileAvatar extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Color(0xFF561C17),
+                          color: ShopColors.accent,
                         ),
                       ),
                     );
@@ -3340,13 +3285,13 @@ class _AvatarInitial extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       alignment: Alignment.center,
-      color: const Color(0xFFF1E4D7),
+      color: ShopColors.accentSoft,
       child: Text(
         value,
         style: const TextStyle(
-          color: Color(0xFF561C17),
+          color: ShopColors.accent,
           fontSize: 20,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -3377,12 +3322,12 @@ class _AddressCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: address.isDefault
             ? const Color(0xFFFFF4F0)
-            : const Color(0xFFFFFDF9),
+            : ShopColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: address.isDefault
               ? const Color(0xFFD9B09D)
-              : const Color(0xFFEADCCC),
+              : ShopColors.border,
         ),
       ),
       child: Row(
@@ -3392,13 +3337,13 @@ class _AddressCard extends StatelessWidget {
             width: 39,
             height: 39,
             decoration: BoxDecoration(
-              color: const Color(0xFFF1E4D7),
+              color: ShopColors.accentSoft,
               borderRadius: BorderRadius.circular(11),
             ),
             alignment: Alignment.center,
             child: const Icon(
               Icons.location_on_outlined,
-              color: Color(0xFF561C17),
+              color: ShopColors.accent,
               size: 19,
             ),
           ),
@@ -3417,9 +3362,9 @@ class _AddressCard extends StatelessWidget {
                     Text(
                       '${address.label} · ${address.recipientName}',
                       style: const TextStyle(
-                        color: Color(0xFF3B211B),
+                        color: ShopColors.text,
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
@@ -3430,15 +3375,15 @@ class _AddressCard extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1E4D7),
+                          color: ShopColors.accentSoft,
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: const Text(
                           'DEFAULT',
                           style: TextStyle(
-                            color: Color(0xFF561C17),
+                            color: ShopColors.accent,
                             fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -3451,7 +3396,7 @@ class _AddressCard extends StatelessWidget {
                   Text(
                     address.contactNumber,
                     style: const TextStyle(
-                      color: Color(0xFF6C4936),
+                      color: ShopColors.secondaryText,
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -3465,7 +3410,7 @@ class _AddressCard extends StatelessWidget {
                       ? 'No formatted address available.'
                       : address.displayAddress,
                   style: const TextStyle(
-                    color: Color(0xFF987865),
+                    color: ShopColors.muted,
                     fontSize: 13,
                     height: 1.55,
                   ),
@@ -3477,7 +3422,7 @@ class _AddressCard extends StatelessWidget {
                   Text(
                     'Landmark: ${address.landmark}',
                     style: const TextStyle(
-                      color: Color(0xFFA99386),
+                      color: ShopColors.faint,
                       fontSize: 12,
                     ),
                   ),
@@ -3611,7 +3556,7 @@ class _FieldLabel extends StatelessWidget {
         ],
       ),
       style: const TextStyle(
-        color: Color(0xFF3B211B),
+        color: ShopColors.text,
         fontSize: 13,
         fontWeight: FontWeight.w700,
       ),
@@ -3672,21 +3617,21 @@ class _MessageBanner extends StatelessWidget {
 InputDecoration _accountInputDecoration({required String hintText}) {
   return InputDecoration(
     hintText: hintText,
-    hintStyle: const TextStyle(color: Color(0xFFA99386), fontSize: 13.5),
+    hintStyle: const TextStyle(color: ShopColors.faint, fontSize: 13.5),
     filled: true,
-    fillColor: const Color(0xFFFFFDF9),
+    fillColor: ShopColors.surface,
     contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFEADCCC)),
+      borderSide: const BorderSide(color: ShopColors.border),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFEADCCC)),
+      borderSide: const BorderSide(color: ShopColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF561C17), width: 1.3),
+      borderSide: const BorderSide(color: ShopColors.accent, width: 1.3),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),

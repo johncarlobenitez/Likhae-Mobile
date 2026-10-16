@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../../shared/widgets/shop_ui.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../rewards/rewards_screen.dart';
 import 'shop_voucher_picker.dart';
 
@@ -628,7 +629,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Material(
         color: _surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: _border),
         ),
         clipBehavior: Clip.antiAlias,
@@ -1408,7 +1409,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1E4D7),
+                color: ShopColors.accentSoft,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -1522,7 +1523,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     style: const TextStyle(
                       color: _primaryDark,
                       fontSize: 19,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ],
@@ -1572,7 +1573,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             color: _surface,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: _border),
           ),
           child: Column(
@@ -1721,7 +1722,7 @@ class _MobileCheckoutItem extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFFE05A3F),
                       fontSize: 15,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   const Spacer(),
@@ -1811,7 +1812,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
                   style: const TextStyle(
                     color: Color(0xFFE05A3F),
                     fontSize: 12,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -1911,7 +1912,7 @@ class _CheckoutAmountRow extends StatelessWidget {
           style: TextStyle(
             color: strong ? const Color(0xFF292929) : const Color(0xFF666666),
             fontSize: strong ? 17 : 13,
-            fontWeight: strong ? FontWeight.w900 : FontWeight.w600,
+            fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
           ),
         ),
       ],
@@ -1946,7 +1947,7 @@ class _CheckoutCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
@@ -2090,7 +2091,7 @@ class _PaymentOptionTile extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: selected ? _primaryBg : _disabledBg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: selected ? _primary.withValues(alpha: 0.65) : _border,
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../deliveries/rider_delivery_models.dart';
+import '../rider_product_image.dart';
 
 class RiderDashboardStatData {
   final String label;
@@ -73,155 +74,48 @@ typedef RiderDashboardParcelCallback =
 
 typedef RiderDashboardRefreshCallback = Future<void> Function();
 
-class RiderDashboardScreen extends StatefulWidget {
+class RiderDashboardScreen extends StatelessWidget {
   final List<RiderDashboardStatData> stats;
-
   final List<RiderDashboardParcelData> recentParcels;
-
+  final String riderName;
   final String? statusMessage;
-
-  /// Shows sample Rider dashboard data only
-  /// while no real Laravel/API data exists.
-  final bool showPreviewWhenEmpty;
-
   final RiderDashboardParcelCallback? onViewParcel;
-
   final VoidCallback? onViewAllShipments;
+  final VoidCallback? onOpenPickups;
+  final VoidCallback? onOpenEarnings;
   final VoidCallback? onOpenScanner;
   final VoidCallback? onOpenMessages;
-
   final VoidCallback? onOpenNotifications;
-
   final RiderDashboardRefreshCallback? onRefresh;
 
   const RiderDashboardScreen({
     super.key,
-    this.stats = const <RiderDashboardStatData>[],
-    this.recentParcels = const <RiderDashboardParcelData>[],
+    this.stats = const [],
+    this.recentParcels = const [],
+    this.riderName = '',
     this.statusMessage,
-    this.showPreviewWhenEmpty = true,
     this.onViewParcel,
     this.onViewAllShipments,
+    this.onOpenPickups,
+    this.onOpenEarnings,
     this.onOpenScanner,
     this.onOpenMessages,
     this.onOpenNotifications,
     this.onRefresh,
   });
 
-  @override
-  State<RiderDashboardScreen> createState() => _RiderDashboardScreenState();
-}
+  static const _background = Color(0xFFFBF7F2);
+  static const _surface = Color(0xFFFFFDF9);
+  static const _border = Color(0xFFEADCCC);
+  static const _maroon = Color(0xFF561C17);
+  static const _text = Color(0xFF3B211B);
+  static const _muted = Color(0xFF987865);
 
-class _RiderDashboardScreenState extends State<RiderDashboardScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
-
-  static const Color _surface = Color(0xFFFFFDF9);
-
-  static const Color _soft = Color(0xFFF6EFE7);
-
-  static const Color _border = Color(0xFFEADCCC);
-
-  static const Color _maroon = Color(0xFF561C17);
-
-  static const Color _text = Color(0xFF3B211B);
-
-  static const Color _muted = Color(0xFF987865);
-
-  static const Color _tan = Color(0xFFC19771);
-
-  static const Color _success = Color(0xFF1B7A46);
-
-  static const Color _successSoft = Color(0xFFEAF6EE);
-
-  static const List<RiderDashboardStatData> _sampleStats =
-      <RiderDashboardStatData>[
-        RiderDashboardStatData(label: 'Assigned Parcels', value: 4),
-        RiderDashboardStatData(label: 'In Transit', value: 2),
-        RiderDashboardStatData(label: 'Out for Delivery', value: 1),
-        RiderDashboardStatData(label: 'Completed Today', value: 3),
-      ];
-
-  static const List<RiderDashboardParcelData>
-  _sampleParcels = <RiderDashboardParcelData>[
-    RiderDashboardParcelData(
-      id: 105,
-      trackingCode: 'LKH-PCL-2026-0105',
-      buyerName: 'Sample Buyer',
-      contact: '0917 123 4567',
-      address: 'Masico, Pila, Laguna',
-      amount: 965,
-      status: 'assigned',
-      statusLabel: 'Assigned',
-      imageUrl:
-          'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=600&q=85&auto=format&fit=crop',
-      isPreview: true,
-    ),
-    RiderDashboardParcelData(
-      id: 104,
-      trackingCode: 'LKH-PCL-2026-0104',
-      buyerName: 'Maria Santos',
-      contact: '0918 555 0112',
-      address: 'Santa Cruz, Laguna',
-      amount: 495,
-      status: 'picked_up',
-      statusLabel: 'Picked Up',
-      imageUrl:
-          'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&q=85&auto=format&fit=crop',
-      isPreview: true,
-    ),
-    RiderDashboardParcelData(
-      id: 103,
-      trackingCode: 'LKH-PCL-2026-0103',
-      buyerName: 'Juan Dela Cruz',
-      contact: '0919 765 4321',
-      address: 'Calamba, Laguna',
-      amount: 365,
-      status: 'out_for_delivery',
-      statusLabel: 'Out for Delivery',
-      imageUrl:
-          'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&q=85&auto=format&fit=crop',
-      isPreview: true,
-    ),
-  ];
-
-  bool get _usingPreview {
-    return widget.showPreviewWhenEmpty &&
-        widget.stats.isEmpty &&
-        widget.recentParcels.isEmpty;
-  }
-
-  List<RiderDashboardStatData> get _displayStats {
-    if (widget.stats.isNotEmpty) {
-      return widget.stats;
+  int _count(String label) {
+    for (final stat in stats) {
+      if (stat.label.toLowerCase().contains(label)) return stat.value;
     }
-
-    if (_usingPreview) {
-      return _sampleStats;
-    }
-
-    return const <RiderDashboardStatData>[];
-  }
-
-  List<RiderDashboardParcelData> get _displayParcels {
-    if (widget.recentParcels.isNotEmpty) {
-      return widget.recentParcels;
-    }
-
-    if (_usingPreview) {
-      return _sampleParcels;
-    }
-
-    return const <RiderDashboardParcelData>[];
-  }
-
-  Future<void> _refresh() async {
-    final RiderDashboardRefreshCallback? callback = widget.onRefresh;
-
-    if (callback == null) {
-      return;
-    }
-
-    await callback();
+    return 0;
   }
 
   @override
@@ -232,567 +126,550 @@ class _RiderDashboardScreenState extends State<RiderDashboardScreen> {
         bottom: false,
         child: RefreshIndicator(
           color: _maroon,
-          onRefresh: _refresh,
-          child: CustomScrollView(
+          onRefresh: () async {
+            await onRefresh?.call();
+          },
+          child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            slivers: <Widget>[
-              SliverToBoxAdapter(child: _buildTopBar()),
-
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate(<Widget>[
-                    if (widget.statusMessage?.trim().isNotEmpty ==
-                        true) ...<Widget>[
-                      _buildStatusMessage(widget.statusMessage!),
-
-                      const SizedBox(height: 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _topBar(),
+                      const SizedBox(height: 22),
+                      if (statusMessage?.trim().isNotEmpty == true) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF1F0),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            statusMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFB42318),
+                              fontSize: 12,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      _welcomeCard(),
+                      const SizedBox(height: 14),
+                      _pickupCard(),
+                      const SizedBox(height: 28),
+                      const Text(
+                        'Delivery overview',
+                        style: TextStyle(
+                          color: _text,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      const Text(
+                        'A quick look at your assigned deliveries.',
+                        style: TextStyle(
+                          color: _muted,
+                          fontSize: 12,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _statistics(),
+                      const SizedBox(height: 14),
+                      _earningsShortcut(),
+                      const SizedBox(height: 28),
+                      _recentParcels(),
                     ],
-
-                    if (_usingPreview) ...<Widget>[
-                      _buildPreviewNotice(),
-
-                      const SizedBox(height: 18),
-                    ],
-
-                    _buildIntro(),
-
-                    const SizedBox(height: 24),
-
-                    _buildStatistics(),
-
-                    const SizedBox(height: 26),
-
-                    _buildRecentParcels(),
-                  ]),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
-      decoration: const BoxDecoration(
-        color: _background,
-        border: Border(bottom: BorderSide(color: Color(0xFFF0E8DF))),
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _maroon,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: const Icon(
-              Icons.two_wheeler_rounded,
-              color: Colors.white,
-              size: 23,
-            ),
-          ),
-
-          const SizedBox(width: 11),
-
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'LIKHAE Rider',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 18,
-                    height: 1.1,
-                    fontWeight: FontWeight.w900,
                   ),
                 ),
-
-                SizedBox(height: 3),
-
-                Text(
-                  'Pickup & delivery operations',
-                  style: TextStyle(color: _muted, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              IconButton(
-                tooltip: 'Scan parcels',
-                onPressed: widget.onOpenScanner,
-                icon: const Icon(
-                  Icons.qr_code_scanner_rounded,
-                  color: _maroon,
-                  size: 24,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Notifications',
-                onPressed: widget.onOpenNotifications,
-                icon: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: _maroon,
-                  size: 24,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Messages',
-                onPressed: widget.onOpenMessages,
-                icon: const Icon(
-                  Icons.forum_outlined,
-                  color: _maroon,
-                  size: 24,
-                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildIntro() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          'RIDER OPERATIONS',
-          style: TextStyle(
+  Widget _topBar() {
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
             color: _maroon,
-            fontSize: 12,
-            letterSpacing: 1.7,
-            fontWeight: FontWeight.w900,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(
+            Icons.two_wheeler_rounded,
+            color: Colors.white,
+            size: 24,
           ),
         ),
-
-        SizedBox(height: 7),
-
-        Text(
-          'Dashboard',
-          style: TextStyle(
-            color: _text,
-            fontSize: 30,
-            height: 1.05,
-            letterSpacing: -0.7,
-            fontWeight: FontWeight.w900,
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'LIKHAE',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 17,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                'Rider dashboard',
+                style: TextStyle(color: _muted, fontSize: 11),
+              ),
+            ],
           ),
         ),
-
-        SizedBox(height: 8),
-
-        Text(
-          'Real pickup and delivery work assigned to your active rider account.',
-          style: TextStyle(color: _muted, fontSize: 14, height: 1.5),
+        IconButton(
+          tooltip: 'Messages',
+          onPressed: onOpenMessages,
+          icon: const Icon(
+            Icons.chat_bubble_outline_rounded,
+            color: _maroon,
+            size: 22,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Notifications',
+          onPressed: onOpenNotifications,
+          icon: const Icon(
+            Icons.notifications_none_rounded,
+            color: _maroon,
+            size: 24,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildStatistics() {
-    final List<RiderDashboardStatData> stats = _displayStats;
-
-    if (stats.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: _surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _border),
+  Widget _welcomeCard() {
+    final name = riderName.trim();
+    final firstName = name.isEmpty ? '' : name.split(RegExp(r'\s+')).first;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_maroon, Color(0xFF793D2F)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: const Text(
-          'No rider statistics available yet.',
-          style: TextStyle(color: _muted, fontSize: 13),
-        ),
-      );
-    }
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: _maroon.withValues(alpha: 0.13),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            firstName.isEmpty
+                ? 'YOUR DAY AT A GLANCE'
+                : 'HELLO, ${firstName.toUpperCase()}',
+            style: const TextStyle(
+              color: Color(0xFFEBD5BF),
+              fontSize: 11,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Every stop\ncounts.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 34,
+              height: 1.08,
+              letterSpacing: -0.8,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Your pickups, deliveries, and progress\nin one place.',
+            style: TextStyle(
+              color: Color(0xFFEBD5BF),
+              fontSize: 12.5,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: onOpenScanner,
+            icon: const Icon(Icons.qr_code_scanner_rounded, size: 19),
+            label: const Text('Scan a parcel'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFF7E8D8),
+              foregroundColor: _maroon,
+              disabledBackgroundColor: const Color(0xFFF7E8D8),
+              disabledForegroundColor: _muted,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              textStyle: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _pickupCard() {
+    final count = _count('pickup');
+    return Material(
+      color: const Color(0xFFF3E8DB),
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpenPickups,
+        child: Padding(
+          padding: const EdgeInsets.all(17),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(
+                  Icons.storefront_outlined,
+                  color: _maroon,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$count pickup ${count == 1 ? 'batch' : 'batches'}',
+                      style: const TextStyle(
+                        color: _text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      count == 0
+                          ? 'New seller pickups will appear here'
+                          : 'View your seller pickup tasks',
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 11.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.arrow_forward_rounded, color: _maroon, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statistics() {
+    final cards = <({String label, int count, IconData icon, Color color})>[
+      (
+        label: 'Assigned',
+        count: _count('assigned parcels'),
+        icon: Icons.assignment_outlined,
+        color: _maroon,
+      ),
+      (
+        label: 'In transit',
+        count: _count('in transit'),
+        icon: Icons.local_shipping_outlined,
+        color: const Color(0xFF946514),
+      ),
+      (
+        label: 'Out for delivery',
+        count: _count('out for delivery'),
+        icon: Icons.near_me_outlined,
+        color: const Color(0xFF38658C),
+      ),
+      (
+        label: 'Completed today',
+        count: _count('completed today'),
+        icon: Icons.task_alt_rounded,
+        color: const Color(0xFF28724D),
+      ),
+    ];
     return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool wide = constraints.maxWidth >= 700;
-
-        final int columns = wide ? 4 : 2;
-
-        const double gap = 12;
-
-        final double itemWidth =
-            (constraints.maxWidth - ((columns - 1) * gap)) / columns;
-
+      builder: (context, constraints) {
+        final largeText = MediaQuery.textScalerOf(context).scale(13) > 23;
+        final columns = constraints.maxWidth >= 700
+            ? 4
+            : largeText
+            ? 1
+            : 2;
+        final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
         return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: stats
-              .map((RiderDashboardStatData stat) {
-                return SizedBox(
-                  width: itemWidth,
-                  child: _RiderStatCard(data: stat),
-                );
-              })
-              .toList(growable: false),
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final card in cards)
+              SizedBox(
+                width: width,
+                child: Material(
+                  color: _surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(19),
+                    side: const BorderSide(color: _border),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: onViewAllShipments,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: card.color.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(11),
+                                ),
+                                child: Icon(
+                                  card.icon,
+                                  color: card.color,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${card.count}',
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    color: _text,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            card.label,
+                            style: const TextStyle(
+                              color: _muted,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildRecentParcels() {
-    final List<RiderDashboardParcelData> parcels = _displayParcels;
-
-    return Container(
-      width: double.infinity,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _border),
+  Widget _earningsShortcut() {
+    return Material(
+      color: _surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(17),
+        side: const BorderSide(color: _border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(17, 17, 12, 15),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                const Expanded(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpenEarnings,
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                color: _maroon,
+                size: 22,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'View my earnings',
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward_rounded, color: _muted, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _recentParcels() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Recent parcels',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: onViewAllShipments,
+              style: TextButton.styleFrom(foregroundColor: _maroon),
+              child: const Text(
+                'View all',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: _border),
+          ),
+          child: recentParcels.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 26, vertical: 34),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
+                    children: [
+                      Icon(Icons.inventory_2_outlined, color: _muted, size: 36),
+                      SizedBox(height: 14),
                       Text(
-                        'Recent Parcels',
+                        'All clear for now',
                         style: TextStyle(
                           color: _text,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-
-                      SizedBox(height: 5),
-
+                      SizedBox(height: 7),
                       Text(
-                        'Latest parcels assigned to your rider account.',
+                        'Your recent parcels will appear here\nwhen deliveries are assigned to you.',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: _muted,
-                          fontSize: 12.5,
-                          height: 1.4,
+                          fontSize: 12,
+                          height: 1.6,
                         ),
                       ),
                     ],
                   ),
+                )
+              : Column(
+                  children: [
+                    for (int i = 0; i < recentParcels.length; i++) ...[
+                      if (i > 0) const Divider(height: 1, color: _border),
+                      _parcelCard(recentParcels[i]),
+                    ],
+                  ],
                 ),
-
-                if (widget.onViewAllShipments != null)
-                  TextButton(
-                    onPressed: widget.onViewAllShipments,
-                    child: const Text(
-                      'View All',
-                      style: TextStyle(
-                        color: _maroon,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          const Divider(height: 1, color: _border),
-
-          if (parcels.isEmpty)
-            _buildEmptyParcels()
-          else
-            ...List<Widget>.generate(parcels.length, (int index) {
-              final RiderDashboardParcelData parcel = parcels[index];
-
-              return Column(
-                children: <Widget>[
-                  _RiderParcelCard(
-                    parcel: parcel,
-                    onTap: widget.onViewParcel == null
-                        ? null
-                        : () {
-                            widget.onViewParcel!(parcel);
-                          },
-                  ),
-
-                  if (index != parcels.length - 1)
-                    const Divider(height: 1, color: _border),
-                ],
-              );
-            }),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildPreviewNotice() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: _soft,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-      ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(Icons.visibility_outlined, color: _maroon, size: 20),
-
-          SizedBox(width: 9),
-
-          Expanded(
-            child: Text(
-              'Sample dashboard preview only. These parcels are not stored in Laravel. Real rider assignments will replace them when API data is provided.',
-              style: TextStyle(
-                color: _muted,
-                fontSize: 12.5,
-                height: 1.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusMessage(String message) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _successSoft,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB7DFC5)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Icon(
-            Icons.check_circle_outline_rounded,
-            color: _success,
-            size: 20,
-          ),
-
-          const SizedBox(width: 9),
-
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: _success,
-                fontSize: 13,
-                height: 1.45,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyParcels() {
-    return const Padding(
-      padding: EdgeInsets.all(30),
-      child: Column(
-        children: <Widget>[
-          Icon(Icons.inventory_2_outlined, color: _tan, size: 44),
-
-          SizedBox(height: 13),
-
-          Text(
-            'No rider parcels found yet',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _text,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-
-          SizedBox(height: 6),
-
-          Text(
-            'Parcels assigned to your rider account will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RiderStatCard extends StatelessWidget {
-  final RiderDashboardStatData data;
-
-  const _RiderStatCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final IconData icon = _iconForLabel(data.label);
-
-    return Container(
-      constraints: const BoxConstraints(minHeight: 135),
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
-        borderRadius: BorderRadius.circular(19),
-        border: Border.all(color: const Color(0xFFEADCCC)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 39,
-            height: 39,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1E4D7),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(icon, color: const Color(0xFF561C17), size: 20),
-          ),
-
-          const SizedBox(height: 18),
-
-          Text(
-            data.label,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF987865),
-              fontSize: 12.5,
-              height: 1.3,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-
-          const SizedBox(height: 7),
-
-          Text(
-            '${data.value}',
-            style: const TextStyle(
-              color: Color(0xFF3B211B),
-              fontSize: 30,
-              height: 1,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static IconData _iconForLabel(String label) {
-    final String normalized = label.toLowerCase();
-
-    if (normalized.contains('assigned')) {
-      return Icons.assignment_outlined;
-    }
-
-    if (normalized.contains('out for delivery')) {
-      return Icons.near_me_outlined;
-    }
-
-    if (normalized.contains('transit')) {
-      return Icons.local_shipping_outlined;
-    }
-
-    if (normalized.contains('completed')) {
-      return Icons.task_alt_rounded;
-    }
-
-    return Icons.inventory_2_outlined;
-  }
-}
-
-class _RiderParcelCard extends StatelessWidget {
-  final RiderDashboardParcelData parcel;
-
-  final VoidCallback? onTap;
-
-  const _RiderParcelCard({required this.parcel, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _parcelCard(RiderDashboardParcelData parcel) {
+    final status = parcel.status.toLowerCase();
+    final color = status == 'delivered'
+        ? const Color(0xFF28724D)
+        : status.contains('fail')
+        ? const Color(0xFFB42318)
+        : _maroon;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: onViewParcel == null ? null : () => onViewParcel!(parcel),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           child: Column(
-            children: <Widget>[
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Container(
-                    width: 68,
-                    height: 68,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3ECE4),
-                      borderRadius: BorderRadius.circular(13),
-                      border: Border.all(color: const Color(0xFFEADCCC)),
-                    ),
-                    child: _RiderParcelImage(imageUrl: parcel.imageUrl),
-                  ),
-
+                children: [
+                  RiderProductImage(imageUrl: parcel.imageUrl, size: 68),
                   const SizedBox(width: 12),
-
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
+                      children: [
                         Text(
                           parcel.trackingCode,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Color(0xFF3B211B),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-
-                        const SizedBox(height: 5),
-
-                        Text(
-                          'Buyer: ${parcel.buyerName}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF6C4936),
+                            color: _text,
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-
-                        const SizedBox(height: 4),
-
+                        const SizedBox(height: 5),
                         Text(
-                          parcel.address.trim().isEmpty
-                              ? 'Address not available'
+                          parcel.buyerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: _text, fontSize: 12),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          parcel.address.isEmpty
+                              ? 'Address unavailable'
                               : parcel.address,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Color(0xFF987865),
-                            fontSize: 12,
-                            height: 1.45,
+                            color: _muted,
+                            fontSize: 11.5,
+                            height: 1.5,
                           ),
                         ),
                       ],
@@ -800,39 +677,34 @@ class _RiderParcelCard extends StatelessWidget {
                   ),
                 ],
               ),
-
-              const SizedBox(height: 13),
-
+              const SizedBox(height: 12),
               Row(
-                children: <Widget>[
-                  _RiderStatusBadge(
-                    status: parcel.status,
-                    label: parcel.statusLabel,
-                  ),
-
-                  const Spacer(),
-
-                  SizedBox(
-                    height: 40,
-                    child: OutlinedButton.icon(
-                      onPressed: onTap,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF561C17),
-                        side: const BorderSide(color: Color(0xFFC19771)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(11),
-                        ),
+                children: [
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
                       ),
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 17),
-                      label: const Text(
-                        'View',
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        parcel.statusLabel,
                         style: TextStyle(
-                          fontSize: 12.5,
+                          color: color,
+                          fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: _muted,
+                    size: 17,
                   ),
                 ],
               ),
@@ -840,127 +712,6 @@ class _RiderParcelCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _RiderStatusBadge extends StatelessWidget {
-  final String status;
-  final String label;
-
-  const _RiderStatusBadge({required this.status, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final String normalized = status.trim().toLowerCase().replaceAll('-', '_');
-
-    final Color background;
-    final Color foreground;
-
-    switch (normalized) {
-      case 'delivered':
-        background = const Color(0xFFEAF6EE);
-
-        foreground = const Color(0xFF237A44);
-
-        break;
-
-      case 'failed':
-        background = const Color(0xFFFCEBE8);
-
-        foreground = const Color(0xFFB42318);
-
-        break;
-
-      case 'out_for_delivery':
-        background = const Color(0xFFEAF1FF);
-
-        foreground = const Color(0xFF315B9A);
-
-        break;
-
-      case 'picked_up':
-      case 'in_transit':
-        background = const Color(0xFFFFF3DC);
-
-        foreground = const Color(0xFF906010);
-
-        break;
-
-      case 'assigned':
-      default:
-        background = const Color(0xFFF1E4D7);
-
-        foreground = const Color(0xFF561C17);
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: foreground,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _RiderParcelImage extends StatelessWidget {
-  final String? imageUrl;
-
-  const _RiderParcelImage({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    final String? url = imageUrl?.trim();
-
-    if (url == null || url.isEmpty) {
-      return const Center(
-        child: Icon(
-          Icons.inventory_2_outlined,
-          color: Color(0xFFA99386),
-          size: 29,
-        ),
-      );
-    }
-
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      loadingBuilder:
-          (BuildContext context, Widget child, ImageChunkEvent? progress) {
-            if (progress == null) {
-              return child;
-            }
-
-            return const Center(
-              child: SizedBox(
-                width: 19,
-                height: 19,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF561C17),
-                ),
-              ),
-            );
-          },
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: Color(0xFFA99386),
-                size: 28,
-              ),
-            );
-          },
     );
   }
 }

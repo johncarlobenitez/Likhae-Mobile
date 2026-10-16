@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:likhae/core/config/app_config.dart';
 
 typedef StoreProductCallback = void Function(
@@ -326,37 +328,37 @@ class StoreScreen extends StatefulWidget {
 class _StoreScreenState
     extends State<StoreScreen> {
   static const Color _background =
-      Color(0xFFFBF7F2);
+      ShopColors.canvas;
 
   static const Color _surface =
-      Color(0xFFFFFDF9);
+      ShopColors.surface;
 
   static const Color _softStrong =
-      Color(0xFFF1E4D7);
+      ShopColors.accentSoft;
 
   static const Color _border =
-      Color(0xFFEADCCC);
+      ShopColors.border;
 
   static const Color _maroon =
-      Color(0xFF561C17);
+      ShopColors.accent;
 
   static const Color _maroon2 =
       Color(0xFF642920);
 
   static const Color _maroonDark =
-      Color(0xFF3E130F);
+      ShopColors.accentDark;
 
   static const Color _text =
-      Color(0xFF3B211B);
+      ShopColors.text;
 
   static const Color _muted =
-      Color(0xFF987865);
+      ShopColors.muted;
 
   static const Color _muted2 =
-      Color(0xFFA99386);
+      ShopColors.faint;
 
   static const Color _tan =
-      Color(0xFFC19771);
+      ShopColors.tan;
 
   static const Color _success =
       Color(0xFF256F4A);
@@ -905,194 +907,14 @@ class _StoreScreenState
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        7,
-        5,
-        12,
-        7,
-      ),
-      decoration:
-          const BoxDecoration(
-        color:
-            _background,
-        border:
-            Border(
-          bottom:
-              BorderSide(
-            color:
-                Color(
-              0xFFF0E8DF,
-            ),
-          ),
-        ),
-      ),
-      child:
-          Row(
-        children: [
-          IconButton(
-            tooltip:
-                'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(
-                    context,
-                  ).maybePop();
-                },
-            icon:
-                const Icon(
-              Icons
-                  .arrow_back_rounded,
-              color:
-                  _text,
-            ),
-          ),
-
-          const SizedBox(
-            width:
-                2,
-          ),
-
-          Expanded(
-            child:
-                Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Store',
-                  style:
-                      TextStyle(
-                    color:
-                        _text,
-                    fontSize:
-                        19,
-                    height:
-                        1.1,
-                    letterSpacing:
-                        -0.4,
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
-                ),
-
-                const SizedBox(
-                  height:
-                      2,
-                ),
-
-                Text(
-                  widget.seller.name,
-                  maxLines:
-                      1,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(
-                    color:
-                        _muted,
-                    fontSize:
-                        9.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          if (_refreshing) ...[
-            const SizedBox(
-              width:
-                  17,
-              height:
-                  17,
-              child:
-                  CircularProgressIndicator(
-                strokeWidth:
-                    2,
-                color:
-                    _maroon,
-              ),
-            ),
-
-            const SizedBox(
-              width:
-                  9,
-            ),
-          ],
-
-          /*
-           * Only show the badge when Laravel explicitly
-           * supplies verified == true.
-           */
-          if (widget.seller.verified ==
-              true)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(
-                horizontal:
-                    9,
-                vertical:
-                    6,
-              ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    const Color(
-                  0xFFEEF8F1,
-                ),
-                borderRadius:
-                    BorderRadius.circular(
-                  100,
-                ),
-                border:
-                    Border.all(
-                  color:
-                      const Color(
-                    0xFFCDE5D4,
-                  ),
-                ),
-              ),
-              child:
-                  const Row(
-                mainAxisSize:
-                    MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons
-                        .verified_rounded,
-                    color:
-                        _success,
-                    size:
-                        13,
-                  ),
-
-                  SizedBox(
-                    width:
-                        4,
-                  ),
-
-                  Text(
-                    'Verified',
-                    style:
-                        TextStyle(
-                      color:
-                          _success,
-                      fontSize:
-                          8,
-                      fontWeight:
-                          FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar() => ShopPageHeader(
+    title: 'Meet the maker', subtitle: widget.seller.name, onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [
+      if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+      if (widget.seller.verified == true)
+        const Tooltip(message: 'Verified seller', child: Icon(Icons.verified_rounded, color: _success, size: 24)),
+    ],
+  );
 
   Widget _buildSellerHero() {
     return Container(
@@ -1230,7 +1052,7 @@ class _StoreScreenState
                               letterSpacing:
                                   1.4,
                               fontWeight:
-                                  FontWeight.w900,
+                                  FontWeight.w800,
                             ),
                           ),
 
@@ -1256,7 +1078,7 @@ class _StoreScreenState
                               letterSpacing:
                                   -0.5,
                               fontWeight:
-                                  FontWeight.w900,
+                                  FontWeight.w800,
                             ),
                           ),
 
@@ -1505,9 +1327,7 @@ class _StoreScreenState
         color:
             _surface,
         borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+            BorderRadius.circular(20),
         border:
             Border.all(
           color:
@@ -1647,7 +1467,7 @@ class _StoreScreenState
                   letterSpacing:
                       1.5,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
 
@@ -1669,7 +1489,7 @@ class _StoreScreenState
                   letterSpacing:
                       -0.6,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
 
@@ -1941,9 +1761,7 @@ class _StoreScreenState
         color:
             _surface,
         borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+            BorderRadius.circular(20),
         border:
             Border.all(
           color:
@@ -1999,7 +1817,7 @@ class _StoreScreenState
               fontSize:
                   16,
               fontWeight:
-                  FontWeight.w900,
+                  FontWeight.w800,
             ),
           ),
 
@@ -2100,9 +1918,7 @@ class _SellerAvatar
         shape:
             BoxShape.circle,
         color:
-            const Color(
-          0xFFF1E4D7,
-        ),
+            ShopColors.accentSoft,
         border:
             Border.all(
           color:
@@ -2114,9 +1930,7 @@ class _SellerAvatar
             <BoxShadow>[
           BoxShadow(
             color:
-                const Color(
-              0xFF3E130F,
-            ).withValues(
+                ShopColors.accentDark.withValues(
               alpha: 0.16,
             ),
             blurRadius:
@@ -2162,9 +1976,7 @@ class _SellerAvatar
                           strokeWidth:
                               2,
                           color:
-                              Color(
-                            0xFF561C17,
-                          ),
+                              ShopColors.accent,
                         ),
                       ),
                     );
@@ -2199,9 +2011,7 @@ class _SellerInitials
   ) {
     return Container(
       color:
-          const Color(
-        0xFFF1E4D7,
-      ),
+          ShopColors.accentSoft,
       alignment:
           Alignment.center,
       child:
@@ -2210,13 +2020,11 @@ class _SellerInitials
         style:
             const TextStyle(
           color:
-              Color(
-            0xFF561C17,
-          ),
+              ShopColors.accent,
           fontSize:
               18,
           fontWeight:
-              FontWeight.w900,
+              FontWeight.w800,
         ),
       ),
     );
@@ -2259,9 +2067,7 @@ class _SellerStatCard
       decoration:
           BoxDecoration(
         color:
-            const Color(
-          0xFFF6EFE7,
-        ),
+            ShopColors.soft,
         borderRadius:
             BorderRadius.circular(
           12,
@@ -2273,9 +2079,7 @@ class _SellerStatCard
           Icon(
             stat.icon,
             color:
-                const Color(
-              0xFF561C17,
-            ),
+                ShopColors.accent,
             size:
                 18,
           ),
@@ -2296,13 +2100,11 @@ class _SellerStatCard
             style:
                 const TextStyle(
               color:
-                  Color(
-                0xFF3B211B,
-              ),
+                  ShopColors.text,
               fontSize:
                   10.5,
               fontWeight:
-                  FontWeight.w900,
+                  FontWeight.w800,
             ),
           ),
 
@@ -2322,9 +2124,7 @@ class _SellerStatCard
             style:
                 const TextStyle(
               color:
-                  Color(
-                0xFF987865,
-              ),
+                  ShopColors.muted,
               fontSize:
                   7.5,
             ),
@@ -2364,9 +2164,7 @@ class _SellerInfoRow
           decoration:
               BoxDecoration(
             color:
-                const Color(
-              0xFFF1E4D7,
-            ),
+                ShopColors.accentSoft,
             borderRadius:
                 BorderRadius.circular(
               10,
@@ -2378,9 +2176,7 @@ class _SellerInfoRow
               Icon(
             icon,
             color:
-                const Color(
-              0xFF561C17,
-            ),
+                ShopColors.accent,
             size:
                 16,
           ),
@@ -2402,9 +2198,7 @@ class _SellerInfoRow
                 style:
                     const TextStyle(
                   color:
-                      Color(
-                    0xFF987865,
-                  ),
+                      ShopColors.muted,
                   fontSize:
                       8,
                   fontWeight:
@@ -2422,9 +2216,7 @@ class _SellerInfoRow
                 style:
                     const TextStyle(
                   color:
-                      Color(
-                    0xFF3B211B,
-                  ),
+                      ShopColors.text,
                   fontSize:
                       10,
                   height:
@@ -2466,21 +2258,15 @@ class _StoreProductCard
 
     return Material(
       color:
-          const Color(
-        0xFFFFFDF9,
-      ),
+          ShopColors.surface,
       borderRadius:
-          BorderRadius.circular(
-        16,
-      ),
+          BorderRadius.circular(20),
       child:
           InkWell(
         onTap:
             onTap,
         borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
+            BorderRadius.circular(20),
         child:
             Container(
           clipBehavior:
@@ -2488,15 +2274,11 @@ class _StoreProductCard
           decoration:
               BoxDecoration(
             borderRadius:
-                BorderRadius.circular(
-              16,
-            ),
+                BorderRadius.circular(20),
             border:
                 Border.all(
               color:
-                  const Color(
-                0xFFEADCCC,
-              ),
+                  ShopColors.border,
             ),
           ),
           child:
@@ -2512,9 +2294,7 @@ class _StoreProductCard
                   children: [
                     Container(
                       color:
-                          const Color(
-                        0xFFF3ECE4,
-                      ),
+                          ShopColors.soft,
                       child:
                           _StoreProductImage(
                         url:
@@ -2541,9 +2321,7 @@ class _StoreProductCard
                           decoration:
                               BoxDecoration(
                             color:
-                                const Color(
-                              0xFF561C17,
-                            ),
+                                ShopColors.accent,
                             borderRadius:
                                 BorderRadius.circular(
                               8,
@@ -2559,7 +2337,7 @@ class _StoreProductCard
                               fontSize:
                                   10,
                               fontWeight:
-                                  FontWeight.w900,
+                                  FontWeight.w800,
                             ),
                           ),
                         ),
@@ -2604,9 +2382,7 @@ class _StoreProductCard
                                           strokeWidth:
                                               1.8,
                                           color:
-                                              Color(
-                                            0xFF561C17,
-                                          ),
+                                              ShopColors.accent,
                                         ),
                                       )
                                     : Icon(
@@ -2616,9 +2392,7 @@ class _StoreProductCard
                                         size:
                                             18,
                                         color:
-                                            const Color(
-                                          0xFF561C17,
-                                        ),
+                                            ShopColors.accent,
                                       ),
                           ),
                         ),
@@ -2671,7 +2445,7 @@ class _StoreProductCard
                                 letterSpacing:
                                     0.7,
                                 fontWeight:
-                                    FontWeight.w900,
+                                    FontWeight.w800,
                               ),
                             ),
                           ),
@@ -2708,9 +2482,7 @@ class _StoreProductCard
                         style:
                             const TextStyle(
                           color:
-                              Color(
-                            0xFF6C4936,
-                          ),
+                              ShopColors.secondaryText,
                           fontSize:
                               9,
                           letterSpacing:
@@ -2735,9 +2507,7 @@ class _StoreProductCard
                       style:
                           const TextStyle(
                         color:
-                            Color(
-                          0xFF3B211B,
-                        ),
+                            ShopColors.text,
                         fontSize:
                             13,
                         height:
@@ -2767,13 +2537,11 @@ class _StoreProductCard
                           style:
                               const TextStyle(
                             color:
-                                Color(
-                              0xFF561C17,
-                            ),
+                                ShopColors.accent,
                             fontSize:
                                 15,
                             fontWeight:
-                                FontWeight.w900,
+                                FontWeight.w800,
                           ),
                         ),
 
@@ -2788,9 +2556,7 @@ class _StoreProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFFA99386,
-                              ),
+                                  ShopColors.faint,
                               fontSize:
                                   9.5,
                               decoration:
@@ -2832,9 +2598,7 @@ class _StoreProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFF3B211B,
-                              ),
+                                  ShopColors.text,
                               fontSize:
                                   9.5,
                               fontWeight:
@@ -2859,9 +2623,7 @@ class _StoreProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFF987865,
-                              ),
+                                  ShopColors.muted,
                               fontSize:
                                   9.5,
                             ),
@@ -2877,9 +2639,7 @@ class _StoreProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFF987865,
-                              ),
+                                  ShopColors.muted,
                               fontSize:
                                   9,
                             ),
@@ -2926,9 +2686,7 @@ class _StoreProductImage
           Icons
               .inventory_2_outlined,
           color:
-              Color(
-            0xFFA99386,
-          ),
+              ShopColors.faint,
           size:
               34,
         ),
@@ -2963,9 +2721,7 @@ class _StoreProductImage
               strokeWidth:
                   2,
               color:
-                  Color(
-                0xFF561C17,
-              ),
+                  ShopColors.accent,
             ),
           ),
         );
@@ -2982,9 +2738,7 @@ class _StoreProductImage
             Icons
                 .broken_image_outlined,
             color:
-                Color(
-              0xFFA99386,
-            ),
+                ShopColors.faint,
             size:
                 34,
           ),

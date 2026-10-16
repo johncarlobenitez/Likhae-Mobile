@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
@@ -33,12 +36,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   mapbox.MapboxMap? _mapboxMap;
   mapbox.CircleAnnotationManager? _mapMarkers;
+  mapbox.PolylineAnnotationManager? _routeLines;
 
   late BuyerOrderData _trackedOrder;
   Timer? _locationRefreshTimer;
   RealtimeSubscription? _shipmentRealtime;
   bool _refreshingLocation = false;
   bool _locationRefreshErrorShown = false;
+  bool _routeRequestInProgress = false;
+  LatLng? _lastRouteOrigin;
+  DateTime? _lastRouteRequestAt;
+  bool _roadRouteUnavailable = false;
+  double? _roadDistanceMeters;
+  double? _roadDurationSeconds;
 
   double _zoomLevel = 14;
   LatLng _lastMapCenter = _defaultCenter;
@@ -249,7 +259,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x12000000),
@@ -270,7 +280,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1E4D7),
+                    color: ShopColors.accentSoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
@@ -289,7 +299,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         style: TextStyle(
                           color: _text,
                           fontSize: 17,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -388,7 +398,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Text(
-                'Rider is ${_riderDistanceText ?? 'nearby'} and on the way.',
+                '${_roadRouteSummary}\nRider is ${_riderDistanceText ?? 'nearby'} and on the way.',
                 style: const TextStyle(
                   color: _text,
                   fontSize: 12,
@@ -461,7 +471,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x12000000),
@@ -478,7 +488,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             style: TextStyle(
               color: _text,
               fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 16),
@@ -552,6 +562,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   Future<void> _onMapboxMapCreated(mapbox.MapboxMap map) async {
     _mapboxMap = map;
     _mapMarkers = await map.annotations.createCircleAnnotationManager();
+    _routeLines = await map.annotations.createPolylineAnnotationManager();
     await _syncMapboxMarkers();
   }
 
@@ -592,14 +603,154 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     if (recenter) {
       _lastMapCenter = _center;
       _zoomLevel = _locations.isEmpty ? 11 : 14;
+      final BuyerOrderLocation? rider = order.riderLocation;
+      final BuyerOrderLocation? destination = order.orderLocation;
+      if (rider != null && destination != null) {
+        final mapbox.CameraOptions camera = await map.cameraForCoordinatesPadding(
+          <mapbox.Point>[
+            _toMapboxPoint(LatLng(rider.latitude, rider.longitude)),
+            _toMapboxPoint(LatLng(destination.latitude, destination.longitude)),
+          ],
+          mapbox.CameraOptions(
+            padding: mapbox.MbxEdgeInsets(
+              top: 48,
+              left: 48,
+              bottom: 48,
+              right: 48,
+            ),
+          ),
+          null,
+          14,
+          null,
+        );
+        _zoomLevel = camera.zoom ?? _zoomLevel;
+        await map.setCamera(camera);
+      } else {
+        await map.setCamera(
+          mapbox.CameraOptions(
+            center: _toMapboxPoint(_lastMapCenter),
+            zoom: _zoomLevel,
+          ),
+        );
+      }
+    }
 
-      await map.setCamera(
-        mapbox.CameraOptions(
-          center: _toMapboxPoint(_lastMapCenter),
-          zoom: _zoomLevel,
+    await _syncRoadRoute();
+  }
+
+  Future<void> _syncRoadRoute() async {
+    final mapbox.PolylineAnnotationManager? manager = _routeLines;
+    final BuyerOrderLocation? rider = order.riderLocation;
+    final BuyerOrderLocation? destination = order.orderLocation;
+    if (manager == null) return;
+    if (rider == null || destination == null || _mapboxAccessToken.isEmpty) {
+      await manager.deleteAll();
+      if (mounted) {
+        setState(() {
+          _roadDistanceMeters = null;
+          _roadDurationSeconds = null;
+          _roadRouteUnavailable = false;
+        });
+      }
+      return;
+    }
+
+    final LatLng origin = LatLng(rider.latitude, rider.longitude);
+    final LatLng target = LatLng(destination.latitude, destination.longitude);
+    final LatLng? previousOrigin = _lastRouteOrigin;
+    final DateTime? previousRequestAt = _lastRouteRequestAt;
+    if (_routeRequestInProgress ||
+        (previousOrigin != null &&
+            previousRequestAt != null &&
+            DateTime.now().difference(previousRequestAt) <
+                const Duration(seconds: 15) &&
+            Geolocator.distanceBetween(
+                  previousOrigin.latitude,
+                  previousOrigin.longitude,
+                  origin.latitude,
+                  origin.longitude,
+                ) <
+                50)) {
+      return;
+    }
+
+    _routeRequestInProgress = true;
+    _lastRouteOrigin = origin;
+    _lastRouteRequestAt = DateTime.now();
+    final String coordinates =
+        '${origin.longitude},${origin.latitude};'
+        '${target.longitude},${target.latitude}';
+    try {
+      final Response<Map<String, dynamic>> response = await Dio().get(
+        'https://api.mapbox.com/directions/v5/mapbox/driving-traffic/$coordinates',
+        queryParameters: <String, dynamic>{
+          'access_token': _mapboxAccessToken,
+          'geometries': 'geojson',
+          'overview': 'full',
+          'steps': false,
+        },
+      );
+      final List<dynamic> routes =
+          response.data?['routes'] as List<dynamic>? ?? const <dynamic>[];
+      if (routes.isEmpty) throw StateError('No driving route was returned.');
+      final Map<String, dynamic> route =
+          Map<String, dynamic>.from(routes.first as Map);
+      final Map<String, dynamic> geometry =
+          Map<String, dynamic>.from(route['geometry'] as Map);
+      final List<dynamic> rawCoordinates =
+          geometry['coordinates'] as List<dynamic>? ?? const <dynamic>[];
+      final List<mapbox.Position> positions = rawCoordinates
+          .whereType<List<dynamic>>()
+          .where((List<dynamic> pair) => pair.length >= 2)
+          .map((List<dynamic> pair) => mapbox.Position(
+                (pair[0] as num).toDouble(),
+                (pair[1] as num).toDouble(),
+              ))
+          .toList(growable: false);
+      if (positions.length < 2) throw StateError('The driving route was incomplete.');
+
+      await manager.deleteAll();
+      await manager.create(
+        mapbox.PolylineAnnotationOptions(
+          geometry: mapbox.LineString(coordinates: positions),
+          lineColor: _maroon.toARGB32(),
+          lineWidth: 5,
+          lineOpacity: 0.85,
+          lineBorderColor: Colors.white.toARGB32(),
+          lineBorderWidth: 1.5,
         ),
       );
+      if (mounted) {
+        setState(() {
+          _roadDistanceMeters = (route['distance'] as num?)?.toDouble();
+          _roadDurationSeconds = (route['duration'] as num?)?.toDouble();
+          _roadRouteUnavailable = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _roadRouteUnavailable = true);
+      }
+    } finally {
+      _routeRequestInProgress = false;
     }
+  }
+
+  String get _roadRouteSummary {
+    final double? distance = _roadDistanceMeters;
+    final double? duration = _roadDurationSeconds;
+    if (_roadRouteUnavailable && (distance == null || duration == null)) {
+      return 'Road route unavailable; retrying.';
+    }
+    if (distance == null || duration == null) return 'Calculating road route…';
+    final String distanceText = distance < 1000
+        ? '${distance.round()} m'
+        : '${(distance / 1000).toStringAsFixed(1)} km';
+    final int minutes = (duration / 60).ceil();
+    final String durationText = minutes < 60
+        ? '$minutes min'
+        : '${minutes ~/ 60}h ${minutes % 60}m';
+    return '$distanceText by road · about $durationText';
   }
 
   Future<void> _zoomMap(double step) async {

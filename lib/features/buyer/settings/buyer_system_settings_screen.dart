@@ -1,54 +1,6 @@
 import 'package:flutter/material.dart';
-
-import '../../../core/theme/theme_controller.dart';
-
-class BuyerSystemSettingsController extends ChangeNotifier {
-  BuyerSystemSettingsController._();
-
-  static final BuyerSystemSettingsController instance =
-      BuyerSystemSettingsController._();
-
-  bool orderUpdates = true;
-  bool deliveryUpdates = true;
-  bool chatNotifications = true;
-  bool promotionUpdates = true;
-  bool showAiAssistant = true;
-  bool aiResponseSound = false;
-  bool notificationSounds = true;
-
-  ThemeMode get themeMode => ThemeController.instance.value;
-
-  void setTheme(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
-        ThemeController.instance.setLightMode();
-      case ThemeMode.dark:
-        ThemeController.instance.setDarkMode();
-      case ThemeMode.system:
-        ThemeController.instance.setSystemMode();
-    }
-    notifyListeners();
-  }
-
-  void update({
-    bool? orderUpdates,
-    bool? deliveryUpdates,
-    bool? chatNotifications,
-    bool? promotionUpdates,
-    bool? showAiAssistant,
-    bool? aiResponseSound,
-    bool? notificationSounds,
-  }) {
-    this.orderUpdates = orderUpdates ?? this.orderUpdates;
-    this.deliveryUpdates = deliveryUpdates ?? this.deliveryUpdates;
-    this.chatNotifications = chatNotifications ?? this.chatNotifications;
-    this.promotionUpdates = promotionUpdates ?? this.promotionUpdates;
-    this.showAiAssistant = showAiAssistant ?? this.showAiAssistant;
-    this.aiResponseSound = aiResponseSound ?? this.aiResponseSound;
-    this.notificationSounds = notificationSounds ?? this.notificationSounds;
-    notifyListeners();
-  }
-}
+import '../../../shared/widgets/shop_ui.dart';
+import 'buyer_system_settings_controller.dart';
 
 class BuyerSystemSettingsScreen extends StatelessWidget {
   final VoidCallback? onBack;
@@ -298,9 +250,20 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
 
   Widget _buildSaveBar(BuildContext context, ColorScheme colors) {
     final Widget saveButton = FilledButton(
-      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings saved.')),
-      ),
+      onPressed: () async {
+        try {
+          await BuyerSystemSettingsController.instance.save();
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Settings saved on this device.')),
+          );
+        } catch (_) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not save settings. Try again.')),
+          );
+        }
+      },
       child: const Text('Save Settings'),
     );
 
@@ -308,7 +271,7 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: LayoutBuilder(
@@ -368,7 +331,7 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Column(

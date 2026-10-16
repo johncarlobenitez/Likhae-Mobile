@@ -34,7 +34,6 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
   static const Color _maroon = Color(0xFF561C17);
   static const Color _text = Color(0xFF3B211B);
   static const Color _muted = Color(0xFF987865);
-  static const Color _success = Color(0xFF1B7A46);
 
   static const List<RiderDeliveryData> _sampleDeliveries = <RiderDeliveryData>[
     RiderDeliveryData(
@@ -310,7 +309,7 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
                 ),
                 SizedBox(height: 5),
                 Text(
-                  'Real assignments will appear here when the Rider API is connected.',
+                  'Active delivery tasks assigned to your account appear here.',
                   style: TextStyle(
                     color: _muted,
                     fontSize: 12.5,
@@ -663,20 +662,24 @@ class _StatusNotice extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF6EE),
+        color: const Color(0xFFFFF1F0),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB7DFC5)),
+        border: Border.all(color: const Color(0xFFF2B8B5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(Icons.check_circle_outline_rounded, color: _RiderDeliveriesScreenState._success, size: 20),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFB42318),
+            size: 20,
+          ),
           const SizedBox(width: 9),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: _RiderDeliveriesScreenState._success,
+                color: Color(0xFFB42318),
                 fontSize: 13,
                 height: 1.45,
                 fontWeight: FontWeight.w700,

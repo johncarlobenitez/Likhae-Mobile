@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/theme/app_theme.dart';
 import 'package:likhae/core/config/app_config.dart';
@@ -255,17 +257,17 @@ class BuyerHomeScreen extends StatefulWidget {
 }
 
 class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
-  static Color get background => AppTheme.adaptive(const Color(0xFFFBF7F2));
-  static Color get backgroundSoft => AppTheme.adaptive(const Color(0xFFF3E8DC));
-  static Color get card => AppTheme.adaptive(const Color(0xFFFFFDF9));
-  static Color get border => AppTheme.adaptive(const Color(0xFFEADCCC));
-  static Color get maroon => AppTheme.adaptive(const Color(0xFF561C17));
-  static Color get maroonLight => AppTheme.adaptive(const Color(0xFF7A2A22));
-  static Color get text => AppTheme.adaptive(const Color(0xFF3B211B));
-  static Color get brown => AppTheme.adaptive(const Color(0xFF6C4936));
-  static Color get muted => AppTheme.adaptive(const Color(0xFF987865));
-  static Color get muted2 => AppTheme.adaptive(const Color(0xFFA99386));
-  static Color get tan => AppTheme.adaptive(const Color(0xFFC19771));
+  static Color get background => AppTheme.adaptive(ShopColors.canvas);
+  static Color get backgroundSoft => AppTheme.adaptive(ShopColors.accentSoft);
+  static Color get card => AppTheme.adaptive(ShopColors.surface);
+  static Color get border => AppTheme.adaptive(ShopColors.border);
+  static Color get maroon => AppTheme.adaptive(ShopColors.accent);
+  static Color get maroonLight => AppTheme.adaptive(ShopColors.accentLight);
+  static Color get text => AppTheme.adaptive(ShopColors.text);
+  static Color get brown => AppTheme.adaptive(ShopColors.secondaryText);
+  static Color get muted => AppTheme.adaptive(ShopColors.muted);
+  static Color get muted2 => AppTheme.adaptive(ShopColors.faint);
+  static Color get tan => AppTheme.adaptive(ShopColors.tan);
   static Color get star => AppTheme.adaptive(const Color(0xFFC88418));
   final Set<int> _wishlistIds = <int>{};
   final Set<int> _wishlistLoading = <int>{};
@@ -497,123 +499,69 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      color: background,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-      child: Column(
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  'LIKHAE',
-                  style: TextStyle(
-                    color: maroon,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Notifications',
-                onPressed: widget.onNotifications,
-                icon: Icon(Icons.notifications_none_rounded, color: text),
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: 'Cart',
-                onPressed: widget.onCart,
-                icon: Icon(Icons.shopping_bag_outlined, color: text),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: widget.onSearch,
-            borderRadius: BorderRadius.circular(15),
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: card,
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: border),
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(Icons.search_rounded, size: 21, color: muted),
-                  SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      'Search products, categories...',
-                      style: TextStyle(
-                        color: muted2,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.tune_rounded, size: 19, color: brown),
-                ],
-              ),
+    return Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1120),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+        child: Column(children: [
+          Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('LIKHAE', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w800, letterSpacing: 2.2)),
+              const SizedBox(height: 3),
+              Text('Thoughtfully local.', style: TextStyle(color: muted, fontSize: 11.5)),
+            ])),
+            GlassIconButton(icon: Icons.notifications_none_rounded, label: 'Notifications', onPressed: widget.onNotifications),
+            const SizedBox(width: 9),
+            GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Cart', onPressed: widget.onCart),
+          ]),
+          const SizedBox(height: 20),
+          Material(
+            color: card, borderRadius: BorderRadius.circular(18),
+            child: InkWell(
+              onTap: widget.onSearch, borderRadius: BorderRadius.circular(18),
+              child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15), child: Row(children: [
+                Icon(Icons.search_rounded, size: 22, color: maroon),
+                const SizedBox(width: 11),
+                Expanded(child: Text('Find your next favourite', style: TextStyle(color: muted, fontSize: 13))),
+                Icon(Icons.tune_rounded, size: 19, color: muted),
+              ])),
             ),
           ),
-        ],
+        ]),
       ),
-    );
+    ));
   }
 
   Widget _buildMainContent() {
-    final BuyerHomeProduct? product = _heroProduct;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 120),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
+    return Center(child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1120),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 130),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _buildHero(_heroProduct),
+          const SizedBox(height: 16),
           _buildQuickActions(),
-          const SizedBox(height: 22),
-          _buildHero(product),
           const SizedBox(height: 30),
-          _buildHeaderRow(
-            'CURATED',
-            'Featured Products',
-            'Top picks from trusted sellers.',
-            'See All',
-            widget.onViewFeatured,
-          ),
-          const SizedBox(height: 12),
+          _buildHeaderRow('CURATED', 'Worth a closer look', 'Featured finds from local sellers.', 'See all', widget.onViewFeatured),
+          const SizedBox(height: 16),
           _ProductGrid(
             products: _featuredProducts,
-            isWishlisted: (BuyerHomeProduct product) =>
-                _wishlistIds.contains(product.id),
-            isWishlistLoading: (BuyerHomeProduct product) =>
-                _wishlistLoading.contains(product.id),
-            onProductSelected: widget.onProductSelected,
-            onWishlistProduct: _toggleWishlist,
+            isWishlisted: (product) => _wishlistIds.contains(product.id),
+            isWishlistLoading: (product) => _wishlistLoading.contains(product.id),
+            onProductSelected: widget.onProductSelected, onWishlistProduct: _toggleWishlist,
           ),
           const SizedBox(height: 30),
-          _buildHeaderRow(
-            'FOR YOU',
-            'Recommended For You',
-            'Marketplace recommendations selected for this section.',
-            'See All',
-            widget.onViewRecommended,
-          ),
-          const SizedBox(height: 12),
+          _buildHeaderRow('FOR YOU', 'Picked for you', 'A little inspiration for your everyday.', 'See all', widget.onViewRecommended),
+          const SizedBox(height: 16),
           _ProductGrid(
             products: _recommendedProducts,
-            isWishlisted: (BuyerHomeProduct product) =>
-                _wishlistIds.contains(product.id),
-            isWishlistLoading: (BuyerHomeProduct product) =>
-                _wishlistLoading.contains(product.id),
-            onProductSelected: widget.onProductSelected,
-            onWishlistProduct: _toggleWishlist,
+            isWishlisted: (product) => _wishlistIds.contains(product.id),
+            isWishlistLoading: (product) => _wishlistLoading.contains(product.id),
+            onProductSelected: widget.onProductSelected, onWishlistProduct: _toggleWishlist,
           ),
-        ],
+        ]),
       ),
-    );
+    ));
   }
 
   Widget _buildQuickActions() {
@@ -664,187 +612,59 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   Widget _buildHero(BuyerHomeProduct? product) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            card,
-            AppTheme.adaptive(const Color(0xFFF6EFE7)),
-            AppTheme.adaptive(const Color(0xFFEFE7DE)),
-          ],
+        gradient: const LinearGradient(
+          colors: [ShopColors.accentDark, ShopColors.accent, ShopColors.accentLight],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
-        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [BoxShadow(color: ShopColors.accent.withValues(alpha: .13), blurRadius: 26, offset: const Offset(0, 10))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'YOUR MARKETPLACE',
-            style: TextStyle(
-              color: maroonLight,
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.6,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text.rich(
-            TextSpan(
-              children: <InlineSpan>[
-                TextSpan(
-                  text: 'Discover something\n',
-                  style: TextStyle(
-                    color: maroon,
-                    fontSize: 34,
-                    height: 0.98,
-                    letterSpacing: -1.1,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                TextSpan(
-                  text: 'worth keeping.',
-                  style: TextStyle(
-                    color: maroonLight,
-                    fontSize: 34,
-                    height: 0.98,
-                    letterSpacing: -1.1,
-                    fontWeight: FontWeight.w700,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final largeText = MediaQuery.textScalerOf(context).scale(14) > 22;
+        final copy = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('THE LOCAL EDIT', style: TextStyle(color: Color(0xFFE6C5BD), fontSize: 9.5, letterSpacing: 1.8, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 13),
+          const Text('Good finds.\nLocal stories.', style: TextStyle(color: Colors.white, fontSize: 30, letterSpacing: -.9, height: 1.08, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          Text(
-            product == null
-                ? 'Explore meaningful products from local sellers across LIKHAE.'
-                : product.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: text, fontSize: 12.5, height: 1.5),
-          ),
-          if (product != null) ...<Widget>[
-            const SizedBox(height: 7),
-            Row(
-              children: <Widget>[
-                Text(
-                  '₱${product.price.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    color: maroon,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (product.originalPrice != null &&
-                    product.originalPrice! > product.price) ...<Widget>[
-                  const SizedBox(width: 7),
-                  Text(
-                    '₱${product.originalPrice!.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      color: muted2,
-                      fontSize: 10,
-                      decoration: TextDecoration.lineThrough,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
+          const Text('Discover something\nworth keeping.', style: TextStyle(color: Color(0xFFEEDBD4), fontSize: 12, height: 1.5)),
           const SizedBox(height: 18),
-          Wrap(
-            spacing: 9,
-            runSpacing: 9,
-            children: <Widget>[
-              _PrimaryActionButton(
-                label: 'Shop Now',
-                icon: Icons.arrow_forward_rounded,
-                onTap: widget.onBrowseProducts,
-              ),
-              if (product != null && widget.onProductSelected != null)
-                _OutlineActionButton(
-                  label: 'View Product',
-                  icon: Icons.visibility_outlined,
-                  onTap: () => widget.onProductSelected!(product),
-                ),
-            ],
+          FilledButton.icon(
+            onPressed: widget.onBrowseProducts, icon: const Icon(Icons.arrow_forward_rounded, size: 17),
+            iconAlignment: IconAlignment.end, label: const Text('Explore'),
+            style: FilledButton.styleFrom(backgroundColor: ShopColors.surface, foregroundColor: ShopColors.accentDark,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
           ),
-        ],
-      ),
+        ]);
+        final photo = product == null ? null : Column(children: [
+          GestureDetector(
+            onTap: widget.onProductSelected == null ? null : () => widget.onProductSelected!(product),
+            child: ClipRRect(borderRadius: BorderRadius.circular(20),
+              child: AspectRatio(aspectRatio: .83, child: _ProductGallery(images: product.galleryImages))),
+          ),
+          const SizedBox(height: 10),
+          Text(product.name, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white, fontSize: 11, height: 1.4, fontWeight: FontWeight.w500)),
+        ]);
+        if (photo == null || largeText) return copy;
+        return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Expanded(flex: 3, child: copy),
+          const SizedBox(width: 16),
+          Expanded(flex: 2, child: photo),
+        ]);
+      }),
     );
   }
 
-  Widget _buildHeaderRow(
-    String kicker,
-    String title,
-    String subtitle,
-    String actionText,
-    VoidCallback? onAction,
-  ) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                kicker,
-                style: TextStyle(
-                  color: maroon,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                title,
-                style: TextStyle(
-                  color: text,
-                  fontSize: 25,
-                  height: 1.03,
-                  letterSpacing: -0.7,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: muted,
-                  fontSize: 10.5,
-                  height: 1.45,
-                ),
-              ),
-            ],
-          ),
-        ),
-        TextButton(
-          onPressed: onAction,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                actionText,
-                style: TextStyle(
-                  color: brown,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(Icons.arrow_forward_rounded, size: 14, color: brown),
-            ],
-          ),
-        ),
-      ],
-    );
+  Widget _buildHeaderRow(String kicker, String title, String subtitle, String actionText, VoidCallback? onAction) {
+    return ShopSectionTitle(title: title, subtitle: subtitle, actionLabel: actionText, onAction: onAction);
   }
 }
+
+
 
 class _ProductGrid extends StatelessWidget {
   final List<BuyerHomeProduct> products;
@@ -865,17 +685,17 @@ class _ProductGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = constraints.maxWidth < 330 ? 1 : 2;
-        const double spacing = 10;
+        final int columns = constraints.maxWidth >= 940 ? 4 : constraints.maxWidth >= 660 ? 3 : constraints.maxWidth < 290 || MediaQuery.textScalerOf(context).scale(14) > 24 ? 1 : 2;
+        const double spacing = 12;
         final double itemWidth =
             (constraints.maxWidth - ((columns - 1) * spacing)) / columns;
 
         return Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: TextDirection.ltr,
           child: Wrap(
             spacing: spacing,
             runSpacing: 12,
-            textDirection: TextDirection.rtl,
+            textDirection: TextDirection.ltr,
             children: products.map((BuyerHomeProduct product) {
               return SizedBox(
                 width: itemWidth,
@@ -904,266 +724,17 @@ class _ProductCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback onWishlist;
 
-  const _ProductCard({
-    required this.product,
-    required this.isWishlisted,
-    required this.wishlistLoading,
-    required this.onTap,
-    required this.onWishlist,
-  });
+  const _ProductCard({required this.product, required this.isWishlisted, required this.wishlistLoading, required this.onTap, required this.onWishlist});
 
   @override
-  Widget build(BuildContext context) {
-    final double? discount = product.discountPercentage;
-    return Material(
-      color: _BuyerHomeScreenState.card,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            border: Border.all(color: _BuyerHomeScreenState.border),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              AspectRatio(
-                aspectRatio: 1,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: <Widget>[
-                    Container(
-                      color: AppTheme.adaptive(const Color(0xFFF3ECE4)),
-                      child: _ProductGallery(images: product.galleryImages),
-                    ),
-                    if (discount != null)
-                      Positioned(
-                        left: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _BuyerHomeScreenState.maroon,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '-${discount.round()}%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Material(
-                        color: AppTheme.adaptive(
-                          const Color(0xFFFFFDF9),
-                        ).withValues(alpha: 0.93),
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          onTap: wishlistLoading ? null : onWishlist,
-                          customBorder: const CircleBorder(),
-                          child: SizedBox(
-                            width: 34,
-                            height: 34,
-                            child: wishlistLoading
-                                ? Padding(
-                                    padding: EdgeInsets.all(8),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.8,
-                                      color: _BuyerHomeScreenState.maroon,
-                                    ),
-                                  )
-                                : Icon(
-                                    isWishlisted
-                                        ? Icons.favorite_rounded
-                                        : Icons.favorite_border_rounded,
-                                    size: 18,
-                                    color: _BuyerHomeScreenState.maroon,
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (product.isOutOfStock)
-                      Positioned.fill(
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.42),
-                          alignment: Alignment.center,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.64),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'OUT OF STOCK',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                letterSpacing: 0.7,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                height: 154,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(11, 11, 11, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                    if (product.category?.trim().isNotEmpty ==
-                        true) ...<Widget>[
-                      Text(
-                        product.category!.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _BuyerHomeScreenState.brown,
-                          fontSize: 9,
-                          letterSpacing: 0.7,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                    ],
-                    Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _BuyerHomeScreenState.text,
-                        fontSize: 13,
-                        height: 1.3,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if (product.sellerName?.trim().isNotEmpty ==
-                        true) ...<Widget>[
-                      const SizedBox(height: 5),
-                      Text(
-                        product.sellerName!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: _BuyerHomeScreenState.muted,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: <Widget>[
-                        Expanded(
-                          child: Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 4,
-                            runSpacing: 3,
-                            children: <Widget>[
-                              Text(
-                          '₱${product.price.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: _BuyerHomeScreenState.maroon,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        if (product.originalPrice != null &&
-                            product.originalPrice! > product.price)
-                          Text(
-                            '₱${product.originalPrice!.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: _BuyerHomeScreenState.muted2,
-                              fontSize: 9.5,
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                              ],
-                            ),
-                          ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${product.soldCount} sold',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _BuyerHomeScreenState.muted,
-                            fontSize: 9.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: <Widget>[
-                        if (product.rating != null) ...<Widget>[
-                          Icon(
-                            Icons.star_rounded,
-                            color: _BuyerHomeScreenState.star,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            product.rating!.toStringAsFixed(1),
-                            style: TextStyle(
-                              color: _BuyerHomeScreenState.text,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                        ],
-                        if (product.stock != null) ...<Widget>[
-                          const Spacer(),
-                          Text(
-                            product.isOutOfStock
-                                ? 'Out of stock'
-                                : '${product.stock} left',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: product.isOutOfStock
-                                  ? _BuyerHomeScreenState.maroon
-                                  : _BuyerHomeScreenState.muted,
-                              fontSize: 9,
-                              fontWeight: product.isOutOfStock
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ShopProductCard(
+    image: _ProductGallery(images: product.galleryImages),
+    name: product.name, category: product.category, seller: product.sellerName,
+    price: product.price, originalPrice: product.originalPrice, rating: product.rating,
+    soldCount: product.soldCount, outOfStock: product.isOutOfStock,
+    wishlisted: isWishlisted, wishlistLoading: wishlistLoading,
+    onTap: onTap, onWishlist: onWishlist,
+  );
 }
 
 class _ProductGallery extends StatefulWidget {
@@ -1306,16 +877,16 @@ class _BuyerQuickActionCard extends StatelessWidget {
       label: '${action.label}, ${action.description}',
       child: Material(
         color: _BuyerHomeScreenState.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: action.onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           child: Container(
             height: 92,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               border: Border.all(color: _BuyerHomeScreenState.border),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               children: <Widget>[

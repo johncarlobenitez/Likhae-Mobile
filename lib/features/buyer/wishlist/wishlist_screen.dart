@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/widgets/shop_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/config/app_config.dart';
 
@@ -186,40 +188,40 @@ class WishlistScreen extends StatefulWidget {
 class _WishlistScreenState
     extends State<WishlistScreen> {
   static const Color _background =
-      Color(0xFFFBF7F2);
+      ShopColors.canvas;
 
   static const Color _backgroundSoft =
-      Color(0xFFF6EFE7);
+      ShopColors.soft;
 
   static const Color _card =
-      Color(0xFFFFFDF9);
+      ShopColors.surface;
 
   static const Color _border =
-      Color(0xFFEADCCC);
+      ShopColors.border;
 
   static const Color _borderStrong =
       Color(0xFFDBCEC1);
 
   static const Color _maroon =
-      Color(0xFF561C17);
+      ShopColors.accent;
 
   static const Color _maroonDark =
-      Color(0xFF3E130F);
+      ShopColors.accentDark;
 
   static const Color _text =
-      Color(0xFF3B211B);
+      ShopColors.text;
 
   static const Color _brown =
-      Color(0xFF6C4936);
+      ShopColors.secondaryText;
 
   static const Color _muted =
-      Color(0xFF987865);
+      ShopColors.muted;
 
   static const Color _muted2 =
-      Color(0xFFA99386);
+      ShopColors.faint;
 
   static const Color _tan =
-      Color(0xFFC19771);
+      ShopColors.tan;
 
   static const Color _danger =
       Color(0xFFB42318);
@@ -508,9 +510,7 @@ class _WishlistScreenState
           shape:
               RoundedRectangleBorder(
             borderRadius:
-                BorderRadius.circular(
-              20,
-            ),
+                BorderRadius.circular(24),
           ),
           title:
               const Text(
@@ -959,100 +959,15 @@ class _WishlistScreenState
     );
   }
 
-  Widget _buildTopBar() {
-    return Container(
-      padding:
-          const EdgeInsets.fromLTRB(
-        8,
-        6,
-        12,
-        7,
-      ),
-      decoration:
-          const BoxDecoration(
-        color:
-            _background,
-        border:
-            Border(
-          bottom:
-              BorderSide(
-            color:
-                Color(
-              0xFFF0E8DF,
-            ),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip:
-                'Back',
-            onPressed:
-                widget.onBack ??
-                () {
-                  Navigator.of(
-                    context,
-                  ).maybePop();
-                },
-            icon:
-                const Icon(
-              Icons
-                  .arrow_back_rounded,
-              color:
-                  _text,
-            ),
-          ),
-
-          const SizedBox(
-            width: 2,
-          ),
-
-          const Expanded(
-            child: Text(
-              'Wishlist',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _maroon,
-                fontSize: 18,
-                letterSpacing: 0.2,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-
-          _TopIconButton(
-            icon:
-                Icons
-                    .notifications_none_rounded,
-            tooltip:
-                'Notifications',
-            badgeCount:
-                widget
-                    .unreadNotificationCount,
-            onTap:
-                widget.onNotifications,
-          ),
-
-          const SizedBox(
-            width: 7,
-          ),
-
-          _TopIconButton(
-            icon:
-                Icons
-                    .shopping_bag_outlined,
-            tooltip:
-                'Cart',
-            badgeCount:
-                widget.cartItemCount,
-            onTap:
-                widget.onCart,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildTopBar() => ShopPageHeader(
+    title: 'Saved finds', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    actions: [
+      Badge.count(count: widget.unreadNotificationCount, isLabelVisible: widget.unreadNotificationCount > 0,
+        child: GlassIconButton(icon: Icons.notifications_none_rounded, label: 'Notifications', onPressed: widget.onNotifications)),
+      Badge.count(count: widget.cartItemCount, isLabelVisible: widget.cartItemCount > 0,
+        child: GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Cart', onPressed: widget.onCart)),
+    ],
+  );
 
   Widget _buildHero() {
     return Container(
@@ -1083,15 +998,9 @@ class _WishlistScreenState
           end:
               Alignment.bottomRight,
           colors: <Color>[
-            Color(
-              0xFFFFFDF9,
-            ),
-            Color(
-              0xFFF6EFE7,
-            ),
-            Color(
-              0xFFEFE7DE,
-            ),
+            ShopColors.surface,
+            ShopColors.soft,
+            ShopColors.soft,
           ],
         ),
         boxShadow:
@@ -1149,7 +1058,7 @@ class _WishlistScreenState
                   letterSpacing:
                       1.8,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
 
@@ -1300,9 +1209,7 @@ class _WishlistScreenState
         color:
             _card,
         borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+            BorderRadius.circular(20),
         border:
             Border.all(
           color:
@@ -1321,9 +1228,7 @@ class _WishlistScreenState
                 decoration:
                     BoxDecoration(
                   color:
-                      const Color(
-                    0xFFF1E4D7,
-                  ),
+                      ShopColors.accentSoft,
                   borderRadius:
                       BorderRadius.circular(
                     15,
@@ -1361,7 +1266,7 @@ class _WishlistScreenState
                         fontSize:
                             13,
                         fontWeight:
-                            FontWeight.w900,
+                            FontWeight.w800,
                       ),
                     ),
 
@@ -1481,9 +1386,7 @@ class _WishlistScreenState
         color:
             _card,
         borderRadius:
-            BorderRadius.circular(
-          18,
-        ),
+            BorderRadius.circular(20),
         border:
             Border.all(
           color:
@@ -1739,7 +1642,7 @@ class _WishlistScreenState
                     color:
                         _maroon,
                     fontWeight:
-                        FontWeight.w900,
+                        FontWeight.w800,
                   ),
                 ),
                 const TextSpan(
@@ -1754,7 +1657,7 @@ class _WishlistScreenState
                     color:
                         _maroon,
                     fontWeight:
-                        FontWeight.w900,
+                        FontWeight.w800,
                   ),
                 ),
                 const TextSpan(
@@ -1910,13 +1813,9 @@ class _WishlistScreenState
               decoration:
                   BoxDecoration(
                 color:
-                    const Color(
-                  0xFFF1E4D7,
-                ),
+                    ShopColors.accentSoft,
                 borderRadius:
-                    BorderRadius.circular(
-                  20,
-                ),
+                    BorderRadius.circular(24),
               ),
               alignment:
                   Alignment.center,
@@ -1947,7 +1846,7 @@ class _WishlistScreenState
                 fontSize:
                     19,
                 fontWeight:
-                    FontWeight.w900,
+                    FontWeight.w800,
                 letterSpacing:
                     -0.4,
               ),
@@ -2052,13 +1951,9 @@ class _WishlistScreenState
               decoration:
                   BoxDecoration(
                 color:
-                    const Color(
-                  0xFFF1E4D7,
-                ),
+                    ShopColors.accentSoft,
                 borderRadius:
-                    BorderRadius.circular(
-                  20,
-                ),
+                    BorderRadius.circular(24),
               ),
               alignment:
                   Alignment.center,
@@ -2089,7 +1984,7 @@ class _WishlistScreenState
                 fontSize:
                     18,
                 fontWeight:
-                    FontWeight.w900,
+                    FontWeight.w800,
               ),
             ),
 
@@ -2190,41 +2085,29 @@ class _WishlistProductCard
 
     return Material(
       color:
-          const Color(
-        0xFFFFFDF9,
-      ),
+          ShopColors.surface,
       borderRadius:
-          BorderRadius.circular(
-        16,
-      ),
+          BorderRadius.circular(20),
       child: InkWell(
         onTap:
             removing
                 ? null
                 : onTap,
         borderRadius:
-            BorderRadius.circular(
-          16,
-        ),
+            BorderRadius.circular(20),
         child: Container(
           clipBehavior:
               Clip.antiAlias,
           decoration:
               BoxDecoration(
             color:
-                const Color(
-              0xFFFFFDF9,
-            ),
+                ShopColors.surface,
             borderRadius:
-                BorderRadius.circular(
-              16,
-            ),
+                BorderRadius.circular(20),
             border:
                 Border.all(
               color:
-                  const Color(
-                0xFFEADCCC,
-              ),
+                  ShopColors.border,
             ),
           ),
           child: Column(
@@ -2238,9 +2121,7 @@ class _WishlistProductCard
                   children: [
                     Container(
                       color:
-                          const Color(
-                        0xFFF3ECE4,
-                      ),
+                          ShopColors.soft,
                       child:
                           _WishlistProductImage(
                         imageUrl:
@@ -2267,9 +2148,7 @@ class _WishlistProductCard
                           decoration:
                               BoxDecoration(
                             color:
-                                const Color(
-                              0xFF561C17,
-                            ),
+                                ShopColors.accent,
                             borderRadius:
                                 BorderRadius.circular(
                               7,
@@ -2330,18 +2209,14 @@ class _WishlistProductCard
                                           strokeWidth:
                                               2,
                                           color:
-                                              Color(
-                                            0xFF561C17,
-                                          ),
+                                              ShopColors.accent,
                                         ),
                                       )
                                     : const Icon(
                                         Icons
                                             .favorite_rounded,
                                         color:
-                                            Color(
-                                          0xFF561C17,
-                                        ),
+                                            ShopColors.accent,
                                         size:
                                             19,
                                       ),
@@ -2393,7 +2268,7 @@ class _WishlistProductCard
                                 letterSpacing:
                                     0.7,
                                 fontWeight:
-                                    FontWeight.w900,
+                                    FontWeight.w800,
                               ),
                             ),
                           ),
@@ -2429,9 +2304,7 @@ class _WishlistProductCard
                         style:
                             const TextStyle(
                           color:
-                              Color(
-                            0xFF6C4936,
-                          ),
+                              ShopColors.secondaryText,
                           fontSize:
                               9,
                           letterSpacing:
@@ -2456,9 +2329,7 @@ class _WishlistProductCard
                       style:
                           const TextStyle(
                         color:
-                            Color(
-                          0xFF3B211B,
-                        ),
+                            ShopColors.text,
                         fontSize:
                             13,
                         height:
@@ -2486,9 +2357,7 @@ class _WishlistProductCard
                         style:
                             const TextStyle(
                           color:
-                              Color(
-                            0xFF987865,
-                          ),
+                              ShopColors.muted,
                           fontSize:
                               10,
                         ),
@@ -2515,13 +2384,11 @@ class _WishlistProductCard
                           style:
                               const TextStyle(
                             color:
-                                Color(
-                              0xFF561C17,
-                            ),
+                                ShopColors.accent,
                             fontSize:
                                 15,
                             fontWeight:
-                                FontWeight.w900,
+                                FontWeight.w800,
                           ),
                         ),
 
@@ -2536,9 +2403,7 @@ class _WishlistProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFFA99386,
-                              ),
+                                  ShopColors.faint,
                               fontSize:
                                   9.5,
                               decoration:
@@ -2580,9 +2445,7 @@ class _WishlistProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFF3B211B,
-                              ),
+                                  ShopColors.text,
                               fontSize:
                                   9.5,
                               fontWeight:
@@ -2602,9 +2465,7 @@ class _WishlistProductCard
                               style:
                                   const TextStyle(
                                 color:
-                                    Color(
-                                  0xFF987865,
-                                ),
+                                    ShopColors.muted,
                                 fontSize:
                                     9,
                               ),
@@ -2628,9 +2489,7 @@ class _WishlistProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFF987865,
-                              ),
+                                  ShopColors.muted,
                               fontSize:
                                   9.5,
                             ),
@@ -2646,9 +2505,7 @@ class _WishlistProductCard
                             style:
                                 const TextStyle(
                               color:
-                                  Color(
-                                0xFF987865,
-                              ),
+                                  ShopColors.muted,
                               fontSize:
                                   9,
                             ),
@@ -2695,9 +2552,7 @@ class _WishlistProductImage
           Icons
               .inventory_2_outlined,
           color:
-              Color(
-            0xFFA99386,
-          ),
+              ShopColors.faint,
           size:
               36,
         ),
@@ -2731,9 +2586,7 @@ class _WishlistProductImage
               strokeWidth:
                   2,
               color:
-                  Color(
-                0xFF561C17,
-              ),
+                  ShopColors.accent,
             ),
           ),
         );
@@ -2750,9 +2603,7 @@ class _WishlistProductImage
             Icons
                 .broken_image_outlined,
             color:
-                Color(
-              0xFFA99386,
-            ),
+                ShopColors.faint,
             size:
                 36,
           ),
@@ -2793,9 +2644,7 @@ class _TopIconButton
           child:
               Material(
             color:
-                const Color(
-              0xFFFFFDF9,
-            ),
+                ShopColors.surface,
             borderRadius:
                 BorderRadius.circular(
               12,
@@ -2825,18 +2674,14 @@ class _TopIconButton
                   border:
                       Border.all(
                     color:
-                        const Color(
-                      0xFFEADCCC,
-                    ),
+                        ShopColors.border,
                   ),
                 ),
                 child:
                     Icon(
                   icon,
                   color:
-                      const Color(
-                    0xFF561C17,
-                  ),
+                      ShopColors.accent,
                   size:
                       19,
                 ),
@@ -2871,9 +2716,7 @@ class _TopIconButton
               decoration:
                   BoxDecoration(
                 color:
-                    const Color(
-                  0xFF561C17,
-                ),
+                    ShopColors.accent,
                 borderRadius:
                     BorderRadius.circular(
                   100,
@@ -2881,9 +2724,7 @@ class _TopIconButton
                 border:
                     Border.all(
                   color:
-                      const Color(
-                    0xFFFBF7F2,
-                  ),
+                      ShopColors.canvas,
                   width:
                       2,
                 ),
@@ -2901,7 +2742,7 @@ class _TopIconButton
                   fontSize:
                       7,
                   fontWeight:
-                      FontWeight.w900,
+                      FontWeight.w800,
                 ),
               ),
             ),
