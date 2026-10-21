@@ -17,11 +17,25 @@ class RiderProfileData {
 
   final String vehicleType;
 
+  final bool isOnline;
+
   final String plateNumber;
 
   final String status;
 
   final String primaryRole;
+
+  final String firstName;
+
+  final String lastName;
+
+  final String? profilePhotoUrl;
+
+  final String logisticsCenter;
+
+  final List<String> serviceAreas;
+
+  final RiderResidentialAddressData? residentialAddress;
 
   const RiderProfileData({
     required this.id,
@@ -32,9 +46,16 @@ class RiderProfileData {
     required this.sex,
     required this.address,
     required this.vehicleType,
+    this.isOnline = false,
     required this.plateNumber,
     required this.status,
     required this.primaryRole,
+    this.firstName = '',
+    this.lastName = '',
+    this.profilePhotoUrl,
+    this.logisticsCenter = 'Not recorded',
+    this.serviceAreas = const <String>[],
+    this.residentialAddress,
   });
 
   factory RiderProfileData.fromApi(Map<String, dynamic> json) {
@@ -45,10 +66,32 @@ class RiderProfileData {
     final Map<String, dynamic> rider = json['rider'] is Map
         ? Map<String, dynamic>.from(json['rider'] as Map)
         : json;
+    final String name = _valueOrFallback(
+      user['name'] ?? rider['name'],
+      'Rider Account',
+    );
+    final Map<String, dynamic>? address = json['residential_address'] is Map
+        ? Map<String, dynamic>.from(json['residential_address'] as Map)
+        : null;
+    final String formattedAddress = address == null
+        ? ''
+        : <dynamic>[
+                address['house_number'],
+                address['street_address'],
+                address['barangay_name'],
+                address['municipality_name'],
+                address['province_name'],
+                address['postal_code'],
+              ]
+              .where(
+                (dynamic part) =>
+                    part != null && part.toString().trim().isNotEmpty,
+              )
+              .join(', ');
 
     return RiderProfileData(
       id: _toInt(user['id'] ?? rider['user_id'] ?? rider['id']),
-      name: _valueOrFallback(user['name'] ?? rider['name'], 'Rider Account'),
+      name: name,
       email: _valueOrFallback(user['email'] ?? rider['email'], 'Not recorded'),
       contactNumber: _valueOrFallback(
         user['phone'] ??
@@ -60,13 +103,16 @@ class RiderProfileData {
       birthday: _formatBirthday(user['birthday'] ?? rider['birthday']),
       sex: _valueOrFallback(user['sex'] ?? rider['sex'], 'Not recorded'),
       address: _valueOrFallback(
-        user['address'] ?? rider['address'],
+        formattedAddress.isNotEmpty
+            ? formattedAddress
+            : user['address'] ?? rider['address'],
         'Not recorded',
       ),
       vehicleType: _valueOrFallback(
         rider['vehicle_type'] ?? user['vehicle_type'],
         'Not recorded',
       ),
+      isOnline: _toBool(rider['is_online']),
       plateNumber: _valueOrFallback(
         rider['plate_number'] ?? user['plate_number'],
         'Not recorded',
@@ -80,11 +126,35 @@ class RiderProfileData {
           'rider',
         ),
       ),
+      firstName: _valueOrFallback(
+        user['first_name'],
+        name.trim().split(RegExp(r'\s+')).first,
+      ),
+      lastName: _valueOrFallback(user['last_name'], ''),
+      profilePhotoUrl: user['profile_photo_url']?.toString(),
+      logisticsCenter: _valueOrFallback(
+        rider['logistics_center'],
+        'Not recorded',
+      ),
+      serviceAreas: rider['service_areas'] is List
+          ? (rider['service_areas'] as List)
+                .map((dynamic value) => value.toString())
+                .where((String value) => value.trim().isNotEmpty)
+                .toList(growable: false)
+          : const <String>[],
+      residentialAddress: address == null
+          ? null
+          : RiderResidentialAddressData.fromApi(address),
     );
   }
 
   String get riderId {
     return 'RID-${id.toString().padLeft(4, '0')}';
+  }
+
+  bool get supportsAvailabilityStatus {
+    final String normalized = vehicleType.trim().toLowerCase();
+    return normalized == 'motorcycle' || normalized == 'tricycle';
   }
 
   String get initials {
@@ -120,6 +190,13 @@ class RiderProfileData {
     }
 
     return int.tryParse(value?.toString().trim() ?? '') ?? 0;
+  }
+
+  static bool _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final String normalized = value?.toString().trim().toLowerCase() ?? '';
+    return normalized == '1' || normalized == 'true' || normalized == 'online';
   }
 
   static String _valueOrFallback(dynamic value, String fallback) {
@@ -196,6 +273,72 @@ class RiderProfileData {
   }
 }
 
+class RiderResidentialAddressData {
+  final String regionCode;
+  final String regionName;
+  final String provinceCode;
+  final String provinceName;
+  final String municipalityCode;
+  final String municipalityName;
+  final String barangayCode;
+  final String barangayName;
+  final String postalCode;
+  final String houseNumber;
+  final String streetAddress;
+  final String landmark;
+  final double? latitude;
+  final double? longitude;
+
+  const RiderResidentialAddressData({
+    this.regionCode = '',
+    this.regionName = '',
+    this.provinceCode = '',
+    this.provinceName = '',
+    this.municipalityCode = '',
+    this.municipalityName = '',
+    this.barangayCode = '',
+    this.barangayName = '',
+    this.postalCode = '',
+    this.houseNumber = '',
+    this.streetAddress = '',
+    this.landmark = '',
+    this.latitude,
+    this.longitude,
+  });
+
+  factory RiderResidentialAddressData.fromApi(Map<String, dynamic> json) {
+    double? coordinate(dynamic value) => value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString() ?? '');
+
+    return RiderResidentialAddressData(
+      regionCode: (json['region_code'] ?? '').toString(),
+      regionName: (json['region_name'] ?? '').toString(),
+      provinceCode: (json['province_code'] ?? '').toString(),
+      provinceName: (json['province_name'] ?? '').toString(),
+      municipalityCode: (json['municipality_code'] ?? '').toString(),
+      municipalityName: (json['municipality_name'] ?? '').toString(),
+      barangayCode: (json['barangay_code'] ?? '').toString(),
+      barangayName: (json['barangay_name'] ?? '').toString(),
+      postalCode: (json['postal_code'] ?? '').toString(),
+      houseNumber: (json['house_number'] ?? '').toString(),
+      streetAddress: (json['street_address'] ?? '').toString(),
+      landmark: (json['landmark'] ?? '').toString(),
+      latitude: coordinate(json['latitude']),
+      longitude: coordinate(json['longitude']),
+    );
+  }
+
+  String get formatted => <String>[
+    houseNumber,
+    streetAddress,
+    barangayName,
+    municipalityName,
+    provinceName,
+    postalCode,
+  ].where((String value) => value.trim().isNotEmpty).join(', ');
+}
+
 typedef RiderProfileRefreshCallback = Future<void> Function();
 
 typedef RiderLogoutCallback = Future<void> Function();
@@ -209,12 +352,18 @@ class RiderProfileScreen extends StatefulWidget {
 
   final RiderLogoutCallback? onLogout;
 
+  final VoidCallback? onSystemSettings;
+
+  final VoidCallback? onEditProfile;
+
   const RiderProfileScreen({
     super.key,
     this.profile,
     this.statusMessage,
     this.onRefresh,
     this.onLogout,
+    this.onSystemSettings,
+    this.onEditProfile,
   });
 
   @override
@@ -397,9 +546,35 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                 const SizedBox(height: 14),
 
                 _buildRiderInformation(profile),
+              ],
 
+              if (profile != null && widget.onEditProfile != null) ...<Widget>[
                 const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 49,
+                  child: OutlinedButton.icon(
+                    onPressed: widget.onEditProfile,
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit Profile & Address'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _maroon,
+                      backgroundColor: _surface,
+                      side: const BorderSide(color: _maroon),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
 
+              const SizedBox(height: 14),
+
+              _buildSystemSettings(),
+
+              if (profile != null) ...<Widget>[
+                const SizedBox(height: 14),
                 _buildAccountActions(),
               ],
             ],
@@ -506,14 +681,31 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                   color: _maroonSoft,
                   shape: BoxShape.circle,
                 ),
-                child: Text(
-                  profile.initials,
-                  style: const TextStyle(
-                    color: _maroon,
-                    fontSize: 25,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: profile.profilePhotoUrl?.trim().isNotEmpty == true
+                    ? ClipOval(
+                        child: Image.network(
+                          profile.profilePhotoUrl!,
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Text(
+                            profile.initials,
+                            style: const TextStyle(
+                              color: _maroon,
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        profile.initials,
+                        style: const TextStyle(
+                          color: _maroon,
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
               ),
 
               const SizedBox(width: 15),
@@ -595,7 +787,9 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       ),
       _ProfileInformation(
         label: 'Address',
-        value: profile.address,
+        value: profile.residentialAddress?.formatted.isNotEmpty == true
+            ? profile.residentialAddress!.formatted
+            : profile.address,
         icon: Icons.location_on_outlined,
       ),
     ];
@@ -625,9 +819,79 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
         value: profile.primaryRole,
         icon: Icons.badge_outlined,
       ),
+      _ProfileInformation(
+        label: 'Logistics Center',
+        value: profile.logisticsCenter,
+        icon: Icons.warehouse_outlined,
+      ),
+      _ProfileInformation(
+        label: 'Areas',
+        value: profile.serviceAreas.isEmpty
+            ? 'No active area'
+            : profile.serviceAreas.join(', '),
+        icon: Icons.map_outlined,
+      ),
     ];
 
     return _ProfileSection(title: 'Rider Information', items: details);
+  }
+
+  Widget _buildSystemSettings() {
+    return Material(
+      color: _surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: widget.onSystemSettings,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 42,
+                height: 42,
+                decoration: const BoxDecoration(
+                  color: _maroonSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.tune_rounded, color: _maroon, size: 21),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'System Settings',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Notifications, sounds, appearance, and language.',
+                      style: TextStyle(
+                        color: _muted,
+                        fontSize: 11.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: _muted),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildAccountActions() {

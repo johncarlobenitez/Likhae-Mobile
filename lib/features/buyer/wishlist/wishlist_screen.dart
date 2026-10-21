@@ -1,7 +1,7 @@
+import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/config/app_config.dart';
 
 typedef WishlistProductCallback = Future<void> Function(
@@ -45,6 +45,10 @@ class WishlistProduct {
   ///
   /// > 0 = available stock.
   final int? stock;
+  final bool isActive;
+  final bool isDraft;
+  final bool isDeleted;
+  final bool sellerOnVacation;
 
   /// Time this product was saved to the wishlist.
   ///
@@ -70,6 +74,10 @@ class WishlistProduct {
     this.reviewCount = 0,
     this.soldCount = 0,
     this.stock,
+    this.isActive = true,
+    this.isDraft = false,
+    this.isDeleted = false,
+    this.sellerOnVacation = false,
     this.wishlistAddedAt,
     this.createdAt,
   });
@@ -96,6 +104,16 @@ class WishlistProduct {
     }
 
     return available < 1;
+  }
+
+  bool get isUnavailable =>
+      !isActive || isDraft || isDeleted || sellerOnVacation || isOutOfStock;
+
+  String get unavailableLabel {
+    if (sellerOnVacation) return 'SELLER ON VACATION';
+    if (!isActive || isDraft || isDeleted) return 'UNAVAILABLE';
+    if (isOutOfStock) return 'OUT OF STOCK';
+    return 'UNAVAILABLE';
   }
 }
 
@@ -244,10 +262,7 @@ class _WishlistScreenState
   void initState() {
     super.initState();
 
-    _wishlist =
-        List<WishlistProduct>.from(
-      widget.products,
-    );
+    _wishlist = _uniqueProducts(widget.products);
 
     _searchQuery =
         widget.initialSearchQuery;
@@ -271,10 +286,7 @@ class _WishlistScreenState
 
     if (oldWidget.products !=
         widget.products) {
-      _wishlist =
-          List<WishlistProduct>.from(
-        widget.products,
-      );
+      _wishlist = _uniqueProducts(widget.products);
 
       _removingProductIds.removeWhere(
         (int productId) {
@@ -303,6 +315,14 @@ class _WishlistScreenState
       _activeSort =
           widget.initialSort;
     }
+  }
+
+  List<WishlistProduct> _uniqueProducts(Iterable<WishlistProduct> products) {
+    final Map<int, WishlistProduct> unique = <int, WishlistProduct>{};
+    for (final WishlistProduct product in products) {
+      if (product.id > 0) unique[product.id] = product;
+    }
+    return unique.values.toList(growable: true);
   }
 
   @override
@@ -635,7 +655,7 @@ class _WishlistScreenState
       final List<WishlistProduct> refreshed = await callback();
       if (!mounted) return;
       setState(() {
-        _wishlist = List<WishlistProduct>.from(refreshed);
+        _wishlist = _uniqueProducts(refreshed);
       });
     } catch (error) {
       _showMessage(
@@ -2225,8 +2245,7 @@ class _WishlistProductCard
                       ),
                     ),
 
-                    if (product
-                        .isOutOfStock)
+                    if (product.isUnavailable)
                       Positioned.fill(
                         child:
                             Container(
@@ -2257,10 +2276,10 @@ class _WishlistProductCard
                               ),
                             ),
                             child:
-                                const Text(
-                              'OUT OF STOCK',
+                                Text(
+                              product.unavailableLabel,
                               style:
-                                  TextStyle(
+                                  const TextStyle(
                                 color:
                                     Colors.white,
                                 fontSize:
@@ -2529,87 +2548,15 @@ class _WishlistProductCard
   }
 }
 
-class _WishlistProductImage
-    extends StatelessWidget {
+class _WishlistProductImage extends StatelessWidget {
   final String? imageUrl;
-
-  const _WishlistProductImage({
-    required this.imageUrl,
-  });
-
+  const _WishlistProductImage({required this.imageUrl});
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final String? url =
-        imageUrl?.trim();
-
-    if (url == null ||
-        url.isEmpty) {
-      return const Center(
-        child:
-            Icon(
-          Icons
-              .inventory_2_outlined,
-          color:
-              ShopColors.faint,
-          size:
-              36,
-        ),
-      );
-    }
-
-    final String resolvedUrl = AppConfig.resolveMediaUrl(url);
-
-    return Image(
-      image: CachedNetworkImageProvider(resolvedUrl),
-      fit:
-          BoxFit.cover,
-      loadingBuilder:
-          (
-        BuildContext context,
-        Widget child,
-        ImageChunkEvent? progress,
-      ) {
-        if (progress == null) {
-          return child;
-        }
-
-        return const Center(
-          child: SizedBox(
-            width:
-                22,
-            height:
-                22,
-            child:
-                CircularProgressIndicator(
-              strokeWidth:
-                  2,
-              color:
-                  ShopColors.accent,
-            ),
-          ),
-        );
-      },
-      errorBuilder:
-          (
-        BuildContext context,
-        Object error,
-        StackTrace? stackTrace,
-      ) {
-        return const Center(
-          child:
-              Icon(
-            Icons
-                .broken_image_outlined,
-            color:
-                ShopColors.faint,
-            size:
-                36,
-          ),
-        );
-      },
-    );
+  Widget build(BuildContext context) {
+    final value = imageUrl?.trim() ?? '';
+    if (value.isEmpty) return const Center(child: Icon(Icons.inventory_2_outlined,
+      color: ShopColors.faint, size: 36));
+    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 36);
   }
 }
 

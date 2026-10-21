@@ -8,6 +8,7 @@ class GlassSurface extends StatelessWidget {
   final double radius;
   final EdgeInsetsGeometry padding;
   final bool elevated;
+  final double? opacity;
 
   const GlassSurface({
     super.key,
@@ -15,6 +16,7 @@ class GlassSurface extends StatelessWidget {
     this.radius = 28,
     this.padding = EdgeInsets.zero,
     this.elevated = true,
+    this.opacity,
   });
 
   @override
@@ -26,7 +28,7 @@ class GlassSurface extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
         boxShadow: elevated ? [
-          BoxShadow(color: Colors.black.withValues(alpha: dark ? .22 : .07), blurRadius: 28, offset: const Offset(0, 10)),
+          BoxShadow(color: Colors.black.withValues(alpha: dark ? .22 : .06), blurRadius: 18, offset: const Offset(0, 6)),
           BoxShadow(color: Colors.black.withValues(alpha: .035), blurRadius: 4, offset: const Offset(0, 2)),
         ] : null,
       ),
@@ -34,12 +36,14 @@ class GlassSurface extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: BackdropFilter(
           enabled: !highContrast,
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: tint.withValues(alpha: highContrast ? 1 : dark ? .78 : .72),
+              color: tint.withValues(
+                alpha: highContrast ? 1 : opacity ?? .97,
+              ),
               borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: Colors.white.withValues(alpha: dark ? .16 : .85), width: 1),
+              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 1),
               gradient: highContrast ? null : LinearGradient(
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
                 colors: [Colors.white.withValues(alpha: dark ? .09 : .38), Colors.white.withValues(alpha: 0)],
@@ -63,16 +67,16 @@ class GlassIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassSurface(
-      radius: 24,
+      radius: 16,
       elevated: false,
       child: IconButton(
         tooltip: label,
         onPressed: onPressed,
-        icon: Icon(icon, size: 21),
+        icon: Icon(icon, size: 24),
         style: IconButton.styleFrom(
-          foregroundColor: Theme.of(context).colorScheme.onSurface,
-          minimumSize: const Size(46, 46),
-          padding: const EdgeInsets.all(11),
+          foregroundColor: Theme.of(context).colorScheme.primary,
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.all(12),
         ),
       ),
     );

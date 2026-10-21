@@ -1,10 +1,17 @@
 import 'package:dio/dio.dart';
 
 import '../core/config/app_config.dart';
+import '../core/data/async_cache.dart';
 import '../features/auth/register_screen.dart';
 
 class PhilippineAddressService {
   PhilippineAddressService._();
+
+  static final _options = AsyncCache<String, List<AddressOption>>(
+    maximumEntries: 64,
+  );
+
+  static void clearCache() => _options.clear();
 
   static final Dio _dio = Dio(
     BaseOptions(
@@ -51,17 +58,21 @@ class PhilippineAddressService {
   static Future<String?> fetchPostalCode({
     required String municipalityCode,
     required String barangayCode,
+    required String provinceCode,
     required String provinceName,
     required String municipalityName,
   }) async {
+    final Map<String, dynamic> queryParameters = <String, dynamic>{
+      'province': provinceCode,
+      'municipality': municipalityCode,
+      'province_name': provinceName,
+      'municipality_name': municipalityName,
+    };
+    queryParameters['barangay'] = barangayCode;
+
     final Response<dynamic> response = await _dio.get(
       '/postal-code',
-      queryParameters: <String, dynamic>{
-        'municipality': municipalityCode,
-        'province_name': provinceName,
-        'municipality_name': municipalityName,
-        'barangay': barangayCode,
-      },
+      queryParameters: queryParameters,
     );
     final dynamic data = response.data;
     if (data is Map && data['postal_code'] != null) {
@@ -70,7 +81,11 @@ class PhilippineAddressService {
     return null;
   }
 
-  static Future<List<AddressOption>> _fetchOptions(String path) async {
+  static Future<List<AddressOption>> _fetchOptions(String path) => _options.load(
+    path, () => _loadOptions(path), lifetime: const Duration(hours: 24),
+  );
+
+  static Future<List<AddressOption>> _loadOptions(String path) async {
     try {
       final Response<dynamic> response = await _dio.get(path);
       return _parseOptions(response.data);

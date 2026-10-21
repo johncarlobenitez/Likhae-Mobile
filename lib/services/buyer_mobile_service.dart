@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
+import '../core/utils/api_value_parsers.dart';
 import '../features/buyer/cart/cart_screen.dart';
 import '../features/buyer/checkout/checkout_screen.dart';
 import '../features/buyer/messages/messages_screen.dart';
@@ -28,6 +29,10 @@ class _BuyerProductData {
   final int reviewCount;
   final int soldCount;
   final int? stock;
+  final bool isActive;
+  final bool isDraft;
+  final bool isDeleted;
+  final bool sellerOnVacation;
 
   const _BuyerProductData({
     required this.id,
@@ -43,11 +48,18 @@ class _BuyerProductData {
     this.originalPrice,
     this.rating,
     this.stock,
+    this.isActive = true,
+    this.isDraft = false,
+    this.isDeleted = false,
+    this.sellerOnVacation = false,
   });
 }
 
 class BuyerMobileService {
-  static Future<List<dynamic>> _getRows(String endpoint) async {
+  static Future<List<dynamic>> _getRows(
+    String endpoint, {
+    int? maxPages,
+  }) async {
     final List<dynamic> allRows = <dynamic>[];
     int page = 1;
     int lastPage = 1;
@@ -69,7 +81,7 @@ class BuyerMobileService {
         lastPage = int.tryParse(meta['last_page'].toString()) ?? page;
       }
       page++;
-    } while (page <= lastPage);
+    } while (page <= lastPage && (maxPages == null || page <= maxPages));
     return allRows;
   }
 
@@ -167,31 +179,41 @@ class BuyerMobileService {
     _requirePayload(response);
   }
 
-  static Future<void> toggleWishlist(int productId) async {
+  static Future<bool> toggleWishlist(int productId) async {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('buyer/wishlist/toggle'),
       <String, dynamic>{'product_id': productId},
     );
-    _requirePayload(response);
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map) {
+      throw const FormatException(
+        'Invalid wishlist response from the buyer API.',
+      );
+    }
+    return parseApiBool(data['wishlisted'], defaultValue: true);
   }
 
   static Future<List<WishlistProduct>> fetchWishlist() async {
-    return (await _getRows('buyer/wishlist'))
-        .whereType<Map>()
-        .map((Map item) {
-          final Map<String, dynamic> row = Map<String, dynamic>.from(item);
-          final dynamic rawProduct = row['product'];
-          if (rawProduct is! Map) {
-            throw const FormatException(
-              'Invalid product in wishlist response.',
-            );
-          }
-          final Map<String, dynamic> product = Map<String, dynamic>.from(
-            rawProduct,
-          );
-          final _BuyerProductData data = _buyerProductData(product);
-          return WishlistProduct(
-            id: data.id,
+    final Map<int, WishlistProduct> products = <int, WishlistProduct>{};
+    for (final dynamic item in await _getRows('buyer/wishlist')) {
+      if (item is! Map) continue;
+      final Map<String, dynamic> row = Map<String, dynamic>.from(item);
+      final dynamic rawProduct = row['product'];
+      final DateTime? wishlistedAt = DateTime.tryParse(
+        (row['wishlisted_at'] ?? '').toString(),
+      );
+      WishlistProduct? product;
+      if (rawProduct is Map) {
+        final Map<String, dynamic> productRow = Map<String, dynamic>.from(
+          rawProduct,
+        );
+        final _BuyerProductData data = _buyerProductData(productRow);
+        final int id = data.id > 0
+            ? data.id
+            : int.tryParse((row['product_id'] ?? '').toString()) ?? 0;
+        if (id > 0) {
+          product = WishlistProduct(
+            id: id,
             name: data.name,
             slug: data.slug,
             category: data.category,
@@ -204,12 +226,30 @@ class BuyerMobileService {
             reviewCount: data.reviewCount,
             soldCount: data.soldCount,
             stock: data.stock,
-            wishlistAddedAt: DateTime.tryParse(
-              (row['wishlisted_at'] ?? '').toString(),
-            ),
+            isActive: data.isActive,
+            isDraft: data.isDraft,
+            isDeleted: data.isDeleted,
+            sellerOnVacation: data.sellerOnVacation,
+            wishlistAddedAt: wishlistedAt,
           );
-        })
-        .toList(growable: false);
+        }
+      } else {
+        final int id = int.tryParse((row['product_id'] ?? '').toString()) ?? 0;
+        if (id > 0) {
+          product = WishlistProduct(
+            id: id,
+            name: (row['product_name'] ?? 'Unavailable product').toString(),
+            price: _asDouble(row['price']),
+            stock: 0,
+            isActive: false,
+            isDeleted: true,
+            wishlistAddedAt: wishlistedAt,
+          );
+        }
+      }
+      if (product != null) products[product.id] = product;
+    }
+    return products.values.toList(growable: false);
   }
 
   static _BuyerProductData _buyerProductData(Map<String, dynamic> row) {
@@ -242,7 +282,40 @@ class BuyerMobileService {
       rating: row['rating'] == null ? null : _asDouble(row['rating']),
       reviewCount: int.tryParse((row['reviews'] ?? 0).toString()) ?? 0,
       soldCount: int.tryParse((row['sold'] ?? 0).toString()) ?? 0,
-      stock: int.tryParse((row['stock'] ?? 0).toString()) ?? 0,
+      stock: int.tryParse(row['stock']?.toString() ?? ''),
+      isActive:
+          parseApiBool(
+            row['is_active'] ??
+                row['is_available'] ??
+                row['active'] ??
+                row['is_published'],
+            defaultValue: !<String>{
+              'inactive',
+              'unpublished',
+              'draft',
+              'deleted',
+              'disabled',
+            }.contains((row['status'] ?? '').toString().toLowerCase()),
+          ) &&
+          parseApiBool(seller?['store_visibility'], defaultValue: true) &&
+          parseApiBool(row['is_visible'], defaultValue: true),
+      isDraft:
+          parseApiBool(row['is_draft'], defaultValue: false) ||
+          (row['status'] ?? '').toString().toLowerCase() == 'draft',
+      isDeleted:
+          parseApiBool(
+            row['is_deleted'] ?? row['deleted'],
+            defaultValue: false,
+          ) ||
+          row['deleted_at'] != null ||
+          (row['status'] ?? '').toString().toLowerCase() == 'deleted',
+      sellerOnVacation: parseApiBool(
+        seller?['is_on_vacation'] ??
+            seller?['is_vacation_mode'] ??
+            seller?['vacation_mode'] ??
+            row['seller_on_vacation'],
+        defaultValue: false,
+      ),
     );
   }
 
@@ -279,9 +352,7 @@ class BuyerMobileService {
           expires: (item['expires'] ?? '').toString(),
           campaignName: item['campaign_name']?.toString(),
           sellerName: item['seller_name']?.toString(),
-          canUse: item.containsKey('can_use')
-              ? item['can_use'] == true
-              : null,
+          canUse: item.containsKey('can_use') ? item['can_use'] == true : null,
           sellerId: int.tryParse((item['seller_id'] ?? '').toString()),
           discountType: item['discount_type']?.toString(),
           discountAmount: _asDouble(item['discount_value']),
@@ -339,12 +410,17 @@ class BuyerMobileService {
         'label': request.label,
         'recipient_name': request.recipientName,
         'contact_number': request.contactNumber,
+        'region_code': request.regionCode ?? _locationCode(request.region),
+        'region_name': request.region,
         'province_name': request.province,
-        'province_code': _locationCode(request.province),
+        'province_code':
+            request.provinceCode ?? _locationCode(request.province),
         'municipality_name': request.municipality,
-        'municipality_code': _locationCode(request.municipality),
+        'municipality_code':
+            request.municipalityCode ?? _locationCode(request.municipality),
         'barangay_name': request.barangay,
-        'barangay_code': _locationCode(request.barangay),
+        'barangay_code':
+            request.barangayCode ?? _locationCode(request.barangay),
         'postal_code': request.postalCode,
         'house_number': request.houseNumber,
         'street_address': request.street,
@@ -397,6 +473,7 @@ class BuyerMobileService {
     required int addressId,
     required String paymentMethod,
     Map<int, String> voucherCodes = const <int, String>{},
+    Map<int, String> sellerNotes = const <int, String>{},
     List<int> protectedProductIds = const <int>[],
   }) async {
     final Response<dynamic> response = await ApiClient.post(
@@ -405,6 +482,11 @@ class BuyerMobileService {
         'cart_item_ids': cartItemIds,
         'address_id': addressId,
         'payment_method': paymentMethod.toUpperCase(),
+        if (sellerNotes.isNotEmpty)
+          'seller_notes': sellerNotes.map(
+            (int sellerId, String note) =>
+                MapEntry<String, String>(sellerId.toString(), note),
+          ),
         if (voucherCodes.isNotEmpty)
           'voucher_codes': voucherCodes.map(
             (int sellerId, String code) =>
@@ -446,9 +528,23 @@ class BuyerMobileService {
         .toList(growable: false);
   }
 
-  static Future<BuyerOrderLocation?> fetchRiderLocation(
-    String orderId,
-  ) async {
+  static Future<BuyerOrderData> fetchOrder(String orderReference) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(
+        'buyer/orders/${Uri.encodeComponent(orderReference)}',
+      ),
+    );
+    final dynamic responseData = _requirePayload(response)['data'];
+    final dynamic orderData = responseData is Map
+        ? responseData['order'] ?? responseData
+        : null;
+    if (orderData is! Map) {
+      throw const FormatException('Invalid order response from the buyer API.');
+    }
+    return BuyerOrderData.fromApi(Map<String, dynamic>.from(orderData));
+  }
+
+  static Future<BuyerOrderLocation?> fetchRiderLocation(String orderId) async {
     final Response<dynamic> response = await ApiClient.get(
       AppConfig.resolveApiUrl(
         'buyer/orders/${Uri.encodeComponent(orderId)}/live-location',
@@ -463,7 +559,9 @@ class BuyerMobileService {
       return null;
     }
     if (location is! Map) {
-      throw const FormatException('Invalid rider location in buyer API response.');
+      throw const FormatException(
+        'Invalid rider location in buyer API response.',
+      );
     }
     final double? latitude = double.tryParse(
       (location['latitude'] ?? '').toString(),
@@ -481,12 +579,50 @@ class BuyerMobileService {
     );
   }
 
-  static Future<void> cancelOrder(BuyerOrderData order, String reason) async {
+  static Future<void> cancelOrder(
+    BuyerOrderData order,
+    String reason,
+    String note,
+  ) async {
+    final String normalizedReason = reason.trim();
+    const Map<String, String> reasonCodes = <String, String>{
+      'Changed my mind': 'CHANGED_MIND',
+      'Ordered by mistake': 'ORDERED_BY_MISTAKE',
+      'Need to change address': 'OTHER',
+      'Found a better option': 'OTHER',
+      'Payment issue': 'OTHER',
+      'Other': 'OTHER',
+    };
+    final String? reasonCode = reasonCodes[normalizedReason];
+    if (reasonCode == null) {
+      throw const FormatException('Choose a valid order cancellation reason.');
+    }
+
+    final String normalizedNote = note.trim();
+    if (normalizedReason == 'Other' && normalizedNote.isEmpty) {
+      throw const FormatException('Add a note when you choose Other.');
+    }
+
+    final List<String> details = <String>[
+      if (reasonCode == 'OTHER' && normalizedReason != 'Other')
+        normalizedReason,
+      if (normalizedNote.isNotEmpty) normalizedNote,
+    ];
+    final String reasonDetails = details.join('\n\n');
+    if (reasonDetails.length > 480) {
+      throw const FormatException(
+        'Cancellation notes must be 480 characters or fewer.',
+      );
+    }
+
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl(
         'buyer/orders/${Uri.encodeComponent(order.id)}/cancel',
       ),
-      <String, dynamic>{'reason': reason},
+      <String, dynamic>{
+        'reason': reasonCode,
+        if (reasonDetails.isNotEmpty) 'reason_details': reasonDetails,
+      },
     );
     _requirePayload(response);
   }
@@ -550,11 +686,7 @@ class BuyerMobileService {
         'rating': request.rating,
         'comment': request.review,
       };
-      response = await _postReview(
-        endpoint,
-        productOnlyFields,
-        request.photos,
-      );
+      response = await _postReview(endpoint, productOnlyFields, request.photos);
     }
 
     _requirePayload(response);
@@ -753,23 +885,42 @@ class BuyerMobileService {
     _requirePayload(response);
   }
 
-  static Future<List<BuyerNotificationData>> fetchNotifications() async {
-    return (await _getRows('buyer/notifications'))
+  static Future<List<BuyerNotificationData>> fetchNotifications({
+    bool latestOnly = false,
+  }) async {
+    return (await _getRows(
+          'buyer/notifications',
+          maxPages: latestOnly ? 1 : null,
+        ))
         .whereType<Map>()
         .map((Map item) {
           final Map<String, dynamic> row = Map<String, dynamic>.from(item);
+          final dynamic rawData = row['data'];
+          final Map<String, dynamic> payload = rawData is Map
+              ? Map<String, dynamic>.from(rawData)
+              : const <String, dynamic>{};
           final DateTime? createdAt = DateTime.tryParse(
             (row['created_at'] ?? '').toString(),
           );
           return BuyerNotificationData(
             id: row['id'].toString(),
-            type: BuyerNotificationData.resolveType(row['type']?.toString()),
-            title: (row['title'] ?? '').toString(),
-            message: (row['message'] ?? '').toString(),
+            type: BuyerNotificationData.resolveType(
+              (row['type'] ?? payload['type'])?.toString(),
+            ),
+            title: (row['title'] ?? payload['title'] ?? payload['subject'] ?? '')
+                .toString(),
+            message:
+                (row['message'] ?? payload['message'] ?? payload['body'] ?? '')
+                    .toString(),
             time: createdAt == null ? '' : _relativeTime(createdAt),
             unread: row['read_at'] == null,
             createdAt: createdAt,
-            actionUrl: row['action_url']?.toString(),
+            actionUrl: (row['action_url'] ??
+                    payload['action_url'] ??
+                    payload['actionUrl'] ??
+                    payload['url'])
+                ?.toString(),
+            relatedOrderId: BuyerNotificationData.resolveOrderReference(row),
           );
         })
         .toList(growable: false);
@@ -798,35 +949,40 @@ class BuyerMobileService {
         final Map<String, dynamic> notificationData = rawPayload is Map
             ? Map<String, dynamic>.from(rawPayload)
             : event.data;
-        final DateTime? createdAt =
-            DateTime.tryParse(
-              (event.data['created_at'] ?? notificationData['created_at'] ?? '')
-                  .toString(),
-            );
+        final DateTime? createdAt = DateTime.tryParse(
+          (event.data['created_at'] ?? notificationData['created_at'] ?? '')
+              .toString(),
+        );
         yield BuyerNotificationData(
           id: (event.data['id'] ?? notificationData['id'] ?? '').toString(),
           type: BuyerNotificationData.resolveType(
             (notificationData['type'] ?? event.data['type'])?.toString(),
           ),
-          title: (notificationData['title'] ??
-                  notificationData['subject'] ??
-                  event.data['title'] ??
-                  '')
-              .toString(),
-          message: (notificationData['message'] ??
-                  notificationData['body'] ??
-                  notificationData['content'] ??
-                  event.data['message'] ??
-                  '')
-              .toString(),
+          title:
+              (notificationData['title'] ??
+                      notificationData['subject'] ??
+                      event.data['title'] ??
+                      '')
+                  .toString(),
+          message:
+              (notificationData['message'] ??
+                      notificationData['body'] ??
+                      notificationData['content'] ??
+                      event.data['message'] ??
+                      '')
+                  .toString(),
           time: createdAt == null ? 'Just now' : _displayTime(createdAt),
           unread: true,
           createdAt: createdAt,
-          actionUrl: (notificationData['action_url'] ??
-                  notificationData['actionUrl'] ??
-                  notificationData['url'] ??
-                  event.data['action_url'])
-              ?.toString(),
+          actionUrl:
+              (notificationData['action_url'] ??
+                      notificationData['actionUrl'] ??
+                      notificationData['url'] ??
+                      event.data['action_url'])
+                  ?.toString(),
+          relatedOrderId: BuyerNotificationData.resolveOrderReference(
+            notificationData,
+          ) ?? BuyerNotificationData.resolveOrderReference(event.data),
         );
       }
     } finally {
@@ -839,15 +995,28 @@ class BuyerMobileService {
         .whereType<Map>()
         .map((Map item) {
           final Map<String, dynamic> row = Map<String, dynamic>.from(item);
+          final dynamic rawOnline =
+              row['seller_is_online'] ?? row['is_online'] ?? row['online'];
+          final String? rawStatus =
+              (row['seller_status'] ?? row['status_label'])?.toString();
+          final dynamic rawAvatar =
+              row['seller_avatar_url'] ?? row['avatar_url'] ?? row['avatar'];
+          final String? avatarUrl = rawAvatar?.toString().trim();
           return BuyerConversationData(
             sellerId: (row['seller_id'] ?? '').toString(),
             conversationId: (row['conversation_id'] ?? row['id'] ?? '')
                 .toString(),
             name: (row['seller_name'] ?? 'Seller').toString(),
             slug: (row['slug'] ?? '').toString(),
+            statusLabel: rawStatus,
+            avatarUrl: avatarUrl == null || avatarUrl.isEmpty
+                ? null
+                : AppConfig.resolveMediaUrl(avatarUrl),
             lastMessage: (row['last_message'] ?? '').toString(),
             time: _displayTime(row['time']),
             unread: int.tryParse((row['unread'] ?? 0).toString()) ?? 0,
+            isOnline:
+                _optionalApiBool(rawOnline) ?? _presenceFromLabel(rawStatus),
           );
         })
         .where((BuyerConversationData item) => item.sellerId.isNotEmpty)
@@ -872,6 +1041,7 @@ class BuyerMobileService {
             fromBuyer: row['from_buyer'] == true,
             attachmentUrl: _messageAttachmentUrl(row),
             attachmentName: row['attachment_name']?.toString(),
+            seenByRecipient: _messageSeenState(row),
           );
         })
         .toList(growable: false);
@@ -880,9 +1050,9 @@ class BuyerMobileService {
   static Stream<BuyerMessageData> watchMessages(
     BuyerConversationData conversation,
   ) async* {
-    final Set<String> knownIds = (await fetchMessages(conversation))
-        .map((BuyerMessageData message) => message.id)
-        .toSet();
+    final Set<String> knownIds = (await fetchMessages(
+      conversation,
+    )).map((BuyerMessageData message) => message.id).toSet();
     RealtimeSubscription? subscription;
     try {
       subscription = await LikhaeRealtimeService.subscribe(
@@ -899,6 +1069,7 @@ class BuyerMobileService {
           fromBuyer: false,
           attachmentUrl: event.data['attachment_url']?.toString(),
           attachmentName: event.data['attachment_name']?.toString(),
+          seenByRecipient: _messageSeenState(event.data),
         );
       }
     } catch (_) {
@@ -968,11 +1139,48 @@ class BuyerMobileService {
       fromBuyer: message['from_buyer'] == true,
       attachmentUrl: _messageAttachmentUrl(message),
       attachmentName: message['attachment_name']?.toString(),
+      seenByRecipient: _messageSeenState(message),
     );
   }
 
+  static bool? _optionalApiBool(dynamic value) {
+    if (value == null) return null;
+    final String normalized = value.toString().trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+    return parseApiBool(value, defaultValue: false);
+  }
+
+  static bool? _presenceFromLabel(String? value) {
+    final String label = value?.trim().toLowerCase() ?? '';
+    if (label == 'online' || label.endsWith(' · online')) return true;
+    if (label == 'offline' || label.endsWith(' · offline')) return false;
+    return null;
+  }
+
+  static bool? _messageSeenState(Map<String, dynamic> message) {
+    for (final String key in <String>['seen_by_recipient', 'is_seen', 'seen']) {
+      if (message.containsKey(key) && message[key] != null) {
+        return parseApiBool(message[key], defaultValue: false);
+      }
+    }
+
+    for (final String key in <String>[
+      'recipient_read_at',
+      'seen_at',
+      'read_at',
+    ]) {
+      if (message.containsKey(key)) {
+        final dynamic value = message[key];
+        return value != null && value.toString().trim().isNotEmpty;
+      }
+    }
+
+    return null;
+  }
+
   static String? _messageAttachmentUrl(Map<String, dynamic> message) {
-    dynamic raw = message['attachment_url'] ??
+    dynamic raw =
+        message['attachment_url'] ??
         message['attachment'] ??
         message['attachment_path'] ??
         message['image_url'] ??
@@ -1007,6 +1215,15 @@ class BuyerMobileService {
       oldPrice: row['old_price'] == null ? null : _asDouble(row['old_price']),
       quantity: int.tryParse((row['quantity'] ?? 1).toString()) ?? 1,
       stock: int.tryParse((row['stock'] ?? 0).toString()) ?? 0,
+      isActive: parseApiBool(
+        row['is_active'],
+        defaultValue: (row['product_status'] ?? 'ACTIVE') == 'ACTIVE',
+      ),
+      sellerOnVacation: parseApiBool(
+        row['seller_on_vacation'],
+        defaultValue: false,
+      ),
+      serverAvailable: parseApiBool(row['available'], defaultValue: true),
       imageUrl: row['image_url'] == null
           ? null
           : AppConfig.resolveMediaUrl(row['image_url'].toString()),

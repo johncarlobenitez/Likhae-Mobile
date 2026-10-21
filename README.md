@@ -12,11 +12,17 @@ Run with the API enabled:
 flutter run --dart-define=API_ENABLED=true
 ```
 
-Run with Mapbox and Laravel Reverb enabled in PowerShell. Keep this command on
-one line; PowerShell does not use `^` for line continuation:
+Run with Mapbox and Laravel Reverb enabled in PowerShell. Set the environment
+variables in the same PowerShell window first, then run this command on one
+line:
 
 ```powershell
-flutter run --dart-define="API_ENABLED=true" --dart-define="MAPBOX_ACCESS_TOKEN=$env:MAPBOX_ACCESS_TOKEN" --dart-define="REVERB_APP_KEY=$env:REVERB_APP_KEY" --dart-define="REVERB_HOST=likhae.online" --dart-define="REVERB_PORT=443" --dart-define="REVERB_SCHEME=https"
+$env:MAPBOX_ACCESS_TOKEN = 'your-mapbox-token'
+$env:REVERB_APP_KEY = 'your-reverb-key'
+```
+
+```powershell
+flutter run --dart-define="API_ENABLED=true" --dart-define="MAPBOX_ACCESS_TOKEN=$($env:MAPBOX_ACCESS_TOKEN)" --dart-define="REVERB_APP_KEY=$($env:REVERB_APP_KEY)" --dart-define="REVERB_HOST=likhae.online" --dart-define="REVERB_PORT=443" --dart-define="REVERB_SCHEME=https"
 ```
 
 Override the API and web origins for a local or staging backend:
@@ -31,8 +37,9 @@ enabled. Other app areas still depend on their existing local/demo behavior.
 
 ### Buyer API coverage
 
-With `API_ENABLED=true`, buyer catalog/product details, cart, checkout and
-seller vouchers, order history/actions/reviews/returns, address create/delete/
+With `API_ENABLED=true`, buyer catalog/product details, cart, checkout (including
+per-shop notes saved with each seller order) and seller vouchers, order
+history/actions/reviews/returns, address create/delete/
 default selection, wishlist, rewards, notifications, seller conversations and
 image attachments, and profile name/contact/birthday/gender/photo and password
 changes use authenticated Laravel APIs. Messages and notifications use

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/core/config/app_config.dart';
+import 'package:likhae/core/storage/token_storage.dart';
 
 typedef LoadConversationMessagesCallback =
     Future<List<BuyerMessageData>> Function(BuyerConversationData seller);
@@ -134,6 +135,10 @@ class BuyerMessageData {
   final String? attachmentUrl;
   final String? attachmentName;
 
+  /// True when the other conversation participant has read this message.
+  /// Null means the API did not provide a read receipt.
+  final bool? seenByRecipient;
+
   const BuyerMessageData({
     required this.id,
     required this.body,
@@ -141,6 +146,7 @@ class BuyerMessageData {
     required this.fromBuyer,
     this.attachmentUrl,
     this.attachmentName,
+    this.seenByRecipient,
   });
 
   bool get hasAttachment => attachmentUrl?.trim().isNotEmpty == true;
@@ -1220,20 +1226,28 @@ class _MessagesScreenState extends State<MessagesScreen> {
     await _refreshConversations();
   }
 
+  bool _bottomScrollScheduled = false;
+
   void _scheduleScrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (_bottomScrollScheduled) return;
+    _bottomScrollScheduled = true;
+    void settle(Duration _) {
       if (!mounted || !_messageScrollController.hasClients) {
+        _bottomScrollScheduled = false;
         return;
       }
+      final position = _messageScrollController.position;
+      if (position.isScrollingNotifier.value ||
+          (position.maxScrollExtent - position.pixels).abs() < 1) {
+        _bottomScrollScheduled = false;
+        return;
+      }
+      _messageScrollController.jumpTo(position.maxScrollExtent);
+      // A lazy list refines its estimated extent after laying out the last rows.
+      WidgetsBinding.instance.addPostFrameCallback(settle);
+    }
 
-      final ScrollPosition position = _messageScrollController.position;
-
-      _messageScrollController.animateTo(
-        position.maxScrollExtent,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
-    });
+    WidgetsBinding.instance.addPostFrameCallback(settle);
   }
 
   void _showMessage(String message, {bool error = false}) {
@@ -1357,13 +1371,59 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  Widget _buildPageHeader() => ShopPageHeader(
-    title: 'Conversations', subtitle: 'A little closer to your sellers.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-    actions: [
-      if (_refreshingConversations) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-      else GlassIconButton(icon: Icons.refresh_rounded, label: 'Refresh conversations',
-        onPressed: widget.onRefreshConversations == null ? null : _refreshConversations),
-    ],
+  Widget _buildPageHeader() => Container(
+    width: double.infinity,
+    color: _background,
+    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+            color: _backgroundSoft,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.circle, color: _maroon, size: 6),
+              const SizedBox(width: 6),
+              Text(
+                'COMMUNICATION',
+                style: TextStyle(
+                  color: _maroonDark,
+                  fontSize: 9,
+                  letterSpacing: 1.1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 5),
+        const Text(
+          'Messages',
+          style: TextStyle(
+            color: Color(0xFF432A25),
+            fontFamily: 'serif',
+            fontSize: 38,
+            height: 1.05,
+            letterSpacing: -1.1,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 2),
+        const Text(
+          'Keep conversations with sellers in one polished LIKHAE inbox',
+          style: TextStyle(
+            color: Color(0xFF8A7163),
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _buildConversationPanel({bool mobile = false}) {
@@ -1745,9 +1805,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   itemBuilder: (BuildContext context, int index) {
                     final _DemoMessage message = messages[index];
 
-                    return _DemoMessageBubble(
-                      message: message,
-                    );
+                    return _DemoMessageBubble(message: message);
                   },
                 );
               },
@@ -1898,93 +1956,113 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return RefreshIndicator(
       color: _maroon,
       onRefresh: _refreshChat,
-      child: ListView(
+      child: ListView.builder(
         controller: _messageScrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
-        children: [
-          if (_activeProductReference != null) ...[
-            const SizedBox(height: 4),
+        itemCount: _messages.length + 1,
+        itemBuilder: (context, index) {
+          if (index > 0) {
+            final int messageIndex = index - 1;
+            final int latestBuyerMessageIndex = _messages.lastIndexWhere(
+              (BuyerMessageData message) => message.fromBuyer,
+            );
+            final bool sellerRepliedAfterLatestBuyerMessage =
+                messageIndex == latestBuyerMessageIndex &&
+                _messages
+                    .skip(messageIndex + 1)
+                    .any((BuyerMessageData message) => !message.fromBuyer);
+            return _MessageBubble(
+              message: _messages[messageIndex],
+              seller: seller,
+              showReceipt: messageIndex == latestBuyerMessageIndex,
+              hasBeenSeen:
+                  _messages[messageIndex].seenByRecipient == true ||
+                  sellerRepliedAfterLatestBuyerMessage,
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_activeProductReference != null) ...[
+                const SizedBox(height: 4),
 
-            _ProductInquiryCard(
-              product: _activeProductReference!,
-              onTap: widget.onProductReferenceSelected == null
-                  ? null
-                  : () {
-                      widget.onProductReferenceSelected!(
-                        _activeProductReference!,
-                      );
-                    },
-            ),
-          ],
+                _ProductInquiryCard(
+                  product: _activeProductReference!,
+                  onTap: widget.onProductReferenceSelected == null
+                      ? null
+                      : () {
+                          widget.onProductReferenceSelected!(
+                            _activeProductReference!,
+                          );
+                        },
+                ),
+              ],
 
-          if (_messageError != null) ...[
-            const SizedBox(height: 14),
+              if (_messageError != null) ...[
+                const SizedBox(height: 14),
 
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFCECE7),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFEBC9C0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.error_outline_rounded,
-                    color: _danger,
-                    size: 18,
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFCECE7),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFEBC9C0)),
                   ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: _danger,
+                        size: 18,
+                      ),
 
-                  const SizedBox(width: 8),
+                      const SizedBox(width: 8),
 
-                  Expanded(
-                    child: Text(
-                      _messageError!,
-                      style: const TextStyle(color: _danger, fontSize: 12),
-                    ),
+                      Expanded(
+                        child: Text(
+                          _messageError!,
+                          style: const TextStyle(color: _danger, fontSize: 12),
+                        ),
+                      ),
+
+                      TextButton(
+                        onPressed: _refreshChat,
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
+                ),
+              ],
 
-                  TextButton(
-                    onPressed: _refreshChat,
-                    child: const Text('Retry'),
+              if (_messages.isEmpty) ...[
+                const SizedBox(height: 35),
+
+                const Icon(Icons.forum_outlined, size: 42, color: _tan),
+
+                const SizedBox(height: 11),
+
+                const Text(
+                  'No messages yet',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
 
-          if (_messages.isEmpty) ...[
-            const SizedBox(height: 35),
+                const SizedBox(height: 5),
 
-            const Icon(Icons.forum_outlined, size: 42, color: _tan),
-
-            const SizedBox(height: 11),
-
-            const Text(
-              'No messages yet',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _text,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-
-            const SizedBox(height: 5),
-
-            Text(
-              'Send the first message to ${seller.name}.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: _muted, fontSize: 12),
-            ),
-          ] else ...[
-            const SizedBox(height: 5),
-
-            for (final BuyerMessageData message in _messages)
-              _MessageBubble(message: message),
-          ],
-        ],
+                Text(
+                  'Send the first message to ${seller.name}.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _muted, fontSize: 12),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -2664,8 +2742,16 @@ class _MessageBubble extends StatelessWidget {
   static const Color _border = ShopColors.border;
 
   final BuyerMessageData message;
+  final BuyerConversationData seller;
+  final bool showReceipt;
+  final bool hasBeenSeen;
 
-  const _MessageBubble({required this.message});
+  const _MessageBubble({
+    required this.message,
+    required this.seller,
+    required this.showReceipt,
+    required this.hasBeenSeen,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2683,124 +2769,192 @@ class _MessageBubble extends StatelessWidget {
             alignment: message.fromBuyer
                 ? Alignment.centerRight
                 : Alignment.centerLeft,
-            child: Row(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: message.fromBuyer
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
-                      decoration: BoxDecoration(
-                        color: message.fromBuyer ? _maroon : _surface,
-                        border: Border.all(
-                          color: message.fromBuyer ? _maroon : _border,
-                        ),
-                        borderRadius: BorderRadius.circular(15),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
+                    decoration: BoxDecoration(
+                      color: message.fromBuyer ? _maroon : _surface,
+                      border: Border.all(
+                        color: message.fromBuyer ? _maroon : _border,
                       ),
-                      child: Column(
-                        crossAxisAlignment: message.fromBuyer
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
-                        children: [
-                          if (message.hasAttachment) ...[
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.network(
-                                AppConfig.resolveMediaUrl(
-                                  message.attachmentUrl!,
-                                ),
-                                width: 220,
-                                height: 150,
-                                fit: BoxFit.cover,
-                                errorBuilder:
-                                    (
-                                      BuildContext context,
-                                      Object error,
-                                      StackTrace? stackTrace,
-                                    ) {
-                                      return Container(
-                                        width: 220,
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: message.fromBuyer
-                                              ? const Color(0x22FFFFFF)
-                                              : ShopColors.soft,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.attachment_rounded,
-                                              color: message.fromBuyer
-                                                  ? Colors.white
-                                                  : ShopColors.accent,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                message.attachmentName ??
-                                                    'Attachment',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  color: message.fromBuyer
-                                                      ? Colors.white
-                                                      : ShopColors.text,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                              ),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: message.fromBuyer
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        if (message.hasAttachment) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: _MessageAttachmentImage(
+                              AppConfig.resolveMediaUrl(message.attachmentUrl!),
                             ),
-                            if (message.body.trim().isNotEmpty &&
-                                !message.isAttachmentPlaceholder)
-                              const SizedBox(height: 8),
-                          ],
+                          ),
                           if (message.body.trim().isNotEmpty &&
                               !message.isAttachmentPlaceholder)
-                            Text(
-                              message.body,
-                              style: TextStyle(
-                                color: message.fromBuyer
-                                    ? Colors.white
-                                    : ShopColors.text,
-                                fontSize: 14,
-                                height: 1.45,
-                              ),
-                            ),
-
-                          if (message.time.trim().isNotEmpty) ...[
-                            const SizedBox(height: 5),
-
-                            Text(
-                              message.time,
-                              style: TextStyle(
-                                color: message.fromBuyer
-                                    ? Colors.white70
-                                    : ShopColors.muted,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
+                            const SizedBox(height: 8),
                         ],
-                      ),
+                        if (message.body.trim().isNotEmpty &&
+                            !message.isAttachmentPlaceholder)
+                          Text(
+                            message.body,
+                            style: TextStyle(
+                              color: message.fromBuyer
+                                  ? Colors.white
+                                  : ShopColors.text,
+                              fontSize: 14,
+                              height: 1.45,
+                            ),
+                          ),
+
+                        if (message.time.trim().isNotEmpty) ...[
+                          const SizedBox(height: 5),
+
+                          Text(
+                            message.time,
+                            style: TextStyle(
+                              color: message.fromBuyer
+                                  ? Colors.white70
+                                  : ShopColors.muted,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
+                if (message.fromBuyer && showReceipt) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (hasBeenSeen) ...[
+                        _ReceiptAvatar(seller: seller),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        hasBeenSeen
+                            ? 'Seen'
+                            : seller.isOnline == true
+                            ? 'Delivered'
+                            : 'Sent',
+                        style: const TextStyle(
+                          color: ShopColors.muted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _ReceiptAvatar extends StatelessWidget {
+  final BuyerConversationData seller;
+
+  const _ReceiptAvatar({required this.seller});
+
+  @override
+  Widget build(BuildContext context) {
+    final String? url = seller.avatarUrl?.trim();
+    final String initial = seller.initials.isEmpty ? '?' : seller.initials[0];
+
+    return Container(
+      width: 16,
+      height: 16,
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: ShopColors.soft,
+      ),
+      child: url == null || url.isEmpty
+          ? Center(
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: ShopColors.accent,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            )
+          : Image.network(
+              AppConfig.resolveMediaUrl(url),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Center(
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: ShopColors.accent,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _MessageAttachmentImage extends StatefulWidget {
+  final String url;
+
+  const _MessageAttachmentImage(this.url);
+
+  @override
+  State<_MessageAttachmentImage> createState() =>
+      _MessageAttachmentImageState();
+}
+
+class _MessageAttachmentImageState extends State<_MessageAttachmentImage> {
+  late final Future<Map<String, String>> _headersFuture = _loadHeaders();
+
+  Future<Map<String, String>> _loadHeaders() async {
+    final String? token = await TokenStorage.readToken();
+    if (token == null || token.trim().isEmpty) {
+      return const <String, String>{};
+    }
+    return <String, String>{'Authorization': 'Bearer ${token.trim()}'};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, String>>(
+      future: _headersFuture,
+      builder:
+          (BuildContext context, AsyncSnapshot<Map<String, String>> snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const SizedBox(width: 220, height: 150);
+            }
+
+            return Image.network(
+              widget.url,
+              headers: snapshot.data,
+              width: 220,
+              height: 150,
+              fit: BoxFit.cover,
+              errorBuilder:
+                  (BuildContext context, Object error, StackTrace? stackTrace) {
+                    return const SizedBox(width: 220, height: 150);
+                  },
+            );
+          },
     );
   }
 }

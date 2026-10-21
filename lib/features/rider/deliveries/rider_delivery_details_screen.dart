@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -65,6 +67,7 @@ class _RiderDeliveryDetailsScreenState
 
   String? _proofPath;
   bool _submitting = false;
+  bool _takingProof = false;
 
   bool get _usingPreview => widget.delivery == null && widget.showPreviewWhenNull;
 
@@ -106,6 +109,9 @@ class _RiderDeliveryDetailsScreenState
   }
 
   Future<void> _chooseProof() async {
+    if (_takingProof) {
+      return;
+    }
     if (widget.onChooseProof != null) {
       final String? path = await widget.onChooseProof!();
       if (!mounted || path == null || path.trim().isEmpty) {
@@ -117,20 +123,19 @@ class _RiderDeliveryDetailsScreenState
       return;
     }
 
+    setState(() {
+      _takingProof = true;
+    });
     try {
       final String riderName = (await AuthService.getCurrentUser()).name.trim();
       if (riderName.isEmpty) {
         throw Exception('Unable to load the rider name for the watermark.');
       }
-      final position = await RiderProofWatermark.requireCurrentPosition();
-
-      if (!mounted) {
-        return;
-      }
-
       final XFile? image = await ImagePicker().pickImage(
         source: ImageSource.camera,
         imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1920,
         preferredCameraDevice: CameraDevice.rear,
       );
 
@@ -138,10 +143,12 @@ class _RiderDeliveryDetailsScreenState
         return;
       }
 
+      final DateTime capturedAt = DateTime.now();
+      final position = await RiderProofWatermark.requireCurrentPosition();
       final String stampedPath = await RiderProofWatermark.stamp(
         imagePath: image.path,
         riderName: riderName,
-        capturedAt: DateTime.now(),
+        capturedAt: capturedAt,
         position: position,
       );
 
@@ -159,6 +166,12 @@ class _RiderDeliveryDetailsScreenState
         'Unable to capture watermarked proof: $error',
         error: true,
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _takingProof = false;
+        });
+      }
     }
   }
 
@@ -494,7 +507,7 @@ class _RiderDeliveryDetailsScreenState
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: _submitting ? null : _chooseProof,
+              onPressed: _submitting || _takingProof ? null : _chooseProof,
               style: OutlinedButton.styleFrom(
                 foregroundColor: _maroon,
                 side: const BorderSide(color: _border),
@@ -505,10 +518,40 @@ class _RiderDeliveryDetailsScreenState
               ),
               icon: const Icon(Icons.camera_alt_outlined),
               label: Text(
-                _proofPath == null ? 'Add Proof of Delivery' : 'Proof: ${_proofPath!.split('/').last}',
+                _takingProof
+                    ? 'Capturing and watermarking...'
+                    : _proofPath == null
+                    ? 'Add Proof of Delivery'
+                    : 'Proof: ${_proofPath!.split('/').last}',
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (_proofPath != null) ...<Widget>[
+              const SizedBox(height: 9),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: ColoredBox(
+                  color: _soft,
+                  child: Image.file(
+                    File(_proofPath!),
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.contain,
+                    errorBuilder:
+                        (BuildContext context, Object error, StackTrace? stackTrace) =>
+                            const SizedBox(
+                              height: 110,
+                              child: Center(
+                                child: Text(
+                                  'Watermarked proof preview is unavailable.',
+                                  style: TextStyle(color: _muted, fontSize: 12),
+                                ),
+                              ),
+                            ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             SizedBox(
               height: 50,

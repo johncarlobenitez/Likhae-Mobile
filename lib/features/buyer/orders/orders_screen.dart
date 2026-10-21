@@ -1,3 +1,4 @@
+import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
@@ -16,6 +17,36 @@ enum BuyerOrderTab {
   completed,
   cancelled,
   returns,
+}
+
+String? _formatOrderVariant(dynamic raw) {
+  String displayValue(dynamic value) {
+    if (value is Map) {
+      return (value['value'] ?? value['name'] ?? value['label'] ?? '')
+          .toString()
+          .trim();
+    }
+    if (value is List) {
+      return value
+          .map(displayValue)
+          .where((String item) => item.isNotEmpty)
+          .join(', ');
+    }
+    return value?.toString().trim() ?? '';
+  }
+
+  if (raw is Map) {
+    final List<String> parts = <String>[];
+    for (final MapEntry<dynamic, dynamic> entry in raw.entries) {
+      final String value = displayValue(entry.value);
+      if (value.isEmpty) continue;
+      final String label = entry.key.toString().trim();
+      parts.add(label.isEmpty ? value : '$label: $value');
+    }
+    if (parts.isNotEmpty) return parts.join(' / ');
+  }
+  final String value = displayValue(raw);
+  return value.isEmpty ? null : value;
 }
 
 extension BuyerOrderTabInfo on BuyerOrderTab {
@@ -125,10 +156,14 @@ class BuyerOrderTimelineEvent {
 
   final bool done;
 
+  /// Optional shipment note, such as a sorting hub or delivery location.
+  final String details;
+
   const BuyerOrderTimelineEvent({
     required this.label,
     required this.time,
     required this.done,
+    this.details = '',
   });
 }
 
@@ -148,6 +183,12 @@ class BuyerOrderLocation {
 
 class BuyerOrderData {
   final String id;
+
+  /// Human-readable order reference shown to buyers (for example, LK-...).
+  final String? orderNumber;
+
+  /// Seller-side reference included in order workflow notifications.
+  final String? sellerOrderNumber;
 
   /// Buyer-facing grouping key:
   ///
@@ -189,6 +230,11 @@ class BuyerOrderData {
   final String buyerName;
   final String? buyerContact;
 
+  final String? sellerName;
+  final int? sellerId;
+  final String? sellerSlug;
+  final String? sellerAvatarUrl;
+
   final String shippingAddress;
 
   final String? tracking;
@@ -227,6 +273,12 @@ class BuyerOrderData {
     required this.total,
     required this.buyerName,
     required this.shippingAddress,
+    this.sellerName,
+    this.sellerId,
+    this.sellerSlug,
+    this.sellerAvatarUrl,
+    this.orderNumber,
+    this.sellerOrderNumber,
     this.backendStatus,
     this.paymentStatus,
     this.buyerContact,
@@ -288,6 +340,117 @@ class BuyerOrderData {
         : const <String, dynamic>{};
     final dynamic rawItems =
         json['items'] ?? json['order_items'] ?? json['products'];
+    final dynamic rawSeller = json['seller'] ?? json['store'] ?? json['shop'];
+    final Map<String, dynamic> seller = rawSeller is Map
+        ? Map<String, dynamic>.from(rawSeller)
+        : const <String, dynamic>{};
+    final dynamic rawSellerOrder = json['seller_order'] ?? json['sellerOrder'];
+    final Map<String, dynamic> sellerOrder = rawSellerOrder is Map
+        ? Map<String, dynamic>.from(rawSellerOrder)
+        : const <String, dynamic>{};
+    final dynamic rawShipment =
+        json['shipment'] ?? json['parcel'] ?? json['latest_shipment'];
+    final dynamic shipmentValue = rawShipment is List && rawShipment.isNotEmpty
+        ? rawShipment.first
+        : rawShipment;
+    final Map<String, dynamic> shipment = shipmentValue is Map
+        ? Map<String, dynamic>.from(shipmentValue)
+        : const <String, dynamic>{};
+    final dynamic rawFirstItem = rawItems is List && rawItems.isNotEmpty
+        ? rawItems.first
+        : null;
+    final Map<String, dynamic> firstItem = rawFirstItem is Map
+        ? Map<String, dynamic>.from(rawFirstItem)
+        : const <String, dynamic>{};
+    final dynamic rawFirstProduct = firstItem['product'];
+    final Map<String, dynamic> firstProduct = rawFirstProduct is Map
+        ? Map<String, dynamic>.from(rawFirstProduct)
+        : firstItem;
+    final dynamic rawFirstSeller = firstItem['seller'] ??
+        firstItem['store'] ??
+        firstProduct['seller'] ??
+        firstProduct['store'];
+    final Map<String, dynamic> firstSeller = rawFirstSeller is Map
+        ? Map<String, dynamic>.from(rawFirstSeller)
+        : const <String, dynamic>{};
+    String? firstNonEmptyText(Iterable<dynamic> values) {
+      for (final dynamic value in values) {
+        final String text = value?.toString().trim() ?? '';
+        if (text.isNotEmpty) return text;
+      }
+      return null;
+    }
+
+    final String? resolvedSellerName = firstNonEmptyText(<dynamic>[
+      json['seller_name'],
+      json['store_name'],
+      json['shop_name'],
+      seller['business_name'],
+      seller['store_name'],
+      seller['name'],
+      firstItem['seller_name'],
+      firstItem['store_name'],
+      firstProduct['seller_name'],
+      firstProduct['store_name'],
+      firstSeller['business_name'],
+      firstSeller['store_name'],
+      firstSeller['name'],
+    ]);
+    final String? resolvedSellerOrderNumber = firstNonEmptyText(<dynamic>[
+      json['seller_order_number'],
+      json['sellerOrderNumber'],
+      json['seller_order_id'],
+      json['seller_order'] is String ? json['seller_order'] : null,
+      sellerOrder['seller_order_number'],
+      sellerOrder['order_number'],
+      sellerOrder['number'],
+      sellerOrder['id'],
+      firstItem['seller_order_number'],
+      firstProduct['seller_order_number'],
+    ]);
+    final int? resolvedSellerId = int.tryParse(
+      <dynamic>[
+            json['seller_user_id'],
+            json['seller_id'],
+            json['store_id'],
+            seller['user_id'],
+            seller['seller_user_id'],
+            seller['id'],
+            seller['seller_id'],
+            firstItem['seller_user_id'],
+            firstItem['seller_id'],
+            firstProduct['seller_user_id'],
+            firstProduct['seller_id'],
+            firstSeller['user_id'],
+            firstSeller['seller_user_id'],
+            firstSeller['id'],
+            firstSeller['seller_id'],
+          ]
+          .firstWhere((dynamic value) => value != null, orElse: () => '')
+          .toString(),
+    );
+    final String? resolvedSellerSlug = firstNonEmptyText(<dynamic>[
+      json['seller_slug'],
+      json['store_slug'],
+      seller['slug'],
+      seller['store_slug'],
+      firstItem['seller_slug'],
+      firstProduct['seller_slug'],
+      firstSeller['slug'],
+      firstSeller['store_slug'],
+    ]);
+    final String? resolvedSellerAvatar = firstNonEmptyText(<dynamic>[
+      json['seller_avatar'],
+      json['seller_avatar_url'],
+      seller['logo_url'],
+      seller['avatar_url'],
+      firstItem['seller_avatar'],
+      firstItem['seller_avatar_url'],
+      firstProduct['seller_avatar'],
+      firstProduct['seller_avatar_url'],
+      firstSeller['logo_url'],
+      firstSeller['avatar_url'],
+    ]);
     final List<BuyerOrderProductData> products = rawItems is List
         ? rawItems
               .whereType<Map>()
@@ -333,7 +496,15 @@ class BuyerOrderData {
                   ),
                   name: (product['name'] ?? details['name'] ?? 'Product')
                       .toString(),
-                  variant: product['variant']?.toString(),
+                  variant: _formatOrderVariant(
+                    product['variant'] ??
+                        product['variation'] ??
+                        product['variant_name'] ??
+                        product['variation_name'] ??
+                        product['attributes'] ??
+                        details['variant'] ??
+                        details['attributes'],
+                  ),
                   imageUrl: resolvedImages.isEmpty
                       ? null
                       : resolvedImages.first,
@@ -367,11 +538,62 @@ class BuyerOrderData {
               )
               .join(', ')
         : (rawAddress ?? '').toString();
+    final BuyerOrderLocation? orderLocation = parseLocation(
+      rawAddress,
+      'Delivery destination',
+    );
+    final dynamic rawTimeline = json['timeline'] ?? json['tracking_timeline'];
+    final List<BuyerOrderTimelineEvent> timeline = rawTimeline is List
+        ? rawTimeline.whereType<Map>().map((Map item) {
+            final Map<String, dynamic> event = Map<String, dynamic>.from(item);
+            final String rawLabel = (event['label'] ??
+                    event['status_label'] ??
+                    event['status'] ??
+                    event['current_status'] ??
+                    'Shipment update')
+                .toString()
+                .trim();
+            final String label = rawLabel
+                .replaceAll(RegExp(r'[_-]+'), ' ')
+                .replaceAll(RegExp(r'\s+'), ' ')
+                .split(' ')
+                .where((String word) => word.isNotEmpty)
+                .map((String word) =>
+                    '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+                .join(' ');
+            final dynamic rawDetails = event['notes'] ??
+                event['details'] ??
+                event['description'] ??
+                event['message'] ??
+                event['location_name'] ??
+                event['facility_name'] ??
+                event['location'];
+            final String details = rawDetails is Map
+                ? (rawDetails['label'] ??
+                          rawDetails['name'] ??
+                          rawDetails['facility_name'] ??
+                          rawDetails['location_name'] ??
+                          '')
+                      .toString()
+                      .trim()
+                : rawDetails?.toString().trim() ?? '';
+            return BuyerOrderTimelineEvent(
+              label: label.isEmpty ? 'Shipment update' : label,
+              time: _formatOrderTimelineTime(
+                event['occurred_at'] ?? event['created_at'] ?? event['time'],
+              ),
+              done: event['done'] is bool ? event['done'] as bool : true,
+              details: details,
+            );
+          }).toList(growable: false)
+        : const <BuyerOrderTimelineEvent>[];
     final String backendStatus =
         (json['status'] ?? json['order_status'] ?? 'pending').toString();
 
     return BuyerOrderData(
       id: (json['id'] ?? json['order_number'] ?? '').toString(),
+      orderNumber: json['order_number']?.toString(),
+      sellerOrderNumber: resolvedSellerOrderNumber,
       status: (json['buyer_status'] ?? backendStatus).toString(),
       backendStatus: backendStatus,
       statusLabel:
@@ -390,17 +612,38 @@ class BuyerOrderData {
       buyerName: (json['buyer_name'] ?? buyer['name'] ?? '').toString(),
       buyerContact: (json['buyer_contact'] ?? buyer['contact_number'])
           ?.toString(),
-      shippingAddress: address,
-      tracking: (json['tracking_number'] ?? json['tracking'])?.toString(),
-      shipmentId: (json['shipment_id'] ?? '').toString().trim().isEmpty
+      sellerName: resolvedSellerName,
+      sellerId: resolvedSellerId,
+      sellerSlug: resolvedSellerSlug,
+      sellerAvatarUrl: resolvedSellerAvatar == null
           ? null
-          : (json['shipment_id'] ?? '').toString(),
+          : AppConfig.resolveMediaUrl(resolvedSellerAvatar),
+      shippingAddress: address,
+      tracking: (json['tracking_number'] ??
+              json['tracking'] ??
+              shipment['tracking_number'] ??
+              shipment['tracking_code'] ??
+              shipment['tracking'])
+          ?.toString(),
+      shipmentId: (json['shipment_id'] ??
+                  shipment['shipment_id'] ??
+                  shipment['id'] ??
+                  '')
+              .toString()
+              .trim()
+              .isEmpty
+          ? null
+          : (json['shipment_id'] ??
+                  shipment['shipment_id'] ??
+                  shipment['id'])
+              .toString(),
       orderLocation: parseLocation(
-        json['order_location'] ??
-            json['shipment_location'] ??
-            json['current_order_location'],
-        'Order location',
-      ),
+            json['order_location'] ??
+                json['shipment_location'] ??
+                json['current_order_location'],
+            'Order location',
+          ) ??
+          orderLocation,
       riderLocation: parseLocation(
         json['rider_location'] ??
             json['driver_location'] ??
@@ -410,6 +653,7 @@ class BuyerOrderData {
         'Rider location',
       ),
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()),
+      timeline: timeline,
       allowCancel: json['allow_cancel'] as bool?,
       allowMarkReceived: json['allow_mark_received'] as bool?,
       allowReview: json['allow_review'] as bool?,
@@ -533,6 +777,7 @@ class BuyerOrderData {
     String? backendStatus,
     String? statusLabel,
     String? paymentStatus,
+    List<BuyerOrderTimelineEvent>? timeline,
     BuyerOrderLocation? orderLocation,
     BuyerOrderLocation? riderLocation,
     bool clearRiderLocation = false,
@@ -545,6 +790,8 @@ class BuyerOrderData {
   }) {
     return BuyerOrderData(
       id: id,
+      orderNumber: orderNumber,
+      sellerOrderNumber: sellerOrderNumber,
       status: status ?? this.status,
       backendStatus: backendStatus ?? this.backendStatus,
       statusLabel: statusLabel ?? this.statusLabel,
@@ -561,7 +808,7 @@ class BuyerOrderData {
       riderLocation: clearRiderLocation
           ? null
           : riderLocation ?? this.riderLocation,
-      timeline: timeline,
+      timeline: timeline ?? this.timeline,
       createdAt: createdAt,
       isPreview: isPreview ?? this.isPreview,
       allowCancel: allowCancel ?? this.allowCancel,
@@ -599,6 +846,22 @@ class BuyerOrderData {
       }
     }
     return urls;
+  }
+
+  static String _formatOrderTimelineTime(dynamic value) {
+    final DateTime? parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) {
+      return value?.toString() ?? '';
+    }
+    final DateTime local = parsed.toLocal();
+    const List<String> months = <String>[
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final String minute = local.minute.toString().padLeft(2, '0');
+    final String period = local.hour >= 12 ? 'PM' : 'AM';
+    return '${months[local.month - 1]} ${local.day}, $hour:$minute $period';
   }
 }
 
@@ -724,6 +987,7 @@ class OrdersScreen extends StatefulWidget {
 
   final BuyerOrderCallback? onTrackOrder;
   final BuyerOrderCallback? onContactSeller;
+  final BuyerOrderCallback? onViewStore;
   final VoidCallback? onOpenHelpCenter;
 
   final CancelOrderCallback? onCancelOrder;
@@ -757,6 +1021,7 @@ class OrdersScreen extends StatefulWidget {
     this.onShopProducts,
     this.onTrackOrder,
     this.onContactSeller,
+    this.onViewStore,
     this.onOpenHelpCenter,
     this.onCancelOrder,
     this.onReceiveOrder,
@@ -956,6 +1221,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
         total: product.price + 75,
         buyerName: 'LIKHAE Buyer',
         buyerContact: '0917 123 4567',
+        sellerName: product.sellerName,
+        sellerId: product.sellerUserId,
+        sellerSlug: product.sellerSlug,
         shippingAddress: '1 aaasasa, Masico, Pila, Laguna, 4010',
         timeline: <BuyerOrderTimelineEvent>[
           BuyerOrderTimelineEvent(
@@ -1236,8 +1504,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return null;
     }
 
+    final String reference = id.trim().toLowerCase();
+    if (reference.isEmpty) {
+      return null;
+    }
+
     for (final BuyerOrderData order in _orders) {
-      if (order.id == id) {
+      final Set<String> orderReferences = <String>{
+        order.id,
+        order.orderNumber ?? '',
+        order.sellerOrderNumber ?? '',
+        order.tracking ?? '',
+        order.shipmentId ?? '',
+      }.map((String value) => value.trim().toLowerCase())
+          .where((String value) => value.isNotEmpty)
+          .toSet();
+      if (orderReferences.contains(reference)) {
         return order;
       }
     }
@@ -1595,6 +1877,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 return;
               }
 
+              if (reason == 'Other' && noteController.text.trim().isEmpty) {
+                _showMessage(
+                  'Add a note when you choose Other.',
+                  error: true,
+                );
+                return;
+              }
+
               final CancelOrderCallback? callback = widget.onCancelOrder;
 
               if (callback == null) {
@@ -1746,7 +2036,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           enabled: !submitting,
                           minLines: 3,
                           maxLines: 5,
-                          maxLength: 1000,
+                          maxLength: 450,
                           textCapitalization: TextCapitalization.sentences,
                           decoration: _sheetInputDecoration(
                             hintText: 'Optional note',
@@ -2088,18 +2378,40 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
-  Widget _buildTopBar() => ShopPageHeader(
-    title: _modeTitle, subtitle: _modeSubtitle,
-    onBack: () {
-      if (_mode != BuyerOrdersMode.overview && _mode != BuyerOrdersMode.success) { _openIndex(); return; }
-      if (widget.onBack != null) { widget.onBack!(); return; }
+  Widget _buildTopBar() {
+    void handleBack() {
+      if (_mode != BuyerOrdersMode.overview &&
+          _mode != BuyerOrdersMode.success) {
+        if (_mode == BuyerOrdersMode.details &&
+            widget.initialMode == BuyerOrdersMode.details &&
+            widget.selectedOrderId?.trim().isNotEmpty == true) {
+          if (widget.onBack != null) {
+            widget.onBack!();
+          } else {
+            Navigator.of(context).maybePop();
+          }
+          return;
+        }
+        _openIndex();
+        return;
+      }
+      if (widget.onBack != null) {
+        widget.onBack!();
+        return;
+      }
       Navigator.of(context).maybePop();
-    },
-    actions: [
-      if (_mode == BuyerOrdersMode.overview)
-        GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Shop products', onPressed: widget.onShopProducts),
-    ],
-  );
+    }
+
+    if (_mode == BuyerOrdersMode.overview) {
+      return const SizedBox.shrink();
+    }
+
+    return ShopPageHeader(
+      title: _modeTitle,
+      subtitle: _modeSubtitle,
+      onBack: handleBack,
+    );
+  }
 
   String get _modeTitle {
     switch (_mode) {
@@ -2143,10 +2455,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final List<BuyerOrderData> visibleOrders = _visibleOrders;
 
     return CustomScrollView(
+                  key: const PageStorageKey<String>('buyer-orders-scroll'),
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(14, 16, 14, 0),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
           sliver: SliverToBoxAdapter(
             child: Column(
               children: [
@@ -2167,7 +2480,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
                 _buildOrdersHeading(),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
                 _buildTabs(),
 
@@ -2181,7 +2494,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           SliverFillRemaining(hasScrollBody: false, child: _buildEmptyOrders())
         else
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((
                 BuildContext context,
@@ -2221,6 +2534,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             _openReturn(order);
                           }
                         : null,
+                    onContactSeller: widget.onContactSeller == null ||
+                            order.sellerId == null ||
+                            order.sellerId! < 1
+                        ? null
+                        : () => widget.onContactSeller!(order),
+                    onViewStore: widget.onViewStore == null ||
+                            order.sellerName?.trim().isEmpty != false
+                        ? null
+                        : () => widget.onViewStore!(order),
                     receiving: _receivingOrder,
                   ),
                 );
@@ -2228,59 +2550,54 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ),
           ),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 90)),
+        const SliverToBoxAdapter(child: SizedBox(height: 112)),
       ],
     );
   }
 
   Widget _buildOrdersHeading() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: ShopColors.accentSoft,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: const Text(
                 'ORDER CENTER',
                 style: TextStyle(
-                  color: _maroon,
-                  fontSize: 11,
-                  letterSpacing: 1.7,
+                  color: _maroonDark,
+                  fontSize: 9,
+                  letterSpacing: 1.1,
                   fontWeight: FontWeight.w800,
                 ),
               ),
-
-              SizedBox(height: 5),
-
-              Text(
-                'My Orders',
-                style: TextStyle(
-                  color: _text,
-                  fontSize: 28,
-                  letterSpacing: -0.7,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-
-              SizedBox(height: 6),
-
-              Text(
-                'Payment, seller preparation, delivery, receipt, reviews, and return cases in one place.',
-                style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
-              ),
-            ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'My Orders',
+          style: TextStyle(
+            color: Color(0xFF432A25),
+            fontFamily: 'serif',
+            fontSize: 36,
+            height: 1.05,
+            letterSpacing: -1.1,
+            fontWeight: FontWeight.w400,
           ),
         ),
-
-        const SizedBox(width: 10),
-
-        Text(
-          '${_orders.length} ${_orders.length == 1 ? 'order' : 'orders'}',
-          style: const TextStyle(
-            color: _maroon,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w800,
+        const SizedBox(height: 3),
+        const Text(
+          'Track fulfillment and confirm receipt after delivery.',
+          style: TextStyle(
+            color: Color(0xFF8A7163),
+            fontSize: 11.5,
+            height: 1.4,
           ),
         ),
       ],
@@ -2516,7 +2833,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
       children: [
         if (order.isPreview) ...[
           const _NoticeCard(
@@ -2526,6 +2843,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
           const SizedBox(height: 12),
         ],
+        _buildOrderSummaryCard(order),
+        const SizedBox(height: 12),
         _buildBuyerShippingCard(order),
         const SizedBox(height: 12),
         _buildBuyerProductsCard(order),
@@ -2537,6 +2856,74 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
+  Widget _buildOrderSummaryCard(BuyerOrderData order) {
+    final String orderReference = order.orderNumber?.trim().isNotEmpty == true
+        ? order.orderNumber!.trim()
+        : order.id;
+
+    return _BuyerDetailCard(
+      padding: const EdgeInsets.all(15),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: ShopColors.accentSoft,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              color: ShopColors.accent,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'ORDER SUMMARY',
+                  style: TextStyle(
+                    color: ShopColors.muted,
+                    fontSize: 10,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Order $orderReference',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (order.createdAt != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    _formatDetailDate(order.createdAt!),
+                    style: const TextStyle(
+                      color: ShopColors.muted,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _StatusBadge(label: order.statusLabel, status: order.tabStatus),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBuyerShippingCard(BuyerOrderData order) {
     final BuyerOrderTimelineEvent? latestEvent = _latestTimelineEvent(order);
     final bool delivered = <String>{
@@ -2544,8 +2931,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
       'completed',
     }.contains(order.normalizedStatus);
     final Color statusColor = delivered ? const Color(0xFF168548) : _maroon;
+    final Color statusBackground = delivered
+        ? const Color(0xFFEAF6EE)
+        : ShopColors.accentSoft;
 
     return _BuyerDetailCard(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2553,129 +2944,199 @@ class _OrdersScreenState extends State<OrdersScreen> {
             onTap: widget.onTrackOrder == null
                 ? null
                 : () => widget.onTrackOrder!(order),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
+              padding: const EdgeInsets.fromLTRB(16, 15, 13, 13),
               child: Row(
                 children: [
-                  const Expanded(
-                    child: Text(
-                      'Shipping Information',
-                      style: TextStyle(
-                        color: _text,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: ShopColors.accentSoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.local_shipping_outlined,
+                      color: ShopColors.accent,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Shipping information',
+                          style: TextStyle(
+                            color: ShopColors.text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          order.tracking?.trim().isNotEmpty == true
+                              ? 'Tracking No. ${order.tracking}'
+                              : 'Tracking number will appear after shipment.',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ShopColors.muted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (widget.onTrackOrder != null)
                     const Icon(
                       Icons.chevron_right_rounded,
-                      color: _muted2,
-                      size: 25,
+                      color: ShopColors.faint,
+                      size: 23,
                     ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            order.tracking?.trim().isNotEmpty == true
-                ? 'Tracking No. ${order.tracking}'
-                : 'Tracking number will appear after shipment.',
-            style: const TextStyle(color: _muted, fontSize: 12.5),
-          ),
-          const SizedBox(height: 22),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.local_shipping_outlined, color: statusColor, size: 27),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      latestEvent?.label ?? order.statusLabel,
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      latestEvent?.time.trim().isNotEmpty == true
-                          ? latestEvent!.time
-                          : 'Shipment update pending',
-                      style: const TextStyle(color: _muted2, fontSize: 12.5),
-                    ),
-                  ],
-                ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(15, 0, 15, 13),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: statusBackground,
+                borderRadius: BorderRadius.circular(15),
               ),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 19),
-            child: Divider(height: 1, color: _border),
-          ),
-          const Text(
-            'Delivery Information',
-            style: TextStyle(
-              color: _text,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    delivered
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.local_shipping_outlined,
+                    color: statusColor,
+                    size: 21,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          latestEvent?.label ?? order.statusLabel,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          latestEvent?.time.trim().isNotEmpty == true
+                              ? latestEvent!.time
+                              : 'Shipment update pending',
+                          style: const TextStyle(
+                            color: ShopColors.muted,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        if (latestEvent?.details.trim().isNotEmpty == true) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            latestEvent!.details,
+                            style: const TextStyle(
+                              color: ShopColors.muted,
+                              fontSize: 11.5,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 17),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.location_on_outlined, color: _muted, size: 25),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
+          const Divider(height: 1, indent: 15, endIndent: 15, color: _border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'DELIVER TO',
+                  style: TextStyle(
+                    color: ShopColors.muted,
+                    fontSize: 10,
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: order.buyerName.trim().isEmpty
-                                ? 'Buyer'
-                                : order.buyerName,
-                          ),
-                          if (order.buyerContact?.trim().isNotEmpty == true)
-                            TextSpan(
-                              text: '  ${order.buyerContact}',
-                              style: const TextStyle(
-                                color: _muted2,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                        ],
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: ShopColors.soft,
+                        borderRadius: BorderRadius.circular(11),
                       ),
-                      style: const TextStyle(
-                        color: _text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.location_on_outlined,
+                        color: ShopColors.secondaryText,
+                        size: 19,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      order.shippingAddress.trim().isEmpty
-                          ? 'No delivery address recorded.'
-                          : order.shippingAddress,
-                      style: const TextStyle(
-                        color: _muted,
-                        fontSize: 12.5,
-                        height: 1.45,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            order.buyerName.trim().isEmpty
+                                ? 'Buyer'
+                                : order.buyerName,
+                            style: const TextStyle(
+                              color: ShopColors.text,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (order.buyerContact?.trim().isNotEmpty == true) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              order.buyerContact!,
+                              style: const TextStyle(
+                                color: ShopColors.muted,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 5),
+                          Text(
+                            order.shippingAddress.trim().isEmpty
+                                ? 'No delivery address recorded.'
+                                : order.shippingAddress,
+                            style: const TextStyle(
+                              color: ShopColors.secondaryText,
+                              fontSize: 11.5,
+                              height: 1.45,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -2693,29 +3154,72 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildBuyerProductsCard(BuyerOrderData order) {
+    final int totalQuantity = order.products.fold<int>(
+      0,
+      (int total, BuyerOrderProductData product) =>
+          total + product.safeQuantity,
+    );
+
     return _BuyerDetailCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           InkWell(
             onTap: widget.onShopProducts,
-            child: const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 13, 13),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(15, 14, 13, 12),
               child: Row(
                 children: [
-                  Icon(Icons.storefront_outlined, color: _maroon, size: 23),
-                  SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      'Likhae Marketplace',
-                      style: TextStyle(
-                        color: _text,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
+                  Container(
+                    width: 37,
+                    height: 37,
+                    decoration: BoxDecoration(
+                      color: ShopColors.accentSoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.storefront_outlined,
+                      color: ShopColors.accent,
+                      size: 19,
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded, color: _muted2, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'SOLD BY',
+                          style: TextStyle(
+                            color: ShopColors.muted,
+                            fontSize: 9.5,
+                            letterSpacing: 1,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          order.sellerName?.trim().isNotEmpty == true
+                              ? order.sellerName!.trim()
+                              : 'Likhae Marketplace',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ShopColors.text,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: ShopColors.faint,
+                    size: 23,
+                  ),
                 ],
               ),
             ),
@@ -2742,21 +3246,43 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 growable: false,
               ),
             ),
-          const Divider(height: 1, color: _border),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFAF7F4),
+              border: Border(top: BorderSide(color: _border)),
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                const Text(
-                  'Order Total: ',
-                  style: TextStyle(color: _text, fontSize: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Order total',
+                        style: TextStyle(
+                          color: ShopColors.text,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$totalQuantity ${totalQuantity == 1 ? 'item' : 'items'}',
+                        style: const TextStyle(
+                          color: ShopColors.muted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Text(
                   _formatPrice(order.total),
                   style: const TextStyle(
-                    color: _maroon,
-                    fontSize: 17,
+                    color: ShopColors.accentDark,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -2775,22 +3301,32 @@ class _OrdersScreenState extends State<OrdersScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 9),
-            child: Text(
-              'Support Center',
-              style: TextStyle(
-                color: _text,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-              ),
+            padding: EdgeInsets.fromLTRB(16, 15, 16, 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.support_agent_rounded,
+                  color: ShopColors.accent,
+                  size: 19,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Need help?',
+                  style: TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
           _BuyerDetailActionRow(
             icon: Icons.settings_backup_restore_rounded,
-            title: 'Request for Return/Refund',
+            title: 'Request a return or refund',
             subtitle: order.canRequestReturn
                 ? 'Submit a request for this order.'
-                : 'Availability depends on the order status.',
+                : 'Available depending on the order status.',
             onTap: () {
               if (order.canRequestReturn) {
                 _openReturn(order);
@@ -2802,10 +3338,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
               );
             },
           ),
-          const Divider(height: 1, indent: 53, color: _border),
+          const Divider(height: 1, indent: 58, endIndent: 14, color: _border),
           _BuyerDetailActionRow(
             icon: Icons.forum_outlined,
-            title: 'Contact Seller',
+            title: 'Contact seller',
+            subtitle: 'Ask the seller about this order.',
             onTap: () {
               if (widget.onContactSeller != null) {
                 widget.onContactSeller!(order);
@@ -2814,10 +3351,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
               _showMessage('Seller messaging is currently unavailable.');
             },
           ),
-          const Divider(height: 1, indent: 53, color: _border),
+          const Divider(height: 1, indent: 58, endIndent: 14, color: _border),
           _BuyerDetailActionRow(
             icon: Icons.help_outline_rounded,
-            title: 'Help Center',
+            title: 'Help center',
+            subtitle: 'Get help with your purchase.',
             onTap: () {
               if (widget.onOpenHelpCenter != null) {
                 widget.onOpenHelpCenter!();
@@ -2834,58 +3372,80 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget _buildBuyerOrderInfoCard(BuyerOrderData order) {
     return _BuyerDetailCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text(
-                'Order ID',
-                style: TextStyle(
-                  color: _text,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              Flexible(
-                child: Text(
-                  order.id,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _text, fontSize: 13),
-                ),
-              ),
-              const SizedBox(width: 9),
-              SizedBox(
-                height: 31,
-                child: OutlinedButton(
-                  onPressed: () => _copyOrderId(order.id),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _text,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    side: const BorderSide(color: _muted2),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('Copy', style: TextStyle(fontSize: 12)),
-                ),
-              ),
-            ],
+          const Text(
+            'Payment details',
+            style: TextStyle(
+              color: ShopColors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(11, 10, 7, 10),
+            decoration: BoxDecoration(
+              color: ShopColors.soft,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.tag_rounded,
+                  color: ShopColors.secondaryText,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'ORDER ID',
+                        style: TextStyle(
+                          color: ShopColors.muted,
+                          fontSize: 9,
+                          letterSpacing: .9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        order.id,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: ShopColors.text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _copyOrderId(order.id),
+                  style: TextButton.styleFrom(
+                    foregroundColor: ShopColors.accentDark,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(48, 38),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.copy_rounded, size: 14),
+                  label: const Text(
+                    'Copy',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 15),
           _DetailRow(label: 'Paid by', value: order.payment),
           if (order.paymentStatus?.trim().isNotEmpty == true) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             _DetailRow(label: 'Payment status', value: order.paymentStatus!),
-          ],
-          const SizedBox(height: 14),
-          _DetailRow(label: 'Order status', value: order.statusLabel),
-          if (order.createdAt != null) ...[
-            const SizedBox(height: 14),
-            _DetailRow(
-              label: 'Placed on',
-              value: _formatDetailDate(order.createdAt!),
-            ),
           ],
         ],
       ),
@@ -3738,7 +4298,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   static String _formatPrice(double value) {
-    return '₱${value.toStringAsFixed(2)}';
+    return formatPesoAmount(value);
   }
 }
 
@@ -3751,6 +4311,8 @@ class _OrderCard extends StatelessWidget {
   final VoidCallback? onReceive;
   final VoidCallback? onReview;
   final VoidCallback? onReturn;
+  final VoidCallback? onContactSeller;
+  final VoidCallback? onViewStore;
 
   final bool receiving;
 
@@ -3762,6 +4324,8 @@ class _OrderCard extends StatelessWidget {
     required this.onReceive,
     required this.onReview,
     required this.onReturn,
+    required this.onContactSeller,
+    required this.onViewStore,
     required this.receiving,
   });
 
@@ -3778,43 +4342,106 @@ class _OrderCard extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
-            decoration: const BoxDecoration(color: Color(0xFFF9F2EA)),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            padding: const EdgeInsets.fromLTRB(16, 13, 16, 12),
+            decoration: const BoxDecoration(color: Color(0xFFFAF5EF)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 3,
-                    children: [
-                      Text(
-                        'Order #${order.id}',
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Order ${order.orderNumber?.trim().isNotEmpty == true ? order.orderNumber!.trim() : order.id}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: ShopColors.text,
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      Text(
-                        _placedLabel(order.createdAt),
-                        style: const TextStyle(
-                          color: ShopColors.muted,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w500,
+                    ),
+                    const SizedBox(width: 8),
+                    _StatusBadge(label: order.statusLabel, status: order.tabStatus),
+                  ],
+                ),
+                if (_placedLabel(order.createdAt).isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _placedLabel(order.createdAt),
+                    style: const TextStyle(
+                      color: ShopColors.muted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          if (order.sellerName?.trim().isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 11),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.storefront_outlined,
+                        size: 17,
+                        color: ShopColors.accentDark,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          order.sellerName!.trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ShopColors.text,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(width: 8),
-
-                _StatusBadge(label: order.statusLabel, status: order.tabStatus),
-              ],
+                  if (onContactSeller != null || onViewStore != null) ...[
+                    const SizedBox(height: 5),
+                    Wrap(
+                      spacing: 12,
+                      children: [
+                        if (onContactSeller != null)
+                          _SellerAction(
+                            text: 'Chat',
+                            onPressed: onContactSeller!,
+                          ),
+                        if (onViewStore != null)
+                          _SellerAction(
+                            text: 'View Shop',
+                            onPressed: onViewStore!,
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
+
+          if (order.tabStatus != 'cancelled' && order.tabStatus != 'returns')
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: _ParcelUpdateCard(
+                order: order,
+                onTap: (order.tracking?.trim().isNotEmpty == true ||
+                        order.shipmentId?.trim().isNotEmpty == true)
+                    ? onTrack
+                    : null,
+              ),
+            ),
 
           if (order.products.isEmpty)
             const Padding(
@@ -3845,6 +4472,16 @@ class _OrderCard extends StatelessWidget {
             padding: const EdgeInsets.all(13),
             child: Column(
               children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_itemCount(order)} ${_itemCount(order) == 1 ? 'item' : 'items'} - Total',
+                    style: const TextStyle(
+                      color: ShopColors.muted,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ),
                 Row(
                   children: [
                     Expanded(
@@ -3852,7 +4489,7 @@ class _OrderCard extends StatelessWidget {
                         TextSpan(
                           children: [
                             TextSpan(text: order.payment),
-                            const TextSpan(text: ' · '),
+                            const TextSpan(text: ' - '),
                             TextSpan(
                               text: _price(order.total),
                               style: const TextStyle(
@@ -3914,10 +4551,12 @@ class _OrderCard extends StatelessWidget {
                           ),
 
                         if (onTrack != null &&
-                            order.tracking?.trim().isNotEmpty == true)
+                            (order.tracking?.trim().isNotEmpty == true ||
+                                order.shipmentId?.trim().isNotEmpty == true))
                           _SmallActionButton(
                             text: 'Track Parcel',
                             onPressed: onTrack,
+                            filled: onReceive == null,
                           ),
 
                         if (onOpen != null)
@@ -3960,21 +4599,145 @@ class _OrderCard extends StatelessWidget {
 
     final DateTime local = value.toLocal();
 
-    final int hour12 = local.hour == 0
-        ? 12
-        : local.hour > 12
-        ? local.hour - 12
-        : local.hour;
+    return '${months[local.month - 1]} ${local.day}, ${local.year}';
+  }
 
-    final String minute = local.minute.toString().padLeft(2, '0');
-
-    final String period = local.hour >= 12 ? 'PM' : 'AM';
-
-    return 'Placed ${months[local.month - 1]} ${local.day}, ${local.year}, $hour12:$minute $period';
+  static int _itemCount(BuyerOrderData order) {
+    return order.products.fold<int>(
+      0,
+      (int total, BuyerOrderProductData product) =>
+          total + product.safeQuantity,
+    );
   }
 
   static String _price(double value) {
-    return '₱${value.toStringAsFixed(2)}';
+    return formatPesoAmount(value);
+  }
+}
+
+class _ParcelUpdateCard extends StatelessWidget {
+  final BuyerOrderData order;
+  final VoidCallback? onTap;
+
+  const _ParcelUpdateCard({required this.order, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final BuyerOrderTimelineEvent? latestEvent = order.timeline.isEmpty
+        ? null
+        : order.timeline.last;
+    final String title = latestEvent?.label.trim().isNotEmpty == true
+        ? latestEvent!.label
+        : order.statusLabel;
+    final String details = latestEvent?.details.trim().isNotEmpty == true
+        ? latestEvent!.details
+        : _fallbackDetails;
+    final String trackingReference =
+        order.tracking?.trim().isNotEmpty == true
+        ? order.tracking!.trim()
+        : order.shipmentId?.trim() ?? '';
+
+    return Material(
+      color: const Color(0xFFEEF9F6),
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 1),
+                child: Icon(
+                  Icons.local_shipping_outlined,
+                  color: Color(0xFF338D78),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (trackingReference.isNotEmpty) ...[
+                      Text(
+                        'Parcel 1 - Tracking $trackingReference',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: ShopColors.muted,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                    ],
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF267B69),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      details,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: ShopColors.muted,
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (latestEvent?.time.trim().isNotEmpty == true) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        latestEvent!.time,
+                        style: const TextStyle(
+                          color: Color(0xFF6F9188),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFF6F9188),
+                  size: 22,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String get _fallbackDetails {
+    if (order.riderLocation != null) {
+      return 'Your rider is on the way. Live location is available.';
+    }
+    if (order.tracking?.trim().isNotEmpty == true) {
+      return 'Tracking is active. Waiting for the next parcel update.';
+    }
+    return switch (order.tabStatus) {
+      'to-pay' => 'Waiting for payment confirmation.',
+      'to-ship' => 'The seller is preparing your parcel.',
+      'to-receive' => 'Parcel updates will appear here as it moves.',
+      'completed' => 'This order has been delivered.',
+      _ => 'Parcel updates will appear here when available.',
+    };
   }
 }
 
@@ -3989,23 +4752,23 @@ class _OrderProductRow extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          padding: const EdgeInsets.fromLTRB(15, 12, 15, 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 72,
-                height: 72,
+                width: 66,
+                height: 66,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: ShopColors.soft,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(13),
                   border: Border.all(color: ShopColors.border),
                 ),
                 child: _OrderProductGallery(images: product.galleryImages),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(width: 11),
 
               Expanded(
                 child: Column(
@@ -4017,7 +4780,7 @@ class _OrderProductRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: ShopColors.text,
-                        fontSize: 13.5,
+                        fontSize: 13,
                         height: 1.3,
                         fontWeight: FontWeight.w800,
                       ),
@@ -4038,23 +4801,36 @@ class _OrderProductRow extends StatelessWidget {
 
                     const SizedBox(height: 5),
 
-                    Text(
-                      'Qty ${product.safeQuantity}',
-                      style: const TextStyle(
-                        color: ShopColors.faint,
-                        fontSize: 11.5,
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    Text(
-                      '₱${product.lineTotal.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: ShopColors.accent,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: ShopColors.soft,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Qty ${product.safeQuantity}',
+                            style: const TextStyle(
+                              color: ShopColors.secondaryText,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          formatPesoAmount(product.lineTotal),
+                          style: const TextStyle(
+                            color: ShopColors.accentDark,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -4065,6 +4841,32 @@ class _OrderProductRow extends StatelessWidget {
 
         if (showDivider) const Divider(height: 1, color: ShopColors.border),
       ],
+    );
+  }
+}
+
+class _SellerAction extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+
+  const _SellerAction({required this.text, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(5),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: ShopColors.accentDark,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -4189,7 +4991,8 @@ class _StatusBadge extends StatelessWidget {
         label,
         style: TextStyle(
           color: foreground,
-          fontSize: 10.5,
+          fontSize: 9.5,
+          letterSpacing: 1,
           fontWeight: FontWeight.w800,
         ),
       ),
@@ -4240,12 +5043,21 @@ class _BuyerDetailActionRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(icon, color: const Color(0xFF766C65), size: 24),
-            const SizedBox(width: 13),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: ShopColors.soft,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: ShopColors.secondaryText, size: 18),
+            ),
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -4254,17 +5066,17 @@ class _BuyerDetailActionRow extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       color: ShopColors.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   if (subtitle?.trim().isNotEmpty == true) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       subtitle!,
                       style: const TextStyle(
                         color: ShopColors.muted,
-                        fontSize: 11.5,
+                        fontSize: 10.5,
                         height: 1.35,
                       ),
                     ),
@@ -4395,7 +5207,7 @@ class _SelectedProduct extends StatelessWidget {
         ),
 
         Text(
-          '₱${product.lineTotal.toStringAsFixed(2)}',
+          formatPesoAmount(product.lineTotal),
           style: const TextStyle(
             color: ShopColors.accent,
             fontSize: 12.5,
@@ -4472,49 +5284,14 @@ class _OrderProductGalleryState extends State<_OrderProductGallery> {
 }
 
 class _OrderProductImage extends StatelessWidget {
-  final String url;
-
+  final String? url;
   const _OrderProductImage({required this.url});
-
   @override
   Widget build(BuildContext context) {
-    final String imageUrl = url.trim();
-    if (imageUrl.isEmpty) {
-      return const Center(
-        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 28),
-      );
-    }
-
-    return Image.network(
-      imageUrl,
-      fit: BoxFit.contain,
-      errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-        return const Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: ShopColors.faint,
-            size: 27,
-          ),
-        );
-      },
-      loadingBuilder: (
-        BuildContext context,
-        Widget child,
-        ImageChunkEvent? progress,
-      ) {
-        if (progress == null) return child;
-        return const Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: ShopColors.accent,
-            ),
-          ),
-        );
-      },
-    );
+    final value = url?.trim() ?? '';
+    if (value.isEmpty) return const Center(child: Icon(Icons.inventory_2_outlined,
+      color: ShopColors.faint, size: 34));
+    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 34);
   }
 }
 

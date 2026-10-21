@@ -16,6 +16,7 @@ class BuyerSystemSettingsController extends ChangeNotifier {
   static const String _storageKey = 'likhae_buyer_system_settings';
 
   Future<void> _writeQueue = Future<void>.value();
+  Future<void>? _loadFuture;
 
   bool orderUpdates = true;
   bool deliveryUpdates = true;
@@ -24,10 +25,18 @@ class BuyerSystemSettingsController extends ChangeNotifier {
   bool showAiAssistant = true;
   bool aiResponseSound = false;
   bool notificationSounds = true;
+  bool riderAssignmentUpdates = true;
+  bool riderRouteUpdates = true;
+  bool riderChatUpdates = true;
+  bool riderEarningsUpdates = true;
+  bool riderSafetyUpdates = true;
+  bool riderNotificationSounds = true;
 
   ThemeMode get themeMode => ThemeController.instance.value;
 
-  Future<void> load() async {
+  Future<void> load() => _loadFuture ??= _load();
+
+  Future<void> _load() async {
     try {
       final String? value = await _storage.read(key: _storageKey);
       if (value == null || value.isEmpty) return;
@@ -38,16 +47,53 @@ class BuyerSystemSettingsController extends ChangeNotifier {
 
       orderUpdates = _readBool(settings, 'orderUpdates', orderUpdates);
       deliveryUpdates = _readBool(settings, 'deliveryUpdates', deliveryUpdates);
-      chatNotifications =
-          _readBool(settings, 'chatNotifications', chatNotifications);
-      promotionUpdates =
-          _readBool(settings, 'promotionUpdates', promotionUpdates);
-      showAiAssistant =
-          _readBool(settings, 'showAiAssistant', showAiAssistant);
-      aiResponseSound =
-          _readBool(settings, 'aiResponseSound', aiResponseSound);
-      notificationSounds =
-          _readBool(settings, 'notificationSounds', notificationSounds);
+      chatNotifications = _readBool(
+        settings,
+        'chatNotifications',
+        chatNotifications,
+      );
+      promotionUpdates = _readBool(
+        settings,
+        'promotionUpdates',
+        promotionUpdates,
+      );
+      showAiAssistant = _readBool(settings, 'showAiAssistant', showAiAssistant);
+      aiResponseSound = _readBool(settings, 'aiResponseSound', aiResponseSound);
+      notificationSounds = _readBool(
+        settings,
+        'notificationSounds',
+        notificationSounds,
+      );
+      riderAssignmentUpdates = _readBool(
+        settings,
+        'riderAssignmentUpdates',
+        riderAssignmentUpdates,
+      );
+      riderRouteUpdates = _readBool(
+        settings,
+        'riderRouteUpdates',
+        riderRouteUpdates,
+      );
+      riderChatUpdates = _readBool(
+        settings,
+        'riderChatUpdates',
+        riderChatUpdates,
+      );
+      riderEarningsUpdates = _readBool(
+        settings,
+        'riderEarningsUpdates',
+        riderEarningsUpdates,
+      );
+      riderSafetyUpdates = _readBool(
+        settings,
+        'riderSafetyUpdates',
+        riderSafetyUpdates,
+      );
+      riderNotificationSounds = _readBool(
+        settings,
+        'riderNotificationSounds',
+        riderNotificationSounds,
+      );
 
       final String savedTheme = (settings['themeMode'] ?? '').toString();
       for (final ThemeMode mode in ThemeMode.values) {
@@ -76,6 +122,12 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     bool? showAiAssistant,
     bool? aiResponseSound,
     bool? notificationSounds,
+    bool? riderAssignmentUpdates,
+    bool? riderRouteUpdates,
+    bool? riderChatUpdates,
+    bool? riderEarningsUpdates,
+    bool? riderSafetyUpdates,
+    bool? riderNotificationSounds,
   }) {
     this.orderUpdates = orderUpdates ?? this.orderUpdates;
     this.deliveryUpdates = deliveryUpdates ?? this.deliveryUpdates;
@@ -84,6 +136,15 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     this.showAiAssistant = showAiAssistant ?? this.showAiAssistant;
     this.aiResponseSound = aiResponseSound ?? this.aiResponseSound;
     this.notificationSounds = notificationSounds ?? this.notificationSounds;
+    this.riderAssignmentUpdates =
+        riderAssignmentUpdates ?? this.riderAssignmentUpdates;
+    this.riderRouteUpdates = riderRouteUpdates ?? this.riderRouteUpdates;
+    this.riderChatUpdates = riderChatUpdates ?? this.riderChatUpdates;
+    this.riderEarningsUpdates =
+        riderEarningsUpdates ?? this.riderEarningsUpdates;
+    this.riderSafetyUpdates = riderSafetyUpdates ?? this.riderSafetyUpdates;
+    this.riderNotificationSounds =
+        riderNotificationSounds ?? this.riderNotificationSounds;
     _persist();
     notifyListeners();
   }
@@ -100,6 +161,24 @@ class BuyerSystemSettingsController extends ChangeNotifier {
         return chatNotifications;
       case 'rewards':
         return promotionUpdates;
+      default:
+        return true;
+    }
+  }
+
+  bool allowsRiderNotification({required String category}) {
+    switch (category) {
+      case 'orders':
+        return riderAssignmentUpdates;
+      case 'deliveries':
+        return riderRouteUpdates;
+      case 'messages':
+        return riderChatUpdates;
+      case 'rewards':
+        return riderEarningsUpdates;
+      case 'account':
+      case 'general':
+        return riderSafetyUpdates;
       default:
         return true;
     }
@@ -131,6 +210,12 @@ class BuyerSystemSettingsController extends ChangeNotifier {
       'showAiAssistant': showAiAssistant,
       'aiResponseSound': aiResponseSound,
       'notificationSounds': notificationSounds,
+      'riderAssignmentUpdates': riderAssignmentUpdates,
+      'riderRouteUpdates': riderRouteUpdates,
+      'riderChatUpdates': riderChatUpdates,
+      'riderEarningsUpdates': riderEarningsUpdates,
+      'riderSafetyUpdates': riderSafetyUpdates,
+      'riderNotificationSounds': riderNotificationSounds,
       'themeMode': themeMode.name,
     });
   }

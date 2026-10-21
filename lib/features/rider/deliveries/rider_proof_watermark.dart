@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
 
 class RiderProofWatermark {
+  static const Duration _lastLocationMaxAge = Duration(minutes: 2);
+
   static Future<Position> requireCurrentPosition() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw Exception('Turn on location services to capture delivery proof.');
@@ -21,12 +24,27 @@ class RiderProofWatermark {
       );
     }
 
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        timeLimit: Duration(seconds: 20),
-      ),
-    );
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+    } on TimeoutException {
+      final Position? lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        final Duration age = DateTime.now().difference(lastKnown.timestamp);
+        if (!age.isNegative &&
+            age <= _lastLocationMaxAge &&
+            lastKnown.accuracy <= 100) {
+          return lastKnown;
+        }
+      }
+      throw Exception(
+        'Could not get a GPS location. Move to an open area and try again.',
+      );
+    }
   }
 
   static Future<String> stamp({
@@ -48,19 +66,39 @@ class RiderProofWatermark {
     }
 
     final img.Image image = img.bakeOrientation(decoded);
-    final img.BitmapFont font = image.width < 640 ? img.arial14 : img.arial24;
-    final int padding = image.width < 640 ? 10 : 18;
-    final int maxTextWidth = image.width - padding * 2;
+    final img.BitmapFont font = switch (image.width) {
+      >= 1280 => img.arial48,
+      >= 640 => img.arial24,
+      _ => img.arial14,
+    };
+    final int padding = switch (image.width) {
+      >= 1280 => 28,
+      >= 640 => 18,
+      _ => 10,
+    };
+    final int maxTextWidth = (image.width - padding * 2)
+        .clamp(1, image.width)
+        .toInt();
     final List<String> lines = <String>[
-      'DATE & TIME: ${_formatDateTime(capturedAt)}',
-      'GPS: ${position.latitude.toStringAsFixed(6)}, '
-          '${position.longitude.toStringAsFixed(6)}',
+      ..._wrapText(
+        'DATE & TIME: ${_formatDateTime(capturedAt)}',
+        font,
+        maxTextWidth,
+      ),
+      ..._wrapText(
+        'GPS: ${position.latitude.toStringAsFixed(6)}, '
+            '${position.longitude.toStringAsFixed(6)}',
+        font,
+        maxTextWidth,
+      ),
       ..._wrapText('RIDER: $name', font, maxTextWidth),
     ];
 
     final int lineHeight = font.lineHeight;
     final int bandHeight = (lines.length * lineHeight) + (padding * 2);
-    final int bandTop = image.height - bandHeight;
+    final int bandTop = (image.height - bandHeight)
+        .clamp(0, image.height - 1)
+        .toInt();
     img.fillRect(
       image,
       x1: 0,
@@ -89,7 +127,7 @@ class RiderProofWatermark {
     final File output = File(
       '${outputDirectory.path}${Platform.pathSeparator}proof.jpg',
     );
-    await output.writeAsBytes(img.encodeJpg(image, quality: 85), flush: true);
+    await output.writeAsBytes(img.encodeJpg(image, quality: 90), flush: true);
     return output.path;
   }
 

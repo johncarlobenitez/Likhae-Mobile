@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../core/api/api_client.dart';
@@ -252,8 +254,150 @@ class RiderMobileService {
     return RiderProfileData.fromApi(_map(rawData, 'profile'));
   }
 
-  static Future<List<BuyerNotificationData>> fetchNotifications() async {
-    return (await _getRows('rider/notifications'))
+  static Future<bool> updateAvailability(
+    bool isOnline, {
+    double? latitude,
+    double? longitude,
+  }) async {
+    final Response<dynamic> response;
+    try {
+      final Map<String, dynamic> fields = <String, dynamic>{
+        'is_online': isOnline,
+      };
+      if (latitude != null) fields['latitude'] = latitude;
+      if (longitude != null) fields['longitude'] = longitude;
+      response = await ApiClient.patch(
+        AppConfig.resolveApiUrl('rider/availability'),
+        fields,
+        options: Options(
+          connectTimeout: const Duration(seconds: 8),
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+    } on DioException catch (error) {
+      throw RiderApiException(ApiClient.formatError(error));
+    }
+    final Map<String, dynamic> payload = _requirePayload(response);
+    final dynamic rawData = payload['data'] is Map
+        ? Map<String, dynamic>.from(payload['data'] as Map)['is_online']
+        : payload['is_online'];
+    final bool? savedStatus = _parseApiBool(rawData);
+    if (savedStatus == null) {
+      throw const FormatException(
+        'The server did not return the updated rider availability.',
+      );
+    }
+    return savedStatus;
+  }
+
+  static Future<void> updateAvailabilityLocation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final Response<dynamic> response;
+    try {
+      response = await ApiClient.post(
+        AppConfig.resolveApiUrl('rider/availability/location'),
+        <String, dynamic>{'latitude': latitude, 'longitude': longitude},
+        options: Options(
+          connectTimeout: const Duration(seconds: 8),
+          sendTimeout: const Duration(seconds: 8),
+          receiveTimeout: const Duration(seconds: 10),
+        ),
+      );
+    } on DioException catch (error) {
+      throw RiderApiException(ApiClient.formatError(error));
+    }
+    _requirePayload(response);
+  }
+
+  static bool? _parseApiBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final String normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized == '1' || normalized == 'true' || normalized == 'online') {
+      return true;
+    }
+    if (normalized == '0' || normalized == 'false' || normalized == 'offline') {
+      return false;
+    }
+    return null;
+  }
+
+  static Future<RiderProfileData> updateProfile({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String contactNumber,
+    Uint8List? profilePhotoBytes,
+    String? profilePhotoFileName,
+  }) async {
+    final Map<String, dynamic> fields = <String, dynamic>{
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': email,
+      'contact_number': contactNumber,
+    };
+    final Response<dynamic> response;
+    if (profilePhotoBytes != null) {
+      final FormData form = FormData.fromMap(<String, dynamic>{
+        ...fields,
+        '_method': 'PATCH',
+        'profile_photo': MultipartFile.fromBytes(
+          profilePhotoBytes,
+          filename: profilePhotoFileName ?? 'rider-profile.jpg',
+        ),
+      });
+      response = await ApiClient.post(
+        AppConfig.resolveApiUrl('rider/profile'),
+        form,
+      );
+    } else {
+      response = await ApiClient.patch(
+        AppConfig.resolveApiUrl('rider/profile'),
+        fields,
+      );
+    }
+    final Map<String, dynamic> payload = _requirePayload(response);
+    final dynamic rawData = payload['data'] ?? payload;
+    return RiderProfileData.fromApi(_map(rawData, 'profile'));
+  }
+
+  static Future<RiderProfileData> updateResidentialAddress(
+    Map<String, dynamic> address,
+  ) async {
+    final Response<dynamic> response = await ApiClient.patch(
+      AppConfig.resolveApiUrl('rider/profile/address'),
+      address,
+    );
+    final Map<String, dynamic> payload = _requirePayload(response);
+    final dynamic rawData = payload['data'] ?? payload;
+    return RiderProfileData.fromApi(_map(rawData, 'profile'));
+  }
+
+  static Future<void> updatePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final Response<dynamic> response = await ApiClient.patch(
+      AppConfig.resolveApiUrl('rider/profile/password'),
+      <String, dynamic>{
+        'current_password': currentPassword,
+        'password': newPassword,
+        'password_confirmation': newPassword,
+      },
+    );
+    _requirePayload(response);
+  }
+
+  static Future<List<BuyerNotificationData>> fetchNotifications({
+    bool latestOnly = false,
+  }) async {
+    final rows = latestOnly
+        ? _rowsFromPayload(await _getPayload('rider/notifications'))
+        : await _getRows('rider/notifications');
+    return rows
         .whereType<Map>()
         .map((Map item) {
           final Map<String, dynamic> row = Map<String, dynamic>.from(item);
@@ -308,10 +452,19 @@ class RiderMobileService {
             ),
             unreadCount:
                 int.tryParse((item['unread_count'] ?? 0).toString()) ?? 0,
+            buyerIsOnline: item['buyer_is_online'] == true,
           );
         })
         .where((RiderConversationData item) => item.id.isNotEmpty)
         .toList(growable: false);
+  }
+
+  static Future<void> touchMessagePresence() async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('messages/presence'),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
   }
 
   static Future<List<RiderMessageData>> fetchMessages(

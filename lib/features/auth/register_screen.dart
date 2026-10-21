@@ -99,6 +99,7 @@ typedef PostalCodeLoader =
     Future<String?> Function({
       required String municipalityCode,
       required String barangayCode,
+      required String provinceCode,
       required String provinceName,
       required String municipalityName,
     });
@@ -212,6 +213,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _loadingProvinces = false;
   bool _loadingMunicipalities = false;
   bool _loadingBarangays = false;
+  int _postalLookupGeneration = 0;
 
   RegistrationDocument? _validId;
   RegistrationDocument? _vehicleOrCr;
@@ -376,6 +378,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _onRegionChanged(AddressOption? region) async {
+    _postalLookupGeneration++;
     setState(() {
       _region = region;
 
@@ -420,6 +423,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _onProvinceChanged(AddressOption? province) async {
+    _postalLookupGeneration++;
     setState(() {
       _province = province;
 
@@ -462,6 +466,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _onMunicipalityChanged(AddressOption? municipality) async {
+    _postalLookupGeneration++;
     setState(() {
       _municipality = municipality;
       _barangay = null;
@@ -469,9 +474,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _postalController.clear();
     });
 
-    if (municipality == null || widget.loadBarangays == null) {
+    if (municipality == null) {
       return;
     }
+
+    if (widget.loadBarangays == null) return;
 
     setState(() {
       _loadingBarangays = true;
@@ -501,30 +508,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _onBarangayChanged(AddressOption? barangay) async {
     setState(() {
       _barangay = barangay;
-      _postalController.clear();
     });
 
-    if (barangay == null ||
-        _municipality == null ||
-        widget.loadPostalCode == null) {
-      return;
-    }
+    if (barangay == null || _municipality == null) return;
+
+    await _loadPostalCodeForCurrentLocation(barangayCode: barangay.code);
+  }
+
+  Future<void> _loadPostalCodeForCurrentLocation({
+    required String barangayCode,
+  }) async {
+    final AddressOption? municipality = _municipality;
+    final PostalCodeLoader? loadPostalCode = widget.loadPostalCode;
+    if (municipality == null || loadPostalCode == null) return;
+
+    final int lookupGeneration = ++_postalLookupGeneration;
 
     try {
-      final String? postal = await widget.loadPostalCode!(
-        municipalityCode: _municipality!.code,
-        barangayCode: barangay.code,
+      final String? postal = await loadPostalCode(
+        municipalityCode: municipality.code,
+        barangayCode: barangayCode,
+        provinceCode: _province?.code ?? '',
         provinceName: _province?.name ?? '',
-        municipalityName: _municipality!.name,
+        municipalityName: municipality.name,
       );
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted ||
+          lookupGeneration != _postalLookupGeneration ||
+          _municipality?.code != municipality.code) return;
 
-      _postalController.text = postal ?? '';
+      if (postal != null && postal.trim().isNotEmpty) {
+        _postalController.text = postal.trim();
+      }
     } catch (_) {
-      _showMessage('Postal code could not be loaded.', error: true);
+      if (mounted &&
+          lookupGeneration == _postalLookupGeneration &&
+          _postalController.text.trim().isEmpty) {
+        _showMessage('Postal code could not be loaded.', error: true);
+      }
     }
   }
 

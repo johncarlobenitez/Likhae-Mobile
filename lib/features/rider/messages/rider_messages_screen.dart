@@ -11,6 +11,7 @@ class RiderConversationData {
   final String lastMessage;
   final DateTime? lastMessageAt;
   final int unreadCount;
+  final bool buyerIsOnline;
 
   const RiderConversationData({
     required this.id,
@@ -21,6 +22,7 @@ class RiderConversationData {
     this.lastMessage = '',
     this.lastMessageAt,
     this.unreadCount = 0,
+    this.buyerIsOnline = false,
   });
 }
 
@@ -51,6 +53,7 @@ typedef RiderMessageSend =
     );
 typedef RiderConversationMessageStream =
     Stream<RiderMessageData> Function(RiderConversationData conversation);
+typedef RiderMessagePresenceHeartbeat = Future<void> Function();
 
 class RiderMessagesScreen extends StatefulWidget {
   final List<RiderConversationData> conversations;
@@ -58,6 +61,7 @@ class RiderMessagesScreen extends StatefulWidget {
   final RiderConversationLoad? onLoadMessages;
   final RiderMessageSend? onSendMessage;
   final RiderConversationMessageStream? messageStreamBuilder;
+  final RiderMessagePresenceHeartbeat? onPresenceHeartbeat;
   final VoidCallback? onBack;
   final String? statusMessage;
 
@@ -68,6 +72,7 @@ class RiderMessagesScreen extends StatefulWidget {
     this.onLoadMessages,
     this.onSendMessage,
     this.messageStreamBuilder,
+    this.onPresenceHeartbeat,
     this.onBack,
     this.statusMessage,
   });
@@ -76,7 +81,8 @@ class RiderMessagesScreen extends StatefulWidget {
   State<RiderMessagesScreen> createState() => _RiderMessagesScreenState();
 }
 
-class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
+class _RiderMessagesScreenState extends State<RiderMessagesScreen>
+    with WidgetsBindingObserver {
   static const Color _background = Color(0xFFFBF7F2);
   static const Color _surface = Color(0xFFFFFDF9);
   static const Color _soft = Color(0xFFF6EFE7);
@@ -92,8 +98,12 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
   final ScrollController _scrollController = ScrollController();
   RiderConversationData? _activeConversation;
   StreamSubscription<RiderMessageData>? _messageSubscription;
+  Timer? _presenceHeartbeatTimer;
+  Timer? _presenceRefreshTimer;
+  AppLifecycleState _appLifecycleState = AppLifecycleState.resumed;
   bool _loadingMessages = false;
   bool _sendingMessage = false;
+  bool _refreshingConversations = false;
   String? _error;
 
   @override
@@ -101,6 +111,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
     super.initState();
     _conversations = List<RiderConversationData>.from(widget.conversations);
     _error = widget.statusMessage;
+    WidgetsBinding.instance.addObserver(this);
+    _startPresenceTracking();
   }
 
   @override
@@ -116,17 +128,81 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _presenceHeartbeatTimer?.cancel();
+    _presenceRefreshTimer?.cancel();
     _messageSubscription?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _refresh() async {
+  void _startPresenceTracking() {
+    if (widget.onPresenceHeartbeat != null) {
+      unawaited(_touchPresence());
+      _presenceHeartbeatTimer = Timer.periodic(
+        const Duration(seconds: 60),
+        (_) => unawaited(_touchPresence()),
+      );
+    }
+    if (widget.onRefresh != null) {
+      _presenceRefreshTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => unawaited(_refreshPresence()),
+      );
+    }
+  }
+
+  Future<void> _touchPresence() async {
+    if (!mounted || _appLifecycleState != AppLifecycleState.resumed) return;
+    try {
+      await widget.onPresenceHeartbeat?.call();
+    } catch (_) {
+      // Presence expires naturally if the server cannot be reached.
+    }
+  }
+
+  Future<void> _refreshPresence() async {
     final RiderConversationsRefresh? callback = widget.onRefresh;
-    if (callback == null) {
+    if (!mounted ||
+        callback == null ||
+        _appLifecycleState != AppLifecycleState.resumed ||
+        _refreshingConversations) {
       return;
     }
+    _refreshingConversations = true;
+    try {
+      final List<RiderConversationData> conversations = await callback();
+      if (!mounted) return;
+      setState(() {
+        _conversations = conversations;
+        final String? activeId = _activeConversation?.id;
+        _activeConversation = conversations
+            .where((RiderConversationData item) => item.id == activeId)
+            .firstOrNull;
+      });
+    } catch (_) {
+      // Keep the last reported status during a temporary network failure.
+    } finally {
+      _refreshingConversations = false;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appLifecycleState = state;
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_touchPresence());
+      unawaited(_refreshPresence());
+    }
+  }
+
+  Future<void> _refresh() async {
+    final RiderConversationsRefresh? callback = widget.onRefresh;
+    if (callback == null || _refreshingConversations) {
+      return;
+    }
+    _refreshingConversations = true;
     try {
       final List<RiderConversationData> conversations = await callback();
       if (!mounted) {
@@ -141,6 +217,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
       });
     } catch (error) {
       _showError('Unable to load conversations: $error');
+    } finally {
+      _refreshingConversations = false;
     }
   }
 
@@ -277,15 +355,16 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
     final RiderConversationData? conversation = _activeConversation;
     return Scaffold(
       backgroundColor: _background,
-      appBar: AppBar(
-        backgroundColor: _background,
-        foregroundColor: _text,
-        elevation: 0,
-        leading: IconButton(
-          tooltip: conversation == null ? 'Back' : 'Back to conversations',
-          onPressed: conversation == null
-              ? (widget.onBack ?? () => Navigator.of(context).maybePop())
-              : () {
+      appBar: conversation == null
+          ? null
+          : AppBar(
+              backgroundColor: _background,
+              foregroundColor: _text,
+              elevation: 0,
+              toolbarHeight: 60,
+              leading: IconButton(
+                tooltip: 'Back to conversations',
+                onPressed: () {
                   _messageSubscription?.cancel();
                   setState(() {
                     _activeConversation = null;
@@ -293,26 +372,129 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
                     _error = null;
                   });
                 },
-          icon: Icon(
-            conversation == null ? Icons.arrow_back_rounded : Icons.chevron_left,
-          ),
-        ),
-        title: Text(
-          conversation?.buyerName ?? 'Messages',
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          if (conversation == null)
-            IconButton(
-              tooltip: 'Refresh conversations',
-              onPressed: widget.onRefresh == null ? null : _refresh,
-              icon: const Icon(Icons.refresh_rounded),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              titleSpacing: 0,
+              title: Row(
+                children: [
+                  PhysicalShape(
+                    clipper: _OctagonClipper(),
+                    color: _maroon,
+                    elevation: 2,
+                    shadowColor: _maroon.withValues(alpha: 0.18),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Center(
+                        child: Text(
+                          _initials(conversation.buyerName),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          conversation.buyerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.circle,
+                              size: 7,
+                              color: conversation.buyerIsOnline
+                                  ? const Color(0xFF27866A)
+                                  : _muted.withValues(alpha: 0.65),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              conversation.buyerIsOnline ? 'Online' : 'Offline',
+                              style: const TextStyle(
+                                color: _muted,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-        ],
-      ),
       body: conversation == null
           ? _buildConversationList()
           : _buildConversation(conversation),
+    );
+  }
+
+  Widget _buildMessagesHeader() {
+    return Container(
+      width: double.infinity,
+      color: _background,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(
+              color: _selectedRow,
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, color: _maroon, size: 5),
+                SizedBox(width: 5),
+                Text(
+                  'COMMUNICATION',
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 8,
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'Messages',
+            style: TextStyle(
+              color: _text,
+              fontFamily: 'serif',
+              fontSize: 35,
+              height: 1,
+              letterSpacing: -1.2,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            'Keep conversations with buyers in one polished LIKHAE inbox',
+            style: TextStyle(color: _muted, fontSize: 9.5, height: 1.4),
+          ),
+        ],
+      ),
     );
   }
 
@@ -320,51 +502,26 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
     return RefreshIndicator(
       color: _maroon,
       onRefresh: _refresh,
-      child: _conversations.isEmpty
-          ? ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(24, 90, 24, 120),
-              children: [
-                Icon(
-                  Icons.forum_outlined,
-                  size: 54,
-                  color: _maroon.withValues(alpha: 0.7),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'No conversations yet',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.onRefresh == null
-                      ? 'Buyer and rider messaging will appear here when Laravel messaging is connected.'
-                      : 'Messages from buyers about your deliveries will appear here.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: _muted,
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            )
-          : ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(4, 10, 4, 110),
-              itemCount: _conversations.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 5),
-              itemBuilder: (BuildContext context, int index) {
-                final RiderConversationData conversation =
-                    _conversations[index];
-                final bool highlighted =
-                    index == 0 || conversation.unreadCount > 0;
-                return Material(
+      child: SafeArea(
+        child: ColoredBox(
+          color: _surface,
+          child: ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 110),
+            itemCount: _conversations.length + (_conversations.isEmpty ? 2 : 1),
+            separatorBuilder: (BuildContext context, int index) =>
+                SizedBox(height: index == 0 ? 0 : 5),
+            itemBuilder: (BuildContext context, int index) {
+              if (index == 0) return _buildMessagesHeader();
+              if (_conversations.isEmpty) return _buildEmptyConversations();
+
+              final RiderConversationData conversation =
+                  _conversations[index - 1];
+              final bool highlighted =
+                  index == 1 || conversation.unreadCount > 0;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                child: Material(
                   color: highlighted ? _selectedRow : Colors.transparent,
                   borderRadius: BorderRadius.circular(15),
                   child: InkWell(
@@ -377,24 +534,57 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
                       ),
                       child: Row(
                         children: [
-                          PhysicalShape(
-                            clipper: _OctagonClipper(),
-                            color: _maroon,
-                            elevation: 3,
-                            shadowColor: _maroon.withValues(alpha: 0.22),
-                            child: SizedBox(
-                              width: 38,
-                              height: 38,
-                              child: Center(
-                                child: Text(
-                                  _initials(conversation.buyerName),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
+                          SizedBox(
+                            width: 42,
+                            height: 42,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Positioned(
+                                  left: 0,
+                                  top: 0,
+                                  child: PhysicalShape(
+                                    clipper: _OctagonClipper(),
+                                    color: _maroon,
+                                    elevation: 3,
+                                    shadowColor: _maroon.withValues(
+                                      alpha: 0.22,
+                                    ),
+                                    child: SizedBox(
+                                      width: 38,
+                                      height: 38,
+                                      child: Center(
+                                        child: Text(
+                                          _initials(conversation.buyerName),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: conversation.buyerIsOnline
+                                          ? const Color(0xFF27866A)
+                                          : const Color(0xFFB9ACA7),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: _surface,
+                                        width: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 11),
@@ -463,9 +653,45 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen> {
                       ),
                     ),
                   ),
-                );
-              },
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyConversations() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 60, 24, 120),
+      child: Column(
+        children: [
+          Icon(
+            Icons.forum_outlined,
+            size: 54,
+            color: _maroon.withValues(alpha: 0.7),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'No conversations yet',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _text,
+              fontSize: 21,
+              fontWeight: FontWeight.w900,
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.onRefresh == null
+                ? 'Buyer and rider messaging will appear here when Laravel messaging is connected.'
+                : 'Messages from buyers about your deliveries will appear here.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _muted, fontSize: 13, height: 1.5),
+          ),
+        ],
+      ),
     );
   }
 

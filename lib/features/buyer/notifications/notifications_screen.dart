@@ -63,10 +63,10 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
   IconData get icon {
     switch (this) {
       case BuyerNotificationType.orders:
-        return Icons.inventory_2_outlined;
+        return Icons.description_outlined;
 
       case BuyerNotificationType.deliveries:
-        return Icons.local_shipping_outlined;
+        return Icons.inventory_2_outlined;
 
       case BuyerNotificationType.messages:
         return Icons.mail_outline_rounded;
@@ -79,6 +79,40 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
 
       case BuyerNotificationType.general:
         return Icons.notifications_none_rounded;
+    }
+  }
+
+  Color get iconBackgroundColor {
+    switch (this) {
+      case BuyerNotificationType.orders:
+        return const Color(0xFFF6F0DE);
+      case BuyerNotificationType.deliveries:
+        return const Color(0xFFE7F2EC);
+      case BuyerNotificationType.messages:
+        return const Color(0xFFEAF0F5);
+      case BuyerNotificationType.rewards:
+        return const Color(0xFFF6EDE2);
+      case BuyerNotificationType.account:
+        return const Color(0xFFF3E9E6);
+      case BuyerNotificationType.general:
+        return const Color(0xFFF1ECE7);
+    }
+  }
+
+  Color get iconColor {
+    switch (this) {
+      case BuyerNotificationType.orders:
+        return const Color(0xFF795A2D);
+      case BuyerNotificationType.deliveries:
+        return const Color(0xFF2D705C);
+      case BuyerNotificationType.messages:
+        return const Color(0xFF536D83);
+      case BuyerNotificationType.rewards:
+        return const Color(0xFF91622B);
+      case BuyerNotificationType.account:
+        return const Color(0xFF83504B);
+      case BuyerNotificationType.general:
+        return ShopColors.secondaryText;
     }
   }
 }
@@ -181,6 +215,10 @@ class BuyerNotificationData {
   /// equivalent Flutter route later.
   final String? actionUrl;
 
+  /// Order associated with this notification, when the API
+  /// includes one. Used to open the exact order from parcel updates.
+  final String? relatedOrderId;
+
   const BuyerNotificationData({
     required this.id,
     required this.type,
@@ -190,11 +228,10 @@ class BuyerNotificationData {
     required this.unread,
     this.createdAt,
     this.actionUrl,
+    this.relatedOrderId,
   });
 
-  BuyerNotificationData copyWith({
-    bool? unread,
-  }) {
+  BuyerNotificationData copyWith({bool? unread}) {
     return BuyerNotificationData(
       id: id,
       type: type,
@@ -204,12 +241,104 @@ class BuyerNotificationData {
       unread: unread ?? this.unread,
       createdAt: createdAt,
       actionUrl: actionUrl,
+      relatedOrderId: relatedOrderId,
     );
   }
 
-  static BuyerNotificationType resolveType(
-    String? value,
-  ) {
+  static String? resolveOrderReference(Map<String, dynamic> source) {
+    final dynamic rawPayload = source['data'];
+    final Map<String, dynamic>? payload = rawPayload is Map
+        ? Map<String, dynamic>.from(rawPayload)
+        : null;
+    final dynamic rawOrder = source['order'] ?? payload?['order'];
+    final Map<String, dynamic>? order = rawOrder is Map
+        ? Map<String, dynamic>.from(rawOrder)
+        : null;
+    final dynamic rawSellerOrder =
+        source['seller_order'] ??
+        source['sellerOrder'] ??
+        payload?['seller_order'] ??
+        payload?['sellerOrder'];
+    final Map<String, dynamic>? sellerOrder = rawSellerOrder is Map
+        ? Map<String, dynamic>.from(rawSellerOrder)
+        : null;
+    final dynamic rawShipment =
+        source['shipment'] ??
+        source['parcel'] ??
+        payload?['shipment'] ??
+        payload?['parcel'];
+    final dynamic shipmentValue = rawShipment is List && rawShipment.isNotEmpty
+        ? rawShipment.first
+        : rawShipment;
+    final Map<String, dynamic>? shipment = shipmentValue is Map
+        ? Map<String, dynamic>.from(shipmentValue)
+        : null;
+
+    String? firstReference(Iterable<dynamic> candidates) {
+      for (final dynamic candidate in candidates) {
+        final String value = candidate?.toString().trim() ?? '';
+        if (value.isNotEmpty) return value;
+      }
+      return null;
+    }
+
+    final String notificationText = <dynamic>[
+      source['title'],
+      source['message'],
+      payload?['title'],
+      payload?['subject'],
+      payload?['message'],
+      payload?['body'],
+    ].whereType<String>().join(' ');
+    final RegExpMatch? textualReference = RegExp(
+      r'\b(?:LK|TRK|SO)-[A-Z0-9]+(?:-[A-Z0-9]+)*\b',
+      caseSensitive: false,
+    ).firstMatch(notificationText);
+    if (textualReference != null) return textualReference.group(0);
+
+    final String? structuredReference = firstReference(<dynamic>[
+      source['order_id'],
+      source['orderId'],
+      source['order_number'],
+      source['related_order_id'],
+      source['relatedOrderId'],
+      source['seller_order_number'],
+      source['sellerOrderNumber'],
+      source['seller_order_id'],
+      source['sellerOrderId'],
+      source['seller_order'] is Map ? null : source['seller_order'],
+      payload?['order_id'],
+      payload?['orderId'],
+      payload?['order_number'],
+      payload?['related_order_id'],
+      payload?['relatedOrderId'],
+      payload?['seller_order_number'],
+      payload?['sellerOrderNumber'],
+      payload?['seller_order_id'],
+      payload?['sellerOrderId'],
+      payload?['seller_order'] is Map ? null : payload?['seller_order'],
+      order?['id'],
+      order?['order_id'],
+      order?['order_number'],
+      sellerOrder?['seller_order_number'],
+      sellerOrder?['order_number'],
+      sellerOrder?['id'],
+      source['shipment_order_id'],
+      payload?['shipment_order_id'],
+      source['tracking_number'],
+      payload?['tracking_number'],
+      source['shipment_id'],
+      payload?['shipment_id'],
+      shipment?['tracking_number'],
+      shipment?['tracking_code'],
+      shipment?['tracking'],
+      shipment?['shipment_id'],
+      shipment?['id'],
+    ]);
+    return structuredReference;
+  }
+
+  static BuyerNotificationType resolveType(String? value) {
     final String normalized = (value ?? '')
         .trim()
         .toLowerCase()
@@ -219,6 +348,9 @@ class BuyerNotificationData {
     switch (normalized) {
       case 'order':
       case 'orders':
+      case 'assignment':
+      case 'assignments':
+      case 'rider_assignment_updates':
         return BuyerNotificationType.orders;
 
       case 'shipment':
@@ -228,6 +360,9 @@ class BuyerNotificationData {
       case 'deliveries':
       case 'parcel':
       case 'parcels':
+      case 'route':
+      case 'routes':
+      case 'rider_route_updates':
         return BuyerNotificationType.deliveries;
 
       case 'message':
@@ -242,12 +377,19 @@ class BuyerNotificationData {
       case 'vouchers':
       case 'points':
       case 'cashback':
+      case 'earning':
+      case 'earnings':
+      case 'rider_earnings_updates':
         return BuyerNotificationType.rewards;
 
       case 'account':
       case 'profile':
       case 'security':
       case 'password':
+      case 'safety':
+      case 'exception':
+      case 'exceptions':
+      case 'rider_safety_updates':
         return BuyerNotificationType.account;
 
       case 'general':
@@ -271,8 +413,7 @@ class BuyerNotificationData {
       return BuyerNotificationType.orders;
     }
 
-    if (normalized.contains('message') ||
-        normalized.contains('chat')) {
+    if (normalized.contains('message') || normalized.contains('chat')) {
       return BuyerNotificationType.messages;
     }
 
@@ -304,9 +445,8 @@ class BuyerNotificationData {
   }
 }
 
-typedef NotificationTapCallback = Future<void> Function(
-  BuyerNotificationData notification,
-);
+typedef NotificationTapCallback =
+    Future<void> Function(BuyerNotificationData notification);
 
 typedef MarkAllNotificationsReadCallback = Future<void> Function();
 
@@ -360,8 +500,7 @@ class NotificationsScreen extends StatefulWidget {
   });
 
   @override
-  State<NotificationsScreen> createState() =>
-      _NotificationsScreenState();
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
@@ -402,9 +541,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void initState() {
     super.initState();
 
-    _notifications = List<BuyerNotificationData>.from(
-      widget.notifications,
-    );
+    _notifications = List<BuyerNotificationData>.from(widget.notifications);
 
     _activeFilter = widget.initialFilter;
 
@@ -421,46 +558,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _connectRealtime() async {
     try {
-      final NotificationStreamBuilder? builder =
-          widget.realtimeStreamBuilder;
+      final NotificationStreamBuilder? builder = widget.realtimeStreamBuilder;
       if (builder == null) return;
 
-      _notificationStream = builder().listen(
-        (BuyerNotificationData notification) {
-          if (!mounted ||
-              _notifications.any(
-                (BuyerNotificationData item) => item.id == notification.id,
-              )) {
-            return;
-          }
-          setState(() => _notifications.insert(0, notification));
-          widget.onUnreadCountChanged?.call(_unreadCount);
-        },
-        onError: (_) {},
-      );
+      _notificationStream = builder().listen((
+        BuyerNotificationData notification,
+      ) {
+        if (!mounted ||
+            _notifications.any(
+              (BuyerNotificationData item) => item.id == notification.id,
+            )) {
+          return;
+        }
+        setState(() => _notifications.insert(0, notification));
+        widget.onUnreadCountChanged?.call(_unreadCount);
+      }, onError: (_) {});
     } catch (_) {
       // The initial API list and manual refresh remain available offline.
     }
   }
 
   @override
-  void didUpdateWidget(
-    covariant NotificationsScreen oldWidget,
-  ) {
+  void didUpdateWidget(covariant NotificationsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.notifications != widget.notifications) {
-      _notifications = List<BuyerNotificationData>.from(
-        widget.notifications,
-      );
+      _notifications = List<BuyerNotificationData>.from(widget.notifications);
 
       final Set<String> currentIds = _notifications
-          .map(
-            (
-              BuyerNotificationData notification,
-            ) =>
-                notification.id,
-          )
+          .map((BuyerNotificationData notification) => notification.id)
           .toSet();
 
       _openingNotificationIds.removeWhere(
@@ -474,81 +600,56 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   int get _unreadCount {
-    return _notifications.where(
-      (
-        BuyerNotificationData notification,
-      ) {
-        return notification.unread;
-      },
-    ).length;
+    return _notifications.where((BuyerNotificationData notification) {
+      return notification.unread;
+    }).length;
   }
 
   List<BuyerNotificationData> get _visibleNotifications {
-    final BuyerNotificationType? type =
-        _activeFilter.notificationType;
+    final BuyerNotificationType? type = _activeFilter.notificationType;
 
     if (type == null) {
       return _notifications;
     }
 
-    return _notifications.where(
-      (
-        BuyerNotificationData notification,
-      ) {
-        return notification.type == type;
-      },
-    ).toList();
+    return _notifications.where((BuyerNotificationData notification) {
+      return notification.type == type;
+    }).toList();
   }
 
-  int _filterCount(
-    NotificationFilter filter,
-  ) {
+  int _filterCount(NotificationFilter filter) {
     if (filter == NotificationFilter.all) {
       return _notifications.length;
     }
 
-    final BuyerNotificationType? type =
-        filter.notificationType;
+    final BuyerNotificationType? type = filter.notificationType;
 
     if (type == null) {
       return _notifications.length;
     }
 
-    return _notifications.where(
-      (
-        BuyerNotificationData notification,
-      ) {
-        return notification.type == type;
-      },
-    ).length;
+    return _notifications.where((BuyerNotificationData notification) {
+      return notification.type == type;
+    }).length;
   }
 
-  int _filterUnreadCount(
-    NotificationFilter filter,
-  ) {
-    final BuyerNotificationType? type =
-        filter.notificationType;
+  int _filterUnreadCount(NotificationFilter filter) {
+    final BuyerNotificationType? type = filter.notificationType;
 
-    return _notifications.where(
-      (
-        BuyerNotificationData notification,
-      ) {
-        if (!notification.unread) {
-          return false;
-        }
+    return _notifications.where((BuyerNotificationData notification) {
+      if (!notification.unread) {
+        return false;
+      }
 
-        if (type == null) {
-          return true;
-        }
+      if (type == null) {
+        return true;
+      }
 
-        return notification.type == type;
-      },
-    ).length;
+      return notification.type == type;
+    }).length;
   }
 
-  void _changeFilter(
-    NotificationFilter filter,
-  ) {
+  void _changeFilter(NotificationFilter filter) {
     if (_activeFilter == filter) {
       return;
     }
@@ -559,20 +660,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _notifyUnreadCountChanged() {
-    widget.onUnreadCountChanged?.call(
-      _unreadCount,
-    );
+    widget.onUnreadCountChanged?.call(_unreadCount);
   }
 
   Future<void> _markAllAsRead() async {
-    if (_notifications.isEmpty ||
-        _unreadCount == 0 ||
-        _markingAllRead) {
+    if (_notifications.isEmpty || _unreadCount == 0 || _markingAllRead) {
       return;
     }
 
-    final MarkAllNotificationsReadCallback? callback =
-        widget.onMarkAllAsRead;
+    final MarkAllNotificationsReadCallback? callback = widget.onMarkAllAsRead;
 
     if (callback == null) {
       return;
@@ -596,31 +692,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
 
       setState(() {
-        _notifications = _notifications
-            .map(
-              (
-                BuyerNotificationData notification,
-              ) {
-                return notification.copyWith(
-                  unread: false,
-                );
-              },
-            )
-            .toList();
+        _notifications = _notifications.map((
+          BuyerNotificationData notification,
+        ) {
+          return notification.copyWith(unread: false);
+        }).toList();
       });
 
       _notifyUnreadCountChanged();
 
-      _showMessage(
-        'All notifications marked as read.',
-      );
+      _showMessage('All notifications marked as read.');
     } catch (error) {
-      _showMessage(
-        _errorText(
-          error,
-        ),
-        error: true,
-      );
+      _showMessage(_errorText(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -630,26 +713,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  Future<void> _openNotification(
-    BuyerNotificationData notification,
-  ) async {
-    if (_openingNotificationIds.contains(
-      notification.id,
-    )) {
+  Future<void> _openNotification(BuyerNotificationData notification) async {
+    if (_openingNotificationIds.contains(notification.id)) {
       return;
     }
 
-    final NotificationTapCallback? callback =
-        widget.onNotificationTap;
+    final NotificationTapCallback? callback = widget.onNotificationTap;
 
     if (callback == null) {
       return;
     }
 
     setState(() {
-      _openingNotificationIds.add(
-        notification.id,
-      );
+      _openingNotificationIds.add(notification.id);
     });
 
     try {
@@ -661,30 +737,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
        * known Laravel Buyer notification flow guarantees
        * mark-all-read, not a per-notification read endpoint.
        */
-      await callback(
-        notification,
-      );
+      await callback(notification);
     } catch (error) {
-      _showMessage(
-        _errorText(
-          error,
-        ),
-        error: true,
-      );
+      _showMessage(_errorText(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
-          _openingNotificationIds.remove(
-            notification.id,
-          );
+          _openingNotificationIds.remove(notification.id);
         });
       }
     }
   }
 
   Future<void> _refresh() async {
-    final RefreshNotificationsCallback? callback =
-        widget.onRefresh;
+    final RefreshNotificationsCallback? callback = widget.onRefresh;
 
     if (callback == null || _refreshing) {
       return;
@@ -695,26 +761,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
 
     try {
-      final List<BuyerNotificationData> refreshed =
-          await callback();
+      final List<BuyerNotificationData> refreshed = await callback();
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _notifications =
-            List<BuyerNotificationData>.from(
-          refreshed,
-        );
+        _notifications = List<BuyerNotificationData>.from(refreshed);
 
         final Set<String> currentIds = _notifications
-            .map(
-              (
-                BuyerNotificationData notification,
-              ) =>
-                  notification.id,
-            )
+            .map((BuyerNotificationData notification) => notification.id)
             .toSet();
 
         _openingNotificationIds.removeWhere(
@@ -724,12 +781,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       _notifyUnreadCountChanged();
     } catch (error) {
-      _showMessage(
-        _errorText(
-          error,
-        ),
-        error: true,
-      );
+      _showMessage(_errorText(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -739,30 +791,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _showMessage(
-    String message, {
-    bool error = false,
-  }) {
+  void _showMessage(String message, {bool error = false}) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    )
+    ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor:
-              error ? _danger : _maroonDark,
-          margin: const EdgeInsets.all(
-            16,
-          ),
+          backgroundColor: error ? _danger : _maroonDark,
+          margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              14,
-            ),
+            borderRadius: BorderRadius.circular(14),
           ),
           content: Text(
             message,
@@ -775,21 +817,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       );
   }
 
-  String _errorText(
-    Object error,
-  ) {
-    return error
-        .toString()
-        .replaceFirst(
-          'Exception: ',
-          '',
-        );
+  String _errorText(Object error) {
+    return error.toString().replaceFirst('Exception: ', '');
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     final List<BuyerNotificationData> visibleNotifications =
         _visibleNotifications;
 
@@ -806,33 +839,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 color: _maroon,
                 onRefresh: _refresh,
                 child: ListView(
-                  physics:
-                      const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
-                    14,
-                    15,
-                    14,
-                    100,
-                  ),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(14, 15, 14, 100),
                   children: [
                     _buildHeading(),
 
-                    const SizedBox(
-                      height: 17,
-                    ),
+                    const SizedBox(height: 17),
 
                     _buildFilters(),
 
-                    const SizedBox(
-                      height: 16,
-                    ),
+                    const SizedBox(height: 16),
 
                     if (visibleNotifications.isEmpty)
                       _buildEmptyState()
                     else
-                      _buildNotificationList(
-                        visibleNotifications,
-                      ),
+                      _buildNotificationList(visibleNotifications),
                   ],
                 ),
               ),
@@ -843,44 +864,123 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _buildTopBar() => ShopPageHeader(
-    title: 'Updates', subtitle: 'Everything you need to know.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-    actions: [
-      if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-      if (_unreadCount > 0) Badge.count(count: _unreadCount, child: const Icon(Icons.notifications_none_rounded, color: ShopColors.accent)),
-    ],
+  Widget _buildTopBar() => ColoredBox(
+    color: _surface,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GlassIconButton(
+                icon: Icons.arrow_back_rounded,
+                label: 'Back',
+                onPressed:
+                    widget.onBack ?? () => Navigator.of(context).maybePop(),
+              ),
+              const Spacer(),
+              if (_refreshing)
+                const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Updates',
+            style: TextStyle(
+              color: _text,
+              fontSize: 25,
+              height: 1.15,
+              letterSpacing: -.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'Everything you need to know.',
+            style: TextStyle(color: _muted, fontSize: 12.5, height: 1.4),
+          ),
+        ],
+      ),
+    ),
   );
 
   Widget _buildHeading() {
-    final canMarkAll = widget.onMarkAllAsRead != null && _unreadCount > 0 && !_markingAllRead;
+    final canMarkAll =
+        widget.onMarkAllAsRead != null && _unreadCount > 0 && !_markingAllRead;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: _surface, borderRadius: BorderRadius.circular(24),
+        color: _surface,
+        borderRadius: BorderRadius.circular(21),
         border: Border.all(color: _border),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: ShopColors.accentSoft, borderRadius: BorderRadius.circular(16)),
-            child: Icon(_unreadCount == 0 ? Icons.done_all_rounded : Icons.notifications_active_outlined, color: _maroon, size: 24)),
-          const SizedBox(width: 14),
-          Expanded(child: Text(_unreadCount == 0 ? 'You’re all caught up' : '$_unreadCount unread updates',
-            style: const TextStyle(color: _text, fontSize: 20, letterSpacing: -.5, fontWeight: FontWeight.w700))),
-        ]),
-        const SizedBox(height: 13),
-        const Text('Your orders, conversations, and rewards, all in one place.',
-          style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5)),
-        if (_unreadCount > 0) ...[
-          const SizedBox(height: 13),
-          TextButton.icon(
-            onPressed: canMarkAll ? _markAllAsRead : null,
-            icon: _markingAllRead ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.done_all_rounded, size: 18),
-            label: const Text('Mark all as read'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: ShopColors.accentSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  _unreadCount == 0
+                      ? Icons.done_all_rounded
+                      : Icons.notifications_active_outlined,
+                  color: _maroon,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _unreadCount == 0
+                      ? 'You’re all caught up'
+                      : '$_unreadCount unread updates',
+                  style: const TextStyle(
+                    color: _text,
+                    fontSize: 17,
+                    letterSpacing: -.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 10),
+          const Text(
+            'Your orders, conversations, and rewards, all in one place.',
+            style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
+          ),
+          if (_unreadCount > 0) ...[
+            const SizedBox(height: 7),
+            TextButton.icon(
+              onPressed: canMarkAll ? _markAllAsRead : null,
+              icon: _markingAllRead
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.done_all_rounded, size: 18),
+              label: const Text('Mark all as read'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                visualDensity: VisualDensity.compact,
+                minimumSize: const Size(44, 40),
+                alignment: Alignment.centerLeft,
+              ),
+            ),
+          ],
         ],
-      ]),
+      ),
     );
   }
 
@@ -890,66 +990,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount:
-            NotificationFilter.values.length,
-        separatorBuilder: (
-          BuildContext context,
-          int index,
-        ) {
-          return const SizedBox(
-            width: 6,
-          );
+        itemCount: NotificationFilter.values.length,
+        separatorBuilder: (BuildContext context, int index) {
+          return const SizedBox(width: 6);
         },
-        itemBuilder: (
-          BuildContext context,
-          int index,
-        ) {
-          final NotificationFilter filter =
-              NotificationFilter.values[index];
+        itemBuilder: (BuildContext context, int index) {
+          final NotificationFilter filter = NotificationFilter.values[index];
 
-          final bool selected =
-              filter == _activeFilter;
+          final bool selected = filter == _activeFilter;
 
-          final int totalCount =
-              _filterCount(
-            filter,
-          );
+          final int totalCount = _filterCount(filter);
 
-          final int unreadCount =
-              _filterUnreadCount(
-            filter,
-          );
+          final int unreadCount = _filterUnreadCount(filter);
 
           return Material(
-            color: selected
-                ? _maroon
-                : _surface,
-            borderRadius: BorderRadius.circular(
-              11,
-            ),
+            color: selected ? _maroon : _surface,
+            borderRadius: BorderRadius.circular(11),
             child: InkWell(
               onTap: () {
-                _changeFilter(
-                  filter,
-                );
+                _changeFilter(filter);
               },
-              borderRadius: BorderRadius.circular(
-                11,
-              ),
+              borderRadius: BorderRadius.circular(11),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 13),
                 decoration: BoxDecoration(
-                  borderRadius:
-                      BorderRadius.circular(
-                    11,
-                  ),
-                  border: Border.all(
-                    color: selected
-                        ? _maroon
-                        : _border,
-                  ),
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: selected ? _maroon : _border),
                 ),
                 alignment: Alignment.center,
                 child: Row(
@@ -957,45 +1023,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     Text(
                       filter.label,
                       style: TextStyle(
-                        color: selected
-                            ? Colors.white
-                            : _brown,
+                        color: selected ? Colors.white : _brown,
                         fontSize: 13,
-                        fontWeight:
-                            FontWeight.w800,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
-                    const SizedBox(
-                      width: 5,
-                    ),
+                    const SizedBox(width: 5),
 
                     Text(
                       '$totalCount',
                       style: TextStyle(
                         color: selected
-                            ? Colors.white.withValues(
-                                alpha: 0.72,
-                              )
+                            ? Colors.white.withValues(alpha: 0.72)
                             : _muted2,
                         fontSize: 12,
-                        fontWeight:
-                            FontWeight.w700,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
 
                     if (unreadCount > 0) ...[
-                      const SizedBox(
-                        width: 5,
-                      ),
+                      const SizedBox(width: 5),
 
                       Container(
                         width: 6,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: selected
-                              ? Colors.white
-                              : _maroon,
+                          color: selected ? Colors.white : _maroon,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -1010,83 +1064,53 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  Widget _buildNotificationList(
-    List<BuyerNotificationData> notifications,
-  ) {
+  Widget _buildNotificationList(List<BuyerNotificationData> notifications) {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _border,
-        ),
+        border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
-            color: _maroon.withValues(
-              alpha: 0.04,
-            ),
+            color: _maroon.withValues(alpha: 0.04),
             blurRadius: 20,
-            offset: const Offset(
-              0,
-              8,
-            ),
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
-        children: List<Widget>.generate(
-          notifications.length,
-          (
-            int index,
-          ) {
-            final BuyerNotificationData notification =
-                notifications[index];
+        children: List<Widget>.generate(notifications.length, (int index) {
+          final BuyerNotificationData notification = notifications[index];
 
-            final bool last =
-                index == notifications.length - 1;
+          final bool last = index == notifications.length - 1;
 
-            final bool actionable =
-                widget.onNotificationTap != null;
+          final bool actionable = widget.onNotificationTap != null;
 
-            return _NotificationTile(
-              notification: notification,
-              opening:
-                  _openingNotificationIds.contains(
-                notification.id,
-              ),
-              enabled: actionable,
-              showDivider: !last,
-              onTap: () {
-                _openNotification(
-                  notification,
-                );
-              },
-            );
-          },
-        ),
+          return _NotificationTile(
+            notification: notification,
+            opening: _openingNotificationIds.contains(notification.id),
+            enabled: actionable,
+            showDivider: !last,
+            onTap: () {
+              _openNotification(notification);
+            },
+          );
+        }),
       ),
     );
   }
 
   Widget _buildEmptyState() {
-    final String categoryName =
-        _activeFilter.label.toLowerCase();
+    final String categoryName = _activeFilter.label.toLowerCase();
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        24,
-        55,
-        24,
-        55,
-      ),
+      padding: const EdgeInsets.fromLTRB(24, 55, 24, 55),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _border,
-        ),
+        border: Border.all(color: _border),
       ),
       child: Column(
         children: [
@@ -1105,9 +1129,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
           ),
 
-          const SizedBox(
-            height: 17,
-          ),
+          const SizedBox(height: 17),
 
           const Text(
             'No notifications',
@@ -1119,21 +1141,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ),
           ),
 
-          const SizedBox(
-            height: 7,
-          ),
+          const SizedBox(height: 7),
 
           Text(
-            _activeFilter ==
-                    NotificationFilter.all
+            _activeFilter == NotificationFilter.all
                 ? 'There are no account updates yet.'
                 : 'There are no $categoryName updates in this section.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _muted,
-              fontSize: 13.5,
-              height: 1.55,
-            ),
+            style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.55),
           ),
         ],
       ),
@@ -1159,81 +1174,48 @@ class _NotificationTile extends StatelessWidget {
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final bool unread =
-        notification.unread;
+  Widget build(BuildContext context) {
+    final bool unread = notification.unread;
 
-    final bool canOpen =
-        enabled && !opening;
+    final bool canOpen = enabled && !opening;
 
     return Material(
-      color: unread
-          ? const Color(
-              0xFFFFF4F0,
-            )
-          : ShopColors.surface,
+      color: unread ? const Color(0xFFFFF4F0) : ShopColors.surface,
       child: InkWell(
-        onTap: canOpen
-            ? onTap
-            : null,
+        onTap: canOpen ? onTap : null,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(
-            13,
-            14,
-            13,
-            14,
-          ),
+          padding: const EdgeInsets.fromLTRB(13, 14, 13, 14),
           decoration: BoxDecoration(
             border: showDivider
-                ? const Border(
-                    bottom: BorderSide(
-                      color: ShopColors.border,
-                    ),
-                  )
+                ? const Border(bottom: BorderSide(color: ShopColors.border))
                 : null,
           ),
           child: Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 43,
                 height: 43,
                 decoration: BoxDecoration(
-                  color: unread
-                      ? ShopColors.accent
-                      : const Color(
-                          0xFFF1ECE7,
-                        ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    12,
-                  ),
+                  color: notification.type.iconBackgroundColor,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   notification.type.icon,
-                  color: unread
-                      ? Colors.white
-                      : ShopColors.muted,
+                  color: notification.type.iconColor,
                   size: 19,
                 ),
               ),
 
-              const SizedBox(
-                width: 11,
-              ),
+              const SizedBox(width: 11),
 
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(
@@ -1249,12 +1231,8 @@ class _NotificationTile extends StatelessWidget {
                           ),
                         ),
 
-                        if (notification.time
-                            .trim()
-                            .isNotEmpty) ...[
-                          const SizedBox(
-                            width: 8,
-                          ),
+                        if (notification.time.trim().isNotEmpty) ...[
+                          const SizedBox(width: 8),
 
                           Text(
                             notification.time,
@@ -1267,12 +1245,8 @@ class _NotificationTile extends StatelessWidget {
                       ],
                     ),
 
-                    if (notification.message
-                        .trim()
-                        .isNotEmpty) ...[
-                      const SizedBox(
-                        height: 5,
-                      ),
+                    if (notification.message.trim().isNotEmpty) ...[
+                      const SizedBox(height: 5),
 
                       Text(
                         notification.message,
@@ -1284,55 +1258,40 @@ class _NotificationTile extends StatelessWidget {
                       ),
                     ],
 
-                    const SizedBox(
-                      height: 8,
-                    ),
+                    const SizedBox(height: 8),
 
                     Row(
                       children: [
                         Container(
-                          padding:
-                              const EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                             horizontal: 7,
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
                             color: ShopColors.soft,
-                            borderRadius:
-                                BorderRadius.circular(
-                              100,
-                            ),
+                            borderRadius: BorderRadius.circular(100),
                           ),
                           child: Text(
                             notification.type.label,
                             style: const TextStyle(
                               color: ShopColors.secondaryText,
                               fontSize: 11.5,
-                              fontWeight:
-                                  FontWeight.w800,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
 
                         if (unread) ...[
-                          const SizedBox(
-                            width: 6,
-                          ),
+                          const SizedBox(width: 6),
 
                           Container(
-                            padding:
-                                const EdgeInsets.symmetric(
+                            padding: const EdgeInsets.symmetric(
                               horizontal: 7,
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(
-                                0xFFFCE9E5,
-                              ),
-                              borderRadius:
-                                  BorderRadius.circular(
-                                100,
-                              ),
+                              color: const Color(0xFFFCE9E5),
+                              borderRadius: BorderRadius.circular(100),
                             ),
                             child: const Text(
                               'UNREAD',
@@ -1340,8 +1299,7 @@ class _NotificationTile extends StatelessWidget {
                                 color: ShopColors.accent,
                                 fontSize: 11,
                                 letterSpacing: 0.4,
-                                fontWeight:
-                                    FontWeight.w800,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                           ),
@@ -1353,8 +1311,7 @@ class _NotificationTile extends StatelessWidget {
                           const SizedBox(
                             width: 15,
                             height: 15,
-                            child:
-                                CircularProgressIndicator(
+                            child: CircularProgressIndicator(
                               strokeWidth: 1.8,
                               color: ShopColors.accent,
                             ),
@@ -1372,14 +1329,10 @@ class _NotificationTile extends StatelessWidget {
               ),
 
               if (unread) ...[
-                const SizedBox(
-                  width: 7,
-                ),
+                const SizedBox(width: 7),
 
                 Container(
-                  margin: const EdgeInsets.only(
-                    top: 7,
-                  ),
+                  margin: const EdgeInsets.only(top: 7),
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(

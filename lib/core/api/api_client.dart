@@ -1,12 +1,25 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
 import '../config/app_config.dart';
 import '../storage/token_storage.dart';
+import '../data/async_cache.dart';
 
 class ApiClient {
   ApiClient._();
+
+  static final _reads = AsyncCache<String, Response<dynamic>>();
+  static bool _initialized = false;
+  static int _sessionRevision = -1;
+  static int _dataRevision = 0;
+  static int get dataRevision => _dataRevision;
+
+  static void invalidateReads() {
+    _dataRevision++;
+    _reads.clear();
+  }
 
   static final Dio _dio = Dio(
     BaseOptions(
@@ -14,9 +27,7 @@ class ApiClient {
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 25),
       sendTimeout: const Duration(seconds: 25),
-      headers: <String, String>{
-        'Accept': 'application/json',
-      },
+      headers: <String, String>{'Accept': 'application/json'},
       validateStatus: (int? status) => status != null && status < 600,
     ),
   );
@@ -37,24 +48,28 @@ class ApiClient {
   }
 
   static Future<void> initialize() async {
-    if (!AppConfig.apiEnabled) {
+    if (_initialized || !AppConfig.apiEnabled) {
       return;
     }
+
+    _initialized = true;
 
     _dio.interceptors.clear();
     _dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (RequestOptions options, RequestInterceptorHandler handler) async {
-          final String? token = await TokenStorage.readToken();
-          if (token != null && token.trim().isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer ${token.trim()}';
-          }
-          options.headers['Accept'] = 'application/json';
-          handler.next(options);
-        },
-        onResponse: (Response<dynamic> response, ResponseInterceptorHandler handler) {
-          handler.next(response);
-        },
+        onRequest:
+            (RequestOptions options, RequestInterceptorHandler handler) async {
+              final String? token = await TokenStorage.readToken();
+              if (token != null && token.trim().isNotEmpty) {
+                options.headers['Authorization'] = 'Bearer ${token.trim()}';
+              }
+              options.headers['Accept'] = 'application/json';
+              handler.next(options);
+            },
+        onResponse:
+            (Response<dynamic> response, ResponseInterceptorHandler handler) {
+              handler.next(response);
+            },
         onError: (DioException error, ErrorInterceptorHandler handler) async {
           if (error.response?.statusCode == 401) {
             await TokenStorage.clearToken();
@@ -69,15 +84,39 @@ class ApiClient {
     String path, {
     Map<String, dynamic>? queryParameters,
     Options? options,
+    Duration cacheFor = Duration.zero,
+    bool refresh = false,
   }) async {
     if (!AppConfig.apiEnabled) {
       return _offlineResponse(path, data: <String, dynamic>{});
     }
 
-    return _dio.get(
-      path,
-      queryParameters: queryParameters,
-      options: options,
+    await initialize();
+    if (_sessionRevision != TokenStorage.revision) {
+      _sessionRevision = TokenStorage.revision;
+      _reads.clear();
+    }
+    Future<Response<dynamic>> fetch() => _dio
+        .get(path, queryParameters: queryParameters, options: options)
+        .then((response) {
+          if ((response.statusCode ?? 500) >= 400) {
+            // Preserve the caller's existing HTTP error handling, but never retain
+            // an error response as a cached success.
+            _reads.clear();
+          }
+          return response;
+        });
+    // Custom options may change headers/response types; don't merge these.
+    if (options != null) return fetch();
+    final keys = (queryParameters?.keys.toList() ?? <String>[])..sort();
+    final query = <String, dynamic>{
+      for (final key in keys) key: queryParameters![key],
+    };
+    return _reads.load(
+      '$path:${jsonEncode(query)}',
+      fetch,
+      lifetime: cacheFor,
+      refresh: refresh,
     );
   }
 
@@ -90,11 +129,11 @@ class ApiClient {
       return _offlineResponse(path, data: <String, dynamic>{});
     }
 
-    return _dio.post(
-      path,
-      data: data,
-      options: options,
-    );
+    await initialize();
+    invalidateReads();
+    return _dio
+        .post(path, data: data, options: options)
+        .whenComplete(invalidateReads);
   }
 
   static Future<Response<dynamic>> patch(
@@ -106,11 +145,11 @@ class ApiClient {
       return _offlineResponse(path, data: <String, dynamic>{});
     }
 
-    return _dio.patch(
-      path,
-      data: data,
-      options: options,
-    );
+    await initialize();
+    invalidateReads();
+    return _dio
+        .patch(path, data: data, options: options)
+        .whenComplete(invalidateReads);
   }
 
   static Future<Response<dynamic>> delete(
@@ -122,11 +161,11 @@ class ApiClient {
       return _offlineResponse(path, data: <String, dynamic>{});
     }
 
-    return _dio.delete(
-      path,
-      data: data,
-      options: options,
-    );
+    await initialize();
+    invalidateReads();
+    return _dio
+        .delete(path, data: data, options: options)
+        .whenComplete(invalidateReads);
   }
 
   static String formatError(Object error) {
@@ -142,7 +181,9 @@ class ApiClient {
           final List<String> validationErrors = <String>[];
           for (final value in errors.values) {
             if (value is Iterable) {
-              validationErrors.addAll(value.map((dynamic item) => item.toString()));
+              validationErrors.addAll(
+                value.map((dynamic item) => item.toString()),
+              );
             } else if (value != null) {
               validationErrors.add(value.toString());
             }

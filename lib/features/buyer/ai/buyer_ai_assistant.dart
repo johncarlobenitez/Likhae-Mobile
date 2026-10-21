@@ -38,6 +38,10 @@ class _BuyerAiMessage {
 class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
   static const double _launcherSize = 57;
   static const double _edgeMargin = 12;
+  static final RegExp _orderReferencePattern = RegExp(
+    r'\bLK-[A-Z0-9]+(?:-[A-Z0-9]+)*\b',
+    caseSensitive: false,
+  );
 
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _messagesController = ScrollController();
@@ -84,10 +88,11 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
     _scrollToBottom();
 
     try {
-      final BuyerAiResponse response = await BuyerAiService.chat(
-        message: text,
-        page: widget.page,
-      );
+      final String? orderReference =
+          _orderReferencePattern.firstMatch(text)?.group(0);
+      final BuyerAiResponse response = orderReference == null
+          ? await BuyerAiService.chat(message: text, page: widget.page)
+          : await BuyerAiService.lookupOrder(orderReference);
       if (!mounted) return;
       if (BuyerSystemSettingsController.instance.aiResponseSound) {
         unawaited(

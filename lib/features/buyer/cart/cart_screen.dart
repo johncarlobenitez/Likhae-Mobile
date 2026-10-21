@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-
-import '../../../shared/widgets/shop_ui.dart';
 import 'package:likhae/core/config/app_config.dart';
+
+import '../../../shared/widgets/sized_network_image.dart';
+import '../../../shared/widgets/shop_ui.dart';
+import '../checkout/shop_voucher_picker.dart';
+import '../rewards/rewards_screen.dart';
 
 class CartItemData {
   /// Cart item ID.
@@ -44,6 +48,10 @@ class CartItemData {
   /// Available stock for the selected option.
   final int stock;
 
+  final bool isActive;
+  final bool sellerOnVacation;
+  final bool serverAvailable;
+
   final String? imageUrl;
 
   const CartItemData({
@@ -55,6 +63,9 @@ class CartItemData {
     required this.price,
     required this.quantity,
     required this.stock,
+    this.isActive = true,
+    this.sellerOnVacation = false,
+    this.serverAvailable = true,
     this.productId,
     this.productVariationId,
     this.slug,
@@ -68,8 +79,14 @@ class CartItemData {
   }
 
   bool get isAvailable {
-    return stock > 0;
+    return stock > 0 && isActive && !sellerOnVacation && serverAvailable;
   }
+
+  String get unavailableMessage => sellerOnVacation
+      ? 'Seller is on vacation and cannot accept orders.'
+      : stock < 1
+          ? 'This item is currently out of stock.'
+          : 'This item is currently unavailable for purchase.';
 
   CartItemData copyWith({int? quantity, int? stock}) {
     return CartItemData(
@@ -86,9 +103,27 @@ class CartItemData {
       oldPrice: oldPrice,
       quantity: quantity ?? this.quantity,
       stock: stock ?? this.stock,
+      isActive: isActive,
+      sellerOnVacation: sellerOnVacation,
+      serverAvailable: serverAvailable,
       imageUrl: imageUrl,
     );
   }
+}
+
+String _formatCartAmount(double value) {
+  final String fixed = value.abs().toStringAsFixed(2);
+  final List<String> parts = fixed.split('.');
+  final String whole = parts.first;
+  final StringBuffer grouped = StringBuffer();
+  for (int index = 0; index < whole.length; index++) {
+    final int remaining = whole.length - index;
+    grouped.write(whole[index]);
+    if (remaining > 1 && remaining % 3 == 1) grouped.write(',');
+  }
+
+  final String sign = value < 0 ? '-' : '';
+  return '₱$sign$grouped.${parts.last}';
 }
 
 class DeliveryAddressData {
@@ -149,10 +184,12 @@ class CartCheckoutRequest {
   final String checkoutSource;
 
   final List<CartCheckoutItem> items;
+  final Map<int, String> voucherCodes;
 
   const CartCheckoutRequest({
     required this.items,
     this.checkoutSource = 'cart',
+    this.voucherCodes = const <int, String>{},
   });
 
   List<Map<String, dynamic>> get itemPayload {
@@ -173,6 +210,11 @@ typedef CartCheckoutCallback =
 
 typedef CartRefreshCallback = Future<List<CartItemData>> Function();
 
+typedef CartSellerSelectedCallback = void Function(
+  String sellerName,
+  int? sellerId,
+);
+
 class CartScreen extends StatefulWidget {
   final List<CartItemData> items;
 
@@ -183,6 +225,8 @@ class CartScreen extends StatefulWidget {
   final VoidCallback? onChangeAddress;
 
   final ValueChanged<CartItemData>? onProductSelected;
+
+  final CartSellerSelectedCallback? onSellerSelected;
 
   final CartQuantityUpdateCallback? onUpdateQuantity;
 
@@ -199,6 +243,9 @@ class CartScreen extends StatefulWidget {
 
   final CartRefreshCallback? onRefresh;
 
+  final Future<List<RewardVoucherData>> Function()? loadAvailableVouchers;
+  final Map<int, String> initialVoucherCodes;
+
   const CartScreen({
     super.key,
     this.items = const <CartItemData>[],
@@ -207,11 +254,14 @@ class CartScreen extends StatefulWidget {
     this.onContinueShopping,
     this.onChangeAddress,
     this.onProductSelected,
+    this.onSellerSelected,
     this.onUpdateQuantity,
     this.onRemoveItem,
     this.onRemoveSelected,
     this.onCheckout,
     this.onRefresh,
+    this.loadAvailableVouchers,
+    this.initialVoucherCodes = const <int, String>{},
   });
 
   @override
@@ -249,6 +299,10 @@ class _CartScreenState extends State<CartScreen> {
 
   bool _removingSelected = false;
   bool _openingCheckout = false;
+  bool _openingVoucherPicker = false;
+  List<RewardVoucherData>? _availableVouchers;
+  Future<List<RewardVoucherData>>? _voucherLoad;
+  final Map<int, String> _selectedVoucherCodes = <int, String>{};
 
   @override
   void initState() {
@@ -257,6 +311,10 @@ class _CartScreenState extends State<CartScreen> {
     _items = List<CartItemData>.from(widget.items);
 
     _selectAllAvailable();
+    _selectedVoucherCodes.addAll(widget.initialVoucherCodes);
+    if (widget.loadAvailableVouchers != null) {
+      unawaited(_preloadVouchers());
+    }
   }
 
   @override
@@ -271,6 +329,12 @@ class _CartScreenState extends State<CartScreen> {
       final Set<String> previousSelection = Set<String>.from(_selectedIds);
 
       _items = List<CartItemData>.from(widget.items);
+
+      _selectedVoucherCodes.removeWhere(
+        (int sellerId, String _) => !_items.any(
+          (CartItemData item) => item.sellerId == sellerId,
+        ),
+      );
 
       final Set<String> currentAvailableIds = _availableItems
           .map((CartItemData item) => item.id)
@@ -390,7 +454,7 @@ class _CartScreenState extends State<CartScreen> {
 
   void _toggleItemSelection(CartItemData item) {
     if (!item.isAvailable) {
-      _showMessage('This item is currently out of stock.', error: true);
+      _showMessage(item.unavailableMessage, error: true);
 
       return;
     }
@@ -445,7 +509,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _changeQuantity(CartItemData item, int requestedQuantity) async {
     if (!item.isAvailable) {
-      _showMessage('This item is currently out of stock.', error: true);
+      _showMessage(item.unavailableMessage, error: true);
 
       return;
     }
@@ -739,6 +803,12 @@ class _CartScreenState extends State<CartScreen> {
             ),
           )
           .toList(),
+      voucherCodes: Map<int, String>.fromEntries(
+        _selectedVoucherCodes.entries.where(
+          (MapEntry<int, String> entry) =>
+              selected.any((CartItemData item) => item.sellerId == entry.key),
+        ),
+      ),
     );
 
     setState(() {
@@ -763,6 +833,118 @@ class _CartScreenState extends State<CartScreen> {
           _openingCheckout = false;
         });
       }
+    }
+  }
+
+  Future<void> _preloadVouchers() async {
+    try {
+      await _loadAvailableVouchers();
+    } catch (_) {
+      // Keep the cart usable if the rewards endpoint is unavailable.
+    }
+  }
+
+  Future<List<RewardVoucherData>> _loadAvailableVouchers() async {
+    final List<RewardVoucherData>? cached = _availableVouchers;
+    if (cached != null) return cached;
+
+    final Future<List<RewardVoucherData>>? pending = _voucherLoad;
+    if (pending != null) return pending;
+
+    final Future<List<RewardVoucherData>> Function()? loader =
+        widget.loadAvailableVouchers;
+    if (loader == null) return const <RewardVoucherData>[];
+
+    final Future<List<RewardVoucherData>> request = loader();
+    _voucherLoad = request;
+    try {
+      final List<RewardVoucherData> vouchers = await request;
+      _availableVouchers = vouchers;
+      if (mounted) setState(() {});
+      return vouchers;
+    } finally {
+      _voucherLoad = null;
+    }
+  }
+
+  Map<int, String> _voucherSellerNames(List<CartItemData> items) {
+    final Map<int, String> names = <int, String>{};
+    for (final CartItemData item in items) {
+      final int? sellerId = item.sellerId;
+      if (sellerId == null || sellerId < 1) continue;
+      names.putIfAbsent(
+        sellerId,
+        () => item.seller.trim().isEmpty ? 'Shop' : item.seller.trim(),
+      );
+    }
+    return names;
+  }
+
+  Map<int, double> _voucherSellerSubtotals(List<CartItemData> items) {
+    final Map<int, double> subtotals = <int, double>{};
+    for (final CartItemData item in items) {
+      final int? sellerId = item.sellerId;
+      if (sellerId == null || sellerId < 1) continue;
+      subtotals.update(
+        sellerId,
+        (double subtotal) => subtotal + item.lineTotal,
+        ifAbsent: () => item.lineTotal,
+      );
+    }
+    return subtotals;
+  }
+
+  Future<void> _openVoucherPicker({int? sellerId}) async {
+    if (_openingVoucherPicker) return;
+    if (widget.loadAvailableVouchers == null) {
+      _showMessage('Connect the Laravel API to select available vouchers.');
+      return;
+    }
+
+    final List<CartItemData> eligibleItems = sellerId == null
+        ? _selectedItems
+        : _selectedItems
+              .where((CartItemData item) => item.sellerId == sellerId)
+              .toList(growable: false);
+    final Map<int, String> sellerNames = _voucherSellerNames(eligibleItems);
+    if (sellerNames.isEmpty) {
+      _showMessage('Select an available item from a shop to use its voucher.');
+      return;
+    }
+
+    setState(() => _openingVoucherPicker = true);
+    try {
+      final List<RewardVoucherData> vouchers = await _loadAvailableVouchers();
+      if (!mounted) return;
+      final Map<int, String>? result =
+          await showModalBottomSheet<Map<int, String>>(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            backgroundColor: Colors.transparent,
+            builder: (BuildContext context) => ShopVoucherPicker(
+              vouchers: vouchers,
+              sellerNames: sellerNames,
+              sellerSubtotals: _voucherSellerSubtotals(eligibleItems),
+              initialCodes: _selectedVoucherCodes,
+            ),
+          );
+      if (!mounted || result == null) return;
+      setState(() {
+        if (sellerId == null) {
+          _selectedVoucherCodes
+            ..clear()
+            ..addAll(result);
+        } else {
+          _selectedVoucherCodes.remove(sellerId);
+          final String? code = result[sellerId];
+          if (code != null) _selectedVoucherCodes[sellerId] = code;
+        }
+      });
+    } catch (error) {
+      if (mounted) _showMessage('Unable to load shop vouchers: $error');
+    } finally {
+      if (mounted) setState(() => _openingVoucherPicker = false);
     }
   }
 
@@ -844,8 +1026,9 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildTopBar() => ShopPageHeader(
-    title: 'Your bag', subtitle: 'A few good finds, ready for you.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-    actions: [GlassIconButton(icon: Icons.add_rounded, label: 'Continue shopping', onPressed: widget.onContinueShopping)],
+    title: 'Your bag',
+    subtitle: 'A few good finds, ready for you.',
+    onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
   );
 
   Widget _buildEmptyCart() {
@@ -932,7 +1115,7 @@ class _CartScreenState extends State<CartScreen> {
         const SizedBox(height: 6),
 
         const Text(
-          'Your selected product image, name, variant, seller, price, quantity, and subtotal will be shown in this section.',
+          'Your selected product image, name, variant, seller, price, and quantity will be shown in this section.',
           textAlign: TextAlign.center,
           style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
         ),
@@ -1099,7 +1282,7 @@ class _CartScreenState extends State<CartScreen> {
 
                 _buildCartSummary(),
 
-                const SizedBox(height: 125),
+                const SizedBox(height: 170),
               ],
             ),
           ),
@@ -1173,14 +1356,43 @@ class _CartScreenState extends State<CartScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        group.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _text,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w800,
+                      InkWell(
+                        onTap: widget.onSellerSelected == null ||
+                                (group.sellerId == null && group.name.trim().isEmpty)
+                            ? null
+                            : () => widget.onSellerSelected!(
+                                  group.name,
+                                  group.sellerId,
+                                ),
+                        borderRadius: BorderRadius.circular(5),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            children: <Widget>[
+                              Flexible(
+                                child: Text(
+                                  group.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: widget.onSellerSelected == null
+                                        ? _text
+                                        : _maroon,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              if (widget.onSellerSelected != null) ...<Widget>[
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.open_in_new_rounded,
+                                  color: _maroon,
+                                  size: 13,
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1211,7 +1423,100 @@ class _CartScreenState extends State<CartScreen> {
               ),
             _buildCartItem(group.items[index]),
           ],
+          _buildShopVoucherRow(group),
         ],
+      ),
+    );
+  }
+
+  Widget _buildShopVoucherRow(_CartSellerGroup group) {
+    final int? sellerId = group.sellerId;
+    final String? selectedCode =
+        sellerId == null ? null : _selectedVoucherCodes[sellerId];
+    RewardVoucherData? selectedVoucher;
+    RewardVoucherData? availableVoucher;
+    for (final RewardVoucherData voucher in
+        _availableVouchers ?? const <RewardVoucherData>[]) {
+      if (voucher.sellerId != sellerId || voucher.canUse == false) continue;
+      if (voucher.code.toUpperCase() == selectedCode?.toUpperCase()) {
+        selectedVoucher = voucher;
+      }
+      availableVoucher ??= voucher;
+    }
+    final bool hasSelectedItems = group.items.any(
+      (CartItemData item) =>
+          item.isAvailable && _selectedIds.contains(item.id),
+    );
+    final String label = selectedVoucher != null
+        ? 'Voucher applied: ${selectedVoucher.value.isEmpty ? selectedVoucher.code : selectedVoucher.value}'
+        : selectedCode != null
+        ? 'Voucher selected: $selectedCode'
+        : availableVoucher != null
+        ? '${availableVoucher.value.isEmpty ? 'Shop voucher' : availableVoucher.value} available'
+        : 'Add shop voucher code';
+
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: hasSelectedItems && sellerId != null
+            ? () => _openVoucherPicker(sellerId: sellerId)
+            : null,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: _border)),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.confirmation_number_outlined,
+                color: _maroon,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: selectedCode == null ? _muted : _maroon,
+                    fontSize: 13,
+                    fontWeight: selectedCode == null
+                        ? FontWeight.w600
+                        : FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (availableVoucher != null && selectedCode == null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _maroon,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: const Text(
+                    'NEW',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: hasSelectedItems ? _muted : ShopColors.faint,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1384,7 +1689,7 @@ class _CartScreenState extends State<CartScreen> {
 
           Expanded(
             child: Text(
-              '$_unavailableCount ${_unavailableCount == 1 ? 'item is' : 'items are'} currently out of stock and cannot be selected for checkout.',
+              '$_unavailableCount ${_unavailableCount == 1 ? 'item is' : 'items are'} unavailable or on seller vacation and cannot be selected for checkout.',
               style: const TextStyle(
                 color: _brown,
                 fontSize: 12.5,
@@ -1558,37 +1863,6 @@ class _CartScreenState extends State<CartScreen> {
 
           const SizedBox(height: 15),
 
-          const Divider(color: _border, height: 1),
-
-          const SizedBox(height: 15),
-
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Product subtotal',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-
-              Text(
-                _formatPrice(_subtotal),
-                style: const TextStyle(
-                  color: _maroon,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 13),
-
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(11),
@@ -1597,7 +1871,7 @@ class _CartScreenState extends State<CartScreen> {
               borderRadius: BorderRadius.circular(11),
             ),
             child: const Text(
-              'Courier fees, vouchers, payment method, and the final payable total are handled on the Checkout page.',
+              'Choose shop vouchers here. Delivery, payment, and your final total are confirmed on Checkout.',
               style: TextStyle(color: _muted, fontSize: 12, height: 1.55),
             ),
           ),
@@ -1624,80 +1898,82 @@ class _CartScreenState extends State<CartScreen> {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$_selectedQuantity selected',
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 2),
-
-                  Text(
-                    _formatPrice(_subtotal),
-                    style: const TextStyle(
-                      color: _maroon,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            SizedBox(
-              height: 54,
-              child: ElevatedButton(
-                onPressed: !canCheckout || _openingCheckout
-                    ? null
-                    : _openCheckout,
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: _maroon,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFFD8D2CB),
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
+            _buildMarketplaceVoucherRow(),
+            const Divider(height: 1, color: _border),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$_selectedQuantity selected',
+                        style: const TextStyle(
+                          color: _muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatCartAmount(_subtotal),
+                        style: const TextStyle(
+                          color: _maroon,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: _openingCheckout
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Checkout',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-
-                          SizedBox(width: 6),
-
-                          Icon(Icons.arrow_forward_rounded, size: 17),
-                        ],
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: !canCheckout || _openingCheckout
+                        ? null
+                        : _openCheckout,
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: _maroon,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFFD8D2CB),
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
                       ),
-              ),
+                    ),
+                    child: _openingCheckout
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Checkout',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Icon(Icons.arrow_forward_rounded, size: 17),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1705,9 +1981,70 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  static String _formatPrice(double value) {
-    return '₱${value.toStringAsFixed(2)}';
+  Widget _buildMarketplaceVoucherRow() {
+    final String label = _selectedVoucherCodes.isEmpty
+        ? 'Select or enter a code'
+        : '${_selectedVoucherCodes.length} voucher${_selectedVoucherCodes.length == 1 ? '' : 's'} selected';
+    return Material(
+      color: Colors.white,
+      child: InkWell(
+        onTap: _selectedItems.isEmpty || _openingVoucherPicker
+            ? null
+            : () => _openVoucherPicker(),
+        child: SizedBox(
+          height: 46,
+          child: Row(
+            children: [
+              const Icon(
+                Icons.confirmation_number_outlined,
+                color: _maroon,
+                size: 21,
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'LIKHAE Vouchers',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              if (_openingVoucherPicker)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: _maroon,
+                  ),
+                )
+              else
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: ShopColors.faint,
+                size: 19,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
+
 }
 
 class _CartItemCard extends StatelessWidget {
@@ -1790,8 +2127,8 @@ class _CartItemCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(13),
                             ),
                             alignment: Alignment.center,
-                            child: const Text(
-                              'OUT OF\nSTOCK',
+                            child: Text(
+                              item.sellerOnVacation ? 'SELLER ON\nVACATION' : 'UNAVAILABLE',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,
@@ -1944,7 +2281,7 @@ class _CartItemCard extends StatelessWidget {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            _price(item.price),
+                            _formatCartAmount(item.price),
                             style: const TextStyle(
                               color: ShopColors.accent,
                               fontSize: 15,
@@ -1955,7 +2292,7 @@ class _CartItemCard extends StatelessWidget {
                           if (item.oldPrice != null &&
                               item.oldPrice! > item.price)
                             Text(
-                              _price(item.oldPrice!),
+                              _formatCartAmount(item.oldPrice!),
                               style: const TextStyle(
                                 color: ShopColors.faint,
                                 fontSize: 11.5,
@@ -1995,42 +2332,25 @@ class _CartItemCard extends StatelessWidget {
                 ),
               ],
             ),
-
-            const SizedBox(height: 10),
-
-            Row(
-              children: [
-                const Text(
-                  'Item subtotal',
-                  style: TextStyle(color: ShopColors.muted, fontSize: 12),
-                ),
-
-                const Spacer(),
-
-                Text(
-                  _price(item.lineTotal),
-                  style: const TextStyle(
-                    color: ShopColors.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
     );
   }
 
-  static String _price(double value) {
-    return '₱${value.toStringAsFixed(2)}';
-  }
 }
 
 class _CartSellerGroup {
   final String name;
   final List<CartItemData> items = <CartItemData>[];
+
+  int? get sellerId {
+    for (final CartItemData item in items) {
+      final int? id = item.sellerId;
+      if (id != null && id > 0) return id;
+    }
+    return null;
+  }
 
   _CartSellerGroup({required this.name});
 }
@@ -2232,51 +2552,12 @@ class _SummaryRow extends StatelessWidget {
 
 class _CartProductImage extends StatelessWidget {
   final String? imageUrl;
-
   const _CartProductImage({required this.imageUrl});
-
   @override
   Widget build(BuildContext context) {
-    final String? url = imageUrl?.trim();
-
-    if (url == null || url.isEmpty) {
-      return const Center(
-        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 31),
-      );
-    }
-
-    final String resolvedUrl = AppConfig.resolveMediaUrl(url);
-
-    return Image.network(
-      resolvedUrl,
-      fit: BoxFit.cover,
-      loadingBuilder:
-          (BuildContext context, Widget child, ImageChunkEvent? progress) {
-            if (progress == null) {
-              return child;
-            }
-
-            return const Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: ShopColors.accent,
-                ),
-              ),
-            );
-          },
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: ShopColors.faint,
-                size: 31,
-              ),
-            );
-          },
-    );
+    final value = imageUrl?.trim() ?? '';
+    if (value.isEmpty) return const Center(child: Icon(Icons.image_outlined,
+      color: ShopColors.faint, size: 31));
+    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 31);
   }
 }

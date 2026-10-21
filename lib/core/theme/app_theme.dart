@@ -128,6 +128,8 @@ class AppTheme {
 
     surface: lightSurface,
     onSurface: lightText,
+    onSurfaceVariant: lightMuted,
+    surfaceContainerHighest: lightSurfaceSoft,
 
     error: lightDanger,
     onError: Colors.white,
@@ -156,6 +158,8 @@ class AppTheme {
 
     surface: darkSurface,
     onSurface: darkText,
+    onSurfaceVariant: darkMuted,
+    surfaceContainerHighest: darkSurfaceSoft,
 
     error: darkDanger,
     onError: Color(0xFF2A0907),
@@ -1130,8 +1134,11 @@ class AppTheme {
       case 0xFFB29379: return darkTan;
       case 0xFF30272A: return darkText;
       case 0xFF68575C: return darkBrown;
+      case 0xFF675B60:
       case 0xFF7B7071: return darkMuted;
+      case 0xFF75666C:
       case 0xFF95878A: return darkMutedSoft;
+      case 0xFFE2DAD6:
       case 0xFFE7E1DD: return darkBorder;
       case 0xFFD4C7C1: return darkBorderStrong;
       case 0xFFFBF7F2:

@@ -28,9 +28,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   static const String _mapboxAccessToken =
       String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
 
-  static const Color _maroon = Color(0xFF7A2430);
-  static const Color _text = Color(0xFF2D2926);
-  static const Color _muted = Color(0xFF766C65);
+  static const Color _maroon = ShopColors.accent;
+  static const Color _text = ShopColors.text;
+  static const Color _muted = ShopColors.muted;
+  static const Color _canvas = ShopColors.canvas;
+  static const Color _surface = ShopColors.surface;
 
   static const LatLng _defaultCenter = LatLng(14.5995, 120.9842);
 
@@ -55,6 +57,30 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   BuyerOrderData get order => _trackedOrder;
 
+  static String _humanizeStatus(String value) {
+    return value
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .split(' ')
+        .where((String word) => word.isNotEmpty)
+        .map((String word) =>
+            '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  static String _formatTrackingTime(DateTime value) {
+    final DateTime local = value.toLocal();
+    const List<String> months = <String>[
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final String minute = local.minute.toString().padLeft(2, '0');
+    final String period = local.hour >= 12 ? 'PM' : 'AM';
+    return '${months[local.month - 1]} ${local.day}, $hour:$minute $period';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,7 +88,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     if (AppConfig.apiEnabled && !widget.order.isPreview) {
       _locationRefreshTimer = Timer.periodic(
         const Duration(seconds: 15),
-        (_) => unawaited(_refreshOrderLocation()),
+        (_) {
+          if (mounted &&
+              WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+              ModalRoute.of(context)?.isCurrent != false) {
+            unawaited(_refreshOrderLocation());
+          }
+        },
       );
       unawaited(_connectShipmentRealtime());
     }
@@ -114,13 +146,60 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           });
           await _syncMapboxMarkers(recenter: false);
         } else if (event.name == 'shipment.tracking.updated') {
-          final String status =
-              (event.data['current_status'] ?? '').toString().trim();
+          final String status = (event.data['current_status'] ??
+                  event.data['status'] ??
+                  event.data['status_code'] ??
+                  '')
+              .toString()
+              .trim();
           if (status.isEmpty) continue;
+          final String label = (event.data['label'] ??
+                  event.data['status_label'] ??
+                  _humanizeStatus(status))
+              .toString()
+              .trim();
+          final dynamic rawDetails = event.data['notes'] ??
+              event.data['details'] ??
+              event.data['description'] ??
+              event.data['location_name'] ??
+              event.data['facility_name'] ??
+              event.data['location'];
+          final String details = rawDetails is Map
+              ? (rawDetails['label'] ??
+                        rawDetails['name'] ??
+                        rawDetails['facility_name'] ??
+                        rawDetails['location_name'] ??
+                        '')
+                    .toString()
+                    .trim()
+              : rawDetails?.toString().trim() ?? '';
+          final DateTime? occurredAt = DateTime.tryParse(
+            (event.data['occurred_at'] ?? event.data['created_at'] ?? '')
+                .toString(),
+          );
+          final String time = occurredAt == null
+              ? ''
+              : _formatTrackingTime(occurredAt);
+          final List<BuyerOrderTimelineEvent> timeline =
+              List<BuyerOrderTimelineEvent>.from(order.timeline);
+          if (timeline.isEmpty ||
+              timeline.last.label != label ||
+              timeline.last.details != details ||
+              timeline.last.time != time) {
+            timeline.add(
+              BuyerOrderTimelineEvent(
+                label: label.isEmpty ? _humanizeStatus(status) : label,
+                time: time,
+                done: true,
+                details: details,
+              ),
+            );
+          }
           setState(() {
             _trackedOrder = order.copyWith(
               backendStatus: status,
-              statusLabel: status.replaceAll('_', ' '),
+              statusLabel: label.isEmpty ? _humanizeStatus(status) : label,
+              timeline: timeline,
             );
           });
         }
@@ -226,21 +305,26 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F0EB),
+      backgroundColor: _canvas,
       appBar: AppBar(
         leading: IconButton(
           onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
           icon: const Icon(Icons.arrow_back_rounded),
           tooltip: 'Back',
         ),
-        title: const Text('Track Order'),
-        backgroundColor: Colors.white,
+        title: const Text(
+          'Track Order',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        backgroundColor: _canvas,
         foregroundColor: _text,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: ListView(
             children: <Widget>[
               _buildMapCard(),
@@ -258,8 +342,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: _surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: ShopColors.border),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x12000000),
@@ -305,8 +390,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       const SizedBox(height: 4),
                       Text(
                         hasRider
-                            ? 'Current rider location and route to the buyer.'
-                            : 'Waiting for rider location updates.',
+                            ? 'Live rider location and route to your delivery address.'
+                            : order.tracking?.trim().isNotEmpty == true
+                            ? 'No live rider position yet. Parcel updates appear in the timeline below.'
+                            : 'A map location will appear after the parcel is dispatched.',
                         style: const TextStyle(
                           color: _muted,
                           fontSize: 12.5,
@@ -335,7 +422,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 else
                   Positioned.fill(
                     child: Container(
-                      color: const Color(0xFFF7F2EE),
+                      color: _canvas,
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
@@ -382,7 +469,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             child: Row(
               children: <Widget>[
                 const Expanded(
-                  child: _LegendDot(color: _maroon, label: 'Buyer location'),
+                  child: _LegendDot(
+                    color: _maroon,
+                    label: 'Delivery destination',
+                  ),
                 ),
                 if (hasRider)
                   const Expanded(
@@ -419,8 +509,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surface,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ShopColors.border),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x1A000000),
@@ -444,7 +535,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     final List<BuyerOrderTimelineEvent> events = order.timeline.isNotEmpty
         ? order.timeline
-        : <BuyerOrderTimelineEvent>[
+        : order.isPreview
+        ? <BuyerOrderTimelineEvent>[
             const BuyerOrderTimelineEvent(
               label: 'Order placed',
               time: 'Sep 24, 2026 • 1:31 PM',
@@ -465,13 +557,28 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               time: 'Sep 24, 2026 • 4:42 PM',
               done: isCompleted,
             ),
+          ]
+        : <BuyerOrderTimelineEvent>[
+            BuyerOrderTimelineEvent(
+              label: order.statusLabel.trim().isEmpty
+                  ? 'Order update'
+                  : order.statusLabel,
+              time: order.createdAt == null
+                  ? ''
+                  : _formatTrackingTime(order.createdAt!),
+              done: true,
+              details: order.tracking?.trim().isNotEmpty == true
+                  ? 'Parcel tracking updates will appear here as they become available.'
+                  : 'Shipment location will appear once the parcel is dispatched.',
+            ),
           ];
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: _surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: ShopColors.border),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x12000000),
@@ -520,10 +627,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         width: 12,
                         height: 12,
                         decoration: BoxDecoration(
-                          color: isDone ? _maroon : const Color(0xFFEAE1D8),
+                          color: isDone ? _maroon : ShopColors.soft,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: isDone ? _maroon : const Color(0xFFD6C7B9),
+                            color: isDone ? _maroon : ShopColors.borderStrong,
                             width: 2,
                           ),
                         ),
@@ -531,8 +638,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       if (!isLast)
                         Container(
                           width: 2,
-                          height: 34,
-                          color: const Color(0xFFD9CFC3),
+                          height: event.details.trim().isEmpty ? 34 : 54,
+                          color: ShopColors.border,
                         ),
                     ],
                   ),
@@ -541,13 +648,33 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(top: 0, bottom: isLast ? 0 : 10),
-                    child: Text(
-                      event.label,
-                      style: TextStyle(
-                        color: isDone ? _text : _muted,
-                        fontSize: 15,
-                        fontWeight: isDone ? FontWeight.w700 : FontWeight.w500,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          event.label,
+                          style: TextStyle(
+                            color: isDone ? _text : _muted,
+                            fontSize: 15,
+                            fontWeight: isDone
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                        if (event.details.trim().isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            event.details,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _muted,
+                              fontSize: 12,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -801,7 +928,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: Color(0xFF766C65)),
+          style: const TextStyle(fontSize: 11, color: ShopColors.muted),
         ),
       ],
     );

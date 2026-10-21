@@ -42,16 +42,16 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  static const Color _bg = Color(0xFFF6F6F6);
-  static const Color _surface = Colors.white;
-  static const Color _surfaceSoft = Color(0xFFFFF3EE);
-  static const Color _border = Color(0xFFE8E8E8);
-  static const Color _text = Color(0xFF292929);
-  static const Color _muted = Color(0xFF7E7E7E);
-  static const Color _primary = Color(0xFFE05A3F);
-  static const Color _primaryDark = Color(0xFFB9432E);
+  static const Color _bg = ShopColors.canvas;
+  static const Color _surface = ShopColors.surface;
+  static const Color _surfaceSoft = ShopColors.soft;
+  static const Color _border = ShopColors.border;
+  static const Color _text = ShopColors.text;
+  static const Color _muted = ShopColors.muted;
+  static const Color _primary = ShopColors.accent;
+  static const Color _primaryDark = ShopColors.accentDark;
   static const Color _danger = Color(0xFFB42318);
-  static const Color _disabled = Color(0xFFD8CCC3);
+  static const Color _disabled = ShopColors.borderStrong;
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
@@ -106,12 +106,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ..addAll(widget.appliedVoucherCodes);
     }
 
-    final bool stillExists = widget.addresses.any(
+    final bool stillExists = _checkoutAddresses.any(
       (CheckoutAddressData address) => address.id == _selectedAddressId,
     );
 
     if (!stillExists) {
       _selectedAddressId = _resolveInitialAddressId();
+      _syncSelectedAddressFields(overwrite: true);
     }
 
     _syncSelectedAddressFields();
@@ -132,25 +133,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   int? _resolveInitialAddressId() {
-    if (widget.addresses.isEmpty) {
+    final List<CheckoutAddressData> addresses = _checkoutAddresses;
+    if (addresses.isEmpty) {
       return null;
     }
 
     if (widget.defaultAddressId != null) {
-      for (final CheckoutAddressData address in widget.addresses) {
+      for (final CheckoutAddressData address in addresses) {
         if (address.id == widget.defaultAddressId) {
           return address.id;
         }
       }
     }
 
-    for (final CheckoutAddressData address in widget.addresses) {
+    for (final CheckoutAddressData address in addresses) {
       if (address.isDefault) {
         return address.id;
       }
     }
 
-    return widget.addresses.first.id;
+    return addresses.first.id;
   }
 
   void _syncShopState() {
@@ -197,28 +199,51 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return grouped;
   }
 
+  List<CheckoutAddressData> get _checkoutAddresses {
+    final Set<int> seenIds = <int>{};
+    return widget.addresses
+        .where(
+          (CheckoutAddressData address) =>
+              address.id > 0 && seenIds.add(address.id),
+        )
+        .toList(growable: false);
+  }
+
   CheckoutAddressData? get _selectedAddress {
     final int? id = _selectedAddressId;
     if (id == null) return null;
 
-    for (final CheckoutAddressData address in widget.addresses) {
+    for (final CheckoutAddressData address in _checkoutAddresses) {
       if (address.id == id) return address;
     }
     return null;
   }
 
-  void _syncSelectedAddressFields() {
+  void _syncSelectedAddressFields({bool overwrite = false}) {
     final CheckoutAddressData? address = _selectedAddress;
     if (address == null) return;
 
-    if (_recipientController.text.trim().isEmpty &&
-        address.recipient.trim().isNotEmpty) {
+    if (overwrite ||
+        (_recipientController.text.trim().isEmpty &&
+            address.recipient.trim().isNotEmpty)) {
       _recipientController.text = address.recipient;
     }
-    if (_contactController.text.trim().isEmpty &&
-        address.phone.trim().isNotEmpty) {
+    if (overwrite ||
+        (_contactController.text.trim().isEmpty &&
+            address.phone.trim().isNotEmpty)) {
       _contactController.text = address.phone;
     }
+  }
+
+  void _selectAddress(int addressId) {
+    final CheckoutAddressData? address = _checkoutAddresses
+        .where((CheckoutAddressData address) => address.id == addressId)
+        .firstOrNull;
+    if (address == null) return;
+
+    _recipientController.text = address.recipient;
+    _contactController.text = address.phone;
+    setState(() => _selectedAddressId = address.id);
   }
 
   double get _productTotal {
@@ -615,7 +640,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           leadingIcon: Icons.location_on_outlined,
           child: _InfoBanner(
             icon: Icons.location_off_outlined,
-            text: widget.addresses.isEmpty
+            text: _checkoutAddresses.isEmpty
                 ? 'Add a delivery address before placing your order.'
                 : 'Choose a delivery address before placing your order.',
             danger: true,
@@ -703,7 +728,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _showAddressPicker() async {
-    if (widget.addresses.isEmpty) return;
+    final List<CheckoutAddressData> addresses = _checkoutAddresses;
+    if (addresses.isEmpty) return;
 
     final int? selected = await showModalBottomSheet<int>(
       context: context,
@@ -714,7 +740,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-            children: widget.addresses.map((CheckoutAddressData address) {
+            children: addresses.map((CheckoutAddressData address) {
               return ListTile(
                 leading: Icon(
                   address.id == _selectedAddressId
@@ -737,21 +763,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
 
     if (selected != null && mounted) {
-      CheckoutAddressData? selectedAddress;
-      for (final CheckoutAddressData address in widget.addresses) {
-        if (address.id == selected) {
-          selectedAddress = address;
-          break;
-        }
-      }
-
-      setState(() {
-        _selectedAddressId = selected;
-        if (selectedAddress != null) {
-          _recipientController.text = selectedAddress.recipient;
-          _contactController.text = selectedAddress.phone;
-        }
-      });
+      _selectAddress(selected);
     }
   }
 
@@ -796,65 +808,71 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const Divider(height: 22, color: _border),
                 ],
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Shipping Option',
-                        style: TextStyle(
-                          color: _text,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
+                if (widget.requireCourierSelection) ...[
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Shipping Option',
+                          style: TextStyle(
+                            color: _text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
+                      Text(
+                        options.isEmpty ? 'Unavailable' : 'Choose one',
+                        style: const TextStyle(color: _muted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 9),
+                  if (options.isEmpty)
+                    const _InfoBanner(
+                      icon: Icons.local_shipping_outlined,
+                      text: 'No approved courier currently serves this address.',
+                      danger: true,
+                    )
+                  else
+                    DropdownButtonFormField<int>(
+                      initialValue: _selectedCouriers[sellerId],
+                      isExpanded: true,
+                      decoration: _inputDecoration(
+                        label: 'Delivery method',
+                        hint: 'Select shipping option',
+                      ),
+                      items: options.map((CheckoutCourierOption option) {
+                        return DropdownMenuItem<int>(
+                          value: option.id,
+                          child: Text(
+                            '${option.name} · ${_peso(option.fee)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (int? value) {
+                        setState(() {
+                          _selectedCouriers[sellerId] = value;
+                        });
+                      },
+                      validator: (int? value) {
+                        if (widget.requireCourierSelection && value == null) {
+                          return 'Please choose a shipping option.';
+                        }
+                        return null;
+                      },
                     ),
-                    Text(
-                      options.isEmpty ? 'Unavailable' : 'Choose one',
-                      style: const TextStyle(color: _muted, fontSize: 12),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 9),
-                if (options.isEmpty)
+                  const SizedBox(height: 12),
+                ] else
                   const _InfoBanner(
                     icon: Icons.local_shipping_outlined,
-                    text: 'No approved courier currently serves this address.',
-                    danger: true,
-                  )
-                else
-                  DropdownButtonFormField<int>(
-                    initialValue: _selectedCouriers[sellerId],
-                    isExpanded: true,
-                    decoration: _inputDecoration(
-                      label: 'Delivery method',
-                      hint: 'Select shipping option',
-                    ),
-                    items: options.map((CheckoutCourierOption option) {
-                      return DropdownMenuItem<int>(
-                        value: option.id,
-                        child: Text(
-                          '${option.name} · ${_peso(option.fee)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (int? value) {
-                      setState(() {
-                        _selectedCouriers[sellerId] = value;
-                      });
-                    },
-                    validator: (int? value) {
-                      if (widget.requireCourierSelection && value == null) {
-                        return 'Please choose a shipping option.';
-                      }
-                      return null;
-                    },
+                    text: 'Courier assignment is automatic for this checkout.',
                   ),
-                const SizedBox(height: 12),
                 TextFormField(
                   controller: _shopNoteControllers[sellerId],
-                  maxLength: 500,
+                  maxLength: 200,
                   maxLines: 1,
                   decoration: _inputDecoration(
                     label: 'Message for seller',
@@ -1040,7 +1058,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3E7DD),
+                  color: ShopColors.accentSoft,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: const Text(
@@ -1077,7 +1095,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             onPressed: _handleBack,
             style: OutlinedButton.styleFrom(
               foregroundColor: _primary,
-              side: const BorderSide(color: Color(0xFFC49A7A)),
+              side: const BorderSide(color: ShopColors.borderStrong),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -1178,7 +1196,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.addresses.isEmpty)
+          if (_checkoutAddresses.isEmpty)
             _InfoBanner(
               icon: Icons.location_off_outlined,
               text:
@@ -1194,7 +1212,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 label: 'Address',
                 hint: 'Choose address',
               ),
-              items: widget.addresses.map((CheckoutAddressData address) {
+              items: _checkoutAddresses.map((CheckoutAddressData address) {
                 return DropdownMenuItem<int>(
                   value: address.id,
                   child: Text(
@@ -1205,9 +1223,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 );
               }).toList(),
               onChanged: (int? value) {
-                setState(() {
-                  _selectedAddressId = value;
-                });
+                if (value != null) _selectAddress(value);
               },
               validator: (int? value) {
                 if (value == null) {
@@ -1300,7 +1316,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 textInputAction: TextInputAction.newline,
                 minLines: 3,
                 maxLines: 4,
-                maxLength: 500,
+                maxLength: 200,
                 decoration: _inputDecoration(
                   label: 'Message to shop',
                   hint: 'Optional note for the seller',
@@ -1646,7 +1662,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         fontSize: 12,
         fontWeight: FontWeight.w600,
       ),
-      hintStyle: const TextStyle(color: Color(0xFFB59F92), fontSize: 13),
+      hintStyle: const TextStyle(color: ShopColors.faint, fontSize: 13),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: _border),
@@ -1657,7 +1673,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFCDA98E), width: 1.3),
+        borderSide: const BorderSide(color: ShopColors.accentLight, width: 1.3),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -1687,7 +1703,7 @@ class _MobileCheckoutItem extends StatelessWidget {
           child: Container(
             width: 78,
             height: 78,
-            color: const Color(0xFFF4F4F4),
+            color: ShopColors.soft,
             child: _ProductImage(imageUrl: item.imageUrl),
           ),
         ),
@@ -1701,7 +1717,7 @@ class _MobileCheckoutItem extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: Color(0xFF292929),
+                  color: ShopColors.text,
                   fontSize: 13.5,
                   height: 1.25,
                   fontWeight: FontWeight.w700,
@@ -1712,7 +1728,7 @@ class _MobileCheckoutItem extends StatelessWidget {
                 item.variant.isEmpty ? 'Standard' : item.variant,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Color(0xFF858585), fontSize: 12),
+                style: const TextStyle(color: ShopColors.muted, fontSize: 12),
               ),
               const SizedBox(height: 8),
               Row(
@@ -1720,7 +1736,7 @@ class _MobileCheckoutItem extends StatelessWidget {
                   Text(
                     peso(item.lineTotal),
                     style: const TextStyle(
-                      color: Color(0xFFE05A3F),
+                      color: ShopColors.accentDark,
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1729,7 +1745,7 @@ class _MobileCheckoutItem extends StatelessWidget {
                   Text(
                     'x${item.safeQuantity}',
                     style: const TextStyle(
-                      color: Color(0xFF858585),
+                      color: ShopColors.muted,
                       fontSize: 12,
                     ),
                   ),
@@ -1759,7 +1775,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Material(
-        color: selected ? const Color(0xFFFFF3EE) : const Color(0xFFFAFAFA),
+        color: selected ? ShopColors.accentSoft : ShopColors.soft,
         borderRadius: BorderRadius.circular(13),
         child: InkWell(
           onTap: () => onChanged(!selected),
@@ -1771,13 +1787,13 @@ class _ElectronicProtectionTile extends StatelessWidget {
                 Checkbox(
                   value: selected,
                   onChanged: (bool? value) => onChanged(value ?? false),
-                  activeColor: const Color(0xFFE05A3F),
+                  activeColor: ShopColors.accent,
                   visualDensity: VisualDensity.compact,
                 ),
                 const Icon(
                   Icons.verified_user_outlined,
                   size: 19,
-                  color: Color(0xFFE05A3F),
+                  color: ShopColors.accent,
                 ),
                 const SizedBox(width: 8),
                 const Expanded(
@@ -1787,7 +1803,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
                       Text(
                         'Electronic Protection',
                         style: TextStyle(
-                          color: Color(0xFF292929),
+                          color: ShopColors.text,
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -1798,7 +1814,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Color(0xFF858585),
+                          color: ShopColors.muted,
                           fontSize: 11,
                           height: 1.25,
                         ),
@@ -1810,7 +1826,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
                 Text(
                   '+₱${fee.toStringAsFixed(2)}',
                   style: const TextStyle(
-                    color: Color(0xFFE05A3F),
+                    color: ShopColors.accentDark,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),
@@ -1845,17 +1861,17 @@ class _CheckoutActionRow extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF3EE),
+          color: ShopColors.accentSoft,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, size: 18, color: const Color(0xFFE05A3F)),
+          child: Icon(icon, size: 18, color: ShopColors.accent),
         ),
         const SizedBox(width: 11),
         Expanded(
           child: Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF292929),
+              color: ShopColors.text,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -1867,14 +1883,14 @@ class _CheckoutActionRow extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.end,
-            style: const TextStyle(color: Color(0xFF858585), fontSize: 12),
+            style: const TextStyle(color: ShopColors.muted, fontSize: 12),
           ),
         ),
         const SizedBox(width: 4),
         trailing ??
             const Icon(
               Icons.chevron_right,
-              color: Color(0xFFAAAAAA),
+              color: ShopColors.faint,
               size: 20,
             ),
       ],
@@ -1901,7 +1917,7 @@ class _CheckoutAmountRow extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: strong ? const Color(0xFF292929) : const Color(0xFF666666),
+              color: strong ? ShopColors.text : ShopColors.muted,
               fontSize: strong ? 16 : 13,
               fontWeight: strong ? FontWeight.w800 : FontWeight.w500,
             ),
@@ -1910,7 +1926,7 @@ class _CheckoutAmountRow extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            color: strong ? const Color(0xFF292929) : const Color(0xFF666666),
+            color: strong ? ShopColors.text : ShopColors.muted,
             fontSize: strong ? 17 : 13,
             fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
           ),
@@ -1933,12 +1949,12 @@ class _CheckoutCard extends StatelessWidget {
   final IconData? leadingIcon;
   final Widget child;
 
-  static const Color _surface = Colors.white;
-  static const Color _border = Color(0xFFE8E8E8);
-  static const Color _text = Color(0xFF292929);
-  static const Color _muted = Color(0xFF7E7E7E);
-  static const Color _surfaceSoft = Color(0xFFFFF3EE);
-  static const Color _primary = Color(0xFFE05A3F);
+  static const Color _surface = ShopColors.surface;
+  static const Color _border = ShopColors.border;
+  static const Color _text = ShopColors.text;
+  static const Color _muted = ShopColors.muted;
+  static const Color _surfaceSoft = ShopColors.soft;
+  static const Color _primary = ShopColors.accent;
 
   @override
   Widget build(BuildContext context) {
@@ -2034,8 +2050,8 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = danger ? const Color(0xFFB42318) : const Color(0xFF6F2017);
-    final Color bg = danger ? const Color(0xFFFFEFEA) : const Color(0xFFF4EAE0);
+    final Color fg = danger ? const Color(0xFFB42318) : ShopColors.accentDark;
+    final Color bg = danger ? const Color(0xFFFFEFEA) : ShopColors.accentSoft;
 
     return Container(
       width: double.infinity,
@@ -2079,11 +2095,11 @@ class _PaymentOptionTile extends StatelessWidget {
   final String subtitle;
   final bool enabled;
 
-  static const Color _primary = Color(0xFF6F2017);
-  static const Color _primaryBg = Color(0xFFFFF0EE);
-  static const Color _disabledBg = Color(0xFFF5F0EA);
-  static const Color _disabledText = Color(0xFFA09187);
-  static const Color _border = Color(0xFFE4D6C8);
+  static const Color _primary = ShopColors.accent;
+  static const Color _primaryBg = ShopColors.accentSoft;
+  static const Color _disabledBg = ShopColors.soft;
+  static const Color _disabledText = ShopColors.faint;
+  static const Color _border = ShopColors.border;
 
   @override
   Widget build(BuildContext context) {
@@ -2115,7 +2131,7 @@ class _PaymentOptionTile extends StatelessWidget {
                   title,
                   style: TextStyle(
                     color: enabled
-                        ? (selected ? _primary : const Color(0xFF614B41))
+                        ? (selected ? _primary : ShopColors.text)
                         : _disabledText,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -2125,7 +2141,7 @@ class _PaymentOptionTile extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: enabled ? const Color(0xFF8D776C) : _disabledText,
+                    color: enabled ? ShopColors.secondaryText : _disabledText,
                     fontSize: 11,
                   ),
                 ),
@@ -2154,7 +2170,7 @@ class _SummaryItem extends StatelessWidget {
           child: Container(
             width: 56,
             height: 56,
-            color: const Color(0xFFF3ECE6),
+            color: ShopColors.soft,
             child: _ProductImage(imageUrl: item.imageUrl),
           ),
         ),
@@ -2168,7 +2184,7 @@ class _SummaryItem extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: Color(0xFF3B231C),
+                  color: ShopColors.text,
                   fontSize: 13.5,
                   height: 1.28,
                   fontWeight: FontWeight.w700,
@@ -2178,7 +2194,7 @@ class _SummaryItem extends StatelessWidget {
               Text(
                 '${item.variant.isEmpty ? 'Standard' : item.variant} · Qty ${item.safeQuantity}',
                 style: const TextStyle(
-                  color: Color(0xFF8D776C),
+                  color: ShopColors.secondaryText,
                   fontSize: 11.5,
                 ),
               ),
@@ -2189,7 +2205,7 @@ class _SummaryItem extends StatelessWidget {
         Text(
           pesoFormatter(item.lineTotal),
           style: const TextStyle(
-            color: Color(0xFF3B231C),
+            color: ShopColors.text,
             fontSize: 13,
             fontWeight: FontWeight.w800,
           ),
@@ -2210,7 +2226,7 @@ class _ProductImage extends StatelessWidget {
 
     if (url.isEmpty) {
       return const Center(
-        child: Icon(Icons.image_outlined, color: Color(0xFFAA998E)),
+        child: Icon(Icons.image_outlined, color: ShopColors.faint),
       );
     }
 
@@ -2240,7 +2256,7 @@ class _ProductImage extends StatelessWidget {
             return const Center(
               child: Icon(
                 Icons.broken_image_outlined,
-                color: Color(0xFFAA998E),
+                color: ShopColors.faint,
               ),
             );
           },
@@ -2364,7 +2380,7 @@ class CheckoutAddressData {
 
   factory CheckoutAddressData.fromJson(Map<String, dynamic> json) {
     return CheckoutAddressData(
-      id: _asInt(json['id']),
+      id: _asInt(json['id'] ?? json['address_id'] ?? json['user_address_id']),
       label: (json['label'] ?? '').toString(),
       recipient: (json['recipient'] ?? json['recipient_name'] ?? '').toString(),
       phone: (json['phone'] ?? json['contact_number'] ?? '').toString(),
@@ -2435,7 +2451,7 @@ class CheckoutPlaceOrderRequest {
         (int sellerId, int courierId) =>
             MapEntry(sellerId.toString(), courierId),
       ),
-      'notes': notesBySeller.map(
+      'seller_notes': notesBySeller.map(
         (int sellerId, String note) => MapEntry(sellerId.toString(), note),
       ),
       if (voucherCodes.isNotEmpty)

@@ -59,13 +59,59 @@ class BuyerBottomNavigation extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => GlassNavigationBar(
-    currentIndex: currentIndex,
-    destinations: [
-      GlassNavigationDestination(icon: Icons.home_outlined, selectedIcon: Icons.home_rounded, label: 'Home', onTap: onHome),
-      GlassNavigationDestination(icon: Icons.shopping_bag_outlined, selectedIcon: Icons.shopping_bag_rounded, label: 'Orders', onTap: onOrders),
-      GlassNavigationDestination(icon: Icons.chat_bubble_outline_rounded, selectedIcon: Icons.chat_bubble_rounded, label: 'Messages', onTap: onMessages),
-      GlassNavigationDestination(icon: Icons.person_outline_rounded, selectedIcon: Icons.person_rounded, label: 'Me', onTap: onProfile),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final labelHeight = MediaQuery.textScalerOf(context).scale(12);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colors.outlineVariant),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .07),
+            blurRadius: 18, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            backgroundColor: colors.surface,
+            surfaceTintColor: Colors.transparent,
+            indicatorColor: colors.primary,
+            elevation: 0,
+            labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+              fontSize: 12,
+              fontWeight: states.contains(WidgetState.selected)
+                  ? FontWeight.w800 : FontWeight.w600,
+              color: states.contains(WidgetState.selected)
+                  ? colors.primary : colors.onSurfaceVariant,
+            )),
+            iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+              size: 24,
+              color: states.contains(WidgetState.selected)
+                  ? colors.onPrimary : colors.onSurfaceVariant,
+            )),
+          ),
+          child: NavigationBar(
+            height: 76 + (labelHeight - 12).clamp(0, 30),
+            selectedIndex: currentIndex,
+            onDestinationSelected: (index) {
+              if (index == currentIndex) return;
+              [onHome, onOrders, onMessages, onProfile][index]();
+            },
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: const [
+              NavigationDestination(icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+              NavigationDestination(icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
+              NavigationDestination(icon: Icon(Icons.chat_bubble_outline_rounded),
+                  selectedIcon: Icon(Icons.chat_bubble_rounded), label: 'Messages'),
+              NavigationDestination(icon: Icon(Icons.person_outline_rounded),
+                  selectedIcon: Icon(Icons.person_rounded), label: 'Profile'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

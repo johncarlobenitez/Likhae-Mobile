@@ -1,7 +1,10 @@
+import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:likhae/core/config/app_config.dart';
+import 'package:likhae/core/utils/api_value_parsers.dart';
+import 'package:likhae/services/wishlist_service.dart';
 
 typedef ProductActionCallback =
     Future<void> Function(
@@ -40,6 +43,7 @@ class ProductVariationData {
   /// Laravel variation price can replace the base
   /// product price.
   final double? price;
+  final double? originalPrice;
 
   /// Option values that make up this concrete SKU, for example:
   /// {"Color": "Black", "Size": "XL"}.
@@ -56,6 +60,7 @@ class ProductVariationData {
     required this.value,
     this.stock,
     this.price,
+    this.originalPrice,
     this.optionValues = const <String, String>{},
     this.imageUrl,
     this.imageUrls = const <String>[],
@@ -92,6 +97,15 @@ class ProductVariationData {
     }
 
     return '$cleanName: $cleanValue';
+  }
+
+  double? get discountPercentage {
+    final double? original = originalPrice;
+    final double? current = price;
+    if (original == null || current == null || original <= current || original <= 0) {
+      return null;
+    }
+    return ((original - current) / original) * 100;
   }
 }
 
@@ -175,6 +189,10 @@ class ProductDetailData {
   final List<ProductReviewData> reviews;
 
   final bool wishlisted;
+  final bool sellerOnVacation;
+  final bool isActive;
+  final bool isDraft;
+  final bool isDeleted;
 
   const ProductDetailData({
     required this.id,
@@ -201,6 +219,10 @@ class ProductDetailData {
     this.specifications = const {},
     this.reviews = const [],
     this.wishlisted = false,
+    this.sellerOnVacation = false,
+    this.isActive = true,
+    this.isDraft = false,
+    this.isDeleted = false,
   });
 
   List<String> get galleryImages {
@@ -261,7 +283,14 @@ class ProductDetailData {
     final dynamic specs =
         json['specs'] ?? json['specifications'] ?? <String, dynamic>{};
     final dynamic rawReviews =
-        json['customer_reviews'] ?? json['review_items'] ?? <dynamic>[];
+        json['customer_reviews'] ??
+        json['review_items'] ??
+        json['product_reviews'] ??
+        json['reviews'] ??
+        <dynamic>[];
+    final dynamic reviewRows = rawReviews is Map
+        ? rawReviews['data'] ?? rawReviews['items'] ?? <dynamic>[]
+        : rawReviews;
 
     final List<String> galleryImages = <String>[];
 
@@ -338,6 +367,9 @@ class ProductDetailData {
                 : 'Default',
             stock: int.tryParse(value['stock']?.toString() ?? ''),
             price: double.tryParse(value['price']?.toString() ?? ''),
+            originalPrice: double.tryParse(
+              (value['old_price'] ?? value['original_price'])?.toString() ?? '',
+            ),
             optionValues: optionValues,
             imageUrl: variationImage,
             imageUrls: variationImages,
@@ -377,6 +409,9 @@ class ProductDetailData {
               value: value['value']?.toString() ?? '',
               stock: int.tryParse(value['stock']?.toString() ?? ''),
               price: double.tryParse(value['price']?.toString() ?? ''),
+              originalPrice: double.tryParse(
+                (value['old_price'] ?? value['original_price'])?.toString() ?? '',
+              ),
               optionValues: <String, String>{
                 groupName: value['value']?.toString() ?? '',
               },
@@ -452,9 +487,9 @@ class ProductDetailData {
 
     final List<ProductReviewData> parsedReviews = <ProductReviewData>[];
 
-    if (rawReviews is List) {
-      for (int index = 0; index < rawReviews.length; index++) {
-        final dynamic item = rawReviews[index];
+    if (reviewRows is List) {
+      for (int index = 0; index < reviewRows.length; index++) {
+        final dynamic item = reviewRows[index];
 
         if (item is! Map) {
           continue;
@@ -462,32 +497,50 @@ class ProductDetailData {
 
         final Map<String, dynamic> review = Map<String, dynamic>.from(item);
 
-        final String buyerName =
-            (review['buyer_name'] ??
-                    review['name'] ??
-                    review['buyer'] ??
-                    'Buyer')
-                .toString();
+        final dynamic rawReviewer =
+            review['buyer'] ?? review['user'] ?? review['customer'];
+        final Map<String, dynamic>? reviewer = rawReviewer is Map
+            ? Map<String, dynamic>.from(rawReviewer)
+            : null;
+        final String buyerName = (review['buyer_name'] ??
+                review['customer_name'] ??
+                reviewer?['name'] ??
+                reviewer?['full_name'] ??
+                (rawReviewer is String ? rawReviewer : null) ??
+                review['name'] ??
+                'Buyer')
+            .toString();
 
         final String body =
             (review['body'] ?? review['review'] ?? review['comment'] ?? '')
                 .toString();
 
-        final String? rawAvatar =
-            (review['buyer_avatar_url'] ??
-                    review['avatar_url'] ??
-                    review['avatar'])
-                ?.toString();
+        final String? rawAvatar = (review['buyer_avatar_url'] ??
+                review['avatar_url'] ??
+                reviewer?['avatar_url'] ??
+                reviewer?['profile_photo_url'] ??
+                reviewer?['avatar'] ??
+                review['avatar'])
+            ?.toString();
 
         final dynamic photoValue =
             review['photos'] ??
             review['images'] ??
             review['photo'] ??
+            review['attachments'] ??
             review['image_url'];
 
         final bool hasPhoto = photoValue is List
             ? photoValue.isNotEmpty
+            : photoValue is Map
+            ? photoValue.isNotEmpty
             : photoValue != null && photoValue.toString().trim().isNotEmpty;
+        final dynamic rawReviewRating = review['rating'] ?? review['stars'];
+        final int parsedRating = rawReviewRating is num
+            ? rawReviewRating.round()
+            : int.tryParse(rawReviewRating?.toString() ?? '') ??
+                  double.tryParse(rawReviewRating?.toString() ?? '')?.round() ??
+                  0;
 
         parsedReviews.add(
           ProductReviewData(
@@ -496,7 +549,7 @@ class ProductDetailData {
             buyerAvatarUrl: rawAvatar == null || rawAvatar.trim().isEmpty
                 ? null
                 : AppConfig.resolveMediaUrl(rawAvatar.trim()),
-            rating: int.tryParse(review['rating']?.toString() ?? '') ?? 0,
+            rating: parsedRating.clamp(0, 5).toInt(),
             body: body,
             date: (review['date'] ?? review['created_at'] ?? '').toString(),
             hasPhoto: hasPhoto,
@@ -509,14 +562,38 @@ class ProductDetailData {
         json['seller_avatar']?.toString() ??
         json['seller_avatar_url']?.toString();
 
+    final dynamic rawReviewCount = json['review_count'] ??
+        json['reviews_count'] ??
+        json['rating_count'] ??
+        json['ratings_count'] ??
+        (rawReviews is num ? rawReviews : null) ??
+        (rawReviews is Map
+            ? rawReviews['total'] ??
+                  (rawReviews['meta'] is Map
+                      ? rawReviews['meta']['total']
+                      : null)
+            : null);
     final int parsedReviewCount =
-        int.tryParse(
-          json['review_count']?.toString() ??
-              json['reviews_count']?.toString() ??
-              (json['reviews'] is num ? json['reviews'].toString() : null) ??
-              '',
-        ) ??
-        parsedReviews.length;
+        int.tryParse(rawReviewCount?.toString() ?? '') ?? parsedReviews.length;
+    final int reviewCount = parsedReviewCount < parsedReviews.length
+        ? parsedReviews.length
+        : parsedReviewCount;
+    final dynamic rawAverageRating = json['rating'] ??
+        json['average_rating'] ??
+        json['rating_average'] ??
+        json['avg_rating'] ??
+        json['reviews_avg_rating'] ??
+        json['review_avg_rating'];
+    double? averageRating = double.tryParse(
+      rawAverageRating?.toString() ?? '',
+    );
+    if ((averageRating == null || averageRating <= 0) && parsedReviews.isNotEmpty) {
+      averageRating = parsedReviews.fold<int>(
+            0,
+            (int total, ProductReviewData review) => total + review.rating,
+          ) /
+          parsedReviews.length;
+    }
 
     final dynamic rawSeller = json['seller'];
     final Map<String, dynamic>? seller = rawSeller is Map
@@ -546,8 +623,8 @@ class ProductDetailData {
             '',
       ),
       stock: int.tryParse(json['stock']?.toString() ?? '0') ?? 0,
-      rating: double.tryParse(json['rating']?.toString() ?? ''),
-      reviewCount: parsedReviewCount,
+      rating: averageRating,
+      reviewCount: reviewCount,
       soldCount:
           int.tryParse(
             json['sold']?.toString() ?? json['sold_count']?.toString() ?? '0',
@@ -576,6 +653,20 @@ class ProductDetailData {
       specifications: parsedSpecs,
       reviews: parsedReviews,
       wishlisted: json['wishlisted'] == true,
+      sellerOnVacation: parseApiBool(
+        seller?['is_on_vacation'] ?? seller?['is_vacation_mode'] ?? seller?['vacation_mode'] ?? json['seller_on_vacation'],
+        defaultValue: false,
+      ),
+      isActive: parseApiBool(
+        json['is_active'] ?? json['is_available'] ?? json['active'] ?? json['is_published'],
+        defaultValue: !<String>{'inactive', 'unpublished', 'draft', 'deleted', 'disabled'}
+            .contains((json['status'] ?? '').toString().toLowerCase()),
+      ),
+      isDraft: parseApiBool(json['is_draft'], defaultValue: false) ||
+          (json['status'] ?? '').toString().toLowerCase() == 'draft',
+      isDeleted: parseApiBool(json['is_deleted'] ?? json['deleted'], defaultValue: false) ||
+          json['deleted_at'] != null ||
+          (json['status'] ?? '').toString().toLowerCase() == 'deleted',
     );
   }
 
@@ -631,6 +722,10 @@ class ProductDetailData {
       specifications: specifications,
       reviews: reviews,
       wishlisted: wishlisted ?? this.wishlisted,
+      sellerOnVacation: sellerOnVacation,
+      isActive: isActive,
+      isDraft: isDraft,
+      isDeleted: isDeleted,
     );
   }
 }
@@ -676,6 +771,7 @@ class ProductDetailsScreen extends StatefulWidget {
 
   final VoidCallback? onBack;
   final VoidCallback? onCart;
+  final VoidCallback? onVouchers;
 
   /// Existing callback format from the first Flutter
   /// conversion.
@@ -721,6 +817,7 @@ class ProductDetailsScreen extends StatefulWidget {
     this.initialWishlisted,
     this.onBack,
     this.onCart,
+    this.onVouchers,
     this.onAddToCart,
     this.onBuyNow,
     this.onAddToCartRequest,
@@ -792,7 +889,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     _quantity = widget.initialQuantity.clamp(1, 999999).toInt();
 
-    _wishlisted = widget.initialWishlisted ?? _product.wishlisted;
+    _wishlisted = WishlistService.isWishlisted(_product.id) ||
+        (widget.initialWishlisted ?? _product.wishlisted);
+    WishlistService.recordKnownProducts(<({int id, bool wishlisted})>[
+      (id: _product.id, wishlisted: _product.wishlisted),
+    ]);
+    WishlistService.productIds.addListener(_onWishlistChanged);
 
     _selectedVariation = _resolveInitialVariation();
     _selectedOptionValues = _selectedVariation == null
@@ -810,7 +912,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         oldWidget.product != widget.product) {
       _product = widget.product;
 
-      _wishlisted = widget.initialWishlisted ?? _product.wishlisted;
+      _wishlisted = WishlistService.isWishlisted(_product.id) ||
+          (widget.initialWishlisted ?? _product.wishlisted);
 
       _quantity = widget.initialQuantity.clamp(1, 999999).toInt();
 
@@ -836,9 +939,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   @override
   void dispose() {
+    WishlistService.productIds.removeListener(_onWishlistChanged);
     _galleryController.dispose();
 
     super.dispose();
+  }
+
+  void _onWishlistChanged() {
+    if (!mounted) return;
+    setState(() => _wishlisted = WishlistService.isWishlisted(_product.id));
   }
 
   ProductVariationData? _resolveInitialVariation() {
@@ -900,11 +1009,45 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   bool get _outOfStock {
+    return _availableStock < 1 ||
+        !_product.isActive || _product.isDraft || _product.isDeleted ||
+        _product.sellerOnVacation;
+  }
+
+  bool get _purchaseBlocked {
+    if (!_product.isActive || _product.isDraft || _product.isDeleted ||
+        _product.sellerOnVacation) {
+      return true;
+    }
+    if (_hasSelectableOptions && _selectedVariation == null) return false;
     return _availableStock < 1;
   }
 
   double get _displayPrice {
     return _selectedVariation?.price ?? _product.price;
+  }
+
+  double? get _displayOriginalPrice {
+    final ProductVariationData? variation = _selectedVariation;
+    if (variation == null) return _product.originalPrice;
+    return variation.price == null ? null : variation.originalPrice;
+  }
+
+  double? get _displayDiscountPercentage {
+    final double? original = _displayOriginalPrice;
+    if (original == null || original <= _displayPrice || original <= 0) return null;
+    return ((original - _displayPrice) / original) * 100;
+  }
+
+  String get _availabilityLabel {
+    if (_product.sellerOnVacation) return 'Seller is on vacation';
+    if (!_product.isActive || _product.isDraft || _product.isDeleted) {
+      return 'Product unavailable';
+    }
+    if (_hasSelectableOptions && _selectedVariation == null) {
+      return 'Please select a variation.';
+    }
+    return _availableStock < 1 ? 'Out of stock' : '$_availableStock available';
   }
 
   List<String> get _images {
@@ -1033,6 +1176,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final Map<String, String> previewSelections =
         Map<String, String>.from(selections)..[group.name] = value;
     return _findVariationForPreview(previewSelections);
+  }
+
+  bool _isOptionValueAvailable(
+    ProductOptionData group,
+    String value,
+    Map<String, String> selections,
+  ) {
+    final Map<String, String> candidateSelections =
+        Map<String, String>.from(selections)..[group.name] = value;
+    return _product.variations.any((ProductVariationData variation) {
+      final Map<String, String> values = _optionValuesForVariation(variation);
+      final bool matches = candidateSelections.entries.every(
+        (MapEntry<String, String> entry) => values[entry.key] == entry.value,
+      );
+      return matches && _variationStock(variation) > 0;
+    });
   }
 
   bool _isColorOption(String name) {
@@ -1169,16 +1328,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     });
 
     try {
+      final bool wasWishlisted =
+          WishlistService.isWishlisted(_product.id) || _wishlisted;
       await callback(_product);
 
       if (!mounted) {
         return;
       }
 
+      bool newState = WishlistService.isWishlisted(_product.id);
+      if (newState == wasWishlisted) {
+        newState = !wasWishlisted;
+        WishlistService.setProductWishlisted(_product.id, newState);
+      }
       setState(() {
-        _wishlisted = !_wishlisted;
-
-        _product = _product.copyWith(wishlisted: _wishlisted);
+        _wishlisted = newState;
+        _product = _product.copyWith(wishlisted: newState);
       });
 
       _showMessage(
@@ -1407,7 +1572,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                       ? 'Select options'
                                       : previewStock > 0
                                       ? 'Stock: $previewStock'
-                                      : 'Out of stock',
+                                      : 'Unavailable',
                                   style: TextStyle(
                                     color: previewStock > 0 ? _muted : _danger,
                                     fontSize: 12,
@@ -1453,6 +1618,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   children: group.values.map((String value) {
                                     final bool selected =
                                         pendingSelections[group.name] == value;
+                                    final bool optionAvailable =
+                                        _isOptionValueAvailable(
+                                          group,
+                                          value,
+                                          pendingSelections,
+                                        );
                                     final ProductVariationData? optionPreview =
                                         _variationForOptionValue(
                                           group,
@@ -1463,16 +1634,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                         optionPreview?.galleryImages ??
                                             const <String>[];
                                     return Material(
-                                      color: selected
+                                      color: !optionAvailable
+                                          ? const Color(0xFFF1F1F1)
+                                          : selected
                                           ? const Color(0xFFF5E4DA)
                                           : const Color(0xFFF8F7F5),
                                       borderRadius: BorderRadius.circular(9),
                                       child: InkWell(
-                                        onTap: () {
-                                          setModalState(() {
-                                            pendingSelections[group.name] = value;
-                                          });
-                                        },
+                                        onTap: optionAvailable
+                                            ? () {
+                                                setModalState(() {
+                                                  pendingSelections[group.name] =
+                                                      value;
+                                                });
+                                              }
+                                            : null,
                                         borderRadius: BorderRadius.circular(9),
                                         child: Container(
                                           padding: EdgeInsets.symmetric(
@@ -1484,7 +1660,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(9),
                                             border: Border.all(
-                                              color: selected ? _maroon : _border,
+                                              color: !optionAvailable
+                                                  ? const Color(0xFFE3E3E3)
+                                                  : selected
+                                                  ? _maroon
+                                                  : _border,
                                               width: selected ? 1.4 : 1,
                                             ),
                                           ),
@@ -1492,31 +1672,41 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               if (_isColorOption(group.name))
-                                                Container(
-                                                  width: 30,
-                                                  height: 30,
-                                                  clipBehavior: Clip.antiAlias,
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    color: _colorForOption(value),
-                                                    border: Border.all(
-                                                      color: selected
-                                                          ? _maroon
-                                                          : _border,
+                                                Opacity(
+                                                  opacity: optionAvailable
+                                                      ? 1
+                                                      : 0.4,
+                                                  child: Container(
+                                                    width: 30,
+                                                    height: 30,
+                                                    clipBehavior: Clip.antiAlias,
+                                                    decoration: BoxDecoration(
+                                                      shape: BoxShape.circle,
+                                                      color: _colorForOption(value),
+                                                      border: Border.all(
+                                                        color: selected
+                                                            ? _maroon
+                                                            : _border,
+                                                      ),
                                                     ),
+                                                    child: optionImages.isEmpty
+                                                        ? null
+                                                        : _ProductImage(
+                                                            url: optionImages
+                                                                .first,
+                                                          ),
                                                   ),
-                                                  child: optionImages.isEmpty
-                                                      ? null
-                                                      : _ProductImage(
-                                                          url: optionImages.first,
-                                                        ),
                                                 ),
                                               if (_isColorOption(group.name))
                                                 const SizedBox(width: 6),
                                               Text(
                                                 value,
                                                 style: TextStyle(
-                                                  color: selected ? _maroon : _text,
+                                                  color: !optionAvailable
+                                                      ? const Color(0xFF999999)
+                                                      : selected
+                                                      ? _maroon
+                                                      : _text,
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w700,
                                                 ),
@@ -1540,6 +1730,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                 child: Text(
                                   matchingVariation == null
                                       ? 'Select all options to see the available price and stock.'
+                                      : _variationStock(matchingVariation) < 1
+                                      ? 'Unavailable'
                                       : matchingVariation.stock == null
                                       ? 'Selected option: ${matchingVariation.value}'
                                       : '${_formatPrice(matchingVariation.price ?? _product.price)} · ${_variationStock(matchingVariation)} available',
@@ -1652,8 +1844,18 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   bool _validatePurchase() {
+    if (_product.sellerOnVacation) {
+      _showMessage('This seller is on vacation. Purchases are unavailable.', error: true);
+      return false;
+    }
+
+    if (!_product.isActive || _product.isDraft || _product.isDeleted) {
+      _showMessage('This product is no longer available.', error: true);
+      return false;
+    }
+
     if (_hasSelectableOptions && _selectedVariation == null) {
-      _showMessage('Choose a product option first.', error: true);
+      _showMessage('Please select a variation.', error: true);
 
       return false;
     }
@@ -1801,14 +2003,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Widget _buildTopBar() => ShopPageHeader(
     title: 'A closer look', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-    actions: [
-      if (_updatingWishlist) const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-      else GlassIconButton(
-        icon: _wishlisted ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-        label: _wishlisted ? 'Remove from wishlist' : 'Save to wishlist', onPressed: _toggleWishlist,
-      ),
-      GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Cart', onPressed: widget.onCart),
-    ],
   );
 
   Widget _buildBreadcrumb() {
@@ -1865,6 +2059,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Widget _buildGalleryCard() {
     final List<String> images = _images;
+    final double? discount = _displayDiscountPercentage;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1913,7 +2108,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           ),
                   ),
 
-                  if (_product.discountPercentage != null)
+                  if (discount != null)
                     Positioned(
                       left: 12,
                       top: 12,
@@ -1927,7 +2122,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text(
-                          '-${_product.discountPercentage!.round()}%',
+                          '-${discount.round()}%',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10.5,
@@ -2160,13 +2355,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
               ),
 
-              if (_selectedVariation == null &&
-                  _product.originalPrice != null &&
-                  _product.originalPrice! > _product.price)
+              if (_displayOriginalPrice != null &&
+                  _displayOriginalPrice! > _displayPrice)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
-                    _formatPrice(_product.originalPrice!),
+                    _formatPrice(_displayOriginalPrice!),
                     style: const TextStyle(
                       color: _muted2,
                       fontSize: 11.5,
@@ -2192,7 +2386,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               const SizedBox(width: 5),
 
               Text(
-                _outOfStock ? 'Out of stock' : '$_availableStock available',
+                _availabilityLabel,
                 style: TextStyle(
                   color: _outOfStock ? _danger : _success,
                   fontSize: 10.5,
@@ -2208,6 +2402,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               ),
             ],
           ),
+          if (widget.onVouchers != null) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: widget.onVouchers,
+                icon: const Icon(Icons.card_giftcard_outlined, size: 16),
+                label: const Text('See vouchers in Rewards'),
+                style: TextButton.styleFrom(
+                  foregroundColor: _maroon,
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2237,27 +2447,38 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             runSpacing: 8,
             children: group.values.map((String value) {
               final bool selected = _selectedOptionValues[group.name] == value;
+              final bool optionAvailable = _isOptionValueAvailable(
+                group,
+                value,
+                _selectedOptionValues,
+              );
               final ProductVariationData? previewVariation =
                   _variationForOptionValue(group, value, _selectedOptionValues);
               final List<String> previewImages =
                   previewVariation?.galleryImages ?? const <String>[];
               return Material(
-                color: selected ? const Color(0xFFF5E4DA) : _surface,
+                color: !optionAvailable
+                    ? const Color(0xFFF1F1F1)
+                    : selected
+                    ? const Color(0xFFF5E4DA)
+                    : _surface,
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
-                  onTap: () {
-                    final Map<String, String> nextSelections =
-                        Map<String, String>.from(_selectedOptionValues)
-                          ..[group.name] = value;
-                    final ProductVariationData? matching =
-                        _findVariationForSelections(nextSelections);
-                    setState(() {
-                      _selectedOptionValues = nextSelections;
-                      _selectedVariation = matching;
-                      _clampQuantity();
-                      _resetGalleryToSelectedOption();
-                    });
-                  },
+                  onTap: optionAvailable
+                      ? () {
+                          final Map<String, String> nextSelections =
+                              Map<String, String>.from(_selectedOptionValues)
+                                ..[group.name] = value;
+                          final ProductVariationData? matching =
+                              _findVariationForSelections(nextSelections);
+                          setState(() {
+                            _selectedOptionValues = nextSelections;
+                            _selectedVariation = matching;
+                            _clampQuantity();
+                            _resetGalleryToSelectedOption();
+                          });
+                        }
+                      : null,
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -2267,7 +2488,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: selected ? _maroon : _border,
+                        color: !optionAvailable
+                            ? const Color(0xFFE3E3E3)
+                            : selected
+                            ? _maroon
+                            : _border,
                         width: selected ? 1.4 : 1,
                       ),
                     ),
@@ -2275,23 +2500,24 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (_isColorOption(group.name)) ...[
-                          Container(
-                            width: 22,
-                            height: 22,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _colorForOption(value),
-                              border: Border.all(
-                                color: selected
-                                    ? _maroon
-                                    : _border,
-                                width: selected ? 1.5 : 1,
+                          Opacity(
+                            opacity: optionAvailable ? 1 : 0.4,
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              clipBehavior: Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _colorForOption(value),
+                                border: Border.all(
+                                  color: selected ? _maroon : _border,
+                                  width: selected ? 1.5 : 1,
+                                ),
                               ),
+                              child: previewImages.isEmpty
+                                  ? null
+                                  : _ProductImage(url: previewImages.first),
                             ),
-                            child: previewImages.isEmpty
-                                ? null
-                                : _ProductImage(url: previewImages.first),
                           ),
 
                           const SizedBox(width: 7),
@@ -2310,7 +2536,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         Text(
                           value,
                           style: TextStyle(
-                            color: selected ? _maroon : _text,
+                            color: !optionAvailable
+                                ? const Color(0xFF999999)
+                                : selected
+                                ? _maroon
+                                : _text,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                           ),
@@ -2431,7 +2661,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: busy || _outOfStock ? null : _addToCart,
+                onPressed: busy || _purchaseBlocked ? null : _addToCart,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _maroon,
                   side: const BorderSide(color: _maroon),
@@ -2463,7 +2693,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
             Expanded(
               child: ElevatedButton(
-                  onPressed: busy || (_outOfStock && !_hasSelectableOptions)
+                  onPressed: busy || _purchaseBlocked
                       ? null
                       : _buyNow,
                 style: ElevatedButton.styleFrom(
@@ -2486,10 +2716,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                       )
                     : Text(
-                        _outOfStock && !_hasSelectableOptions
-                            ? 'Out of Stock'
-                            : _hasSelectableOptions && _selectedVariation == null
-                            ? 'Choose Options'
+                        _purchaseBlocked
+                            ? _availabilityLabel
                             : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
@@ -3117,7 +3345,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
             Expanded(
               child: OutlinedButton(
-                onPressed: busy || _outOfStock ? null : _addToCart,
+                onPressed: busy || _purchaseBlocked ? null : _addToCart,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _maroon,
                   side: const BorderSide(color: _maroon),
@@ -3149,7 +3377,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
             Expanded(
               child: ElevatedButton(
-                onPressed: busy || (_outOfStock && !_hasSelectableOptions)
+                onPressed: busy || _purchaseBlocked
                     ? null
                     : _buyNow,
                 style: ElevatedButton.styleFrom(
@@ -3172,10 +3400,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                       )
                     : Text(
-                        _outOfStock && !_hasSelectableOptions
-                            ? 'Out of Stock'
-                            : _hasSelectableOptions && _selectedVariation == null
-                            ? 'Choose Options'
+                        _purchaseBlocked
+                            ? _availabilityLabel
                             : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
@@ -3757,57 +3983,16 @@ class _RelatedProductCard extends StatelessWidget {
 
 class _ProductImage extends StatelessWidget {
   final String? url;
-
   const _ProductImage({required this.url});
 
   @override
   Widget build(BuildContext context) {
-    final String? imageUrl = url?.trim();
-
-    if (imageUrl == null || imageUrl.isEmpty) {
-      return const Center(
-        child: Icon(
-          Icons.inventory_2_outlined,
-          color: ShopColors.faint,
-          size: 38,
-        ),
-      );
+    final value = url?.trim() ?? '';
+    if (value.isEmpty) {
+      return const Center(child: Icon(Icons.inventory_2_outlined,
+        color: ShopColors.faint, size: 38));
     }
-
-    final String resolvedUrl = AppConfig.resolveMediaUrl(imageUrl);
-
-    return Image.network(
-      resolvedUrl,
-      width: double.infinity,
-      height: double.infinity,
-      fit: BoxFit.cover,
-      loadingBuilder:
-          (BuildContext context, Widget child, ImageChunkEvent? progress) {
-            if (progress == null) {
-              return child;
-            }
-
-            return const Center(
-              child: SizedBox(
-                width: 23,
-                height: 23,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: ShopColors.accent,
-                ),
-              ),
-            );
-          },
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: ShopColors.faint,
-                size: 38,
-              ),
-            );
-          },
-    );
+    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value),
+      fit: BoxFit.cover, iconSize: 38);
   }
 }

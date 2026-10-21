@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/shop_colors.dart';
 import '../rewards/rewards_screen.dart';
 
 class ShopVoucherPicker extends StatefulWidget {
@@ -21,10 +22,12 @@ class ShopVoucherPicker extends StatefulWidget {
 }
 
 class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
-  static const Color _primary = Color(0xFFE05A3F);
-  static const Color _ink = Color(0xFF292929);
-  static const Color _muted = Color(0xFF7E7E7E);
-  static const Color _border = Color(0xFFE8E8E8);
+  static const Color _primary = ShopColors.accent;
+  static const Color _ink = ShopColors.text;
+  static const Color _muted = ShopColors.muted;
+  static const Color _border = ShopColors.border;
+  static const Color _surface = ShopColors.surface;
+  static const Color _canvas = ShopColors.canvas;
 
   late final TextEditingController _codeController;
   late final Map<int, String> _selectedCodes;
@@ -126,7 +129,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
       child: Container(
         height: availableHeight,
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: _surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
@@ -149,84 +152,101 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                     onPressed: () => Navigator.of(context).pop(),
                     tooltip: 'Close',
                     icon: const Icon(Icons.close_rounded),
+                    color: _muted,
                   ),
                 ],
               ),
             ),
             const Divider(height: 1, color: _border),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Shop vouchers',
-                          style: TextStyle(
-                            color: _ink,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+              child: ColoredBox(
+                color: _canvas,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Shop vouchers',
+                            style: TextStyle(
+                              color: _ink,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        '${_shopVouchers.length} available',
-                        style: const TextStyle(color: _muted, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _codeController,
-                          textCapitalization: TextCapitalization.characters,
-                          autocorrect: false,
-                          decoration: InputDecoration(
-                            hintText: 'Enter shop voucher code',
-                            isDense: true,
-                            filled: true,
-                            fillColor: const Color(0xFFFAFAFA),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
+                        Text(
+                          '${_shopVouchers.length} available',
+                          style: const TextStyle(color: _muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _codeController,
+                            textCapitalization: TextCapitalization.characters,
+                            autocorrect: false,
+                            cursorColor: _primary,
+                            decoration: InputDecoration(
+                              hintText: 'Enter shop voucher code',
+                              isDense: true,
+                              filled: true,
+                              fillColor: _surface,
+                              hintStyle: const TextStyle(
+                                color: ShopColors.faint,
+                                fontSize: 12,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: _border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: _border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: _primary,
+                                  width: 1.4,
+                                ),
+                              ),
                             ),
-                            border: OutlineInputBorder(
+                            onSubmitted: (_) => _applyCode(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: _applyCode,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: _border),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: _border),
                             ),
                           ),
-                          onSubmitted: (_) => _applyCode(),
+                          child: const Text('Apply'),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: _applyCode,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Apply'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  if (_shopVouchers.isEmpty)
-                    _buildEmptyVouchers()
-                  else
-                    for (final RewardVoucherData voucher in _shopVouchers)
-                      _buildVoucherCard(voucher),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    if (_shopVouchers.isEmpty)
+                      _buildEmptyVouchers()
+                    else
+                      for (final RewardVoucherData voucher in _shopVouchers)
+                        _buildVoucherCard(voucher),
+                  ],
+                ),
               ),
             ),
             const Divider(height: 1, color: _border),
@@ -247,6 +267,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                       style: FilledButton.styleFrom(
                         backgroundColor: _primary,
                         foregroundColor: Colors.white,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(13),
                         ),
@@ -270,7 +291,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
+        color: ShopColors.soft,
         border: Border.all(color: _border),
         borderRadius: BorderRadius.circular(14),
       ),
@@ -295,7 +316,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.white,
+        color: selected ? ShopColors.accentSoft : _surface,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: meetsMinimum || selected
@@ -391,7 +412,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                   selected
                       ? Icons.check_circle_rounded
                       : Icons.radio_button_unchecked_rounded,
-                  color: selected ? _primary : const Color(0xFF9E9E9E),
+                  color: selected ? _primary : ShopColors.borderStrong,
                   size: 24,
                 ),
               ],

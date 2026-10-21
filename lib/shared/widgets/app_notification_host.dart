@@ -28,7 +28,8 @@ class AppNotificationHost extends StatefulWidget {
   State<AppNotificationHost> createState() => _AppNotificationHostState();
 }
 
-class _AppNotificationHostState extends State<AppNotificationHost> {
+class _AppNotificationHostState extends State<AppNotificationHost>
+    with WidgetsBindingObserver {
   static const Color _surface = Color(0xFFFFFDF9);
   static const Color _border = Color(0xFFEADCCC);
   static const Color _text = Color(0xFF3B211B);
@@ -55,6 +56,7 @@ class _AppNotificationHostState extends State<AppNotificationHost> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _localNotificationSubscription = AppNotificationCenter.notifications.listen(
       _showNotification,
     );
@@ -64,6 +66,7 @@ class _AppNotificationHostState extends State<AppNotificationHost> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.router.routeInformationProvider.removeListener(_onRouteChanged);
     _retryTimer?.cancel();
     _pollTimer?.cancel();
@@ -119,12 +122,14 @@ class _AppNotificationHostState extends State<AppNotificationHost> {
       return;
     }
 
+    await BuyerSystemSettingsController.instance.load();
+    if (!_isCurrent(role, generation)) return;
     unawaited(_loadNotificationBaseline(role, generation));
 
     if (AppConfig.realtimeEnabled) {
       _connectRealtime(role, generation);
     } else {
-      _startPolling(role, generation);
+      _startPolling(role, generation, immediate: false);
     }
   }
 
@@ -180,15 +185,17 @@ class _AppNotificationHostState extends State<AppNotificationHost> {
     });
   }
 
-  void _startPolling(String role, int generation) {
+  void _startPolling(String role, int generation, {bool immediate = true}) {
     if (!_isCurrent(role, generation) || _pollTimer != null) return;
-    unawaited(_pollNotifications(role, generation));
+    if (immediate) unawaited(_pollNotifications(role, generation));
     _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       unawaited(_pollNotifications(role, generation));
     });
   }
 
   Future<void> _pollNotifications(String role, int generation) async {
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed)
+      return;
     if (_pollInProgress) return;
     _pollInProgress = true;
     try {
@@ -216,8 +223,19 @@ class _AppNotificationHostState extends State<AppNotificationHost> {
 
   Future<List<BuyerNotificationData>> _fetchNotifications(String role) {
     return role == 'rider'
-        ? RiderMobileService.fetchNotifications()
-        : BuyerMobileService.fetchNotifications();
+        ? RiderMobileService.fetchNotifications(latestOnly: true)
+        : BuyerMobileService.fetchNotifications(latestOnly: true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final role = _activeRole;
+    if (state == AppLifecycleState.resumed &&
+        role != null &&
+        role.isNotEmpty &&
+        AppConfig.apiEnabled) {
+      unawaited(_pollNotifications(role, _generation));
+    }
   }
 
   bool _isCurrent(String role, int generation) {
@@ -242,8 +260,12 @@ class _AppNotificationHostState extends State<AppNotificationHost> {
     if (!_rememberNotification(notification.id)) return;
     final BuyerSystemSettingsController settings =
         BuyerSystemSettingsController.instance;
-    if (_activeRole == 'buyer' &&
-        !settings.allowsNotification(category: notification.type.key)) {
+    final bool notificationAllowed = _activeRole == 'rider'
+        ? settings.allowsRiderNotification(category: notification.type.key)
+        : _activeRole == 'buyer'
+        ? settings.allowsNotification(category: notification.type.key)
+        : true;
+    if (!notificationAllowed) {
       return;
     }
     _dismissTimer?.cancel();
@@ -252,7 +274,10 @@ class _AppNotificationHostState extends State<AppNotificationHost> {
       _activeNotification = notification;
       _bannerVisible = true;
     });
-    if (settings.notificationSounds) {
+    final bool soundsEnabled = _activeRole == 'rider'
+        ? settings.riderNotificationSounds
+        : settings.notificationSounds;
+    if (soundsEnabled) {
       unawaited(
         SystemSound.play(SystemSoundType.alert).catchError((Object _) {}),
       );

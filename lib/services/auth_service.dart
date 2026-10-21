@@ -10,6 +10,7 @@ import '../core/config/app_config.dart';
 import '../core/storage/token_storage.dart';
 import '../models/auth_user_model.dart';
 import '../features/auth/register_screen.dart';
+import 'wishlist_service.dart';
 
 class GoogleRegistrationRequiredException implements Exception {
   final Map<String, dynamic> profile;
@@ -107,6 +108,7 @@ class AuthService {
       );
     }
     await TokenStorage.writeToken(token);
+    await WishlistService.clearLocalWishlist();
     return payload;
   }
 
@@ -371,6 +373,7 @@ class AuthService {
         ?.toString();
     if (newToken != null && newToken.isNotEmpty) {
       await TokenStorage.writeToken(newToken);
+      await WishlistService.clearLocalWishlist();
     }
 
     return payload;
@@ -418,5 +421,7 @@ class AuthService {
     }
 
     await TokenStorage.clearToken();
+    ApiClient.invalidateReads();
+    await WishlistService.clearLocalWishlist();
   }
 }

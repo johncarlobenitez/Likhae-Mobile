@@ -15,9 +15,14 @@ buildscript {
             }
             credentials {
                 username = "mapbox"
-                password = project.findProperty('MAPBOX_DOWNLOADS_TOKEN')?.toString()?.trim() ?: System.getenv('MAPBOX_DOWNLOADS_TOKEN')?.trim()
+                def localProperties = new Properties()
+                def localPropertiesFile = project.rootProject.file('local.properties')
+                if (localPropertiesFile.isFile()) {
+                    localPropertiesFile.withInputStream { localProperties.load(it) }
+                }
+                password = project.findProperty('MAPBOX_DOWNLOADS_TOKEN')?.toString()?.trim() ?: System.getenv('MAPBOX_DOWNLOADS_TOKEN')?.trim() ?: localProperties.getProperty('MAPBOX_DOWNLOADS_TOKEN')?.trim()
                 if (password == null || password == "") {
-                    throw new IllegalStateException("MAPBOX_DOWNLOADS_TOKEN isn't set. Set it to the project properties or to the enviroment variables.")
+                    throw new IllegalStateException("MAPBOX_DOWNLOADS_TOKEN isn't set. Set it in local.properties, as a Gradle project property, or as an environment variable.")
                 }
             }
         }
@@ -41,9 +46,14 @@ rootProject.allprojects {
             }
             credentials {
                 username = "mapbox"
-                password = project.findProperty('MAPBOX_DOWNLOADS_TOKEN')?.toString()?.trim() ?: System.getenv('MAPBOX_DOWNLOADS_TOKEN')?.trim()
+                def localProperties = new Properties()
+                def localPropertiesFile = project.rootProject.file('local.properties')
+                if (localPropertiesFile.isFile()) {
+                    localPropertiesFile.withInputStream { localProperties.load(it) }
+                }
+                password = project.findProperty('MAPBOX_DOWNLOADS_TOKEN')?.toString()?.trim() ?: System.getenv('MAPBOX_DOWNLOADS_TOKEN')?.trim() ?: localProperties.getProperty('MAPBOX_DOWNLOADS_TOKEN')?.trim()
                 if (password == null || password == "") {
-                    throw new IllegalStateException("MAPBOX_DOWNLOADS_TOKEN isn't set. Set it to the project properties or to the enviroment variables.")
+                    throw new IllegalStateException("MAPBOX_DOWNLOADS_TOKEN isn't set. Set it in local.properties, as a Gradle project property, or as an environment variable.")
                 }
             }
         }

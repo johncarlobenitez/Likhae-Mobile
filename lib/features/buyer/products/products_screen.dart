@@ -1,9 +1,15 @@
+import 'dart:async';
+
+import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:likhae/core/config/app_config.dart';
+import 'package:likhae/core/utils/api_value_parsers.dart';
 import 'package:likhae/services/product_service.dart';
+import 'package:likhae/services/product_search_history_service.dart';
+import 'package:likhae/services/wishlist_service.dart';
+import 'package:likhae/shared/widgets/price_range_filter.dart';
 
 typedef BuyerProductCallback = void Function(BuyerProduct product);
 
@@ -19,6 +25,7 @@ class BuyerProduct {
   final String? slug;
 
   final String? category;
+  final String? categorySlug;
 
   final String? sellerName;
   final String? sellerSlug;
@@ -39,6 +46,11 @@ class BuyerProduct {
   /// 0    = explicitly out of stock
   /// > 0  = available
   final int? stock;
+  final String? sellerLocation;
+  final bool isActive;
+  final bool isDraft;
+  final bool isDeleted;
+  final bool sellerOnVacation;
 
   /// The actual wishlist state that should eventually come
   /// from Laravel.
@@ -50,6 +62,7 @@ class BuyerProduct {
     required this.price,
     this.slug,
     this.category,
+    this.categorySlug,
     this.sellerName,
     this.sellerSlug,
     this.sellerUserId,
@@ -58,6 +71,11 @@ class BuyerProduct {
     this.rating,
     this.soldCount = 0,
     this.stock,
+    this.sellerLocation,
+    this.isActive = true,
+    this.isDraft = false,
+    this.isDeleted = false,
+    this.sellerOnVacation = false,
     this.wishlisted = false,
   });
 
@@ -81,6 +99,9 @@ class BuyerProduct {
     return available < 1;
   }
 
+  bool get isVisibleInCatalog =>
+      isActive && !isDraft && !isDeleted;
+
   static BuyerProduct? fromApi(dynamic json) {
     if (json is! Map) {
       return null;
@@ -92,8 +113,28 @@ class BuyerProduct {
     final dynamic rawName = data['name'] ?? data['product_name'];
     final dynamic rawPrice =
         data['price'] ?? data['amount'] ?? data['min_price'];
+    final dynamic rawVariants = data['variants'] ?? data['variations'];
+    final List<Map<String, dynamic>> variants = rawVariants is List
+        ? rawVariants
+              .whereType<Map>()
+              .map((Map row) => Map<String, dynamic>.from(row))
+              .where((Map<String, dynamic> row) =>
+                  double.tryParse((row['price'] ?? row['sale_price'] ?? '').toString()) != null)
+              .toList()
+        : <Map<String, dynamic>>[];
+    Map<String, dynamic>? lowestVariant;
+    for (final Map<String, dynamic> variant in variants) {
+      final double price = double.tryParse(
+            (variant['price'] ?? variant['sale_price']).toString(),
+          ) ??
+          double.infinity;
+      final double lowestPrice = lowestVariant == null
+          ? double.infinity
+          : double.tryParse((lowestVariant['price'] ?? lowestVariant['sale_price']).toString()) ?? double.infinity;
+      if (price < lowestPrice) lowestVariant = variant;
+    }
 
-    if (rawId == null || rawName == null || rawPrice == null) {
+    if (rawId == null || rawName == null || (rawPrice == null && lowestVariant == null)) {
       return null;
     }
 
@@ -130,6 +171,21 @@ class BuyerProduct {
       data['store_name'],
       data['storeName'],
     );
+    final dynamic rawLocation =
+        seller?['location'] ?? data['seller_location'] ?? data['location'];
+    final String sellerLocationValue = rawLocation is Map
+        ? <dynamic>[
+                rawLocation['name'],
+                rawLocation['city'],
+                rawLocation['municipality'],
+                rawLocation['province'],
+              ]
+              .where((dynamic value) =>
+                  value != null && value.toString().trim().isNotEmpty)
+              .map((dynamic value) => value.toString().trim())
+              .toSet()
+              .join(', ')
+        : (rawLocation?.toString().trim() ?? '');
 
     final String slugValue = _firstNonEmptyString(
       data['slug'],
@@ -148,15 +204,43 @@ class BuyerProduct {
             (data['original_price'] ?? data['originalPrice']).toString(),
           );
 
+    final dynamic resolvedPrice = data['min_price'] ??
+        lowestVariant?['price'] ?? lowestVariant?['sale_price'] ?? rawPrice;
+    final double? resolvedPriceNumber = double.tryParse(resolvedPrice?.toString() ?? '');
+    Map<String, dynamic>? priceVariant = lowestVariant;
+    if (resolvedPriceNumber != null) {
+      for (final Map<String, dynamic> variant in variants) {
+        final double? variantPrice = double.tryParse(
+          (variant['price'] ?? variant['sale_price'])?.toString() ?? '',
+        );
+        if (variantPrice == resolvedPriceNumber) {
+          priceVariant = variant;
+          break;
+        }
+      }
+    }
+    final String status = (data['status'] ?? '').toString().trim().toLowerCase();
+    final dynamic rawActive = data['is_active'] ?? data['is_available'] ?? data['active'] ?? data['is_published'];
+    final bool active = parseApiBool(
+      rawActive,
+      defaultValue: !<String>{'inactive', 'unpublished', 'draft', 'deleted', 'disabled'}.contains(status),
+    );
+    final bool draft = parseApiBool(data['is_draft'], defaultValue: false) || status == 'draft';
+    final bool deleted = parseApiBool(data['is_deleted'] ?? data['deleted'], defaultValue: false) ||
+        data['deleted_at'] != null || status == 'deleted';
+
     return BuyerProduct(
       id: int.tryParse(rawId.toString()) ?? 0,
       name: rawName.toString(),
       slug: slugValue.isNotEmpty ? slugValue : null,
       category: categoryValue.isNotEmpty ? categoryValue : null,
+      categorySlug: (category?['slug'] ?? data['category_slug'])?.toString(),
       sellerName: sellerNameValue.isNotEmpty ? sellerNameValue : null,
       imageUrl: imageValue.isNotEmpty ? imageValue : null,
-      price: parsedPrice,
-      originalPrice: originalPrice,
+      price: double.tryParse(resolvedPrice.toString()) ?? parsedPrice,
+      originalPrice: variants.isEmpty
+          ? originalPrice
+          : double.tryParse((priceVariant?['old_price'] ?? priceVariant?['original_price'])?.toString() ?? ''),
       rating: (data['rating'] is num)
           ? (data['rating'] as num).toDouble()
           : double.tryParse(data['rating']?.toString() ?? ''),
@@ -166,7 +250,15 @@ class BuyerProduct {
           0,
       stock: data['stock'] is num
           ? (data['stock'] as num).toInt()
-          : int.tryParse(data['stock']?.toString() ?? ''),
+          : int.tryParse((data['stock'] ?? data['quantity'] ?? data['variant_stock'])?.toString() ?? ''),
+      sellerLocation: sellerLocationValue.isEmpty ? null : sellerLocationValue,
+      isActive: active,
+      isDraft: draft,
+      isDeleted: deleted,
+      sellerOnVacation: parseApiBool(
+        seller?['is_on_vacation'] ?? seller?['is_vacation_mode'] ?? seller?['vacation_mode'] ?? data['seller_on_vacation'],
+        defaultValue: false,
+      ),
       sellerSlug:
           seller?['slug']?.toString() ?? data['seller_slug']?.toString(),
       sellerUserId: int.tryParse(
@@ -210,6 +302,7 @@ class BuyerProduct {
     String? name,
     String? slug,
     String? category,
+    String? categorySlug,
     String? sellerName,
     String? sellerSlug,
     String? imageUrl,
@@ -225,6 +318,7 @@ class BuyerProduct {
       name: name ?? this.name,
       slug: slug ?? this.slug,
       category: category ?? this.category,
+      categorySlug: categorySlug ?? this.categorySlug,
       sellerName: sellerName ?? this.sellerName,
       sellerSlug: sellerSlug ?? this.sellerSlug,
       imageUrl: imageUrl ?? this.imageUrl,
@@ -233,6 +327,11 @@ class BuyerProduct {
       rating: rating ?? this.rating,
       soldCount: soldCount ?? this.soldCount,
       stock: stock ?? this.stock,
+      sellerLocation: sellerLocation,
+      isActive: isActive,
+      isDraft: isDraft,
+      isDeleted: isDeleted,
+      sellerOnVacation: sellerOnVacation,
       wishlisted: wishlisted ?? this.wishlisted,
     );
   }
@@ -300,6 +399,9 @@ class ProductsScreen extends StatefulWidget {
 
   final String initialSearchQuery;
   final BuyerProductSort initialSort;
+  final String? initialCategorySlug;
+  final bool dealsOnly;
+  final bool searchOnOpen;
 
   const ProductsScreen({
     super.key,
@@ -312,6 +414,9 @@ class ProductsScreen extends StatefulWidget {
     this.onNotifications,
     this.initialSearchQuery = '',
     this.initialSort = BuyerProductSort.recommended,
+    this.initialCategorySlug,
+    this.dealsOnly = false,
+    this.searchOnOpen = false,
   });
 
   @override
@@ -340,8 +445,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
   static const Color _danger = Color(0xFFB42318);
 
   late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
 
   late List<BuyerProduct> _products;
+  List<ProductSearchRecord> _recentSearches = <ProductSearchRecord>[];
+  late bool _showSearchExperience;
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -349,6 +457,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
   late String _searchQuery;
 
   late BuyerProductSort _sort;
+  String? _categorySlug;
+  String? _location;
+  double? _minimumRating;
+  double? _minimumPrice;
+  double? _maximumPrice;
+  int _pageIndex = 0;
+  static const int _pageSize = 20;
 
   final Set<int> _wishlistLoading = <int>{};
 
@@ -359,14 +474,177 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _products = List<BuyerProduct>.from(widget.products);
 
     _searchQuery = widget.initialSearchQuery;
+    _showSearchExperience = widget.searchOnOpen;
 
     _sort = widget.initialSort;
+    _categorySlug = widget.initialCategorySlug;
 
     _searchController = TextEditingController(text: _searchQuery);
+    _searchFocusNode = FocusNode()..addListener(_onSearchFocusChanged);
+    unawaited(_loadSearchHistory());
+    WishlistService.recordKnownProducts(_products.map((BuyerProduct product) =>
+        (id: product.id, wishlisted: product.wishlisted)));
 
     if (_products.isEmpty) {
       _loadProducts();
     }
+    WishlistService.productIds.addListener(_onWishlistChanged);
+  }
+
+  void _onWishlistChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onSearchFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadSearchHistory() async {
+    final List<ProductSearchRecord> records =
+        await ProductSearchHistoryService.read();
+    if (!mounted) return;
+    setState(() => _recentSearches = records);
+  }
+
+  Future<void> _recordSearch(String query, {int? productId}) async {
+    final List<ProductSearchRecord> records =
+        await ProductSearchHistoryService.record(query, productId: productId);
+    if (!mounted) return;
+    setState(() => _recentSearches = records);
+  }
+
+  Future<void> _clearSearchHistory() async {
+    await ProductSearchHistoryService.clear();
+    if (!mounted) return;
+    setState(() => _recentSearches = <ProductSearchRecord>[]);
+  }
+
+  BuyerProduct? _productForSearch(ProductSearchRecord search) {
+    if (search.productId != null) {
+      for (final BuyerProduct product in _products) {
+        if (product.id == search.productId && product.isVisibleInCatalog) {
+          return product;
+        }
+      }
+    }
+
+    final String query = search.query.trim().toLowerCase();
+    if (query.isEmpty) return null;
+    for (final BuyerProduct product in _products) {
+      if (!product.isVisibleInCatalog) continue;
+      final String searchableText = <String>[
+        product.name,
+        product.category ?? '',
+        product.sellerName ?? '',
+      ].join(' ').toLowerCase();
+      if (searchableText.contains(query)) return product;
+    }
+    return null;
+  }
+
+  List<BuyerProduct> get _recentlySearchedProducts {
+    final Set<int> seenIds = <int>{};
+    final List<BuyerProduct> products = <BuyerProduct>[];
+    for (final ProductSearchRecord search in _recentSearches) {
+      final BuyerProduct? product = _productForSearch(search);
+      if (product != null && seenIds.add(product.id)) products.add(product);
+    }
+    return products;
+  }
+
+  List<BuyerProduct> get _suggestedFromSearchHistory {
+    final List<BuyerProduct> recentProducts = _recentlySearchedProducts;
+    final Set<int> recentIds = recentProducts
+        .map((BuyerProduct product) => product.id)
+        .toSet();
+    final Set<String> categories = recentProducts
+        .map((BuyerProduct product) => product.category?.trim().toLowerCase() ?? '')
+        .where((String category) => category.isNotEmpty)
+        .toSet();
+    final Set<String> words = <String>{
+      ..._recentSearches
+        .expand((ProductSearchRecord search) =>
+            search.query.toLowerCase().split(RegExp(r'[^a-z0-9]+')))
+        .where((String word) => word.length >= 3)
+        .toSet(),
+      ..._searchQuery.toLowerCase().split(RegExp(r'[^a-z0-9]+'))
+          .where((String word) => word.length >= 3),
+    };
+    if (categories.isEmpty && words.isEmpty) return <BuyerProduct>[];
+
+    final List<MapEntry<BuyerProduct, int>> ranked =
+        <MapEntry<BuyerProduct, int>>[];
+    for (final BuyerProduct product in _products) {
+      if (!product.isVisibleInCatalog ||
+          product.isOutOfStock ||
+          product.sellerOnVacation ||
+          recentIds.contains(product.id)) {
+        continue;
+      }
+      int score = 0;
+      final String category = product.category?.trim().toLowerCase() ?? '';
+      if (categories.contains(category)) score += 4;
+      final String searchableText = <String>[
+        product.name,
+        product.category ?? '',
+        product.sellerName ?? '',
+      ].join(' ').toLowerCase();
+      for (final String word in words) {
+        if (searchableText.contains(word)) score++;
+      }
+      if (score > 0) ranked.add(MapEntry<BuyerProduct, int>(product, score));
+    }
+    ranked.sort((MapEntry<BuyerProduct, int> first,
+        MapEntry<BuyerProduct, int> second) {
+      final int relevance = second.value.compareTo(first.value);
+      if (relevance != 0) return relevance;
+      final int rating = (second.key.rating ?? 0).compareTo(first.key.rating ?? 0);
+      if (rating != 0) return rating;
+      return second.key.soldCount.compareTo(first.key.soldCount);
+    });
+    return ranked.take(8).map((MapEntry<BuyerProduct, int> row) => row.key).toList();
+  }
+
+  List<BuyerProduct> get _searchSuggestionProducts {
+    final List<BuyerProduct> suggestions = <BuyerProduct>[];
+    final Set<int> seenIds = <int>{};
+    final String query = _searchQuery.trim();
+
+    void add(Iterable<BuyerProduct> products) {
+      for (final BuyerProduct product in products) {
+        if (product.isVisibleInCatalog && seenIds.add(product.id)) {
+          suggestions.add(product);
+        }
+      }
+    }
+
+    if (query.isNotEmpty) add(_filteredProducts);
+    add(_suggestedFromSearchHistory);
+    if (suggestions.isEmpty) {
+      add(_products.where((BuyerProduct product) =>
+          !widget.dealsOnly || product.discountPercentage != null));
+    }
+    return suggestions.take(12).toList(growable: false);
+  }
+
+  void _submitSearch(String query) {
+    final String trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) return;
+    final List<BuyerProduct> matchingProducts = _filteredProducts;
+    unawaited(_recordSearch(
+      trimmedQuery,
+      productId: matchingProducts.isEmpty ? null : matchingProducts.first.id,
+    ));
+    _searchFocusNode.unfocus();
+  }
+
+  void _openProduct(BuyerProduct product, {String? searchQuery}) {
+    final String query = (searchQuery ?? _searchQuery).trim();
+    if (query.isNotEmpty) {
+      unawaited(_recordSearch(query, productId: product.id));
+    }
+    _searchFocusNode.unfocus();
+    widget.onProductSelected?.call(product);
   }
 
   Future<void> _loadProducts() async {
@@ -381,12 +659,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     try {
       final List<Map<String, dynamic>> rows =
-          await ProductService.fetchProductRows();
+          await ProductService.fetchProductRows(dealsOnly: widget.dealsOnly);
       final List<BuyerProduct> loadedProducts = rows
           .map(BuyerProduct.fromApi)
           .whereType<BuyerProduct>()
-          .where((BuyerProduct product) => product.id != 0)
+          .where((BuyerProduct product) => product.id != 0 && product.isVisibleInCatalog)
           .toList(growable: false);
+
+      WishlistService.recordKnownProducts(loadedProducts.map((BuyerProduct product) =>
+          (id: product.id, wishlisted: product.wishlisted)));
 
       if (!mounted) {
         return;
@@ -414,6 +695,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     if (oldWidget.products != widget.products) {
       _products = List<BuyerProduct>.from(widget.products);
+      WishlistService.recordKnownProducts(_products.map((BuyerProduct product) =>
+          (id: product.id, wishlisted: product.wishlisted)));
+      _pageIndex = 0;
     }
 
     if (oldWidget.initialSearchQuery != widget.initialSearchQuery) {
@@ -425,17 +709,31 @@ class _ProductsScreenState extends State<ProductsScreen> {
     if (oldWidget.initialSort != widget.initialSort) {
       _sort = widget.initialSort;
     }
+    if (oldWidget.initialCategorySlug != widget.initialCategorySlug) {
+      _categorySlug = widget.initialCategorySlug;
+      _pageIndex = 0;
+    }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.removeListener(_onSearchFocusChanged);
+    _searchFocusNode.dispose();
+    WishlistService.productIds.removeListener(_onWishlistChanged);
 
     super.dispose();
   }
 
+  Object? _filterKey;
+  List<BuyerProduct> _filterResult = [];
+
   List<BuyerProduct> get _filteredProducts {
+    final key = (_products, _searchQuery, _sort, _minimumPrice, _maximumPrice, _minimumRating, _categorySlug, _location, widget.dealsOnly);
+    if (_filterKey == key) return _filterResult;
+
     List<BuyerProduct> result = _products.where((BuyerProduct product) {
+      if (!product.isVisibleInCatalog) return false;
       final String query = _searchQuery.trim().toLowerCase();
 
       if (query.isEmpty) {
@@ -448,8 +746,50 @@ class _ProductsScreenState extends State<ProductsScreen> {
         product.sellerName ?? '',
       ].join(' ').toLowerCase();
 
-      return searchableText.contains(query);
+      final bool matched = searchableText.contains(query);
+      if (!matched) return false;
+      return true;
     }).toList();
+
+    final List<double> prices = _products
+        .where((BuyerProduct product) => product.isVisibleInCatalog)
+        .map((BuyerProduct product) => product.price)
+        .toList(growable: false);
+    final double minimum = prices.isEmpty ? 0 : prices.reduce((a, b) => a < b ? a : b);
+    final double maximum = prices.isEmpty ? 100000 : prices.reduce((a, b) => a > b ? a : b);
+    final String? categoryFilter = _categorySlug?.trim();
+    if (categoryFilter != null && categoryFilter.isNotEmpty) {
+      result = result.where((BuyerProduct product) {
+        final String categoryName = product.category?.trim() ?? '';
+        final String fallbackSlug = categoryName
+            .toLowerCase()
+            .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+            .replaceAll(RegExp(r'^-|-$'), '');
+        return product.categorySlug == categoryFilter ||
+            (product.categorySlug?.toLowerCase().startsWith(
+                  '${categoryFilter.toLowerCase()}-',
+                ) ??
+                false) ||
+            fallbackSlug == categoryFilter.toLowerCase() ||
+            categoryName.toLowerCase() == categoryFilter.toLowerCase();
+      }).toList();
+    }
+    if (widget.dealsOnly) {
+      result = result.where((BuyerProduct product) =>
+          product.discountPercentage != null && !product.isOutOfStock).toList();
+    }
+    final double lower = _minimumPrice ?? minimum;
+    final double upper = _maximumPrice ?? maximum;
+    result = result.where((BuyerProduct product) =>
+        product.price >= lower && product.price <= upper).toList();
+    if (_minimumRating != null) {
+      result = result.where((BuyerProduct product) =>
+          (product.rating ?? 0) >= _minimumRating!).toList();
+    }
+    if (_location != null && _location!.isNotEmpty) {
+      result = result.where((BuyerProduct product) =>
+          product.sellerLocation == _location).toList();
+    }
 
     switch (_sort) {
       case BuyerProductSort.recommended:
@@ -482,7 +822,43 @@ class _ProductsScreenState extends State<ProductsScreen> {
         break;
     }
 
-    return result;
+    _filterKey = key;
+    return _filterResult = result;
+  }
+
+  String? get _searchSuggestion {
+    final String query = _searchQuery.trim();
+    if (query.isEmpty || _filteredProducts.isNotEmpty) return null;
+
+    return closestProductSuggestion(
+      query,
+      _products
+          .where((BuyerProduct product) => product.isVisibleInCatalog)
+          .map((BuyerProduct product) => product.name),
+    );
+  }
+
+  double get _priceMinimum {
+    final List<double> prices = _products
+        .where((BuyerProduct product) => product.isVisibleInCatalog)
+        .map((BuyerProduct product) => product.price)
+        .toList(growable: false);
+    return prices.isEmpty ? 0 : prices.reduce((double a, double b) => a < b ? a : b);
+  }
+
+  double get _priceMaximum {
+    final List<double> prices = _products
+        .where((BuyerProduct product) => product.isVisibleInCatalog)
+        .map((BuyerProduct product) => product.price)
+        .toList(growable: false);
+    return prices.isEmpty ? 100000 : prices.reduce((double a, double b) => a > b ? a : b);
+  }
+
+  List<BuyerProduct> get _pageProducts {
+    final List<BuyerProduct> all = _filteredProducts;
+    final int start = (_pageIndex * _pageSize).clamp(0, all.length).toInt();
+    final int end = (start + _pageSize).clamp(0, all.length).toInt();
+    return all.sublist(start, end);
   }
 
   Future<void> _toggleWishlist(BuyerProduct product) async {
@@ -503,6 +879,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     });
 
     try {
+      final bool wasWishlisted = WishlistService.isWishlisted(product.id);
       await callback(product);
 
       if (!mounted) {
@@ -517,11 +894,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
         return;
       }
 
-      final bool newState = !_products[index].wishlisted;
-
-      setState(() {
-        _products[index] = _products[index].copyWith(wishlisted: newState);
-      });
+      bool newState = WishlistService.isWishlisted(product.id);
+      if (newState == wasWishlisted) {
+        newState = !wasWishlisted;
+        WishlistService.setProductWishlisted(product.id, newState);
+      }
 
       _showMessage(
         newState
@@ -604,6 +981,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     setState(() {
       _sort = selected;
+      _pageIndex = 0;
     });
   }
 
@@ -612,6 +990,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     setState(() {
       _searchQuery = '';
+      _pageIndex = 0;
     });
   }
 
@@ -647,9 +1026,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<BuyerProduct> products = _filteredProducts;
+    final List<BuyerProduct> allProducts = _filteredProducts;
+    final List<BuyerProduct> products = _pageProducts;
 
-    if (_isLoading && products.isEmpty) {
+    if (_isLoading &&
+        products.isEmpty &&
+        !_showSearchExperience &&
+        !_searchFocusNode.hasFocus) {
       return Scaffold(
         backgroundColor: _background,
         body: SafeArea(
@@ -668,27 +1051,33 @@ class _ProductsScreenState extends State<ProductsScreen> {
     return Scaffold(
       backgroundColor: _background,
       body: SafeArea(
-        bottom: false,
         child: Column(
           children: [
-            _buildHeader(),
+            if (!_showSearchExperience && !_searchFocusNode.hasFocus)
+              _buildHeader(),
 
             Expanded(
               child: RefreshIndicator(
                 color: _maroon,
                 onRefresh: _refreshProducts,
                 child: CustomScrollView(
+                  key: const PageStorageKey<String>('buyer-products-scroll'),
                   physics: const AlwaysScrollableScrollPhysics(),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   slivers: [
                     SliverToBoxAdapter(child: _buildSearchArea()),
 
-                    SliverToBoxAdapter(
-                      child: _buildCatalogHeader(products.length),
-                    ),
+                    if (_showSearchExperience || _searchFocusNode.hasFocus) ...[
+                      if (_recentSearches.isNotEmpty)
+                        SliverToBoxAdapter(child: _buildSearchHistory()),
+                      SliverToBoxAdapter(child: _buildSearchSuggestions()),
+                    ] else ...[
+                      SliverToBoxAdapter(
+                        child: _buildCatalogHeader(allProducts.length),
+                      ),
 
-                    if (_errorMessage != null && products.isEmpty)
+                      if (_errorMessage != null && products.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
                         child: Padding(
@@ -720,13 +1109,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           ),
                         ),
                       )
-                    else if (products.isEmpty)
+                      else if (allProducts.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
                         child: _buildEmptyState(),
                       )
-                    else
-                      _buildProductGrid(products),
+                      else ...[
+                        _buildProductGrid(products),
+                        if (allProducts.length > _pageSize)
+                          SliverToBoxAdapter(child: _buildPagination(allProducts.length)),
+                      ],
+                    ],
 
                     const SliverToBoxAdapter(child: SizedBox(height: 100)),
                   ],
@@ -741,27 +1134,51 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   Widget _buildHeader() {
     return ShopPageHeader(
-      title: 'Discover', subtitle: 'Good things, made closer to home.',
+      title: widget.dealsOnly ? 'Shop Deals' : 'Discover',
+      subtitle: widget.dealsOnly
+          ? 'Browse genuine discounts from local sellers.'
+          : 'Good things, made closer to home.',
       onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-      actions: [
-        GlassIconButton(icon: Icons.notifications_none_rounded, label: 'Notifications', onPressed: widget.onNotifications),
-        GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Cart', onPressed: widget.onCart),
-      ],
     );
   }
 
   Widget _buildSearchArea() {
+    if (_showSearchExperience || _searchFocusNode.hasFocus) {
+      return _buildFocusedSearchBar();
+    }
+
+    final String? suggestion = _searchSuggestion;
+    final Map<String, String> categories = <String, String>{};
+    final Set<String> locations = <String>{};
+    for (final BuyerProduct product in _products) {
+      final String categoryKey = product.categorySlug?.trim().isNotEmpty == true
+          ? product.categorySlug!.trim()
+          : product.category?.trim() ?? '';
+      if (categoryKey.isNotEmpty) categories[categoryKey] = product.category ?? categoryKey;
+      final String location = product.sellerLocation?.trim() ?? '';
+      if (location.isNotEmpty) locations.add(location);
+    }
+    final List<MapEntry<String, String>> categoryEntries =
+        categories.entries.toList()
+          ..sort((MapEntry<String, String> a, MapEntry<String, String> b) =>
+              a.value.toLowerCase().compareTo(b.value.toLowerCase()));
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: TextField(
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
               controller: _searchController,
+              focusNode: _searchFocusNode,
               textInputAction: TextInputAction.search,
+              onSubmitted: _submitSearch,
               onChanged: (String value) {
                 setState(() {
                   _searchQuery = value;
+                  _pageIndex = 0;
                 });
               },
               decoration: InputDecoration(
@@ -800,11 +1217,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ),
               ),
             ),
-          ),
+              ),
 
-          const SizedBox(width: 9),
+              const SizedBox(width: 9),
 
-          Material(
+              Material(
             color: _surface,
             borderRadius: BorderRadius.circular(15),
             child: InkWell(
@@ -822,9 +1239,413 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
             ),
           ),
+            ],
+          ),
+          if (suggestion != null) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () {
+                  _searchController.text = suggestion;
+                  _searchController.selection = TextSelection.collapsed(
+                    offset: suggestion.length,
+                  );
+                  setState(() {
+                    _searchQuery = suggestion;
+                    _pageIndex = 0;
+                  });
+                  unawaited(_recordSearch(suggestion));
+                  _searchFocusNode.unfocus();
+                },
+                icon: const Icon(Icons.auto_awesome, size: 15),
+                label: Text('Did you mean "$suggestion"?'),
+                style: TextButton.styleFrom(
+                  foregroundColor: _maroon,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Material(
+            color: _surface,
+            borderRadius: BorderRadius.circular(15),
+            child: ExpansionTile(
+              key: const PageStorageKey<String>('buyer-products-filters'),
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              leading: const Icon(Icons.filter_list_rounded, color: _maroon, size: 20),
+              title: const Text(
+                'Filters',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              subtitle: Text(
+                '${_filteredProducts.length} matching products',
+                style: const TextStyle(fontSize: 11, color: _muted),
+              ),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Category',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 7),
+                SizedBox(
+                  height: 44,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: List<Widget>.generate(
+                        categoryEntries.length + 1,
+                        (int index) {
+                          final bool allCategories = index == 0;
+                          final MapEntry<String, String>? entry =
+                              allCategories ? null : categoryEntries[index - 1];
+                          final String? slug = entry?.key;
+                          final bool selected = allCategories
+                              ? _categorySlug == null
+                              : _categorySlug == slug;
+                          final String label =
+                              allCategories ? 'All' : entry!.value;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 7),
+                            child: Semantics(
+                              button: true,
+                              selected: selected,
+                              label: label,
+                              child: Material(
+                                color: selected ? _maroon : _surface,
+                                borderRadius: BorderRadius.circular(100),
+                                child: InkWell(
+                                  onTap: () => setState(() {
+                                    _categorySlug = slug;
+                                    _pageIndex = 0;
+                                  }),
+                                  borderRadius: BorderRadius.circular(100),
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      minHeight: 44,
+                                    ),
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 7,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(100),
+                                      border: Border.all(
+                                        color: selected ? _maroon : _border,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      label,
+                                      style: TextStyle(
+                                        color: selected ? Colors.white : _text,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                PriceRangeFilter(
+                  minimum: _priceMinimum,
+                  maximum: _priceMaximum,
+                  selectedMinimum: _minimumPrice ?? _priceMinimum,
+                  selectedMaximum: _maximumPrice ?? _priceMaximum,
+                  onChanged: (RangeValues range) => setState(() {
+                    _minimumPrice = range.start;
+                    _maximumPrice = range.end;
+                    _pageIndex = 0;
+                  }),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: _location != null && locations.contains(_location) ? _location : 'any',
+                  decoration: const InputDecoration(labelText: 'Seller location', isDense: true),
+                  items: <DropdownMenuItem<String>>[
+                    const DropdownMenuItem(value: 'any', child: Text('Any location')),
+                    ...locations.map((String value) => DropdownMenuItem(value: value, child: Text(value))),
+                  ],
+                  onChanged: (String? value) => setState(() {
+                    _location = value == 'any' ? null : value;
+                    _pageIndex = 0;
+                  }),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _minimumRating?.toString() ?? 'any',
+                  decoration: const InputDecoration(labelText: 'Minimum rating', isDense: true),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem(value: 'any', child: Text('Any rating')),
+                    DropdownMenuItem(value: '3', child: Text('3 stars and up')),
+                    DropdownMenuItem(value: '4', child: Text('4 stars and up')),
+                    DropdownMenuItem(value: '5', child: Text('5 stars')),
+                  ],
+                  onChanged: (String? value) => setState(() {
+                    _minimumRating = value == null || value == 'any' ? null : double.tryParse(value);
+                    _pageIndex = 0;
+                  }),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => setState(() {
+                      _categorySlug = widget.initialCategorySlug;
+                      _location = null;
+                      _minimumRating = null;
+                      _minimumPrice = null;
+                      _maximumPrice = null;
+                      _pageIndex = 0;
+                    }),
+                    child: const Text('Reset filters'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildSearchHistory() {
+    final double maxQueryWidth =
+        (MediaQuery.sizeOf(context).width - 200).clamp(120, 190).toDouble();
+    final List<Widget> chips = _recentSearches.map<Widget>((ProductSearchRecord search) {
+      final BuyerProduct? product = _productForSearch(search);
+      return Material(
+        color: ShopColors.soft,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => _selectRecentSearch(search),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(13, 8, 10, 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxQueryWidth),
+                  child: Text(
+                    search.query,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (product?.imageUrl?.isNotEmpty == true) ...[
+                  const SizedBox(width: 7),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: SizedBox(
+                      width: 25,
+                      height: 25,
+                      child: SizedNetworkImage(
+                        url: AppConfig.resolveMediaUrl(product!.imageUrl!),
+                        fit: BoxFit.contain,
+                        iconSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }).toList(growable: true);
+    chips.add(
+      Tooltip(
+        message: 'Clear recent searches',
+        child: Material(
+          color: ShopColors.soft,
+          shape: const CircleBorder(),
+          child: IconButton(
+            onPressed: _clearSearchHistory,
+            icon: const Icon(Icons.delete_outline_rounded),
+            color: _muted,
+            iconSize: 20,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      child: Wrap(spacing: 9, runSpacing: 12, children: chips),
+    );
+  }
+
+  Widget _buildFocusedSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        textInputAction: TextInputAction.search,
+        onSubmitted: _submitSearch,
+        onChanged: (String value) => setState(() {
+          _searchQuery = value;
+          _pageIndex = 0;
+        }),
+        style: const TextStyle(color: _text, fontSize: 14),
+        cursorColor: _maroon,
+        decoration: InputDecoration(
+          hintText: 'Search products, shops...',
+          hintStyle: const TextStyle(color: _mutedLight, fontSize: 14),
+          prefixIcon: IconButton(
+            tooltip: 'Back',
+            onPressed: _leaveSearchExperience,
+            icon: const Icon(Icons.arrow_back_rounded),
+            color: _maroon,
+            iconSize: 21,
+          ),
+          prefixIconConstraints: const BoxConstraints.tightFor(
+            width: 52,
+            height: 56,
+          ),
+          suffixIcon: _searchQuery.trim().isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear search',
+                  onPressed: _clearSearch,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  color: _muted,
+                ),
+          filled: true,
+          fillColor: _surface,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 17,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide(color: _maroon.withValues(alpha: .65)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide(color: _maroon.withValues(alpha: .65)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: _maroon, width: 1.3),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _leaveSearchExperience() {
+    if (_showSearchExperience) {
+      if (widget.onBack != null) {
+        widget.onBack!();
+      } else {
+        Navigator.of(context).maybePop();
+      }
+      return;
+    }
+    _searchFocusNode.unfocus();
+  }
+
+  Widget _buildSearchSuggestions() {
+    final List<BuyerProduct> products = _searchSuggestionProducts;
+    final bool hasRecentSearches = _recentSearches.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const ColoredBox(color: ShopColors.soft, child: SizedBox(height: 7)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+          child: const Text(
+            'Search Suggestions',
+            style: TextStyle(
+              color: _text,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        if (products.isEmpty && _isLoading)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 28, 20, 40),
+            child: Center(
+              child: CircularProgressIndicator(color: _maroon),
+            ),
+          )
+        else if (products.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+            child: Text(
+              _errorMessage != null
+                  ? 'Search suggestions could not be loaded. Pull down to try again.'
+                  : hasRecentSearches
+                      ? 'No product suggestions yet. Try a different search.'
+                      : 'Products you search for will appear here.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _muted, fontSize: 13),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: products.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 11,
+                mainAxisSpacing: 11,
+                childAspectRatio: .88,
+              ),
+              itemBuilder: (BuildContext context, int index) =>
+                  _SearchSuggestionCard(
+                product: products[index],
+                onTap: () => _openProduct(products[index]),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _selectRecentSearch(ProductSearchRecord search) {
+    _searchController.text = search.query;
+    _searchController.selection = TextSelection.collapsed(
+      offset: search.query.length,
+    );
+    setState(() {
+      _searchQuery = search.query;
+      _pageIndex = 0;
+    });
   }
 
   Widget _buildCatalogHeader(int count) {
@@ -837,8 +1658,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Explore Products',
+                Text(
+                  widget.dealsOnly ? 'Shop Deals' : 'Explore Products',
                   style: TextStyle(
                     color: _text,
                     fontSize: 24,
@@ -898,13 +1719,41 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         product: products[row * columns + column],
                         wishlistLoading: _wishlistLoading.contains(products[row * columns + column].id),
                         onWishlist: () => _toggleWishlist(products[row * columns + column]),
-                        onTap: () => widget.onProductSelected?.call(products[row * columns + column]),
+                        onTap: () => _openProduct(products[row * columns + column]),
                       )),
               ],
             ]),
           );
         }, childCount: (products.length / columns).ceil()));
       }),
+    );
+  }
+
+  Widget _buildPagination(int itemCount) {
+    final int pageCount = (itemCount / _pageSize).ceil();
+    if (pageCount <= 1) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _pageIndex == 0 ? null : () => setState(() => _pageIndex--),
+            icon: const Icon(Icons.chevron_left_rounded),
+            label: const Text('Previous'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Text('Page ${_pageIndex + 1} of $pageCount', style: const TextStyle(color: _muted, fontSize: 11)),
+          ),
+          OutlinedButton.icon(
+            onPressed: _pageIndex >= pageCount - 1 ? null : () => setState(() => _pageIndex++),
+            icon: const Icon(Icons.chevron_right_rounded),
+            label: const Text('Next'),
+            iconAlignment: IconAlignment.end,
+          ),
+        ],
+      ),
     );
   }
 
@@ -994,69 +1843,96 @@ class _ProductCard extends StatelessWidget {
     image: _ProductImage(imageUrl: product.imageUrl),
     name: product.name, category: product.category, seller: product.sellerName,
     price: product.price, originalPrice: product.originalPrice, rating: product.rating,
-    soldCount: product.soldCount, outOfStock: product.isOutOfStock,
-    wishlisted: product.wishlisted, wishlistLoading: wishlistLoading,
+    soldCount: product.soldCount,
+    outOfStock: product.isOutOfStock || product.sellerOnVacation,
+    availabilityLabel: product.sellerOnVacation ? 'Seller on vacation' : null,
+    wishlisted: WishlistService.isWishlisted(product.id), wishlistLoading: wishlistLoading,
     onTap: onTap, onWishlist: onWishlist,
   );
 }
 
 class _ProductImage extends StatelessWidget {
   final String? imageUrl;
-
   const _ProductImage({required this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
-    final String? url = imageUrl?.trim();
-
-    if (url == null || url.isEmpty) {
-      return const Center(
-        child: Icon(
-          Icons.inventory_2_outlined,
-          color: ShopColors.faint,
-          size: 36,
-        ),
-      );
+    final value = imageUrl?.trim() ?? '';
+    if (value.isEmpty) {
+      return const Center(child: Icon(Icons.inventory_2_outlined,
+        color: ShopColors.faint, size: 36));
     }
-
-    final String resolvedUrl = AppConfig.resolveMediaUrl(url);
-
-    return Image(
-      image: CachedNetworkImageProvider(resolvedUrl),
-      fit: BoxFit.cover,
-      loadingBuilder:
-          (BuildContext context, Widget child, ImageChunkEvent? progress) {
-            if (progress == null) {
-              return child;
-            }
-
-            return const Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: ShopColors.accent,
-                ),
-              ),
-            );
-          },
-      errorBuilder:
-          (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: ShopColors.faint,
-                size: 36,
-              ),
-            );
-          },
-    );
+    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value),
+      fit: BoxFit.cover, iconSize: 36);
   }
 }
 
+class _SearchSuggestionCard extends StatelessWidget {
+  const _SearchSuggestionCard({required this.product, required this.onTap});
 
+  final BuyerProduct product;
+  final VoidCallback onTap;
 
+  @override
+  Widget build(BuildContext context) => Material(
+    color: ShopColors.surface,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          border: Border.all(color: ShopColors.border),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox.expand(
+                  child: product.imageUrl?.isNotEmpty == true
+                      ? SizedNetworkImage(
+                          url: AppConfig.resolveMediaUrl(product.imageUrl!),
+                          fit: BoxFit.contain,
+                          iconSize: 38,
+                        )
+                      : const Center(
+                          child: Icon(
+                            Icons.inventory_2_outlined,
+                            color: ShopColors.faint,
+                            size: 38,
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 38,
+              child: Center(
+                child: Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 14,
+                    height: 1.15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 class _SortOption extends StatelessWidget {
   final BuyerProductSort sort;
 

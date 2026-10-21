@@ -1019,13 +1019,6 @@ class _RiderDeliveryTrackingScreenState
       if (riderName.isEmpty) {
         throw Exception('Unable to load the rider name for the watermark.');
       }
-      final Position position =
-          await RiderProofWatermark.requireCurrentPosition();
-
-      if (!mounted) {
-        return;
-      }
-
       final XFile? photo = await _imagePicker.pickImage(
         source: ImageSource.camera,
 
@@ -1047,10 +1040,13 @@ class _RiderDeliveryTrackingScreenState
         return;
       }
 
+      final DateTime capturedAt = DateTime.now();
+      final Position position =
+          await RiderProofWatermark.requireCurrentPosition();
       final String stampedPath = await RiderProofWatermark.stamp(
         imagePath: photo.path,
         riderName: riderName,
-        capturedAt: DateTime.now(),
+        capturedAt: capturedAt,
         position: position,
       );
 
@@ -1910,7 +1906,9 @@ class _RiderDeliveryTrackingScreenState
               ),
               const SizedBox(height: 11),
               Text(
-                _takingPhoto ? 'Opening Camera...' : 'Take Proof of Delivery',
+                _takingPhoto
+                    ? 'Capturing and watermarking...'
+                    : 'Take Proof of Delivery',
                 style: const TextStyle(
                   color: _text,
                   fontSize: 14,
@@ -1947,19 +1945,22 @@ class _RiderDeliveryTrackingScreenState
         children: <Widget>[
           AspectRatio(
             aspectRatio: 4 / 3,
-            child: Image.file(
-              File(photo.path),
-              fit: BoxFit.cover,
-              errorBuilder:
-                  (BuildContext context, Object error, StackTrace? stackTrace) {
-                    return const Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 40,
-                        color: _mutedLight,
-                      ),
-                    );
-                  },
+            child: ColoredBox(
+              color: _soft,
+              child: Image.file(
+                File(photo.path),
+                fit: BoxFit.contain,
+                errorBuilder:
+                    (BuildContext context, Object error, StackTrace? stackTrace) {
+                      return const Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          size: 40,
+                          color: _mutedLight,
+                        ),
+                      );
+                    },
+              ),
             ),
           ),
           Padding(

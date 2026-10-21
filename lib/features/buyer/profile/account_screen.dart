@@ -10,6 +10,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 
+import '../../auth/register_screen.dart'
+    show AddressLoader, AddressOption, ChildAddressLoader, PostalCodeLoader;
+
 enum BuyerAccountTab { profile, addresses, vouchers, password, settings }
 
 extension BuyerAccountTabInfo on BuyerAccountTab {
@@ -301,6 +304,10 @@ class CreateBuyerAddressRequest {
   final String municipality;
   final String province;
   final String region;
+  final String? regionCode;
+  final String? provinceCode;
+  final String? municipalityCode;
+  final String? barangayCode;
   final String postalCode;
   final String landmark;
   final double? latitude;
@@ -318,6 +325,10 @@ class CreateBuyerAddressRequest {
     required this.municipality,
     required this.province,
     required this.region,
+    this.regionCode,
+    this.provinceCode,
+    this.municipalityCode,
+    this.barangayCode,
     required this.postalCode,
     required this.landmark,
     this.latitude,
@@ -385,6 +396,12 @@ class AccountScreen extends StatefulWidget {
 
   final AddBuyerAddressCallback? onAddAddress;
 
+  final AddressLoader? loadRegions;
+  final ChildAddressLoader? loadProvinces;
+  final ChildAddressLoader? loadMunicipalities;
+  final ChildAddressLoader? loadBarangays;
+  final PostalCodeLoader? loadPostalCode;
+
   final DeleteBuyerAddressCallback? onDeleteAddress;
 
   final SetDefaultBuyerAddressCallback? onSetDefaultAddress;
@@ -423,6 +440,11 @@ class AccountScreen extends StatefulWidget {
     this.onUpdateProfile,
     this.onRemoveProfilePhoto,
     this.onAddAddress,
+    this.loadRegions,
+    this.loadProvinces,
+    this.loadMunicipalities,
+    this.loadBarangays,
+    this.loadPostalCode,
     this.onDeleteAddress,
     this.onSetDefaultAddress,
     this.onChangePassword,
@@ -535,6 +557,23 @@ class _AccountScreenState extends State<AccountScreen> {
       TextEditingController();
   final Dio _addressGeocoder = Dio();
 
+  AddressOption? _selectedRegion;
+  AddressOption? _selectedProvince;
+  AddressOption? _selectedMunicipality;
+  AddressOption? _selectedBarangay;
+  List<AddressOption> _addressRegions = <AddressOption>[];
+  List<AddressOption> _addressProvinces = <AddressOption>[];
+  List<AddressOption> _addressMunicipalities = <AddressOption>[];
+  List<AddressOption> _addressBarangays = <AddressOption>[];
+  bool _loadingAddressRegions = false;
+  bool _loadingAddressProvinces = false;
+  bool _loadingAddressMunicipalities = false;
+  bool _loadingAddressBarangays = false;
+  bool _loadingPostalCode = false;
+  bool _postalCodeLookupFailed = false;
+  int _addressOptionsRequest = 0;
+  int _postalCodeLookupGeneration = 0;
+
   mapbox.MapboxMap? _addressMap;
   mapbox.CircleAnnotationManager? _addressMarkerManager;
 
@@ -569,6 +608,8 @@ class _AccountScreenState extends State<AccountScreen> {
 
     _activeTab = widget.initialTab;
 
+    _newAddressIsDefault = _addresses.isEmpty;
+
     _nameController = TextEditingController(text: _profile.name);
 
     _emailController = TextEditingController(text: _profile.email);
@@ -584,6 +625,10 @@ class _AccountScreenState extends State<AccountScreen> {
     _recipientNameController = TextEditingController(text: _profile.name);
 
     _addressPhoneController = TextEditingController(text: _profile.phone);
+
+    if (_activeTab == BuyerAccountTab.addresses) {
+      unawaited(_loadAddressRegions());
+    }
   }
 
   @override
@@ -595,15 +640,21 @@ class _AccountScreenState extends State<AccountScreen> {
 
       _profile = widget.profile;
 
-      _nameController.text = _profile.name;
+      if (_nameController.text == previousProfile.name) {
+        _nameController.text = _profile.name;
+      }
 
-      _emailController.text = _profile.email;
+      if (_emailController.text == previousProfile.email) {
+        _emailController.text = _profile.email;
+      }
 
-      _phoneController.text = _profile.phone;
+      if (_phoneController.text == previousProfile.phone) {
+        _phoneController.text = _profile.phone;
+      }
 
-      _birthday = _profile.birthday;
+      if (_birthday == previousProfile.birthday) _birthday = _profile.birthday;
 
-      _gender = _profile.gender;
+      if (_gender == previousProfile.gender) _gender = _profile.gender;
 
       if (_recipientNameController.text.trim().isEmpty ||
           _recipientNameController.text.trim() == previousProfile.name.trim()) {
@@ -624,6 +675,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
     if (oldWidget.initialTab != widget.initialTab) {
       _activeTab = widget.initialTab;
+      if (_activeTab == BuyerAccountTab.addresses) {
+        unawaited(_loadAddressRegions());
+      }
     }
   }
 
@@ -787,6 +841,381 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
+  Future<void> _loadAddressRegions() async {
+    if (_addressRegions.isNotEmpty || _loadingAddressRegions) return;
+    final AddressLoader? loader = widget.loadRegions;
+    if (loader == null) return;
+
+    setState(() => _loadingAddressRegions = true);
+    try {
+      final List<AddressOption> regions = await loader();
+      if (!mounted) return;
+      setState(() => _addressRegions = regions);
+    } catch (_) {
+      if (mounted) _showMessage('Unable to load regions.', error: true);
+    } finally {
+      if (mounted) setState(() => _loadingAddressRegions = false);
+    }
+  }
+
+  void _refreshAddressPinAfterLocationChange() {
+    unawaited(_syncAddressMarker());
+    final mapbox.MapboxMap? map = _addressMap;
+    if (map != null) {
+      unawaited(
+        map.setCamera(
+          mapbox.CameraOptions(
+            center: _toMapboxPoint(_defaultAddressMapCenter),
+            zoom: 14,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _clearPostalCodeForLocationChange() {
+    _postalCodeLookupGeneration++;
+    _postalCodeController.clear();
+    _loadingPostalCode = false;
+    _postalCodeLookupFailed = false;
+  }
+
+  Future<void> _onAddressRegionChanged(AddressOption? value) async {
+    if (_selectedRegion?.code == value?.code) return;
+    final int request = ++_addressOptionsRequest;
+    final ChildAddressLoader? loadProvinces = widget.loadProvinces;
+    final bool shouldLoad = value != null && loadProvinces != null;
+    setState(() {
+      _selectedRegion = value;
+      _selectedProvince = null;
+      _selectedMunicipality = null;
+      _selectedBarangay = null;
+      _addressProvinces = <AddressOption>[];
+      _addressMunicipalities = <AddressOption>[];
+      _addressBarangays = <AddressOption>[];
+      _loadingAddressProvinces = shouldLoad;
+      _loadingAddressMunicipalities = false;
+      _loadingAddressBarangays = false;
+      _regionController.text = value?.name ?? '';
+      _provinceController.clear();
+      _municipalityController.clear();
+      _barangayController.clear();
+      _clearPostalCodeForLocationChange();
+      _selectedAddressLocation = null;
+      _addressLocationMessage = null;
+      _addressMapCenter = _defaultAddressMapCenter;
+      _addressMapZoom = 14;
+    });
+    _refreshAddressPinAfterLocationChange();
+    if (value == null || loadProvinces == null) return;
+
+    try {
+      final List<AddressOption> options = await loadProvinces(value.code);
+      if (!mounted ||
+          request != _addressOptionsRequest ||
+          _selectedRegion?.code != value.code) return;
+      setState(() => _addressProvinces = options);
+    } catch (_) {
+      if (mounted && request == _addressOptionsRequest) {
+        _showMessage('Unable to load provinces.', error: true);
+      }
+    } finally {
+      if (mounted && request == _addressOptionsRequest) {
+        setState(() => _loadingAddressProvinces = false);
+      }
+    }
+  }
+
+  Future<void> _onAddressProvinceChanged(AddressOption? value) async {
+    if (_selectedProvince?.code == value?.code) return;
+    final int request = ++_addressOptionsRequest;
+    final ChildAddressLoader? loadMunicipalities = widget.loadMunicipalities;
+    final bool shouldLoad = value != null && loadMunicipalities != null;
+    setState(() {
+      _selectedProvince = value;
+      _selectedMunicipality = null;
+      _selectedBarangay = null;
+      _addressMunicipalities = <AddressOption>[];
+      _addressBarangays = <AddressOption>[];
+      _loadingAddressMunicipalities = shouldLoad;
+      _loadingAddressBarangays = false;
+      _provinceController.text = value?.name ?? '';
+      _municipalityController.clear();
+      _barangayController.clear();
+      _clearPostalCodeForLocationChange();
+      _selectedAddressLocation = null;
+      _addressLocationMessage = null;
+      _addressMapCenter = _defaultAddressMapCenter;
+      _addressMapZoom = 14;
+    });
+    _refreshAddressPinAfterLocationChange();
+    if (value == null || loadMunicipalities == null) return;
+
+    try {
+      final List<AddressOption> options = await loadMunicipalities(value.code);
+      if (!mounted ||
+          request != _addressOptionsRequest ||
+          _selectedProvince?.code != value.code) return;
+      setState(() => _addressMunicipalities = options);
+    } catch (_) {
+      if (mounted && request == _addressOptionsRequest) {
+        _showMessage('Unable to load cities.', error: true);
+      }
+    } finally {
+      if (mounted && request == _addressOptionsRequest) {
+        setState(() => _loadingAddressMunicipalities = false);
+      }
+    }
+  }
+
+  Future<void> _onAddressMunicipalityChanged(AddressOption? value) async {
+    if (_selectedMunicipality?.code == value?.code) return;
+    final int request = ++_addressOptionsRequest;
+    final ChildAddressLoader? loadBarangays = widget.loadBarangays;
+    final bool shouldLoad = value != null && loadBarangays != null;
+    setState(() {
+      _selectedMunicipality = value;
+      _selectedBarangay = null;
+      _addressBarangays = <AddressOption>[];
+      _loadingAddressBarangays = shouldLoad;
+      _municipalityController.text = value?.name ?? '';
+      _barangayController.clear();
+      _clearPostalCodeForLocationChange();
+      _selectedAddressLocation = null;
+      _addressLocationMessage = null;
+      _addressMapCenter = _defaultAddressMapCenter;
+      _addressMapZoom = 14;
+    });
+    _refreshAddressPinAfterLocationChange();
+    if (value == null || loadBarangays == null) return;
+
+    try {
+      final List<AddressOption> options = await loadBarangays(value.code);
+      if (!mounted ||
+          request != _addressOptionsRequest ||
+          _selectedMunicipality?.code != value.code) return;
+      setState(() => _addressBarangays = options);
+    } catch (_) {
+      if (mounted && request == _addressOptionsRequest) {
+        _showMessage('Unable to load barangays.', error: true);
+      }
+    } finally {
+      if (mounted && request == _addressOptionsRequest) {
+        setState(() => _loadingAddressBarangays = false);
+      }
+    }
+  }
+
+  Future<void> _onAddressBarangayChanged(AddressOption? value) async {
+    if (_selectedBarangay?.code == value?.code) return;
+    final int lookupGeneration = ++_postalCodeLookupGeneration;
+    setState(() {
+      _selectedBarangay = value;
+      _barangayController.text = value?.name ?? '';
+      _postalCodeController.clear();
+      _loadingPostalCode = value != null;
+      _postalCodeLookupFailed = false;
+      _selectedAddressLocation = null;
+      _addressLocationMessage = null;
+      _addressMapCenter = _defaultAddressMapCenter;
+      _addressMapZoom = 14;
+    });
+    _refreshAddressPinAfterLocationChange();
+
+    final AddressOption? municipality = _selectedMunicipality;
+    final PostalCodeLoader? loadPostalCode = widget.loadPostalCode;
+    if (value == null || municipality == null || loadPostalCode == null) {
+      if (mounted && value != null) {
+        setState(() {
+          _loadingPostalCode = false;
+          _postalCodeLookupFailed = true;
+        });
+      }
+      return;
+    }
+
+    try {
+      final String? postalCode = await loadPostalCode(
+        municipalityCode: municipality.code,
+        barangayCode: value.code,
+        provinceCode: _selectedProvince?.code ?? '',
+        provinceName: _selectedProvince?.name ?? '',
+        municipalityName: municipality.name,
+      );
+      if (!mounted ||
+          lookupGeneration != _postalCodeLookupGeneration ||
+          _selectedBarangay?.code != value.code) return;
+      final String normalizedPostalCode = postalCode?.trim() ?? '';
+      setState(() {
+        _postalCodeController.text = normalizedPostalCode;
+        _loadingPostalCode = false;
+        _postalCodeLookupFailed = normalizedPostalCode.isEmpty;
+      });
+    } catch (_) {
+      if (mounted && lookupGeneration == _postalCodeLookupGeneration) {
+        setState(() {
+          _loadingPostalCode = false;
+          _postalCodeLookupFailed = true;
+        });
+      }
+    }
+  }
+
+  Widget _buildAddressDropdown({
+    required String label,
+    required String hint,
+    required List<AddressOption> options,
+    required AddressOption? value,
+    required bool enabled,
+    required bool loading,
+    required ValueChanged<AddressOption?> onChanged,
+  }) {
+    final OutlineInputBorder border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(13),
+      borderSide: const BorderSide(color: ShopColors.border),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _FieldLabel(text: label, requiredField: true),
+          const SizedBox(height: 7),
+          DropdownButtonFormField<AddressOption>(
+            value: value,
+            isExpanded: true,
+            decoration: InputDecoration(
+              hintText: loading ? 'Loading...' : hint,
+              hintStyle: const TextStyle(
+                color: ShopColors.faint,
+                fontSize: 14,
+              ),
+              isDense: true,
+              filled: true,
+              fillColor: ShopColors.canvas,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 13,
+                vertical: 15,
+              ),
+              suffixIcon: loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(13),
+                      child: SizedBox.square(
+                        dimension: 17,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
+              border: border,
+              enabledBorder: border,
+              focusedBorder: border.copyWith(
+                borderSide: const BorderSide(
+                  color: ShopColors.accent,
+                  width: 1.3,
+                ),
+              ),
+              errorBorder: border.copyWith(
+                borderSide: const BorderSide(color: Color(0xFFD64A59)),
+              ),
+              focusedErrorBorder: border.copyWith(
+                borderSide: const BorderSide(
+                  color: Color(0xFFD64A59),
+                  width: 1.3,
+                ),
+              ),
+            ),
+            items: options
+                .map(
+                  (AddressOption option) => DropdownMenuItem<AddressOption>(
+                    value: option,
+                    child: Text(
+                      option.name,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+            validator: (AddressOption? selected) =>
+                selected == null ? 'Please select an option.' : null,
+            onChanged: enabled && !loading ? onChanged : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _postalCodeHelperText {
+    if (_loadingPostalCode) return 'Finding postal code...';
+    if (_postalCodeLookupFailed) {
+      return 'Postal code is unavailable for this barangay.';
+    }
+    final String postalCode = _postalCodeController.text.trim();
+    if (postalCode.isNotEmpty) return 'Postal code: $postalCode';
+    return 'Postal code will fill after you select a barangay.';
+  }
+
+  Widget _buildAddressLocationField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildAddressDropdown(
+          label: 'Region',
+          hint: 'Select region',
+          options: _addressRegions,
+          value: _selectedRegion,
+          enabled: widget.loadProvinces != null && !_loadingAddressRegions,
+          loading: _loadingAddressRegions,
+          onChanged: (AddressOption? value) {
+            unawaited(_onAddressRegionChanged(value));
+          },
+        ),
+        _buildAddressDropdown(
+          label: 'Province',
+          hint: 'Select province',
+          options: _addressProvinces,
+          value: _selectedProvince,
+          enabled: _selectedRegion != null,
+          loading: _loadingAddressProvinces,
+          onChanged: (AddressOption? value) {
+            unawaited(_onAddressProvinceChanged(value));
+          },
+        ),
+        _buildAddressDropdown(
+          label: 'City / Municipality',
+          hint: 'Select municipality / city',
+          options: _addressMunicipalities,
+          value: _selectedMunicipality,
+          enabled: _selectedProvince != null,
+          loading: _loadingAddressMunicipalities,
+          onChanged: (AddressOption? value) {
+            unawaited(_onAddressMunicipalityChanged(value));
+          },
+        ),
+        _buildAddressDropdown(
+          label: 'Barangay',
+          hint: 'Select barangay',
+          options: _addressBarangays,
+          value: _selectedBarangay,
+          enabled: _selectedMunicipality != null,
+          loading: _loadingAddressBarangays,
+          onChanged: (AddressOption? value) {
+            unawaited(_onAddressBarangayChanged(value));
+          },
+        ),
+        _AddressInput(
+          label: 'Postal code',
+          controller: _postalCodeController,
+          hint: 'Auto-filled when available',
+          helperText: _postalCodeHelperText,
+          helperTextError: _postalCodeLookupFailed,
+          prefixIcon: Icons.markunread_mailbox_outlined,
+          keyboardType: TextInputType.number,
+          maxLength: 20,
+          readOnly: true,
+        ),
+      ],
+    );
+  }
   Future<void> _findAddress() async {
     final String searchText = _addressSearchController.text.trim();
     final String query = <String>[
@@ -932,6 +1361,10 @@ class _AccountScreenState extends State<AccountScreen> {
     setState(() {
       _activeTab = tab;
     });
+
+    if (tab == BuyerAccountTab.addresses) {
+      unawaited(_loadAddressRegions());
+    }
 
     widget.onTabChanged?.call(tab);
   }
@@ -1215,6 +1648,13 @@ class _AccountScreenState extends State<AccountScreen> {
       return;
     }
 
+    if (_selectedAddressLocation == null) {
+      setState(() {
+        _addressLocationMessage = 'Please pin the delivery location.';
+      });
+      return;
+    }
+
     final AddBuyerAddressCallback? callback = widget.onAddAddress;
 
     if (callback == null) {
@@ -1235,10 +1675,14 @@ class _AccountScreenState extends State<AccountScreen> {
           contactNumber: _addressPhoneController.text.trim(),
           houseNumber: _houseNumberController.text.trim(),
           street: _streetController.text.trim(),
-          barangay: _barangayController.text.trim(),
-          municipality: _municipalityController.text.trim(),
-          province: _provinceController.text.trim(),
-          region: _regionController.text.trim(),
+          barangay: _selectedBarangay?.name ?? '',
+          municipality: _selectedMunicipality?.name ?? '',
+          province: _selectedProvince?.name ?? '',
+          region: _selectedRegion?.name ?? '',
+          regionCode: _selectedRegion?.code,
+          provinceCode: _selectedProvince?.code,
+          municipalityCode: _selectedMunicipality?.code,
+          barangayCode: _selectedBarangay?.code,
           postalCode: _postalCodeController.text.trim(),
           landmark: _landmarkController.text.trim(),
            latitude: _selectedAddressLocation?.latitude,
@@ -1296,6 +1740,21 @@ class _AccountScreenState extends State<AccountScreen> {
     _postalCodeController.clear();
     _landmarkController.clear();
     _addressSearchController.clear();
+
+    _selectedRegion = null;
+    _selectedProvince = null;
+    _selectedMunicipality = null;
+    _selectedBarangay = null;
+    _addressProvinces = <AddressOption>[];
+    _addressMunicipalities = <AddressOption>[];
+    _addressBarangays = <AddressOption>[];
+    _loadingAddressProvinces = false;
+    _loadingAddressMunicipalities = false;
+    _loadingAddressBarangays = false;
+    _loadingPostalCode = false;
+    _postalCodeLookupFailed = false;
+    _addressOptionsRequest++;
+    _postalCodeLookupGeneration++;
 
     _newAddressIsDefault = false;
     _selectedAddressLocation = null;
@@ -1673,15 +2132,43 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
-  Widget _buildTopBar() => ShopPageHeader(
-    title: widget.showNavigationTabs ? 'My account' : _activeTab.label,
-    subtitle: widget.showNavigationTabs ? 'Your own little corner of LIKHAE.' : _activeTab.description,
-    onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-    actions: [
-      if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-      if (widget.accountActive != null) _AccountStatusBadge(active: widget.accountActive!),
-    ],
-  );
+  Widget _buildTopBar() {
+    final VoidCallback handleBack =
+        widget.onBack ?? () => Navigator.of(context).maybePop();
+    final List<Widget> actions = [
+      if (_refreshing)
+        const SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      if (widget.accountActive != null)
+        _AccountStatusBadge(active: widget.accountActive!),
+    ];
+
+    if (widget.showNavigationTabs) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+        child: Row(
+          children: [
+            GlassIconButton(
+              icon: Icons.arrow_back_rounded,
+              label: 'Back',
+              onPressed: handleBack,
+            ),
+            const Spacer(),
+            ...actions,
+          ],
+        ),
+      );
+    }
+
+    return ShopPageHeader(
+      title: _activeTab.label,
+      subtitle: _activeTab.description,
+      onBack: handleBack,
+      actions: actions,
+    );
+  }
 
   Widget _buildHeading() {
     return const Column(
@@ -2408,154 +2895,98 @@ class _AccountScreenState extends State<AccountScreen> {
           const SizedBox(height: 8),
 
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
             decoration: BoxDecoration(
-              color: _soft,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: _border),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Form(
               key: _addressFormKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.add_location_alt_outlined,
-                        color: _maroon,
-                        size: 19,
-                      ),
-
-                      SizedBox(width: 7),
-
-                      Text(
-                        'Add delivery address',
-                        style: TextStyle(
-                          color: _text,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
+                  const Text(
+                    'Add delivery address',
+                    style: TextStyle(
+                      color: ShopColors.text,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
 
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 5),
 
                   const Text(
-                    'Region, province, municipality and barangay can later use the same Philippine address API as registration. The save request remains compatible with Laravel address fields.',
-                    style: TextStyle(color: _muted, fontSize: 12, height: 1.55),
+                    'Choose a precise location so the courier can find you.',
+                    style: TextStyle(
+                      color: ShopColors.muted,
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
                   _AddressInput(
-                    label: 'Label',
+                    label: 'Address label',
                     controller: _addressLabelController,
                     hint: 'Home, Work',
+                    prefixIcon: Icons.bookmark_outline_rounded,
                     requiredField: true,
-                    maxLength: 80,
+                    maxLength: 50,
                   ),
-
-                  const SizedBox(height: 12),
 
                   _AddressInput(
                     label: 'Recipient name',
                     controller: _recipientNameController,
-                    hint: 'Recipient name',
+                    hint: 'Recipient full name',
+                    prefixIcon: Icons.person_outline_rounded,
                     requiredField: true,
-                    maxLength: 160,
+                    maxLength: 200,
                   ),
 
-                  const SizedBox(height: 12),
-
                   _AddressInput(
-                    label: 'Contact number',
+                    label: 'Recipient contact number',
                     controller: _addressPhoneController,
-                    hint: 'Contact number',
-                    keyboardType: TextInputType.phone,
+                    hint: 'e.g. 0917 123 4567',
+                    prefixIcon: Icons.phone_outlined,
                     requiredField: true,
-                    maxLength: 40,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 30,
                   ),
 
-                  const SizedBox(height: 12),
+                  _buildAddressLocationField(),
 
                   _AddressInput(
-                    label: 'House / unit number',
+                    label: 'House / Unit Number',
                     controller: _houseNumberController,
-                    hint: 'House / unit number',
-                    maxLength: 80,
+                    hint: 'House or unit number',
+                    prefixIcon: Icons.home_work_outlined,
+                    maxLength: 100,
                   ),
 
-                  const SizedBox(height: 12),
-
                   _AddressInput(
-                    label: 'Street',
+                    label: 'Street / Purok',
                     controller: _streetController,
-                    hint: 'Street',
+                    hint: 'Street or purok',
+                    prefixIcon: Icons.home_outlined,
+                    requiredField: true,
                     maxLength: 255,
                   ),
 
-                  const SizedBox(height: 12),
-
                   _AddressInput(
-                    label: 'Barangay',
-                    controller: _barangayController,
-                    hint: 'Barangay',
-                    maxLength: 160,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  _AddressInput(
-                    label: 'Municipality / City',
-                    controller: _municipalityController,
-                    hint: 'Municipality / City',
-                    maxLength: 160,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  _AddressInput(
-                    label: 'Province',
-                    controller: _provinceController,
-                    hint: 'Province',
-                    maxLength: 160,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  _AddressInput(
-                    label: 'Region',
-                    controller: _regionController,
-                    hint: 'Region',
-                    maxLength: 160,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  _AddressInput(
-                    label: 'Postal code',
-                    controller: _postalCodeController,
-                    hint: 'Postal code',
-                    keyboardType: TextInputType.text,
-                    maxLength: 20,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  _AddressInput(
-                    label: 'Landmark',
+                    label: 'Building / Subdivision, Landmark / Additional Details',
                     controller: _landmarkController,
-                    hint: 'Landmark',
+                    hint: 'Building, subdivision, or nearby landmark',
+                    prefixIcon: Icons.flag_outlined,
                     maxLength: 255,
                   ),
 
-                  const SizedBox(height: 13),
+                  const SizedBox(height: 20),
 
-                   _buildAddressPinSection(),
+                  _buildAddressPinSection(),
 
-                   const SizedBox(height: 13),
+                  const SizedBox(height: 12),
 
                   Material(
                     color: Colors.transparent,
@@ -3481,7 +3912,15 @@ class _AddressInput extends StatelessWidget {
 
   final TextInputType keyboardType;
 
+  final IconData? prefixIcon;
+
   final bool requiredField;
+
+  final bool readOnly;
+
+  final String? helperText;
+
+  final bool helperTextError;
 
   final int maxLength;
 
@@ -3491,45 +3930,106 @@ class _AddressInput extends StatelessWidget {
     required this.hint,
     required this.maxLength,
     this.keyboardType = TextInputType.text,
+    this.prefixIcon,
     this.requiredField = false,
+    this.readOnly = false,
+    this.helperText,
+    this.helperTextError = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _FieldLabel(text: label, requiredField: requiredField),
+    final OutlineInputBorder border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(13),
+      borderSide: const BorderSide(color: ShopColors.border),
+    );
 
-        const SizedBox(height: 6),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _FieldLabel(text: label, requiredField: requiredField),
+          const SizedBox(height: 7),
+          TextFormField(
+            controller: controller,
+            keyboardType: keyboardType,
+            maxLength: maxLength,
+            readOnly: readOnly,
+            textCapitalization:
+                keyboardType == TextInputType.phone ||
+                    keyboardType == TextInputType.number
+                ? TextCapitalization.none
+                : TextCapitalization.words,
+            style: const TextStyle(
+              color: ShopColors.text,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: ShopColors.faint,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+              ),
+              prefixIcon: prefixIcon == null
+                  ? null
+                  : Icon(prefixIcon, color: ShopColors.muted, size: 19),
+              helperText: helperText,
+              helperStyle: TextStyle(
+                color: helperTextError
+                    ? const Color(0xFFD64A59)
+                    : ShopColors.muted,
+                fontSize: 12,
+              ),
+              counterText: '',
+              isDense: true,
+              filled: true,
+              fillColor: ShopColors.canvas,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 13,
+                vertical: 15,
+              ),
+              border: border,
+              enabledBorder: border,
+              focusedBorder: border.copyWith(
+                borderSide: const BorderSide(
+                  color: ShopColors.accent,
+                  width: 1.3,
+                ),
+              ),
+              errorBorder: border.copyWith(
+                borderSide: const BorderSide(color: Color(0xFFD64A59)),
+              ),
+              focusedErrorBorder: border.copyWith(
+                borderSide: const BorderSide(
+                  color: Color(0xFFD64A59),
+                  width: 1.3,
+                ),
+              ),
+              errorStyle: const TextStyle(
+                color: Color(0xFFD64A59),
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+            validator: (String? value) {
+              final String text = value?.trim() ?? '';
 
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          maxLength: maxLength,
-          textCapitalization:
-              keyboardType == TextInputType.phone ||
-                  keyboardType == TextInputType.number
-              ? TextCapitalization.none
-              : TextCapitalization.words,
-          decoration: _accountInputDecoration(
-            hintText: hint,
-          ).copyWith(counterText: ''),
-          validator: (String? value) {
-            final String text = value?.trim() ?? '';
+              if (requiredField && text.isEmpty) {
+                return 'Please provide $label';
+              }
 
-            if (requiredField && text.isEmpty) {
-              return 'Required.';
-            }
+              if (text.length > maxLength) {
+                return 'Maximum $maxLength characters.';
+              }
 
-            if (text.length > maxLength) {
-              return 'Maximum $maxLength characters.';
-            }
-
-            return null;
-          },
-        ),
-      ],
+              return null;
+            },
+          ),
+        ],
+      ),
     );
   }
 }

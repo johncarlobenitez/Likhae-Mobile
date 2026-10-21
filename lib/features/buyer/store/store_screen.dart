@@ -1,7 +1,11 @@
+import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:likhae/core/config/app_config.dart';
+import 'package:likhae/core/utils/api_value_parsers.dart';
+import 'package:likhae/shared/widgets/price_range_filter.dart';
+import 'package:likhae/services/wishlist_service.dart';
 
 typedef StoreProductCallback = void Function(
   StoreProductData product,
@@ -12,6 +16,17 @@ typedef StoreAsyncProductCallback = Future<void> Function(
 );
 
 typedef StoreRefreshCallback = Future<void> Function();
+
+typedef StoreFollowCallback = Future<StoreFollowResult> Function(
+  bool following,
+);
+
+class StoreFollowResult {
+  final bool following;
+  final int? followers;
+
+  const StoreFollowResult({required this.following, this.followers});
+}
 
 class StoreSellerData {
   final int id;
@@ -31,6 +46,7 @@ class StoreSellerData {
   /// a value for them. Flutter does not manufacture seller
   /// performance statistics.
   final String? followers;
+  final bool isFollowing;
   final String? response;
   final String? fulfillment;
 
@@ -41,6 +57,7 @@ class StoreSellerData {
   /// false = Laravel explicitly says not verified.
   /// null  = verification state was not supplied.
   final bool? verified;
+  final bool onVacation;
 
   const StoreSellerData({
     required this.id,
@@ -51,14 +68,19 @@ class StoreSellerData {
     this.joinedYear,
     this.rating,
     this.followers,
+    this.isFollowing = false,
     this.response,
     this.fulfillment,
     this.description,
     this.businessHours,
     this.verified,
+    this.onVacation = false,
   });
 
   factory StoreSellerData.fromApi(Map<String, dynamic> json) {
+    final double? parsedRating = double.tryParse(
+      (json['rating'] ?? json['average_rating'])?.toString() ?? '',
+    );
     return StoreSellerData(
       id: int.tryParse(
             (json['id'] ?? json['user_id'] ?? json['seller_user_id'])
@@ -76,14 +98,66 @@ class StoreSellerData {
       avatarUrl: json['logo_url']?.toString() ??
           json['avatar_url']?.toString() ??
           json['seller_avatar']?.toString(),
-      location: json['location']?.toString() ??
-          json['seller_location']?.toString(),
-      joinedYear: json['joined_year']?.toString() ??
-          json['year_joined']?.toString(),
-      rating: double.tryParse(json['rating']?.toString() ?? ''),
+      location: _formatLocation(json['location'] ?? json['seller_location']),
+      joinedYear: _formatJoinedDate(
+        json['joined_at'] ?? json['created_at'] ?? json['joined_year'] ?? json['year_joined'],
+      ),
+      rating: parsedRating != null && parsedRating > 0 ? parsedRating : null,
+      followers: _metricText(json['followers'] ?? json['followers_count']),
+      isFollowing: parseApiBool(
+        json['is_following'] ?? json['following'],
+        defaultValue: false,
+      ),
+      response: _metricText(
+        json['response'] ?? json['response_rate'] ?? json['response_time'],
+      ),
+      fulfillment: _metricText(
+        json['fulfillment'] ?? json['fulfillment_rate'],
+      ),
       description: json['description']?.toString(),
-      verified: json['verified'] == true || json['is_verified'] == true,
+      verified: json.containsKey('verified') || json.containsKey('is_verified')
+          ? parseApiBool(json['verified'] ?? json['is_verified'], defaultValue: false)
+          : null,
+      onVacation: parseApiBool(
+        json['is_on_vacation'] ?? json['is_vacation_mode'] ?? json['vacation_mode'],
+        defaultValue: false,
+      ),
     );
+  }
+
+  static String? _formatJoinedDate(dynamic raw) {
+    final String value = raw?.toString().trim() ?? '';
+    if (value.isEmpty) return null;
+    final DateTime? date = DateTime.tryParse(value);
+    if (date == null) return value;
+    const List<String> months = <String>[
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return '${months[date.month - 1]} ${date.year}';
+  }
+
+  static String? _formatLocation(dynamic raw) {
+    if (raw is! Map) {
+      final String value = raw?.toString().trim() ?? '';
+      return value.isEmpty ? null : value;
+    }
+    final List<String> values = <dynamic>[
+      raw['name'],
+      raw['city'],
+      raw['municipality'],
+      raw['province'],
+    ]
+        .where((dynamic value) => value != null && value.toString().trim().isNotEmpty)
+        .map((dynamic value) => value.toString().trim())
+        .toSet()
+        .toList(growable: false);
+    return values.isEmpty ? null : values.join(', ');
+  }
+
+  static String? _metricText(dynamic raw) {
+    final String value = raw?.toString().trim() ?? '';
+    return value.isEmpty ? null : value;
   }
 
   String get initials {
@@ -135,6 +209,9 @@ class StoreProductData {
   final int? stock;
 
   final bool wishlisted;
+  final bool isActive;
+  final bool isDraft;
+  final bool isDeleted;
 
   const StoreProductData({
     required this.id,
@@ -148,6 +225,9 @@ class StoreProductData {
     this.soldCount = 0,
     this.stock,
     this.wishlisted = false,
+    this.isActive = true,
+    this.isDraft = false,
+    this.isDeleted = false,
   });
 
   factory StoreProductData.fromApi(Map<String, dynamic> json) {
@@ -170,21 +250,47 @@ class StoreProductData {
                 orElse: () => null,
               )
         : null;
+    final List<Map<String, dynamic>> variants = rawVariants is List
+        ? rawVariants.whereType<Map>().map((Map item) => Map<String, dynamic>.from(item)).toList()
+        : <Map<String, dynamic>>[];
+    Map<String, dynamic>? cheapestVariant;
+    for (final Map<String, dynamic> variant in variants) {
+      final double candidate = double.tryParse((variant['price'] ?? variant['sale_price'] ?? '').toString()) ?? double.infinity;
+      final double current = cheapestVariant == null
+          ? double.infinity
+          : double.tryParse((cheapestVariant['price'] ?? cheapestVariant['sale_price'] ?? '').toString()) ?? double.infinity;
+      if (candidate < current) cheapestVariant = variant;
+    }
     final double price = double.tryParse(
-          (json['price'] ??
-                  json['min_price'] ??
+          (json['min_price'] ??
+                  cheapestVariant?['price'] ?? cheapestVariant?['sale_price'] ??
+                  json['price'] ??
                   defaultVariant?['price'] ??
                   '')
               .toString(),
         ) ??
         0;
-    final double? originalPrice = double.tryParse(
-      (json['old_price'] ??
-              json['original_price'] ??
-              defaultVariant?['original_price'] ??
-              '')
-          .toString(),
-    );
+    Map<String, dynamic>? priceVariant = cheapestVariant;
+    for (final Map<String, dynamic> variant in variants) {
+      final double? variantPrice = double.tryParse(
+        (variant['price'] ?? variant['sale_price'])?.toString() ?? '',
+      );
+      if (variantPrice == price) {
+        priceVariant = variant;
+        break;
+      }
+    }
+    final dynamic rawOriginalPrice = variants.isEmpty
+        ? (json['old_price'] ??
+            json['original_price'] ??
+            (defaultVariant == null
+                ? null
+                : defaultVariant['original_price']))
+        : (priceVariant == null
+            ? null
+            : (priceVariant['old_price'] ??
+                priceVariant['original_price']));
+    final double? originalPrice = double.tryParse(rawOriginalPrice?.toString() ?? '');
 
     return StoreProductData(
       id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
@@ -199,9 +305,19 @@ class StoreProductData {
       rating: double.tryParse(json['rating']?.toString() ?? ''),
       soldCount: int.tryParse(json['sold']?.toString() ?? json['sold_count']?.toString() ?? '0') ?? 0,
       stock: int.tryParse(
-        (json['stock'] ?? json['quantity'])?.toString() ?? '0',
+        (json['stock'] ?? json['quantity'])?.toString() ?? '',
       ),
       wishlisted: json['wishlisted'] == true || json['wishlist'] == true,
+      isActive: parseApiBool(
+        json['is_active'] ?? json['is_available'] ?? json['active'] ?? json['is_published'],
+        defaultValue: !<String>{'inactive', 'unpublished', 'draft', 'deleted', 'disabled'}
+            .contains((json['status'] ?? '').toString().toLowerCase()),
+      ),
+      isDraft: parseApiBool(json['is_draft'], defaultValue: false) ||
+          (json['status'] ?? '').toString().toLowerCase() == 'draft',
+      isDeleted: parseApiBool(json['is_deleted'] ?? json['deleted'], defaultValue: false) ||
+          json['deleted_at'] != null ||
+          (json['status'] ?? '').toString().toLowerCase() == 'deleted',
     );
   }
 
@@ -249,6 +365,9 @@ class StoreProductData {
       stock: stock,
       wishlisted:
           wishlisted ?? this.wishlisted,
+      isActive: isActive,
+      isDraft: isDraft,
+      isDeleted: isDeleted,
     );
   }
 }
@@ -291,6 +410,8 @@ class StoreScreen extends StatefulWidget {
 
   final VoidCallback? onMessageSeller;
 
+  final StoreFollowCallback? onFollowShop;
+
   final StoreProductCallback? onProductSelected;
 
   /// Toggle the real Laravel wishlist state.
@@ -314,6 +435,7 @@ class StoreScreen extends StatefulWidget {
     this.products = const <StoreProductData>[],
     this.onBack,
     this.onMessageSeller,
+    this.onFollowShop,
     this.onProductSelected,
     this.onWishlistProduct,
     this.onRefresh,
@@ -378,9 +500,21 @@ class _StoreScreenState
   StoreProductSort _sort =
       StoreProductSort.defaultSort;
 
+  String? _selectedCategory;
+  bool _filtersExpanded = false;
+
   String _query = '';
+  double? _minimumPrice;
+  double? _maximumPrice;
+  double? _minimumRating;
+  int _pageIndex = 0;
+  static const int _pageSize = 20;
 
   bool _refreshing = false;
+
+  bool _isFollowing = false;
+  bool _followLoading = false;
+  String? _followersLabel;
 
   @override
   void initState() {
@@ -390,6 +524,15 @@ class _StoreScreenState
         List<StoreProductData>.from(
       widget.products,
     );
+    _isFollowing = widget.seller.isFollowing;
+    _followersLabel = widget.seller.followers;
+    WishlistService.productIds.addListener(_onWishlistChanged);
+    WishlistService.recordKnownProducts(_products.map((StoreProductData product) =>
+        (id: product.id, wishlisted: product.wishlisted)));
+  }
+
+  void _onWishlistChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -399,6 +542,28 @@ class _StoreScreenState
     super.didUpdateWidget(
       oldWidget,
     );
+
+    if (oldWidget.seller.id != widget.seller.id ||
+        oldWidget.seller.slug != widget.seller.slug) {
+      _isFollowing = widget.seller.isFollowing;
+      _followersLabel = widget.seller.followers;
+      _followLoading = false;
+      _selectedCategory = null;
+      _minimumPrice = null;
+      _maximumPrice = null;
+      _minimumRating = null;
+      _filtersExpanded = false;
+      _query = '';
+      _searchController.clear();
+      _pageIndex = 0;
+    } else {
+      if (oldWidget.seller.isFollowing != widget.seller.isFollowing) {
+        _isFollowing = widget.seller.isFollowing;
+      }
+      if (oldWidget.seller.followers != widget.seller.followers) {
+        _followersLabel = widget.seller.followers;
+      }
+    }
 
     if (oldWidget.products !=
         widget.products) {
@@ -429,19 +594,42 @@ class _StoreScreenState
   @override
   void dispose() {
     _searchController.dispose();
+    WishlistService.productIds.removeListener(_onWishlistChanged);
 
     super.dispose();
   }
 
+  Object? _filterKey;
+  List<StoreProductData> _filterResult = [];
+
   List<StoreProductData> get _visibleProducts {
+    final key = (
+      _products,
+      _query,
+      _selectedCategory,
+      _sort,
+      _minimumPrice,
+      _maximumPrice,
+      _minimumRating,
+    );
+    if (_filterKey == key) return _filterResult;
+
     final String cleanQuery =
         _query.trim().toLowerCase();
 
-    final List<StoreProductData> result =
+    List<StoreProductData> result =
         _products.where(
       (
         StoreProductData product,
       ) {
+        if (!product.isActive || product.isDraft || product.isDeleted) {
+          return false;
+        }
+        if (_selectedCategory != null &&
+            product.category?.trim().toLowerCase() !=
+                _selectedCategory!.toLowerCase()) {
+          return false;
+        }
         if (cleanQuery.isEmpty) {
           return true;
         }
@@ -457,6 +645,16 @@ class _StoreScreenState
         );
       },
     ).toList();
+
+    final double minimum = _priceMinimum;
+    final double maximum = _priceMaximum;
+    result = result.where((StoreProductData product) =>
+        product.price >= (_minimumPrice ?? minimum) &&
+        product.price <= (_maximumPrice ?? maximum)).toList();
+    if (_minimumRating != null) {
+      result = result.where((StoreProductData product) =>
+          (product.rating ?? 0) >= _minimumRating!).toList();
+    }
 
     switch (_sort) {
       case StoreProductSort.defaultSort:
@@ -516,7 +714,43 @@ class _StoreScreenState
         break;
     }
 
-    return result;
+    _filterKey = key;
+    return _filterResult = result;
+  }
+
+  double get _priceMinimum {
+    final List<double> prices = _products
+        .where((StoreProductData product) => product.isActive && !product.isDraft && !product.isDeleted)
+        .map((StoreProductData product) => product.price)
+        .toList(growable: false);
+    return prices.isEmpty ? 0 : prices.reduce((double a, double b) => a < b ? a : b);
+  }
+
+  double get _priceMaximum {
+    final List<double> prices = _products
+        .where((StoreProductData product) => product.isActive && !product.isDraft && !product.isDeleted)
+        .map((StoreProductData product) => product.price)
+        .toList(growable: false);
+    return prices.isEmpty ? 100000 : prices.reduce((double a, double b) => a > b ? a : b);
+  }
+
+  List<String> get _storeCategories {
+    final List<String> categories = _products
+        .where((StoreProductData product) =>
+            product.isActive && !product.isDraft && !product.isDeleted)
+        .map((StoreProductData product) => product.category?.trim() ?? '')
+        .where((String category) => category.isNotEmpty)
+        .toSet()
+        .toList();
+    categories.sort((String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return categories;
+  }
+
+  List<StoreProductData> get _pageProducts {
+    final List<StoreProductData> all = _visibleProducts;
+    final int start = (_pageIndex * _pageSize).clamp(0, all.length).toInt();
+    final int end = (start + _pageSize).clamp(0, all.length).toInt();
+    return all.sublist(start, end);
   }
 
   Future<void> _refresh() async {
@@ -577,6 +811,7 @@ class _StoreScreenState
     });
 
     try {
+      final bool wasWishlisted = WishlistService.isWishlisted(product.id);
       /*
        * Do not optimistically change the heart.
        *
@@ -585,6 +820,12 @@ class _StoreScreenState
       await callback(
         product,
       );
+
+      bool newState = WishlistService.isWishlisted(product.id);
+      if (newState == wasWishlisted) {
+        newState = !wasWishlisted;
+        WishlistService.setProductWishlisted(product.id, newState);
+      }
 
       if (!mounted) {
         return;
@@ -602,14 +843,6 @@ class _StoreScreenState
       if (index < 0) {
         return;
       }
-
-      setState(() {
-        _products[index] =
-            _products[index].copyWith(
-          wishlisted:
-              !_products[index].wishlisted,
-        );
-      });
 
       widget.onProductsChanged?.call(
         List<StoreProductData>.unmodifiable(
@@ -639,6 +872,19 @@ class _StoreScreenState
 
     setState(() {
       _query = '';
+      _pageIndex = 0;
+    });
+  }
+
+  void _clearProductFilters() {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _selectedCategory = null;
+      _minimumPrice = null;
+      _maximumPrice = null;
+      _minimumRating = null;
+      _pageIndex = 0;
     });
   }
 
@@ -688,6 +934,39 @@ class _StoreScreenState
       );
   }
 
+  Future<void> _toggleFollow() async {
+    if (_followLoading) return;
+    final StoreFollowCallback? onFollowShop = widget.onFollowShop;
+    if (onFollowShop == null) {
+      _showMessage('Shop following is unavailable right now.', error: true);
+      return;
+    }
+
+    setState(() => _followLoading = true);
+    try {
+      final StoreFollowResult result = await onFollowShop(!_isFollowing);
+      if (!mounted) return;
+      setState(() {
+        _isFollowing = result.following;
+        if (result.followers != null) {
+          _followersLabel = result.followers.toString();
+        }
+      });
+      _showMessage(
+        result.following
+            ? 'You are now following ${widget.seller.name}.'
+            : 'You unfollowed ${widget.seller.name}.',
+      );
+    } catch (error) {
+      _showMessage(
+        error.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
+        error: true,
+      );
+    } finally {
+      if (mounted) setState(() => _followLoading = false);
+    }
+  }
+
   String _errorText(
     Object error,
   ) {
@@ -703,9 +982,8 @@ class _StoreScreenState
   Widget build(
     BuildContext context,
   ) {
-    final List<StoreProductData>
-        visibleProducts =
-        _visibleProducts;
+    final List<StoreProductData> visibleProducts = _visibleProducts;
+    final List<StoreProductData> pageProducts = _pageProducts;
 
     return Scaffold(
       backgroundColor:
@@ -728,6 +1006,7 @@ class _StoreScreenState
                     _refresh,
                 child:
                     CustomScrollView(
+                  key: const PageStorageKey<String>('buyer-store-scroll'),
                   physics:
                       const AlwaysScrollableScrollPhysics(),
                   keyboardDismissBehavior:
@@ -748,6 +1027,25 @@ class _StoreScreenState
                             _buildSellerHero(),
                       ),
                     ),
+
+                    if (widget.seller.onVacation)
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                        sliver: SliverToBoxAdapter(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF4ED),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFF2D2BE)),
+                            ),
+                            child: const Text(
+                              'This seller is on vacation and cannot accept orders right now.',
+                              style: TextStyle(color: ShopColors.secondaryText, fontSize: 11, height: 1.4, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ),
 
                     SliverPadding(
                       padding:
@@ -864,12 +1162,14 @@ class _StoreScreenState
                                   int index,
                                 ) {
                                   final StoreProductData product =
-                                      visibleProducts[
+                                      pageProducts[
                                           index];
 
                                   return _StoreProductCard(
                                     product:
                                         product,
+                                    sellerOnVacation:
+                                        widget.seller.onVacation,
                                     wishlistLoading:
                                         _wishlistLoading.contains(
                                       product.id,
@@ -891,12 +1191,14 @@ class _StoreScreenState
                                   );
                                 },
                                 childCount:
-                                    visibleProducts.length,
+                                    pageProducts.length,
                               ),
                             );
                           },
                         ),
                       ),
+                    if (visibleProducts.length > _pageSize)
+                      SliverToBoxAdapter(child: _buildPagination(visibleProducts.length)),
                   ],
                 ),
               ),
@@ -908,7 +1210,7 @@ class _StoreScreenState
   }
 
   Widget _buildTopBar() => ShopPageHeader(
-    title: 'Meet the maker', subtitle: widget.seller.name, onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
+    title: 'Store', subtitle: widget.seller.name, onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
     actions: [
       if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
       if (widget.seller.verified == true)
@@ -1048,7 +1350,7 @@ class _StoreScreenState
                                 0xFFE8C8B2,
                               ),
                               fontSize:
-                                  7.5,
+                                10,
                               letterSpacing:
                                   1.4,
                               fontWeight:
@@ -1134,7 +1436,7 @@ class _StoreScreenState
                                         0xFFF4DED4,
                                       ),
                                       fontSize:
-                                          9.5,
+                                        11.5,
                                       height:
                                           1.35,
                                     ),
@@ -1160,6 +1462,8 @@ class _StoreScreenState
 
                   Text(
                     widget.seller.description!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                     style:
                         const TextStyle(
                       color:
@@ -1167,7 +1471,7 @@ class _StoreScreenState
                         0xFFF4DED4,
                       ),
                       fontSize:
-                          10.5,
+                        12,
                       height:
                           1.55,
                     ),
@@ -1179,60 +1483,78 @@ class _StoreScreenState
                       17,
                 ),
 
-                SizedBox(
-                  width:
-                      double.infinity,
-                  height:
-                      46,
-                  child:
-                      ElevatedButton.icon(
-                    onPressed:
-                        widget.onMessageSeller,
-                    style:
-                        ElevatedButton.styleFrom(
-                      elevation:
-                          0,
-                      backgroundColor:
-                          const Color(
-                        0xFFFFF7EF,
-                      ),
-                      foregroundColor:
-                          _maroon,
-                      disabledBackgroundColor:
-                          Colors.white.withValues(
-                        alpha: 0.18,
-                      ),
-                      disabledForegroundColor:
-                          Colors.white.withValues(
-                        alpha: 0.55,
-                      ),
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(
-                          13,
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 46,
+                        child: OutlinedButton.icon(
+                          onPressed: _followLoading || widget.onFollowShop == null
+                              ? null
+                              : _toggleFollow,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            disabledForegroundColor: Colors.white.withValues(alpha: 0.55),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.55)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                          ),
+                          icon: _followLoading
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Icon(
+                                  _isFollowing
+                                      ? Icons.check_rounded
+                                      : Icons.add_rounded,
+                                  size: 18,
+                                ),
+                          label: Text(
+                            _isFollowing ? 'Following' : 'Follow',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                    icon:
-                        const Icon(
-                      Icons
-                          .chat_bubble_outline_rounded,
-                      size:
-                          17,
-                    ),
-                    label:
-                        const Text(
-                      'Message Seller',
-                      style:
-                          TextStyle(
-                        fontSize:
-                            10.5,
-                        fontWeight:
-                            FontWeight.w800,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SizedBox(
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          onPressed: widget.onMessageSeller,
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            backgroundColor: const Color(0xFFFFF7EF),
+                            foregroundColor: _maroon,
+                            disabledBackgroundColor: Colors.white.withValues(alpha: 0.18),
+                            disabledForegroundColor: Colors.white.withValues(alpha: 0.55),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 17,
+                          ),
+                          label: const Text(
+                            'Message Seller',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -1245,59 +1567,46 @@ class _StoreScreenState
   Widget _buildSellerDetails() {
     final List<_SellerStat> stats =
         <_SellerStat>[
-      if (widget.seller.rating !=
-          null)
         _SellerStat(
           label:
               'Rating',
-          value:
-              widget.seller.rating!
-                  .toStringAsFixed(
-            1,
-          ),
+          value: widget.seller.rating?.toStringAsFixed(1) ?? '—',
           icon:
               Icons.star_rounded,
         ),
 
-      if (widget.seller.followers
-              ?.trim()
-              .isNotEmpty ==
-          true)
         _SellerStat(
           label:
               'Followers',
-          value:
-              widget.seller.followers!,
+          value: _followersLabel?.trim().isNotEmpty == true
+              ? _followersLabel!
+              : '—',
           icon:
               Icons.group_outlined,
         ),
 
-      if (widget.seller.response
-              ?.trim()
-              .isNotEmpty ==
-          true)
         _SellerStat(
           label:
               'Response',
-          value:
-              widget.seller.response!,
+          value: widget.seller.response?.trim().isNotEmpty == true
+              ? widget.seller.response!
+              : '—',
           icon:
               Icons.schedule_outlined,
         ),
 
-      if (widget.seller.fulfillment
-              ?.trim()
-              .isNotEmpty ==
-          true)
         _SellerStat(
           label:
               'Fulfillment',
-          value:
-              widget.seller.fulfillment!,
+          value: widget.seller.fulfillment?.trim().isNotEmpty == true
+              ? widget.seller.fulfillment!
+              : '—',
           icon:
               Icons.inventory_2_outlined,
         ),
     ];
+
+    stats.removeWhere((_SellerStat stat) => stat.value == '\u2014');
 
     final bool hasJoined =
         widget.seller.joinedYear
@@ -1311,9 +1620,7 @@ class _StoreScreenState
                 .isNotEmpty ==
             true;
 
-    if (stats.isEmpty &&
-        !hasJoined &&
-        !hasHours) {
+    if (stats.isEmpty && !hasJoined && !hasHours) {
       return const SizedBox.shrink();
     }
 
@@ -1339,6 +1646,16 @@ class _StoreScreenState
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: [
+          const Text(
+            'Seller details',
+            style: TextStyle(
+              color: ShopColors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+
           if (stats.isNotEmpty)
             LayoutBuilder(
               builder:
@@ -1414,8 +1731,7 @@ class _StoreScreenState
                       .calendar_month_outlined,
               label:
                   'Joined',
-              value:
-                  widget.seller.joinedYear!,
+              value: widget.seller.joinedYear!,
             ),
 
           if (hasJoined &&
@@ -1443,8 +1759,11 @@ class _StoreScreenState
   Widget _buildProductHeader(
     int visibleCount,
   ) {
-    final bool filtering =
-        _query.trim().isNotEmpty;
+    final bool filtering = _query.trim().isNotEmpty ||
+        _selectedCategory != null ||
+        _minimumPrice != null ||
+        _maximumPrice != null ||
+        _minimumRating != null;
 
     return Row(
       crossAxisAlignment:
@@ -1457,13 +1776,13 @@ class _StoreScreenState
                 CrossAxisAlignment.start,
             children: [
               const Text(
-                'STORE PRODUCTS',
+                'PRODUCTS FROM THIS STORE',
                 style:
                     TextStyle(
                   color:
                       _maroon,
                   fontSize:
-                      8,
+                  10,
                   letterSpacing:
                       1.5,
                   fontWeight:
@@ -1500,14 +1819,14 @@ class _StoreScreenState
 
               Text(
                 filtering
-                    ? '$visibleCount of ${_products.length} ${_products.length == 1 ? 'product' : 'products'}'
-                    : '${_products.length} ${_products.length == 1 ? 'product' : 'products'} from this seller',
+                    ? '$visibleCount of ${_products.where((StoreProductData p) => p.isActive && !p.isDraft && !p.isDeleted).length} products'
+                    : '${_products.where((StoreProductData p) => p.isActive && !p.isDraft && !p.isDeleted).length} products from this seller',
                 style:
                     const TextStyle(
                   color:
                       _muted,
                   fontSize:
-                      10,
+                      12,
                 ),
               ),
             ],
@@ -1532,6 +1851,7 @@ class _StoreScreenState
             setState(() {
               _query =
                   value;
+              _pageIndex = 0;
             });
           },
           decoration:
@@ -1543,7 +1863,7 @@ class _StoreScreenState
               color:
                   _muted2,
               fontSize:
-                  11,
+                  13,
             ),
             prefixIcon:
                 const Icon(
@@ -1623,6 +1943,8 @@ class _StoreScreenState
             ),
           ),
         ),
+
+        if (_storeCategories.isNotEmpty) _buildCategoryFilters(),
 
         const SizedBox(
           height:
@@ -1715,7 +2037,7 @@ class _StoreScreenState
                       color:
                           _text,
                       fontSize:
-                          10.5,
+                          12.5,
                       fontWeight:
                           FontWeight.w600,
                     ),
@@ -1734,17 +2056,226 @@ class _StoreScreenState
               setState(() {
                 _sort =
                     value;
+                _pageIndex = 0;
               });
             },
           ),
+        ),
+
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _filtersExpanded = !_filtersExpanded),
+            icon: Icon(
+              _filtersExpanded ? Icons.tune_rounded : Icons.filter_list_rounded,
+              size: 17,
+            ),
+            label: Text(
+              _filtersExpanded
+                  ? 'Hide filters'
+                  : _activeFilterCount == 0
+                      ? 'Filters'
+                      : 'Filters ($_activeFilterCount)',
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: _filtersExpanded
+              ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(17),
+                    border: Border.all(color: _border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Refine products',
+                              style: TextStyle(
+                                color: _text,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _activeFilterCount == 0
+                                ? null
+                                : () => setState(() {
+                                      _selectedCategory = null;
+                                      _minimumPrice = null;
+                                      _maximumPrice = null;
+                                      _minimumRating = null;
+                                      _pageIndex = 0;
+                                    }),
+                            child: const Text('Reset'),
+                          ),
+                        ],
+                      ),
+                      PriceRangeFilter(
+                        minimum: _priceMinimum,
+                        maximum: _priceMaximum,
+                        selectedMinimum: _minimumPrice ?? _priceMinimum,
+                        selectedMaximum: _maximumPrice ?? _priceMaximum,
+                        onChanged: (RangeValues range) => setState(() {
+                          _minimumPrice = range.start;
+                          _maximumPrice = range.end;
+                          _pageIndex = 0;
+                        }),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: _minimumRating?.toInt().toString() ?? 'any',
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Minimum rating',
+                          prefixIcon: const Icon(Icons.star_outline_rounded),
+                          isDense: true,
+                          filled: true,
+                          fillColor: ShopColors.canvas,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: _border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: _border),
+                          ),
+                        ),
+                        items: const <DropdownMenuItem<String>>[
+                          DropdownMenuItem(value: 'any', child: Text('Any rating')),
+                          DropdownMenuItem(value: '3', child: Text('3 stars and up')),
+                          DropdownMenuItem(value: '4', child: Text('4 stars and up')),
+                          DropdownMenuItem(value: '5', child: Text('5 stars')),
+                        ],
+                        onChanged: (String? value) => setState(() {
+                          _minimumRating = value == null || value == 'any'
+                              ? null
+                              : double.tryParse(value);
+                          _pageIndex = 0;
+                        }),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
         ),
       ],
     );
   }
 
+  int get _activeFilterCount => <bool>[
+        _selectedCategory != null,
+        _minimumPrice != null || _maximumPrice != null,
+        _minimumRating != null,
+      ].where((bool active) => active).length;
+
+  Widget _buildCategoryFilters() {
+    final List<String> categories = _storeCategories;
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Categories',
+            style: TextStyle(
+              color: _text,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _categoryChip('All', null),
+                for (final String category in categories)
+                  _categoryChip(category, category),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _categoryChip(String label, String? category) {
+    final bool selected = _selectedCategory == category;
+    return Padding(
+      padding: const EdgeInsets.only(right: 7),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        visualDensity: VisualDensity.compact,
+        side: BorderSide(color: selected ? _maroon : _border),
+        backgroundColor: _surface,
+        selectedColor: ShopColors.accentSoft,
+        labelStyle: TextStyle(
+          color: selected ? _maroon : _muted,
+          fontSize: 11.5,
+          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        ),
+        onSelected: (_) => setState(() {
+          _selectedCategory = category;
+          _pageIndex = 0;
+        }),
+      ),
+    );
+  }
+
+  Widget _buildPagination(int itemCount) {
+    final int pageCount = (itemCount / _pageSize).ceil();
+    if (pageCount <= 1) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _pageIndex == 0 ? null : () => setState(() => _pageIndex--),
+            icon: const Icon(Icons.chevron_left_rounded),
+            label: const Text('Previous'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text('Page ${_pageIndex + 1} of $pageCount', style: const TextStyle(color: _muted, fontSize: 10)),
+          ),
+          OutlinedButton.icon(
+            onPressed: _pageIndex >= pageCount - 1 ? null : () => setState(() => _pageIndex++),
+            icon: const Icon(Icons.chevron_right_rounded),
+            label: const Text('Next'),
+            iconAlignment: IconAlignment.end,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyProducts() {
-    final bool searching =
-        _query.trim().isNotEmpty;
+    final bool searching = _query.trim().isNotEmpty;
+    final bool filtering = searching ||
+        _selectedCategory != null ||
+        _minimumPrice != null ||
+        _maximumPrice != null ||
+        _minimumRating != null;
+    final String? suggestion = searching
+        ? closestProductSuggestion(
+            _query,
+            _products.map((StoreProductData product) => product.name),
+          )
+        : null;
 
     return Container(
       width:
@@ -1787,7 +2318,7 @@ class _StoreScreenState
                 Alignment.center,
             child:
                 Icon(
-              searching
+              filtering
                   ? Icons
                       .search_off_rounded
                   : Icons
@@ -1805,7 +2336,7 @@ class _StoreScreenState
           ),
 
           Text(
-            searching
+            filtering
                 ? 'No matching products'
                 : 'No products available',
             textAlign:
@@ -1827,8 +2358,8 @@ class _StoreScreenState
           ),
 
           Text(
-            searching
-                ? 'Try another product name or category.'
+            filtering
+                ? 'Try another search or adjust your category and filters.'
                 : 'This seller does not have products available in this store right now.',
             textAlign:
                 TextAlign.center,
@@ -1843,7 +2374,21 @@ class _StoreScreenState
             ),
           ),
 
-          if (searching) ...[
+          if (suggestion != null) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () {
+                _searchController.text = suggestion;
+                setState(() {
+                  _query = suggestion;
+                  _pageIndex = 0;
+                });
+              },
+              child: Text('Did you mean “$suggestion”?'),
+            ),
+          ],
+
+          if (filtering) ...[
             const SizedBox(
               height:
                   15,
@@ -1851,7 +2396,7 @@ class _StoreScreenState
 
             OutlinedButton(
               onPressed:
-                  _clearSearch,
+                  _clearProductFilters,
               style:
                   OutlinedButton.styleFrom(
                 foregroundColor:
@@ -1871,11 +2416,11 @@ class _StoreScreenState
               ),
               child:
                   const Text(
-                'Clear Search',
+                'Clear search and filters',
                 style:
                     TextStyle(
                   fontSize:
-                      10,
+                      12,
                   fontWeight:
                       FontWeight.w800,
                 ),
@@ -2078,8 +2623,9 @@ class _SellerStatCard
         children: [
           Icon(
             stat.icon,
-            color:
-                ShopColors.accent,
+            color: stat.label == 'Rating'
+                ? const Color(0xFFC88418)
+                : ShopColors.accent,
             size:
                 18,
           ),
@@ -2102,7 +2648,7 @@ class _SellerStatCard
               color:
                   ShopColors.text,
               fontSize:
-                  10.5,
+                  12.5,
               fontWeight:
                   FontWeight.w800,
             ),
@@ -2126,7 +2672,7 @@ class _SellerStatCard
               color:
                   ShopColors.muted,
               fontSize:
-                  7.5,
+                  10,
             ),
           ),
         ],
@@ -2200,7 +2746,7 @@ class _SellerInfoRow
                   color:
                       ShopColors.muted,
                   fontSize:
-                      8,
+                      10,
                   fontWeight:
                       FontWeight.w700,
                 ),
@@ -2218,9 +2764,9 @@ class _SellerInfoRow
                   color:
                       ShopColors.text,
                   fontSize:
-                      10,
+                      12.5,
                   height:
-                      1.4,
+                      1.35,
                   fontWeight:
                       FontWeight.w700,
                 ),
@@ -2236,6 +2782,7 @@ class _SellerInfoRow
 class _StoreProductCard
     extends StatelessWidget {
   final StoreProductData product;
+  final bool sellerOnVacation;
 
   final bool wishlistLoading;
 
@@ -2244,6 +2791,7 @@ class _StoreProductCard
 
   const _StoreProductCard({
     required this.product,
+    required this.sellerOnVacation,
     required this.wishlistLoading,
     required this.onTap,
     required this.onWishlist,
@@ -2367,9 +2915,9 @@ class _StoreProductCard
                           child:
                               SizedBox(
                             width:
-                                35,
+                                42,
                             height:
-                                35,
+                                42,
                             child:
                                 wishlistLoading
                                     ? const Padding(
@@ -2386,8 +2934,7 @@ class _StoreProductCard
                                         ),
                                       )
                                     : Icon(
-                                        product.wishlisted
-                                            ? Icons.favorite_rounded
+                                        WishlistService.isWishlisted(product.id) ? Icons.favorite_rounded
                                             : Icons.favorite_border_rounded,
                                         size:
                                             18,
@@ -2403,7 +2950,7 @@ class _StoreProductCard
                      * Unknown stock must NOT look like
                      * zero stock.
                      */
-                    if (product.isOutOfStock)
+                    if (product.isOutOfStock || sellerOnVacation)
                       Positioned.fill(
                         child:
                             Container(
@@ -2434,8 +2981,10 @@ class _StoreProductCard
                               ),
                             ),
                             child:
-                                const Text(
-                              'OUT OF STOCK',
+                                Text(
+                              sellerOnVacation
+                                  ? 'SELLER ON VACATION'
+                                  : 'OUT OF STOCK',
                               style:
                                   TextStyle(
                                 color:
@@ -2458,10 +3007,10 @@ class _StoreProductCard
               Padding(
                 padding:
                     const EdgeInsets.fromLTRB(
+                  12,
                   10,
-                  10,
-                  10,
-                  11,
+                  12,
+                  12,
                 ),
                 child:
                     Column(
@@ -2484,7 +3033,7 @@ class _StoreProductCard
                           color:
                               ShopColors.secondaryText,
                           fontSize:
-                              9,
+                              10,
                           letterSpacing:
                               0.7,
                           fontWeight:
@@ -2509,7 +3058,7 @@ class _StoreProductCard
                         color:
                             ShopColors.text,
                         fontSize:
-                            13,
+                            14,
                         height:
                             1.3,
                         fontWeight:
@@ -2539,7 +3088,7 @@ class _StoreProductCard
                             color:
                                 ShopColors.accent,
                             fontSize:
-                                15,
+                                16,
                             fontWeight:
                                 FontWeight.w800,
                           ),
@@ -2600,7 +3149,7 @@ class _StoreProductCard
                               color:
                                   ShopColors.text,
                               fontSize:
-                                  9.5,
+                                  10.5,
                               fontWeight:
                                   FontWeight.w700,
                             ),
@@ -2625,7 +3174,7 @@ class _StoreProductCard
                               color:
                                   ShopColors.muted,
                               fontSize:
-                                  9.5,
+                                  10.5,
                             ),
                           ),
                         ),
@@ -2641,7 +3190,7 @@ class _StoreProductCard
                               color:
                                   ShopColors.muted,
                               fontSize:
-                                  9,
+                                  10,
                             ),
                           ),
                       ],
@@ -2663,87 +3212,14 @@ class _StoreProductCard
   }
 }
 
-class _StoreProductImage
-    extends StatelessWidget {
+class _StoreProductImage extends StatelessWidget {
   final String? url;
-
-  const _StoreProductImage({
-    required this.url,
-  });
-
+  const _StoreProductImage({required this.url});
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final String? imageUrl =
-        url?.trim();
-
-    if (imageUrl == null ||
-        imageUrl.isEmpty) {
-      return const Center(
-        child:
-            Icon(
-          Icons
-              .inventory_2_outlined,
-          color:
-              ShopColors.faint,
-          size:
-              34,
-        ),
-      );
-    }
-
-    final String resolvedUrl = AppConfig.resolveMediaUrl(imageUrl);
-
-    return Image.network(
-      resolvedUrl,
-      fit:
-          BoxFit.cover,
-      loadingBuilder:
-          (
-        BuildContext context,
-        Widget child,
-        ImageChunkEvent? progress,
-      ) {
-        if (progress == null) {
-          return child;
-        }
-
-        return const Center(
-          child:
-              SizedBox(
-            width:
-                22,
-            height:
-                22,
-            child:
-                CircularProgressIndicator(
-              strokeWidth:
-                  2,
-              color:
-                  ShopColors.accent,
-            ),
-          ),
-        );
-      },
-      errorBuilder:
-          (
-        BuildContext context,
-        Object error,
-        StackTrace? stackTrace,
-      ) {
-        return const Center(
-          child:
-              Icon(
-            Icons
-                .broken_image_outlined,
-            color:
-                ShopColors.faint,
-            size:
-                34,
-          ),
-        );
-      },
-    );
+  Widget build(BuildContext context) {
+    final value = url?.trim() ?? '';
+    if (value.isEmpty) return const Center(child: Icon(Icons.inventory_2_outlined,
+      color: ShopColors.faint, size: 34));
+    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 34);
   }
 }

@@ -29,6 +29,7 @@ class GlassNavigationBar extends StatelessWidget {
     return GlassSurface(
       radius: 36,
       padding: const EdgeInsets.all(6),
+      opacity: .94,
       child: SizedBox(
         height: height,
         child: LayoutBuilder(builder: (context, constraints) {
