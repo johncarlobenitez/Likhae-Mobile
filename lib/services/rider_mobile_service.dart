@@ -364,6 +364,25 @@ class RiderMobileService {
     return RiderProfileData.fromApi(_map(rawData, 'profile'));
   }
 
+  static Future<String> updateVehiclePlate(String plateNumber) async {
+    final Response<dynamic> response = await ApiClient.patch(
+      AppConfig.resolveApiUrl('rider/profile/vehicle'),
+      <String, dynamic>{'plate_number': plateNumber.trim().toUpperCase()},
+    );
+    final Map<String, dynamic> payload = _requirePayload(response);
+    final dynamic data = payload['data'];
+    final Map<String, dynamic> result = data is Map
+        ? Map<String, dynamic>.from(data)
+        : payload;
+    final String? savedPlate = result['plate_number']?.toString().trim();
+    if (savedPlate == null || savedPlate.isEmpty) {
+      throw const FormatException(
+        'The server did not return the saved plate number.',
+      );
+    }
+    return savedPlate;
+  }
+
   static Future<RiderProfileData> updateResidentialAddress(
     Map<String, dynamic> address,
   ) async {

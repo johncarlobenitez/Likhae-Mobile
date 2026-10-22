@@ -38,10 +38,12 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _addressFormKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _passwordFormKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _vehicleFormKey = GlobalKey<FormState>();
   final TextEditingController _firstName = TextEditingController();
   final TextEditingController _lastName = TextEditingController();
   final TextEditingController _email = TextEditingController();
   final TextEditingController _contact = TextEditingController();
+  final TextEditingController _plateNumber = TextEditingController();
   final TextEditingController _postalCode = TextEditingController();
   final TextEditingController _houseNumber = TextEditingController();
   final TextEditingController _street = TextEditingController();
@@ -69,6 +71,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   bool _usingDeviceLocation = false;
   bool _pinConfirmed = false;
   bool _savingProfile = false;
+  bool _savingVehicle = false;
   bool _savingAddress = false;
   bool _savingPassword = false;
   bool _addressChanged = false;
@@ -89,6 +92,9 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     _lastName.text = _profile.lastName;
     _email.text = _profile.email;
     _contact.text = _profile.contactNumber;
+    _plateNumber.text = _profile.plateNumber == 'Not recorded'
+        ? ''
+        : _profile.plateNumber;
     final RiderResidentialAddressData? address = _profile.residentialAddress;
     if (address != null) {
       _postalCode.text = address.postalCode;
@@ -111,6 +117,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     _lastName.dispose();
     _email.dispose();
     _contact.dispose();
+    _plateNumber.dispose();
     _postalCode.dispose();
     _houseNumber.dispose();
     _street.dispose();
@@ -423,6 +430,24 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     }
   }
 
+  Future<void> _saveVehicle() async {
+    if (!_vehicleFormKey.currentState!.validate() || _savingVehicle) return;
+    setState(() => _savingVehicle = true);
+    try {
+      final String savedPlate = await RiderMobileService.updateVehiclePlate(
+        _plateNumber.text,
+      );
+      if (!mounted) return;
+      _plateNumber.text = savedPlate;
+      _hasSaved = true;
+      _showMessage('Vehicle plate number updated and synced with LIKHAE.');
+    } catch (error) {
+      _showMessage('Could not update plate number. $error', error: true);
+    } finally {
+      if (mounted) setState(() => _savingVehicle = false);
+    }
+  }
+
   Future<void> _saveAddress() async {
     if (!_addressFormKey.currentState!.validate() || _savingAddress) return;
     final LatLng? location = _selectedLocation;
@@ -653,20 +678,46 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
             _panel(
               title: 'Vehicle and Coverage',
               subtitle:
-                  'Approved rider details managed by your logistics center.',
+                  'Update your plate number when you replace your vehicle. Vehicle type and coverage are managed by your logistics center.',
               icon: Icons.two_wheeler_outlined,
-              child: Column(
-                children: <Widget>[
-                  _readOnlyRow('Vehicle', _profile.vehicleType),
-                  _readOnlyRow('Plate', _profile.plateNumber),
-                  _readOnlyRow('Logistics Center', _profile.logisticsCenter),
-                  _readOnlyRow(
-                    'Areas',
-                    _profile.serviceAreas.isEmpty
-                        ? 'No active area'
-                        : _profile.serviceAreas.join(', '),
-                  ),
-                ],
+              child: Form(
+                key: _vehicleFormKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _readOnlyRow('Vehicle', _profile.vehicleType),
+                    _textField(
+                      controller: _plateNumber,
+                      label: 'Plate number',
+                      textCapitalization: TextCapitalization.characters,
+                      validator: (String? value) {
+                        final String plate = value?.trim() ?? '';
+                        if (plate.isEmpty) return 'Enter your plate number.';
+                        if (plate.length > 50 ||
+                            !RegExp(r'^[A-Za-z0-9][A-Za-z0-9 -]*$')
+                                .hasMatch(plate)) {
+                          return 'Use letters, numbers, spaces, or hyphens.';
+                        }
+                        return null;
+                      },
+                    ),
+                    _readOnlyRow(
+                      'Logistics Center',
+                      _profile.logisticsCenter,
+                    ),
+                    _readOnlyRow(
+                      'Areas',
+                      _profile.serviceAreas.isEmpty
+                          ? 'No active area'
+                          : _profile.serviceAreas.join(', '),
+                    ),
+                    _saveButton(
+                      label: 'Save Plate Number',
+                      saving: _savingVehicle,
+                      onPressed: _saveVehicle,
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 14),
