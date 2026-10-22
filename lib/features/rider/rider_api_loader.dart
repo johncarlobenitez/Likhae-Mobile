@@ -32,6 +32,7 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
   T? _data;
   Object? _error;
   Timer? _refreshTimer;
+  ModalRoute<dynamic>? _modalRoute;
   bool _requestInFlight = false;
 
   @override
@@ -83,10 +84,16 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
     }
     _refreshTimer = Timer.periodic(interval, (_) {
       if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
-          ModalRoute.of(context)?.isCurrent != false) {
+          _modalRoute?.isCurrent != false) {
         unawaited(_refresh());
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _modalRoute = ModalRoute.of(context);
   }
 
   @override
