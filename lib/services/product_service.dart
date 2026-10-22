@@ -227,7 +227,7 @@ class ProductService {
   static Future<List<Map<String, dynamic>>> fetchPlatformEvents() async {
     if (!AppConfig.apiEnabled) return const <Map<String, dynamic>>[];
     final Response<dynamic> response = await ApiClient.get(
-      AppConfig.resolveApiUrl('platform-events'),
+      AppConfig.resolveApiUrl('events'),
     );
     final int statusCode = response.statusCode ?? 500;
     if (statusCode < 200 || statusCode >= 300) {
