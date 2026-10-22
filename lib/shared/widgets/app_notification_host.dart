@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_config.dart';
 import '../../core/storage/token_storage.dart';
 import '../../features/buyer/notifications/notifications_screen.dart';
 import '../../features/buyer/settings/buyer_system_settings_controller.dart';
+import '../../services/notification_sound_service.dart';
 import '../../services/app_notification_center.dart';
 import '../../services/buyer_mobile_service.dart';
 import '../../services/rider_mobile_service.dart';
@@ -279,7 +279,14 @@ class _AppNotificationHostState extends State<AppNotificationHost>
         : settings.notificationSounds;
     if (soundsEnabled) {
       unawaited(
-        SystemSound.play(SystemSoundType.alert).catchError((Object _) {}),
+        NotificationSoundService.play(
+          <String?>[
+            notification.soundType,
+            notification.title,
+            notification.message,
+            notification.type.key,
+          ].whereType<String>().join(' '),
+        ),
       );
     }
     _dismissTimer = Timer(const Duration(seconds: 6), _dismissBanner);

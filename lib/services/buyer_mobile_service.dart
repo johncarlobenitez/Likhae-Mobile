@@ -928,14 +928,16 @@ class BuyerMobileService {
           final Map<String, dynamic> payload = rawData is Map
               ? Map<String, dynamic>.from(rawData)
               : const <String, dynamic>{};
+          final String? soundType = (row['type'] ?? payload['type'])?.toString();
           final DateTime? createdAt = DateTime.tryParse(
             (row['created_at'] ?? '').toString(),
           );
           return BuyerNotificationData(
             id: row['id'].toString(),
             type: BuyerNotificationData.resolveType(
-              (row['type'] ?? payload['type'])?.toString(),
+              soundType,
             ),
+            soundType: soundType,
             title: (row['title'] ?? payload['title'] ?? payload['subject'] ?? '')
                 .toString(),
             message:
@@ -978,6 +980,8 @@ class BuyerMobileService {
         final Map<String, dynamic> notificationData = rawPayload is Map
             ? Map<String, dynamic>.from(rawPayload)
             : event.data;
+        final String? soundType =
+            (notificationData['type'] ?? event.data['type'])?.toString();
         final DateTime? createdAt = DateTime.tryParse(
           (event.data['created_at'] ?? notificationData['created_at'] ?? '')
               .toString(),
@@ -985,8 +989,9 @@ class BuyerMobileService {
         yield BuyerNotificationData(
           id: (event.data['id'] ?? notificationData['id'] ?? '').toString(),
           type: BuyerNotificationData.resolveType(
-            (notificationData['type'] ?? event.data['type'])?.toString(),
+            soundType,
           ),
+          soundType: soundType,
           title:
               (notificationData['title'] ??
                       notificationData['subject'] ??

@@ -401,12 +401,14 @@ class RiderMobileService {
         .whereType<Map>()
         .map((Map item) {
           final Map<String, dynamic> row = Map<String, dynamic>.from(item);
+          final String? soundType = row['type']?.toString();
           final DateTime? createdAt = DateTime.tryParse(
             (row['created_at'] ?? '').toString(),
           );
           return BuyerNotificationData(
             id: (row['id'] ?? '').toString(),
-            type: BuyerNotificationData.resolveType(row['type']?.toString()),
+            type: BuyerNotificationData.resolveType(soundType),
+            soundType: soundType,
             title: (row['title'] ?? '').toString(),
             message: (row['message'] ?? '').toString(),
             time: createdAt == null ? '' : _relativeTime(createdAt),

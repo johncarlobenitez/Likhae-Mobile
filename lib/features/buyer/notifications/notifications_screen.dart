@@ -184,6 +184,9 @@ class BuyerNotificationData {
 
   final BuyerNotificationType type;
 
+  /// Original Laravel notification type for sound-pattern matching.
+  final String? soundType;
+
   final String title;
   final String message;
 
@@ -222,6 +225,7 @@ class BuyerNotificationData {
   const BuyerNotificationData({
     required this.id,
     required this.type,
+    this.soundType,
     required this.title,
     required this.message,
     required this.time,
@@ -235,6 +239,7 @@ class BuyerNotificationData {
     return BuyerNotificationData(
       id: id,
       type: type,
+      soundType: soundType,
       title: title,
       message: message,
       time: time,
@@ -868,41 +873,46 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     color: _surface,
     child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              GlassIconButton(
-                icon: Icons.arrow_back_rounded,
-                label: 'Back',
-                onPressed:
-                    widget.onBack ?? () => Navigator.of(context).maybePop(),
-              ),
-              const Spacer(),
-              if (_refreshing)
-                const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-            ],
+          GlassIconButton(
+            icon: Icons.arrow_back_rounded,
+            label: 'Back',
+            onPressed:
+                widget.onBack ?? () => Navigator.of(context).maybePop(),
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'Updates',
-            style: TextStyle(
-              color: _text,
-              fontSize: 25,
-              height: 1.15,
-              letterSpacing: -.5,
-              fontWeight: FontWeight.w800,
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Updates',
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 22,
+                    height: 1.15,
+                    letterSpacing: -.4,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Everything you need to know.',
+                  style: TextStyle(color: _muted, fontSize: 12, height: 1.35),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 5),
-          const Text(
-            'Everything you need to know.',
-            style: TextStyle(color: _muted, fontSize: 12.5, height: 1.4),
-          ),
+          if (_refreshing) ...[
+            const SizedBox(width: 10),
+            const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ],
         ],
       ),
     ),

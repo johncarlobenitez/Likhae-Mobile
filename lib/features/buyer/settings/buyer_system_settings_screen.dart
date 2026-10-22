@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../core/config/app_config.dart';
 import '../../../features/rider/profile/rider_profile_screen.dart';
+import '../../../services/notification_sound_service.dart';
 import '../../../services/rider_mobile_service.dart';
 import 'buyer_system_settings_controller.dart';
 
@@ -198,16 +199,24 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
       title: 'Sounds',
       subtitle: 'Manage LIKHAE interface sound cues.',
       icon: Icons.music_note_rounded,
-      child: _SettingSwitch(
-        title: 'Notification Sounds',
-        description: 'Play sounds for supported LIKHAE notifications.',
-        value: riderMode
-            ? settings.riderNotificationSounds
-            : settings.notificationSounds,
-        onChanged: (bool value) => settings.update(
-          notificationSounds: riderMode ? null : value,
-          riderNotificationSounds: riderMode ? value : null,
-        ),
+      child: Column(
+        children: [
+          _SettingSwitch(
+            title: 'Notification Sounds',
+            description: 'Play sounds for supported LIKHAE notifications.',
+            value: riderMode
+                ? settings.riderNotificationSounds
+                : settings.notificationSounds,
+            onChanged: (bool value) => settings.update(
+              notificationSounds: riderMode ? null : value,
+              riderNotificationSounds: riderMode ? value : null,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final NotificationSoundOption sound
+              in NotificationSoundService.catalog)
+            _SoundPreviewRow(sound: sound),
+        ],
       ),
     );
 
@@ -726,6 +735,63 @@ class _SettingsCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SoundPreviewRow extends StatelessWidget {
+  final NotificationSoundOption sound;
+
+  const _SoundPreviewRow({required this.sound});
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sound.title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  sound.description,
+                  style: TextStyle(
+                    color: colors.onSurface.withValues(alpha: 0.62),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => unawaited(
+              NotificationSoundService.preview(sound.key),
+            ),
+            icon: const Icon(Icons.play_arrow_rounded, size: 17),
+            label: const Text('Preview'),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              textStyle: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+              side: BorderSide(color: colors.outlineVariant),
+            ),
           ),
         ],
       ),
