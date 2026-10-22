@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/storage/remembered_login_storage.dart';
+
 typedef LoginCallback =
     Future<void> Function(String email, String password, bool rememberMe);
 typedef GoogleLoginCallback = Future<void> Function();
@@ -34,6 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isSubmitting = false;
+  bool _rememberPreferenceChanged = false;
 
   static const Color _background = Color(0xFFF7F2E9);
   static const Color _surface = Color(0xFFFFFCF8);
@@ -44,6 +47,47 @@ class _LoginScreenState extends State<LoginScreen> {
   static const Color _border = Color(0xFFE5D5C3);
   static const Color _fieldBackground = Color(0xFFFFFAF5);
   static const Color _accent = Color(0xFFB42318);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedCredentials();
+  }
+
+  Future<void> _loadRememberedCredentials() async {
+    try {
+      final RememberedLoginCredentials? credentials =
+          await RememberedLoginStorage.read();
+      if (!mounted || credentials == null) return;
+      if (_emailController.text.isNotEmpty ||
+          _passwordController.text.isNotEmpty) {
+        return;
+      }
+
+      setState(() {
+        _emailController.text = credentials.email;
+        _passwordController.text = credentials.password;
+        if (!_rememberPreferenceChanged) _rememberMe = true;
+      });
+    } catch (_) {
+      // Keep login available if secure credential storage is unavailable.
+    }
+  }
+
+  Future<void> _setRememberMe(bool value) async {
+    setState(() {
+      _rememberMe = value;
+      _rememberPreferenceChanged = true;
+    });
+
+    if (!value) {
+      try {
+        await RememberedLoginStorage.clear();
+      } catch (_) {
+        // The next login attempt also clears saved credentials when disabled.
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -430,6 +474,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     return 'Enter your email address.';
                   }
 
+                  if (email.length > 255) {
+                    return 'Email must be 255 characters or fewer.';
+                  }
+
                   final RegExp emailPattern = RegExp(
                     r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
                   );
@@ -529,19 +577,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       onChanged: (bool? value) {
-                        setState(() {
-                          _rememberMe = value ?? false;
-                        });
+                        _setRememberMe(value ?? false);
                       },
                     ),
                   ),
 
                   GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _rememberMe = !_rememberMe;
-                      });
-                    },
+                    onTap: () => _setRememberMe(!_rememberMe),
                     child: const Text(
                       'Remember me',
                       style: TextStyle(

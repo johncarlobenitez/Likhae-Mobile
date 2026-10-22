@@ -136,6 +136,22 @@ class ApiClient {
         .whenComplete(invalidateReads);
   }
 
+  static Future<Response<dynamic>> put(
+    String path,
+    dynamic data, {
+    Options? options,
+  }) async {
+    if (!AppConfig.apiEnabled) {
+      return _offlineResponse(path, data: <String, dynamic>{});
+    }
+
+    await initialize();
+    invalidateReads();
+    return _dio
+        .put(path, data: data, options: options)
+        .whenComplete(invalidateReads);
+  }
+
   static Future<Response<dynamic>> patch(
     String path,
     dynamic data, {

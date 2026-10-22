@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/config/app_config.dart';
+import '../core/storage/remembered_login_storage.dart';
 import '../core/theme/app_theme.dart';
 import '../features/auth/login_screen.dart';
 import '../models/auth_user_model.dart';
@@ -28,6 +29,7 @@ import '../features/buyer/products/products_screen.dart';
 import '../features/buyer/messages/messages_screen.dart';
 import '../features/buyer/profile/account_screen.dart';
 import '../features/buyer/rewards/rewards_screen.dart';
+import '../features/buyer/store/following_shops_screen.dart';
 import '../features/buyer/store/store_screen.dart';
 import '../features/buyer/settings/buyer_system_settings_screen.dart';
 import '../features/buyer/wishlist/wishlist_screen.dart';
@@ -646,12 +648,27 @@ Future<void> _handleLogin(
   required bool rememberMe,
   required VoidCallback onError,
 }) async {
+  if (!rememberMe) {
+    try {
+      await RememberedLoginStorage.clear();
+    } catch (_) {
+      // A storage issue must not prevent signing in.
+    }
+  }
+
   try {
     final Map<String, dynamic> payload = await AuthService.login(
       email: email,
       password: password,
       deviceName: 'LIKHAE Flutter',
     );
+    if (rememberMe) {
+      try {
+        await RememberedLoginStorage.save(email: email, password: password);
+      } catch (_) {
+        // Keep a successful login successful if credential saving fails.
+      }
+    }
     _routeAuthenticatedMobileUser(context, payload);
   } catch (error) {
     onError();
@@ -696,12 +713,17 @@ Future<RegistrationDocument?> _pickRegistrationDocument(
 ) async {
   final List<PlatformFile> files = await FilePicker.pickFiles(
     type: FileType.custom,
-    allowedExtensions: <String>['jpg', 'jpeg', 'png', 'pdf'],
+    allowedExtensions: <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'],
   );
   if (files.isEmpty) return null;
   final PlatformFile file = files.first;
   if (file.path == null || file.path!.isEmpty) return null;
-  return RegistrationDocument(name: file.name, path: file.path);
+  final int sizeBytes = file.lengthSync() ?? (await file.length()) ?? 0;
+  return RegistrationDocument(
+    name: file.name,
+    path: file.path,
+    sizeBytes: sizeBytes,
+  );
 }
 
 final GoRouter appRouter = GoRouter(
@@ -722,6 +744,8 @@ final GoRouter appRouter = GoRouter(
                   onBrowseProducts: () => context.push('/buyer/products'),
                   onViewOrders: () => _goBuyerTab(context, 1),
                   onWishlist: () => context.push('/buyer/wishlist'),
+                  onFollowingShops: () =>
+                      context.push('/buyer/following-shops'),
                   onCart: () => context.push('/buyer/cart'),
                   onNotifications: () => context.push('/buyer/notifications'),
                   onMessages: () => _goBuyerTab(context, 2),
@@ -1082,6 +1106,9 @@ final GoRouter appRouter = GoRouter(
                             onUpdateProfile: AppConfig.apiEnabled
                                 ? BuyerMobileService.updateProfile
                                 : null,
+                            onResendMobileChangeCode: AppConfig.apiEnabled
+                                ? BuyerMobileService.resendMobileChangeCode
+                                : null,
                             onRemoveProfilePhoto: AppConfig.apiEnabled
                                 ? BuyerMobileService.deleteProfilePhoto
                                 : null,
@@ -1210,6 +1237,7 @@ final GoRouter appRouter = GoRouter(
             loadMunicipalities: PhilippineAddressService.fetchMunicipalities,
             loadBarangays: PhilippineAddressService.fetchBarangays,
             loadPostalCode: PhilippineAddressService.fetchPostalCode,
+            loadLogisticsCenters: AuthService.fetchLogisticsCenters,
           ),
         );
       },
@@ -1305,6 +1333,22 @@ final GoRouter appRouter = GoRouter(
                 _wishlistProductFromBuyerProduct(product),
               );
             }
+          },
+        );
+      },
+    ),
+
+    GoRoute(
+      path: '/buyer/following-shops',
+      name: 'buyer-following-shops',
+      builder: (BuildContext context, GoRouterState state) {
+        return FollowingShopsScreen(
+          loadShops: AppConfig.apiEnabled
+              ? StoreService.fetchFollowedShops
+              : () async => const <StoreSellerData>[],
+          onBack: () => safeBack(context, fallback: '/buyer/home'),
+          onShopSelected: (StoreSellerData shop) {
+            context.push('/buyer/store', extra: shop);
           },
         );
       },

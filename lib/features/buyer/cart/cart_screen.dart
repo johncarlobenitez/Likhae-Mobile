@@ -7,6 +7,7 @@ import 'package:likhae/core/config/app_config.dart';
 import '../../../shared/widgets/sized_network_image.dart';
 import '../../../shared/widgets/shop_ui.dart';
 import '../checkout/shop_voucher_picker.dart';
+import '../checkout/voucher_discount_calculator.dart';
 import '../rewards/rewards_screen.dart';
 
 class CartItemData {
@@ -292,11 +293,13 @@ class _CartScreenState extends State<CartScreen> {
   late List<CartItemData> _items;
 
   final Set<String> _selectedIds = <String>{};
+  final Set<String> _deleteSelectedIds = <String>{};
 
   final Set<String> _updatingIds = <String>{};
 
   final Set<String> _removingIds = <String>{};
 
+  bool _editMode = false;
   bool _removingSelected = false;
   bool _openingCheckout = false;
   bool _openingVoucherPicker = false;
@@ -310,7 +313,6 @@ class _CartScreenState extends State<CartScreen> {
 
     _items = List<CartItemData>.from(widget.items);
 
-    _selectAllAvailable();
     _selectedVoucherCodes.addAll(widget.initialVoucherCodes);
     if (widget.loadAvailableVouchers != null) {
       unawaited(_preloadVouchers());
@@ -322,10 +324,6 @@ class _CartScreenState extends State<CartScreen> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.items != widget.items) {
-      final Set<String> oldItemIds = oldWidget.items
-          .map((CartItemData item) => item.id)
-          .toSet();
-
       final Set<String> previousSelection = Set<String>.from(_selectedIds);
 
       _items = List<CartItemData>.from(widget.items);
@@ -340,15 +338,19 @@ class _CartScreenState extends State<CartScreen> {
           .map((CartItemData item) => item.id)
           .toSet();
 
-      final Set<String> newIds = currentAvailableIds.difference(oldItemIds);
-
       _selectedIds
         ..clear()
-        ..addAll(previousSelection.intersection(currentAvailableIds))
-        ..addAll(newIds);
+        ..addAll(previousSelection.intersection(currentAvailableIds));
 
-      if (oldWidget.items.isEmpty && widget.items.isNotEmpty) {
-        _selectAllAvailable();
+      final Set<String> currentItemIds = _items
+          .map((CartItemData item) => item.id)
+          .toSet();
+      _deleteSelectedIds.removeWhere(
+        (String id) => !currentItemIds.contains(id),
+      );
+      if (_items.isEmpty) {
+        _editMode = false;
+        _deleteSelectedIds.clear();
       }
     }
   }
@@ -428,6 +430,70 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  double get _shopVoucherDiscount {
+    if (_availableVouchers == null || _selectedVoucherCodes.isEmpty) return 0;
+
+    double total = 0;
+    for (final MapEntry<int, String> selection
+        in _selectedVoucherCodes.entries) {
+      final List<CartItemData> sellerItems = _selectedItems
+          .where((CartItemData item) => item.sellerId == selection.key)
+          .toList(growable: false);
+      if (sellerItems.isEmpty) continue;
+
+      final RewardVoucherData? voucher =
+          _voucherForSeller(selection.key, selection.value);
+      if (voucher == null) continue;
+
+      final double sellerSubtotal = sellerItems.fold<double>(
+        0,
+        (double subtotal, CartItemData item) => subtotal + item.lineTotal,
+      );
+      total += calculateSellerVoucherDiscount(voucher, sellerSubtotal);
+    }
+
+    return total.clamp(0, _subtotal).toDouble();
+  }
+
+  RewardVoucherData? _voucherForSeller(int sellerId, String code) {
+    for (final RewardVoucherData voucher
+        in _availableVouchers ?? const <RewardVoucherData>[]) {
+      if (voucher.sellerId == sellerId &&
+          voucher.code.trim().toUpperCase() == code.trim().toUpperCase()) {
+        return voucher;
+      }
+    }
+    return null;
+  }
+
+  Map<int, String> _eligibleVoucherCodes(List<CartItemData> selectedItems) {
+    final Map<int, String> eligible = <int, String>{};
+    for (final MapEntry<int, String> selection
+        in _selectedVoucherCodes.entries) {
+      final List<CartItemData> sellerItems = selectedItems
+          .where((CartItemData item) => item.sellerId == selection.key)
+          .toList(growable: false);
+      if (sellerItems.isEmpty) continue;
+
+      final RewardVoucherData? voucher =
+          _voucherForSeller(selection.key, selection.value);
+      if (_availableVouchers != null && voucher == null) continue;
+      if (voucher != null) {
+        final double sellerSubtotal = sellerItems.fold<double>(
+          0,
+          (double subtotal, CartItemData item) => subtotal + item.lineTotal,
+        );
+        if (voucher.canUse == false ||
+            sellerSubtotal < (voucher.minimumOrderAmount ?? 0)) {
+          continue;
+        }
+      }
+
+      eligible[selection.key] = selection.value;
+    }
+    return eligible;
+  }
+
   int get _unavailableCount {
     return _items.where((CartItemData item) => !item.isAvailable).length;
   }
@@ -486,6 +552,60 @@ class _CartScreenState extends State<CartScreen> {
       (CartItemData item) => _selectedIds.contains(item.id),
     );
     return hasSelected && !_isSellerGroupSelected(group);
+  }
+
+  bool _isSellerGroupDeleteSelected(_CartSellerGroup group) {
+    return group.items.isNotEmpty &&
+        group.items.every(
+          (CartItemData item) => _deleteSelectedIds.contains(item.id),
+        );
+  }
+
+  bool _isSellerGroupPartiallyDeleteSelected(_CartSellerGroup group) {
+    final bool hasSelected = group.items.any(
+      (CartItemData item) => _deleteSelectedIds.contains(item.id),
+    );
+    return hasSelected && !_isSellerGroupDeleteSelected(group);
+  }
+
+  void _toggleEditMode() {
+    setState(() {
+      _editMode = !_editMode;
+      _deleteSelectedIds.clear();
+    });
+  }
+
+  void _toggleDeleteItemSelection(CartItemData item) {
+    setState(() {
+      if (!_deleteSelectedIds.add(item.id)) {
+        _deleteSelectedIds.remove(item.id);
+      }
+    });
+  }
+
+  void _toggleDeleteSellerGroup(_CartSellerGroup group) {
+    final bool allSelected = _isSellerGroupDeleteSelected(group);
+    setState(() {
+      for (final CartItemData item in group.items) {
+        if (allSelected) {
+          _deleteSelectedIds.remove(item.id);
+        } else {
+          _deleteSelectedIds.add(item.id);
+        }
+      }
+    });
+  }
+
+  void _toggleAllForRemoval() {
+    setState(() {
+      if (_items.isNotEmpty && _deleteSelectedIds.length == _items.length) {
+        _deleteSelectedIds.clear();
+      } else {
+        _deleteSelectedIds
+          ..clear()
+          ..addAll(_items.map((CartItemData item) => item.id));
+      }
+    });
   }
 
   void _toggleSellerGroup(_CartSellerGroup group) {
@@ -599,6 +719,7 @@ class _CartScreenState extends State<CartScreen> {
         _items.removeWhere((CartItemData current) => current.id == item.id);
 
         _selectedIds.remove(item.id);
+        _deleteSelectedIds.remove(item.id);
       });
 
       _showMessage('${item.name} removed from cart.');
@@ -611,6 +732,104 @@ class _CartScreenState extends State<CartScreen> {
         });
       }
     }
+  }
+
+  Future<void> _removeEditSelectedItems() async {
+    final List<CartItemData> selected = _items
+        .where((CartItemData item) => _deleteSelectedIds.contains(item.id))
+        .toList(growable: false);
+    if (selected.isEmpty || _removingSelected) return;
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: _surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text(
+          'Remove selected items?',
+          style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'Remove ${selected.length} selected ${selected.length == 1 ? 'item' : 'items'} from your cart?',
+          style: const TextStyle(color: _muted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: _danger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    if (widget.onRemoveSelected == null && widget.onRemoveItem == null) {
+      _showMessage('Cart removal will be connected to Laravel later.');
+      return;
+    }
+
+    final Set<String> successfullyRemoved = <String>{};
+    setState(() {
+      _removingSelected = true;
+      _removingIds.addAll(selected.map((CartItemData item) => item.id));
+    });
+
+    try {
+      if (widget.onRemoveItem != null) {
+        for (final CartItemData item in selected) {
+          await widget.onRemoveItem!(item);
+          successfullyRemoved.add(item.id);
+        }
+      } else {
+        await widget.onRemoveSelected!(selected);
+        successfullyRemoved.addAll(selected.map((CartItemData item) => item.id));
+      }
+
+      if (!mounted) return;
+      _removeItemsLocally(successfullyRemoved);
+      _showMessage(
+        selected.length == 1
+            ? 'Item removed from cart.'
+            : 'Items removed from cart.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      if (successfullyRemoved.isNotEmpty) {
+        _removeItemsLocally(successfullyRemoved);
+      }
+      _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _removingSelected = false;
+          _removingIds.removeAll(selected.map((CartItemData item) => item.id));
+        });
+      }
+    }
+  }
+
+  void _removeItemsLocally(Set<String> ids) {
+    if (ids.isEmpty) return;
+    setState(() {
+      _items.removeWhere((CartItemData item) => ids.contains(item.id));
+      _selectedIds.removeAll(ids);
+      _deleteSelectedIds.removeAll(ids);
+      if (_items.isEmpty) _editMode = false;
+      _selectedVoucherCodes.removeWhere(
+        (int sellerId, String _) => !_items.any(
+          (CartItemData item) => item.sellerId == sellerId,
+        ),
+      );
+    });
   }
 
   Future<bool> _confirmRemoveSingle(CartItemData item) async {
@@ -656,117 +875,6 @@ class _CartScreenState extends State<CartScreen> {
     return confirmed == true;
   }
 
-  Future<void> _removeSelected() async {
-    final List<CartItemData> selected = _selectedItems;
-
-    if (selected.isEmpty || _removingSelected) {
-      return;
-    }
-
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: _surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: const Text(
-            'Remove selected items?',
-            style: TextStyle(color: _text, fontWeight: FontWeight.w800),
-          ),
-          content: Text(
-            'Remove ${selected.length} selected ${selected.length == 1 ? 'item' : 'items'} from your cart?',
-            style: const TextStyle(color: _muted, fontSize: 13),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(false);
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop(true);
-              },
-              style: ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: _danger,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Remove'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true || !mounted) {
-      return;
-    }
-
-    if (widget.onRemoveSelected == null && widget.onRemoveItem == null) {
-      _showMessage('Cart removal will be connected to Laravel later.');
-
-      return;
-    }
-
-    setState(() {
-      _removingSelected = true;
-    });
-
-    final Set<String> successfullyRemoved = <String>{};
-
-    try {
-      if (widget.onRemoveSelected != null) {
-        await widget.onRemoveSelected!(selected);
-
-        successfullyRemoved.addAll(
-          selected.map((CartItemData item) => item.id),
-        );
-      } else {
-        for (final CartItemData item in selected) {
-          await widget.onRemoveItem!(item);
-
-          successfullyRemoved.add(item.id);
-        }
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      _removeIdsLocally(successfullyRemoved);
-
-      _showMessage(
-        selected.length == 1
-            ? 'Selected item removed from cart.'
-            : 'Selected items removed from cart.',
-      );
-    } catch (error) {
-      if (mounted && successfullyRemoved.isNotEmpty) {
-        _removeIdsLocally(successfullyRemoved);
-      }
-
-      _showMessage(_errorText(error), error: true);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _removingSelected = false;
-        });
-      }
-    }
-  }
-
-  void _removeIdsLocally(Set<String> ids) {
-    setState(() {
-      _items.removeWhere((CartItemData item) => ids.contains(item.id));
-
-      _selectedIds.removeAll(ids);
-    });
-  }
-
   Future<void> _openCheckout() async {
     if (_openingCheckout) {
       return;
@@ -791,6 +899,19 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
+    final Map<int, String> eligibleVoucherCodes =
+        _eligibleVoucherCodes(selected);
+    if (eligibleVoucherCodes.length != _selectedVoucherCodes.length) {
+      setState(() {
+        _selectedVoucherCodes
+          ..clear()
+          ..addAll(eligibleVoucherCodes);
+      });
+      _showMessage(
+        'A voucher was removed because the selected items no longer qualify.',
+      );
+    }
+
     final CartCheckoutRequest request = CartCheckoutRequest(
       items: selected
           .map(
@@ -803,12 +924,7 @@ class _CartScreenState extends State<CartScreen> {
             ),
           )
           .toList(),
-      voucherCodes: Map<int, String>.fromEntries(
-        _selectedVoucherCodes.entries.where(
-          (MapEntry<int, String> entry) =>
-              selected.any((CartItemData item) => item.sellerId == entry.key),
-        ),
-      ),
+      voucherCodes: eligibleVoucherCodes,
     );
 
     setState(() {
@@ -965,6 +1081,10 @@ class _CartScreenState extends State<CartScreen> {
         _selectedIds.removeWhere(
           (String id) => !items.any((CartItemData item) => item.id == id),
         );
+        _deleteSelectedIds.removeWhere(
+          (String id) => !items.any((CartItemData item) => item.id == id),
+        );
+        if (items.isEmpty) _editMode = false;
       });
     } catch (error) {
       _showMessage(_errorText(error), error: true);
@@ -1021,15 +1141,94 @@ class _CartScreenState extends State<CartScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _items.isEmpty ? null : _buildBottomCheckoutBar(),
+      bottomNavigationBar: _items.isEmpty
+          ? null
+          : _editMode
+          ? _buildBottomEditBar()
+          : _buildBottomCheckoutBar(),
     );
   }
 
-  Widget _buildTopBar() => ShopPageHeader(
-    title: 'Your bag',
-    subtitle: 'A few good finds, ready for you.',
-    onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-  );
+  Widget _buildTopBar() {
+    return ColoredBox(
+      color: _surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GlassIconButton(
+              icon: Icons.arrow_back_rounded,
+              label: 'Back',
+              onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _editMode ? 'EDIT CART' : 'YOUR SELECTION',
+                          style: TextStyle(
+                            color: _maroon,
+                            fontSize: 10,
+                            letterSpacing: 1.4,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${_items.length} ${_items.length == 1 ? 'item' : 'items'}',
+                        style: const TextStyle(
+                          color: _brown,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (_items.isNotEmpty)
+                        TextButton(
+                          onPressed: _removingSelected ? null : _toggleEditMode,
+                          style: TextButton.styleFrom(
+                            foregroundColor: _maroon,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: const Size(44, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(_editMode ? 'Done' : 'Edit'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _editMode ? 'Edit Cart' : 'Your Cart',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 24,
+                      height: 1.1,
+                      letterSpacing: -0.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _editMode
+                        ? 'Select products or shops you want to remove.'
+                        : _items.isEmpty
+                        ? 'A few good finds, ready for you.'
+                        : 'Choose which products you want to send to checkout.',
+                    style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildEmptyCart() {
     return ListView(
@@ -1232,18 +1431,12 @@ class _CartScreenState extends State<CartScreen> {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(14, 16, 14, 0),
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
           sliver: SliverToBoxAdapter(
             child: Column(
               children: [
-                _buildHeading(),
-
-                const SizedBox(height: 16),
-
-                _buildSelectionHeader(),
-
                 if (_unavailableCount > 0) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 2),
 
                   _buildUnavailableNotice(),
                 ],
@@ -1256,176 +1449,140 @@ class _CartScreenState extends State<CartScreen> {
 
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((
-              BuildContext context,
-              int index,
-            ) {
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: index == _sellerGroups.length - 1 ? 0 : 12,
-                ),
-                child: _buildSellerGroup(_sellerGroups[index]),
-              );
-            }, childCount: _sellerGroups.length),
-          ),
+          sliver: SliverToBoxAdapter(child: _buildCartItemsContainer()),
         ),
 
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(14, 20, 14, 0),
-          sliver: SliverToBoxAdapter(
-            child: Column(
-              children: [
-                _buildDeliveryAddress(),
+        if (!_editMode)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(14, 20, 14, 0),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  _buildDeliveryAddress(),
 
-                const SizedBox(height: 14),
+                  const SizedBox(height: 14),
 
-                _buildCartSummary(),
+                  _buildCartSummary(),
 
-                const SizedBox(height: 170),
-              ],
+                  const SizedBox(height: 170),
+                ],
+              ),
             ),
           ),
-        ),
+      ],
+    );
+  }
+
+  Widget _buildCartItemsContainer() {
+    final List<_CartSellerGroup> groups = _sellerGroups;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final _CartSellerGroup group in groups)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: _surface,
+              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: _buildSellerGroup(group),
+          ),
       ],
     );
   }
 
   Widget _buildSellerGroup(_CartSellerGroup group) {
-    final bool groupSelected = _isSellerGroupSelected(group);
-    final bool groupPartiallySelected = _isSellerGroupPartiallySelected(group);
+    final bool groupSelected = _editMode
+        ? _isSellerGroupDeleteSelected(group)
+        : _isSellerGroupSelected(group);
+    final bool groupPartiallySelected = _editMode
+        ? _isSellerGroupPartiallyDeleteSelected(group)
+        : _isSellerGroupPartiallySelected(group);
     final bool hasAvailableItem = group.items.any(
       (CartItemData item) => item.isAvailable,
     );
 
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: _surface,
-        border: Border.all(
-          color: groupSelected || groupPartiallySelected
-              ? const Color(0xFFD9B99D)
-              : _border,
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Container(
-            padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
-            decoration: const BoxDecoration(
-              color: _soft,
-              border: Border(bottom: BorderSide(color: _border)),
-            ),
-            child: Row(
-              children: <Widget>[
-                Checkbox(
-                  tristate: true,
-                  value: groupSelected
-                      ? true
-                      : groupPartiallySelected
-                      ? null
-                      : false,
-                  activeColor: _maroon,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  onChanged: hasAvailableItem
-                      ? (_) {
-                          _toggleSellerGroup(group);
-                        }
-                      : null,
+    final bool canViewShop = widget.onSellerSelected != null &&
+        (group.sellerId != null || group.name.trim().isNotEmpty);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Container(
+          padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
+          decoration: const BoxDecoration(
+            color: _soft,
+            border: Border(bottom: BorderSide(color: _border)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Checkbox(
+                tristate: true,
+                value: groupSelected
+                    ? true
+                    : groupPartiallySelected
+                    ? null
+                    : false,
+                activeColor: _maroon,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEAD8C7),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.storefront_outlined,
-                    color: _maroon,
-                    size: 18,
+                onChanged: _editMode
+                    ? (_) => _toggleDeleteSellerGroup(group)
+                    : hasAvailableItem
+                    ? (_) => _toggleSellerGroup(group)
+                    : null,
+              ),
+              Expanded(
+                child: Text(
+                  group.name.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _text,
+                    fontSize: 12,
+                    letterSpacing: 0.55,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      InkWell(
-                        onTap: widget.onSellerSelected == null ||
-                                (group.sellerId == null && group.name.trim().isEmpty)
-                            ? null
-                            : () => widget.onSellerSelected!(
-                                  group.name,
-                                  group.sellerId,
-                                ),
-                        borderRadius: BorderRadius.circular(5),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            children: <Widget>[
-                              Flexible(
-                                child: Text(
-                                  group.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: widget.onSellerSelected == null
-                                        ? _text
-                                        : _maroon,
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              if (widget.onSellerSelected != null) ...<Widget>[
-                                const SizedBox(width: 4),
-                                const Icon(
-                                  Icons.open_in_new_rounded,
-                                  color: _maroon,
-                                  size: 13,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${group.items.length} ${group.items.length == 1 ? 'item' : 'items'} from this seller',
-                        style: const TextStyle(color: _muted, fontSize: 11.5),
-                      ),
-                    ],
+              ),
+              Text(
+                '${group.items.length} ${group.items.length == 1 ? 'item' : 'items'}',
+                style: const TextStyle(color: _muted, fontSize: 11.5),
+              ),
+              if (canViewShop) ...<Widget>[
+                const SizedBox(width: 12),
+                InkWell(
+                  onTap: () => widget.onSellerSelected!(
+                    group.name,
+                    group.sellerId,
                   ),
-                ),
-                if (hasAvailableItem)
-                  Text(
-                    groupSelected ? 'Selected' : 'Select all',
-                    style: const TextStyle(
-                      color: _brown,
+                  child: const Text(
+                    'View Shop',
+                    style: TextStyle(
+                      color: _maroon,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                ),
               ],
-            ),
+            ],
           ),
-          for (int index = 0; index < group.items.length; index++) ...<Widget>[
-            if (index > 0)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Divider(color: ShopColors.border, height: 1),
-              ),
-            _buildCartItem(group.items[index]),
-          ],
-          _buildShopVoucherRow(group),
+        ),
+        for (int index = 0; index < group.items.length; index++) ...<Widget>[
+          if (index > 0)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Divider(color: ShopColors.border, height: 1),
+            ),
+          _buildCartItem(group.items[index]),
         ],
-      ),
+        if (!_editMode) _buildShopVoucherRow(group),
+      ],
     );
   }
 
@@ -1433,37 +1590,35 @@ class _CartScreenState extends State<CartScreen> {
     final int? sellerId = group.sellerId;
     final String? selectedCode =
         sellerId == null ? null : _selectedVoucherCodes[sellerId];
-    RewardVoucherData? selectedVoucher;
     RewardVoucherData? availableVoucher;
-    for (final RewardVoucherData voucher in
-        _availableVouchers ?? const <RewardVoucherData>[]) {
-      if (voucher.sellerId != sellerId || voucher.canUse == false) continue;
-      if (voucher.code.toUpperCase() == selectedCode?.toUpperCase()) {
-        selectedVoucher = voucher;
+    if (sellerId != null) {
+      for (final RewardVoucherData voucher in
+          _availableVouchers ?? const <RewardVoucherData>[]) {
+        if (voucher.sellerId == sellerId && voucher.canUse != false) {
+          availableVoucher = voucher;
+          break;
+        }
       }
-      availableVoucher ??= voucher;
     }
+
     final bool hasSelectedItems = group.items.any(
-      (CartItemData item) =>
-          item.isAvailable && _selectedIds.contains(item.id),
+      (CartItemData item) => item.isAvailable && _selectedIds.contains(item.id),
     );
-    final String label = selectedVoucher != null
-        ? 'Voucher applied: ${selectedVoucher.value.isEmpty ? selectedVoucher.code : selectedVoucher.value}'
-        : selectedCode != null
+    final String label = selectedCode != null
         ? 'Voucher selected: $selectedCode'
         : availableVoucher != null
         ? '${availableVoucher.value.isEmpty ? 'Shop voucher' : availableVoucher.value} available'
         : 'Add shop voucher code';
 
     return Material(
-      color: Colors.white,
+      color: _surface,
       child: InkWell(
         onTap: hasSelectedItems && sellerId != null
             ? () => _openVoucherPicker(sellerId: sellerId)
             : null,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 54),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
           decoration: const BoxDecoration(
             border: Border(top: BorderSide(color: _border)),
           ),
@@ -1471,7 +1626,7 @@ class _CartScreenState extends State<CartScreen> {
             children: [
               const Icon(
                 Icons.confirmation_number_outlined,
-                color: _maroon,
+                color: ShopColors.accent,
                 size: 20,
               ),
               const SizedBox(width: 10),
@@ -1480,39 +1635,38 @@ class _CartScreenState extends State<CartScreen> {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: selectedCode == null ? _muted : _maroon,
+                  style: const TextStyle(
+                    color: _text,
                     fontSize: 13,
-                    fontWeight: selectedCode == null
-                        ? FontWeight.w600
-                        : FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              if (availableVoucher != null && selectedCode == null)
+              if (availableVoucher != null && selectedCode == null) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 7,
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: _maroon,
+                    color: ShopColors.accent,
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: const Text(
                     'NEW',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
-              const SizedBox(width: 6),
-              Icon(
+                const SizedBox(width: 6),
+              ],
+              const Icon(
                 Icons.chevron_right_rounded,
-                color: hasSelectedItems ? _muted : ShopColors.faint,
-                size: 20,
+                color: ShopColors.faint,
+                size: 19,
               ),
             ],
           ),
@@ -1524,12 +1678,15 @@ class _CartScreenState extends State<CartScreen> {
   Widget _buildCartItem(CartItemData item) {
     return _CartItemCard(
       item: item,
-      selected: _selectedIds.contains(item.id),
+      selected: _editMode
+          ? _deleteSelectedIds.contains(item.id)
+          : _selectedIds.contains(item.id),
+      editMode: _editMode,
       updating: _updatingIds.contains(item.id),
       removing: _removingIds.contains(item.id),
-      onSelectionChanged: () {
-        _toggleItemSelection(item);
-      },
+      onSelectionChanged: _editMode
+          ? () => _toggleDeleteItemSelection(item)
+          : () => _toggleItemSelection(item),
       onProductTap: () {
         widget.onProductSelected?.call(item);
       },
@@ -1542,132 +1699,6 @@ class _CartScreenState extends State<CartScreen> {
       onIncrease: () {
         _changeQuantity(item, item.quantity + 1);
       },
-    );
-  }
-
-  Widget _buildHeading() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'YOUR SELECTION',
-                style: TextStyle(
-                  color: _maroon,
-                  fontSize: 12,
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-
-              SizedBox(height: 5),
-
-              Text(
-                'Your Cart',
-                style: TextStyle(
-                  color: _text,
-                  fontSize: 30,
-                  height: 1,
-                  letterSpacing: -0.7,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-
-              SizedBox(height: 6),
-
-              Text(
-                'Choose which products you want to send to checkout.',
-                style: TextStyle(color: _muted, fontSize: 13, height: 1.55),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(width: 10),
-
-        Text(
-          '${_items.length} ${_items.length == 1 ? 'item' : 'items'}',
-          style: const TextStyle(
-            color: _brown,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSelectionHeader() {
-    final bool hasAvailable = _availableItems.isNotEmpty;
-
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: _surface,
-        border: Border.all(color: _border),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Row(
-        children: [
-          Checkbox(
-            tristate: true,
-            value: _allSelected
-                ? true
-                : _someSelected
-                ? null
-                : false,
-            activeColor: _maroon,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-            onChanged: hasAvailable
-                ? (_) {
-                    _toggleSelectAll();
-                  }
-                : null,
-          ),
-
-          GestureDetector(
-            onTap: hasAvailable ? _toggleSelectAll : null,
-            child: const Text(
-              'Select all available',
-              style: TextStyle(
-                color: _text,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-
-          const Spacer(),
-
-          if (_selectedItems.isNotEmpty)
-            TextButton(
-              onPressed: _removingSelected ? null : _removeSelected,
-              child: _removingSelected
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _danger,
-                      ),
-                    )
-                  : const Text(
-                      'Remove selected',
-                      style: TextStyle(
-                        color: _danger,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-            ),
-        ],
-      ),
     );
   }
 
@@ -1880,6 +1911,94 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  Widget _buildBottomEditBar() {
+    final bool allSelected =
+        _items.isNotEmpty && _deleteSelectedIds.length == _items.length;
+    final bool someSelected = _deleteSelectedIds.isNotEmpty && !allSelected;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        decoration: BoxDecoration(
+          color: _surface,
+          border: const Border(top: BorderSide(color: _border)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, -6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Checkbox(
+              tristate: true,
+              value: allSelected ? true : someSelected ? null : false,
+              activeColor: _maroon,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+              onChanged: (_) => _toggleAllForRemoval(),
+            ),
+            GestureDetector(
+              onTap: _toggleAllForRemoval,
+              child: const Text(
+                'All',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '${_deleteSelectedIds.length} selected',
+              style: const TextStyle(color: _muted, fontSize: 12),
+            ),
+            const Spacer(),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _deleteSelectedIds.isEmpty || _removingSelected
+                    ? null
+                    : _removeEditSelectedItems,
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: _danger,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFD8D2CB),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                ),
+                child: _removingSelected
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        'Remove (${_deleteSelectedIds.length})',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomCheckoutBar() {
     final bool canCheckout = _selectedItems.isNotEmpty;
 
@@ -1903,37 +2022,68 @@ class _CartScreenState extends State<CartScreen> {
           children: [
             _buildMarketplaceVoucherRow(),
             const Divider(height: 1, color: _border),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$_selectedQuantity selected',
-                        style: const TextStyle(
-                          color: _muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _formatCartAmount(_subtotal),
-                        style: const TextStyle(
-                          color: _maroon,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
+                Checkbox(
+                  tristate: true,
+                  value: _allSelected
+                      ? true
+                      : _someSelected
+                      ? null
+                      : false,
+                  activeColor: _maroon,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  onChanged: _availableItems.isEmpty
+                      ? null
+                      : (_) => _toggleSelectAll(),
+                ),
+                GestureDetector(
+                  onTap: _availableItems.isEmpty ? null : _toggleSelectAll,
+                  child: const Text(
+                    'All',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const Spacer(),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (_shopVoucherDiscount > 0)
+                      Text(
+                        'Voucher −${_formatCartAmount(_shopVoucherDiscount)}',
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Color(0xFF19734A),
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    Text(
+                      _formatCartAmount(
+                        (_subtotal - _shopVoucherDiscount)
+                            .clamp(0, _subtotal)
+                            .toDouble(),
+                      ),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: ShopColors.accent,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
                 SizedBox(
-                  height: 54,
+                  height: 50,
                   child: ElevatedButton(
                     onPressed: !canCheckout || _openingCheckout
                         ? null
@@ -1943,7 +2093,7 @@ class _CartScreenState extends State<CartScreen> {
                       backgroundColor: _maroon,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: const Color(0xFFD8D2CB),
-                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(13),
                       ),
@@ -1957,18 +2107,16 @@ class _CartScreenState extends State<CartScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Row(
+                        : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Checkout',
+                                'Checkout (${_selectedItems.length})',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 12.5,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
-                              SizedBox(width: 6),
-                              Icon(Icons.arrow_forward_rounded, size: 17),
                             ],
                           ),
                   ),
@@ -2051,6 +2199,7 @@ class _CartItemCard extends StatelessWidget {
   final CartItemData item;
 
   final bool selected;
+  final bool editMode;
   final bool updating;
   final bool removing;
 
@@ -2066,6 +2215,7 @@ class _CartItemCard extends StatelessWidget {
   const _CartItemCard({
     required this.item,
     required this.selected,
+    required this.editMode,
     required this.updating,
     required this.removing,
     required this.onSelectionChanged,
@@ -2096,7 +2246,7 @@ class _CartItemCard extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  onChanged: removing || unavailable
+                  onChanged: removing || (unavailable && !editMode)
                       ? null
                       : (_) {
                           onSelectionChanged();
@@ -2164,8 +2314,8 @@ class _CartItemCard extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        color: ShopColors.secondaryText,
-                                        fontSize: 11.5,
+                                        color: ShopColors.accent,
+                                        fontSize: 10,
                                         letterSpacing: 0.7,
                                         fontWeight: FontWeight.w800,
                                       ),
@@ -2190,50 +2340,37 @@ class _CartItemCard extends StatelessWidget {
                             ),
                           ),
 
-                          const SizedBox(width: 6),
-
-                          SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: IconButton(
-                              padding: EdgeInsets.zero,
-                              tooltip: 'Remove item',
-                              onPressed: removing ? null : onRemove,
-                              icon: removing
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                          if (!editMode) ...[
+                            const SizedBox(width: 6),
+                            SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                tooltip: 'Remove item',
+                                onPressed: removing ? null : onRemove,
+                                icon: removing
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFFB42318),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.delete_outline_rounded,
                                         color: Color(0xFFB42318),
+                                        size: 18,
                                       ),
-                                    )
-                                  : const Icon(
-                                      Icons.delete_outline_rounded,
-                                      color: Color(0xFFB42318),
-                                      size: 18,
-                                    ),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
 
-                      if (item.seller.trim().isNotEmpty) ...[
-                        const SizedBox(height: 5),
-
-                        Text(
-                          item.seller,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.muted,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-
                       if (item.variant.trim().isNotEmpty) ...[
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 5),
 
                         Text(
                           'Variant: ${item.variant}',
@@ -2264,11 +2401,7 @@ class _CartItemCard extends StatelessWidget {
               ],
             ),
 
-            const SizedBox(height: 12),
-
-            const Divider(color: ShopColors.border, height: 1),
-
-            const SizedBox(height: 11),
+            const SizedBox(height: 10),
 
             Row(
               children: [
@@ -2329,6 +2462,21 @@ class _CartItemCard extends StatelessWidget {
                   loading: updating,
                   onDecrease: onDecrease,
                   onIncrease: onIncrease,
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 72,
+                  child: Text(
+                    _formatCartAmount(item.lineTotal),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: ShopColors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ],
             ),

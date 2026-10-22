@@ -298,6 +298,7 @@ class BuyerHomeScreen extends StatefulWidget {
   final VoidCallback? onBrowseProducts;
   final VoidCallback? onViewOrders;
   final VoidCallback? onWishlist;
+  final VoidCallback? onFollowingShops;
   final VoidCallback? onMessages;
   final VoidCallback? onProfile;
   final VoidCallback? onVouchers;
@@ -326,6 +327,7 @@ class BuyerHomeScreen extends StatefulWidget {
     this.onBrowseProducts,
     this.onViewOrders,
     this.onWishlist,
+    this.onFollowingShops,
     this.onMessages,
     this.onProfile,
     this.onVouchers,
@@ -1456,16 +1458,16 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   Widget _buildQuickActions() {
     final List<_BuyerQuickAction> actions = <_BuyerQuickAction>[
       _BuyerQuickAction(
-        label: 'My Purchases',
-        description: 'Track and review',
-        icon: Icons.receipt_long_outlined,
-        onTap: widget.onViewOrders,
-      ),
-      _BuyerQuickAction(
         label: 'Wishlist',
         description: 'Saved products',
         icon: Icons.favorite_border_rounded,
         onTap: widget.onWishlist,
+      ),
+      _BuyerQuickAction(
+        label: 'Following',
+        description: 'Your favorite stores',
+        icon: Icons.storefront_outlined,
+        onTap: widget.onFollowingShops,
       ),
       _BuyerQuickAction(
         label: 'Messages',
@@ -1580,66 +1582,76 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
               style: TextStyle(color: Color(0xFFEEDBD4), fontSize: 12),
             ),
           )
-        : Column(
-            children: [
-              Stack(
+        : Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: widget.onProductSelected == null
+                  ? null
+                  : () => widget.onProductSelected!(product),
+              child: Column(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: _ProductGallery(images: product.galleryImages),
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: AspectRatio(
+                          aspectRatio: 4 / 3,
+                          child: _ProductGallery(images: product.galleryImages),
+                        ),
+                      ),
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: ShopColors.accentSoft,
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star_rounded, color: ShopColors.tan, size: 12),
+                              SizedBox(width: 4),
+                              Text(
+                                'Best Seller',
+                                style: TextStyle(
+                                  color: ShopColors.accentDark,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    product.name,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: ShopColors.accentSoft,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.star_rounded, color: ShopColors.tan, size: 12),
-                          SizedBox(width: 4),
-                          Text(
-                            'Best Seller',
-                            style: TextStyle(
-                              color: ShopColors.accentDark,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  const SizedBox(height: 5),
+                  Text(
+                    String.fromCharCode(0x20B1) + product.price.toStringAsFixed(2) + (product.category?.trim().isNotEmpty == true ? '  |  ' + product.category! : ''),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xFFEEDBD4), fontSize: 10),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                product.name,
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  height: 1.3,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                String.fromCharCode(0x20B1) + product.price.toStringAsFixed(2) + (product.category?.trim().isNotEmpty == true ? '  |  ' + product.category! : ''),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Color(0xFFEEDBD4), fontSize: 10),
-              ),
-            ],
+            ),
           );
 
     return LayoutBuilder(
@@ -1664,73 +1676,83 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
             );
           }
 
-          return Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: .96),
-              borderRadius: BorderRadius.circular(17),
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 108,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
-                    child: AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: _ProductGallery(images: product.galleryImages),
+          return Material(
+            color: Colors.white.withValues(alpha: .96),
+            borderRadius: BorderRadius.circular(17),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: widget.onProductSelected == null
+                  ? null
+                  : () => widget.onProductSelected!(product),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 108,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(11),
+                        child: AspectRatio(
+                          aspectRatio: 4 / 3,
+                          child: _ProductGallery(images: product.galleryImages),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'FEATURED PICK',
+                            style: TextStyle(
+                              color: ShopColors.accentLight,
+                              fontSize: 8,
+                              letterSpacing: 1,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            product.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: ShopColors.text,
+                              fontSize: 12,
+                              height: 1.2,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            String.fromCharCode(0x20B1) +
+                                product.price.toStringAsFixed(2),
+                            style: const TextStyle(
+                              color: ShopColors.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (product.category?.trim().isNotEmpty == true) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              product.category!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: ShopColors.muted,
+                                fontSize: 9,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'FEATURED PICK',
-                        style: TextStyle(
-                          color: ShopColors.accentLight,
-                          fontSize: 8,
-                          letterSpacing: 1,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        product.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ShopColors.text,
-                          fontSize: 12,
-                          height: 1.2,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        String.fromCharCode(0x20B1) + product.price.toStringAsFixed(2),
-                        style: const TextStyle(
-                          color: ShopColors.accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      if (product.category?.trim().isNotEmpty == true) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          product.category!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: ShopColors.muted, fontSize: 9),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           );
         }

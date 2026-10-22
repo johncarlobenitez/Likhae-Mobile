@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../rewards/rewards_screen.dart';
+import 'voucher_discount_calculator.dart';
 import 'shop_voucher_picker.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -295,25 +296,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           break;
         }
       }
-      if (voucher == null ||
-          voucher.discountAmount == null ||
-          voucher.minimumOrderAmount == null) {
-        continue;
-      }
+      if (voucher == null) continue;
 
       final double subtotal = sellerItems.fold<double>(
         0,
         (double value, CheckoutItemData item) => value + item.lineTotal,
       );
-      if (subtotal < voucher.minimumOrderAmount!) continue;
-
-      double discount = voucher.discountType?.toUpperCase() == 'PERCENT'
-          ? subtotal * voucher.discountAmount! / 100
-          : voucher.discountAmount!;
-      final double? maximum = voucher.maximumDiscountAmount;
-      if (maximum != null) discount = discount.clamp(0, maximum).toDouble();
-      final double cappedDiscount = discount.clamp(0, subtotal).toDouble();
-      total += (cappedDiscount * 100).roundToDouble() / 100;
+      total += calculateSellerVoucherDiscount(voucher, subtotal);
     }
     return total;
   }

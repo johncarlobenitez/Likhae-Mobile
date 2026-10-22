@@ -201,6 +201,39 @@ class AuthService {
     return token;
   }
 
+  static Future<List<LogisticsCenterOption>> fetchLogisticsCenters() async {
+    if (!AppConfig.apiEnabled) {
+      throw const FormatException(
+        'Enable the Laravel API before loading logistics hubs.',
+      );
+    }
+
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('logistics-centers'),
+    );
+    if ((response.statusCode ?? 500) >= 400) {
+      throw Exception('Unable to load active logistics hubs.');
+    }
+
+    dynamic rows = response.data;
+    if (rows is Map) rows = rows['data'];
+    if (rows is! List) {
+      throw const FormatException('Invalid logistics hub response from server.');
+    }
+
+    final List<LogisticsCenterOption> centers = <LogisticsCenterOption>[];
+    for (final dynamic row in rows) {
+      if (row is! Map) continue;
+      final int? id = int.tryParse(row['id']?.toString() ?? '');
+      final String code = row['code']?.toString().trim() ?? '';
+      final String name = row['business_name']?.toString().trim() ?? '';
+      if (id == null || name.isEmpty) continue;
+      centers.add(LogisticsCenterOption(id: id, code: code, name: name));
+    }
+
+    return centers;
+  }
+
   static String? _extractEmailVerificationToken(dynamic payload) {
     if (payload is! Map) {
       return null;
@@ -260,7 +293,7 @@ class AuthService {
       'first_name': data.firstName,
       'middle_initial': data.middleInitial,
       'last_name': data.lastName,
-      'sex': data.sex.toLowerCase(),
+      'sex': data.sex.toLowerCase().replaceAll(' ', '_'),
       'birthday': _formatDate(data.birthday),
       'age': data.age.toString(),
       'email': data.email,
@@ -285,6 +318,12 @@ class AuthService {
 
     if (data.vehicleType != null) fields['vehicle_type'] = data.vehicleType;
     if (data.plateNumber != null) fields['plate_number'] = data.plateNumber;
+    if (data.targetLogisticsCenterId != null) {
+      fields['target_logistics_center_id'] = data.targetLogisticsCenterId;
+    }
+    if (data.driversLicenseNumber != null) {
+      fields['drivers_license_number'] = data.driversLicenseNumber;
+    }
     Future<void> addFile(String field, RegistrationDocument? document) async {
       if (document?.path == null || document!.path!.isEmpty) return;
       fields[field] = await MultipartFile.fromFile(

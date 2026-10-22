@@ -22,6 +22,7 @@ class BuyerProduct {
   final int id;
 
   final String name;
+  final String? description;
   final String? slug;
 
   final String? category;
@@ -34,6 +35,7 @@ class BuyerProduct {
   final String? imageUrl;
 
   final double price;
+  final double? highestVariantPrice;
   final double? originalPrice;
 
   final double? rating;
@@ -60,6 +62,8 @@ class BuyerProduct {
     required this.id,
     required this.name,
     required this.price,
+    this.description,
+    this.highestVariantPrice,
     this.slug,
     this.category,
     this.categorySlug,
@@ -133,6 +137,23 @@ class BuyerProduct {
           : double.tryParse((lowestVariant['price'] ?? lowestVariant['sale_price']).toString()) ?? double.infinity;
       if (price < lowestPrice) lowestVariant = variant;
     }
+    double? highestAvailableVariantPrice;
+    for (final Map<String, dynamic> variant in variants) {
+      final bool isActive = parseApiBool(
+        variant['is_active'],
+        defaultValue: true,
+      );
+      final int? stock = int.tryParse(variant['stock']?.toString() ?? '');
+      if (!isActive || (stock != null && stock < 1)) continue;
+      final double? price = double.tryParse(
+        (variant['price'] ?? variant['sale_price'])?.toString() ?? '',
+      );
+      if (price != null &&
+          (highestAvailableVariantPrice == null ||
+              price > highestAvailableVariantPrice)) {
+        highestAvailableVariantPrice = price;
+      }
+    }
 
     if (rawId == null || rawName == null || (rawPrice == null && lowestVariant == null)) {
       return null;
@@ -197,12 +218,14 @@ class BuyerProduct {
         ? rawPrice.toDouble()
         : double.tryParse(rawPrice.toString()) ?? 0;
 
-    final double? originalPrice =
-        (data['original_price'] ?? data['originalPrice']) is num
-        ? (data['original_price'] ?? data['originalPrice']).toDouble()
-        : double.tryParse(
-            (data['original_price'] ?? data['originalPrice']).toString(),
-          );
+    final dynamic rawOriginalPrice =
+        data['original_price'] ??
+        data['originalPrice'] ??
+        data['old_price'] ??
+        data['oldPrice'];
+    final double? originalPrice = rawOriginalPrice is num
+        ? rawOriginalPrice.toDouble()
+        : double.tryParse(rawOriginalPrice?.toString() ?? '');
 
     final dynamic resolvedPrice = data['min_price'] ??
         lowestVariant?['price'] ?? lowestVariant?['sale_price'] ?? rawPrice;
@@ -232,21 +255,30 @@ class BuyerProduct {
     return BuyerProduct(
       id: int.tryParse(rawId.toString()) ?? 0,
       name: rawName.toString(),
+      description: data['description']?.toString(),
       slug: slugValue.isNotEmpty ? slugValue : null,
       category: categoryValue.isNotEmpty ? categoryValue : null,
       categorySlug: (category?['slug'] ?? data['category_slug'])?.toString(),
       sellerName: sellerNameValue.isNotEmpty ? sellerNameValue : null,
       imageUrl: imageValue.isNotEmpty ? imageValue : null,
       price: double.tryParse(resolvedPrice.toString()) ?? parsedPrice,
+      highestVariantPrice: highestAvailableVariantPrice,
       originalPrice: variants.isEmpty
           ? originalPrice
-          : double.tryParse((priceVariant?['old_price'] ?? priceVariant?['original_price'])?.toString() ?? ''),
+          : double.tryParse(
+              (priceVariant?['old_price'] ??
+                      priceVariant?['original_price'] ??
+                      originalPrice)
+                  ?.toString() ??
+                  '',
+            ),
       rating: (data['rating'] is num)
           ? (data['rating'] as num).toDouble()
           : double.tryParse(data['rating']?.toString() ?? ''),
       soldCount:
           int.tryParse(data['sold_count']?.toString() ?? '') ??
           int.tryParse(data['soldCount']?.toString() ?? '') ??
+          int.tryParse(data['sold']?.toString() ?? '') ??
           0,
       stock: data['stock'] is num
           ? (data['stock'] as num).toInt()
@@ -300,6 +332,7 @@ class BuyerProduct {
 
   BuyerProduct copyWith({
     String? name,
+    String? description,
     String? slug,
     String? category,
     String? categorySlug,
@@ -307,6 +340,7 @@ class BuyerProduct {
     String? sellerSlug,
     String? imageUrl,
     double? price,
+    double? highestVariantPrice,
     double? originalPrice,
     double? rating,
     int? soldCount,
@@ -316,6 +350,7 @@ class BuyerProduct {
     return BuyerProduct(
       id: id,
       name: name ?? this.name,
+      description: description ?? this.description,
       slug: slug ?? this.slug,
       category: category ?? this.category,
       categorySlug: categorySlug ?? this.categorySlug,
@@ -323,6 +358,7 @@ class BuyerProduct {
       sellerSlug: sellerSlug ?? this.sellerSlug,
       imageUrl: imageUrl ?? this.imageUrl,
       price: price ?? this.price,
+      highestVariantPrice: highestVariantPrice ?? this.highestVariantPrice,
       originalPrice: originalPrice ?? this.originalPrice,
       rating: rating ?? this.rating,
       soldCount: soldCount ?? this.soldCount,
@@ -337,32 +373,38 @@ class BuyerProduct {
   }
 }
 
-enum BuyerProductSort { recommended, priceLow, priceHigh, rating, sold }
+enum BuyerProductSort { recommended, latest, sold, priceHigh, priceLow }
 
 extension BuyerProductSortInfo on BuyerProductSort {
   String get label {
     switch (this) {
       case BuyerProductSort.recommended:
-        return 'Recommended';
+        return 'Relevance';
 
-      case BuyerProductSort.priceLow:
-        return 'Price: Low to High';
-
-      case BuyerProductSort.priceHigh:
-        return 'Price: High to Low';
-
-      case BuyerProductSort.rating:
-        return 'Highest Rated';
+      case BuyerProductSort.latest:
+        return 'Latest';
 
       case BuyerProductSort.sold:
-        return 'Best Selling';
+        return 'Top Sales';
+
+      case BuyerProductSort.priceLow:
+        return 'Sort by Price: Low to High';
+
+      case BuyerProductSort.priceHigh:
+        return 'Sort by Price: High to Low';
     }
   }
 
   String get badgeLabel {
     switch (this) {
       case BuyerProductSort.recommended:
-        return 'RECOMMENDED';
+        return 'RELEVANCE';
+
+      case BuyerProductSort.latest:
+        return 'LATEST';
+
+      case BuyerProductSort.sold:
+        return 'TOP SALES';
 
       case BuyerProductSort.priceLow:
         return 'LOWEST PRICE';
@@ -370,11 +412,6 @@ extension BuyerProductSortInfo on BuyerProductSort {
       case BuyerProductSort.priceHigh:
         return 'HIGHEST PRICE';
 
-      case BuyerProductSort.rating:
-        return 'TOP RATED';
-
-      case BuyerProductSort.sold:
-        return 'BEST SELLING';
     }
   }
 }
@@ -448,13 +485,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
   late final FocusNode _searchFocusNode;
 
   late List<BuyerProduct> _products;
+  List<BuyerProduct>? _remoteSearchProducts;
   List<ProductSearchRecord> _recentSearches = <ProductSearchRecord>[];
+  Timer? _searchDebounce;
+  int _searchRequestVersion = 0;
   late bool _showSearchExperience;
 
   bool _isLoading = false;
+  bool _isRemoteSearchLoading = false;
   String? _errorMessage;
 
   late String _searchQuery;
+  late bool _searchSubmitted;
 
   late BuyerProductSort _sort;
   String? _categorySlug;
@@ -474,6 +516,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _products = List<BuyerProduct>.from(widget.products);
 
     _searchQuery = widget.initialSearchQuery;
+    _searchSubmitted = _searchQuery.trim().isNotEmpty;
+    _isRemoteSearchLoading =
+        AppConfig.apiEnabled && _searchQuery.trim().isNotEmpty;
     _showSearchExperience = widget.searchOnOpen;
 
     _sort = widget.initialSort;
@@ -488,6 +533,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
     if (_products.isEmpty) {
       _loadProducts();
     }
+    if (_searchQuery.trim().isNotEmpty) {
+      _scheduleRemoteSearch(_searchQuery.trim());
+    }
     WishlistService.productIds.addListener(_onWishlistChanged);
   }
 
@@ -497,6 +545,70 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   void _onSearchFocusChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {
+      _searchQuery = value;
+      _remoteSearchProducts = null;
+      _isRemoteSearchLoading =
+          AppConfig.apiEnabled && value.trim().isNotEmpty;
+      if (value.trim().isEmpty) _searchSubmitted = false;
+      _pageIndex = 0;
+    });
+    _scheduleRemoteSearch(value.trim());
+  }
+
+  void _scheduleRemoteSearch(String query, {bool immediately = false}) {
+    _searchDebounce?.cancel();
+    final int requestVersion = ++_searchRequestVersion;
+    if (!AppConfig.apiEnabled || query.isEmpty) return;
+
+    Future<void> search() async {
+      try {
+        final List<Map<String, dynamic>> rows =
+            await ProductService.fetchProductRows(
+              dealsOnly: widget.dealsOnly,
+              searchQuery: query,
+            );
+        final List<BuyerProduct> results = rows
+            .map(BuyerProduct.fromApi)
+            .whereType<BuyerProduct>()
+            .where(
+              (BuyerProduct product) =>
+                  product.id != 0 && product.isVisibleInCatalog,
+            )
+            .toList(growable: false);
+        if (!mounted ||
+            requestVersion != _searchRequestVersion ||
+            query != _searchQuery.trim()) {
+          return;
+        }
+        WishlistService.recordKnownProducts(
+          results.map((BuyerProduct product) =>
+              (id: product.id, wishlisted: product.wishlisted)),
+        );
+        setState(() {
+          _remoteSearchProducts = results;
+          _isRemoteSearchLoading = false;
+          _pageIndex = 0;
+        });
+      } catch (_) {
+        // Local matching remains available if the catalog search request fails.
+        if (mounted && requestVersion == _searchRequestVersion) {
+          setState(() => _isRemoteSearchLoading = false);
+        }
+      }
+    }
+
+    if (immediately) {
+      unawaited(search());
+    } else {
+      _searchDebounce = Timer(
+        const Duration(milliseconds: 350),
+        () => unawaited(search()),
+      );
+    }
   }
 
   Future<void> _loadSearchHistory() async {
@@ -630,6 +742,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void _submitSearch(String query) {
     final String trimmedQuery = query.trim();
     if (trimmedQuery.isEmpty) return;
+    setState(() => _searchSubmitted = true);
+    _scheduleRemoteSearch(trimmedQuery, immediately: true);
     final List<BuyerProduct> matchingProducts = _filteredProducts;
     unawaited(_recordSearch(
       trimmedQuery,
@@ -702,8 +816,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     if (oldWidget.initialSearchQuery != widget.initialSearchQuery) {
       _searchQuery = widget.initialSearchQuery;
-
+      _searchSubmitted = _searchQuery.trim().isNotEmpty;
+      _isRemoteSearchLoading =
+          AppConfig.apiEnabled && _searchQuery.trim().isNotEmpty;
       _searchController.text = _searchQuery;
+      _remoteSearchProducts = null;
+      _scheduleRemoteSearch(_searchQuery.trim());
     }
 
     if (oldWidget.initialSort != widget.initialSort) {
@@ -717,6 +835,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchRequestVersion++;
     _searchController.dispose();
     _searchFocusNode.removeListener(_onSearchFocusChanged);
     _searchFocusNode.dispose();
@@ -729,19 +849,23 @@ class _ProductsScreenState extends State<ProductsScreen> {
   List<BuyerProduct> _filterResult = [];
 
   List<BuyerProduct> get _filteredProducts {
-    final key = (_products, _searchQuery, _sort, _minimumPrice, _maximumPrice, _minimumRating, _categorySlug, _location, widget.dealsOnly);
+    final List<BuyerProduct> sourceProducts =
+        _remoteSearchProducts ?? _products;
+    final bool hasRemoteSearchResults = _remoteSearchProducts != null;
+    final key = (sourceProducts, _searchQuery, _sort, _minimumPrice, _maximumPrice, _minimumRating, _categorySlug, _location, widget.dealsOnly);
     if (_filterKey == key) return _filterResult;
 
-    List<BuyerProduct> result = _products.where((BuyerProduct product) {
+    List<BuyerProduct> result = sourceProducts.where((BuyerProduct product) {
       if (!product.isVisibleInCatalog) return false;
       final String query = _searchQuery.trim().toLowerCase();
 
-      if (query.isEmpty) {
+      if (query.isEmpty || hasRemoteSearchResults) {
         return true;
       }
 
       final String searchableText = <String>[
         product.name,
+        product.description ?? '',
         product.category ?? '',
         product.sellerName ?? '',
       ].join(' ').toLowerCase();
@@ -793,6 +917,33 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     switch (_sort) {
       case BuyerProductSort.recommended:
+        final String query = _searchQuery.trim().toLowerCase();
+        if (query.isEmpty) break;
+        final Map<int, int> originalPositions = <int, int>{
+          for (int index = 0; index < result.length; index++)
+            result[index].id: index,
+        };
+        result.sort((BuyerProduct a, BuyerProduct b) {
+          final int scoreDifference =
+              _relevanceScore(b, query) - _relevanceScore(a, query);
+          if (scoreDifference != 0) return scoreDifference;
+          return originalPositions[a.id]!.compareTo(originalPositions[b.id]!);
+        });
+        break;
+
+      case BuyerProductSort.latest:
+        // Laravel returns its catalog newest first. The local demo catalog has
+        // no creation timestamp, so use its sequential IDs as a fallback.
+        if (!AppConfig.apiEnabled) {
+          result.sort((BuyerProduct a, BuyerProduct b) => b.id.compareTo(a.id));
+        }
+        break;
+
+      case BuyerProductSort.sold:
+        result.sort(
+          (BuyerProduct a, BuyerProduct b) =>
+              b.soldCount.compareTo(a.soldCount),
+        );
         break;
 
       case BuyerProductSort.priceLow:
@@ -803,23 +954,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
       case BuyerProductSort.priceHigh:
         result.sort(
-          (BuyerProduct a, BuyerProduct b) => b.price.compareTo(a.price),
+          (BuyerProduct a, BuyerProduct b) =>
+              (b.highestVariantPrice ?? b.price).compareTo(
+                a.highestVariantPrice ?? a.price,
+              ),
         );
         break;
 
-      case BuyerProductSort.rating:
-        result.sort(
-          (BuyerProduct a, BuyerProduct b) =>
-              (b.rating ?? 0).compareTo(a.rating ?? 0),
-        );
-        break;
-
-      case BuyerProductSort.sold:
-        result.sort(
-          (BuyerProduct a, BuyerProduct b) =>
-              b.soldCount.compareTo(a.soldCount),
-        );
-        break;
     }
 
     _filterKey = key;
@@ -836,6 +977,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
           .where((BuyerProduct product) => product.isVisibleInCatalog)
           .map((BuyerProduct product) => product.name),
     );
+  }
+
+  int _relevanceScore(BuyerProduct product, String query) {
+    final String name = product.name.toLowerCase();
+    final String category = product.category?.toLowerCase() ?? '';
+    final String seller = product.sellerName?.toLowerCase() ?? '';
+    if (name == query) return 100;
+    if (name.startsWith(query)) return 80;
+    if (name.contains(query)) return 60;
+    if (category.startsWith(query)) return 40;
+    if (category.contains(query)) return 30;
+    if (seller.startsWith(query)) return 20;
+    if (seller.contains(query)) return 10;
+    if (product.description?.toLowerCase().contains(query) == true) return 5;
+    return 0;
   }
 
   double get _priceMinimum {
@@ -987,11 +1143,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   void _clearSearch() {
     _searchController.clear();
-
-    setState(() {
-      _searchQuery = '';
-      _pageIndex = 0;
-    });
+    _onSearchChanged('');
   }
 
   void _showMessage(String message, {bool error = false}) {
@@ -1028,6 +1180,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Widget build(BuildContext context) {
     final List<BuyerProduct> allProducts = _filteredProducts;
     final List<BuyerProduct> products = _pageProducts;
+    final bool inSearchExperience =
+        _showSearchExperience || _searchFocusNode.hasFocus;
+    final bool showSearchSuggestions =
+        inSearchExperience && !_searchSubmitted;
 
     if (_isLoading &&
         products.isEmpty &&
@@ -1068,7 +1224,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   slivers: [
                     SliverToBoxAdapter(child: _buildSearchArea()),
 
-                    if (_showSearchExperience || _searchFocusNode.hasFocus) ...[
+                    if (showSearchSuggestions) ...[
                       if (_recentSearches.isNotEmpty)
                         SliverToBoxAdapter(child: _buildSearchHistory()),
                       SliverToBoxAdapter(child: _buildSearchSuggestions()),
@@ -1077,7 +1233,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         child: _buildCatalogHeader(allProducts.length),
                       ),
 
-                      if (_errorMessage != null && products.isEmpty)
+                      if (_isRemoteSearchLoading && allProducts.isEmpty)
+                        const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: CircularProgressIndicator(color: _maroon),
+                          ),
+                        )
+                      else if (_errorMessage != null && products.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
                         child: Padding(
@@ -1175,12 +1338,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               focusNode: _searchFocusNode,
               textInputAction: TextInputAction.search,
               onSubmitted: _submitSearch,
-              onChanged: (String value) {
-                setState(() {
-                  _searchQuery = value;
-                  _pageIndex = 0;
-                });
-              },
+              onChanged: _onSearchChanged,
               decoration: InputDecoration(
                 hintText: 'Search products, shops...',
                 hintStyle: const TextStyle(color: _mutedLight, fontSize: 12),
@@ -1235,7 +1393,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   borderRadius: BorderRadius.circular(15),
                 ),
                 alignment: Alignment.center,
-                child: const Icon(Icons.tune_rounded, color: _maroon, size: 21),
+                child: const Icon(
+                  Icons.swap_vert_rounded,
+                  color: _maroon,
+                  size: 23,
+                ),
               ),
             ),
           ),
@@ -1251,10 +1413,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   _searchController.selection = TextSelection.collapsed(
                     offset: suggestion.length,
                   );
-                  setState(() {
-                    _searchQuery = suggestion;
-                    _pageIndex = 0;
-                  });
+                  _onSearchChanged(suggestion);
+                  setState(() => _searchSubmitted = true);
+                  _scheduleRemoteSearch(suggestion, immediately: true);
                   unawaited(_recordSearch(suggestion));
                   _searchFocusNode.unfocus();
                 },
@@ -1507,58 +1668,79 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Widget _buildFocusedSearchBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-      child: TextField(
-        controller: _searchController,
-        focusNode: _searchFocusNode,
-        textInputAction: TextInputAction.search,
-        onSubmitted: _submitSearch,
-        onChanged: (String value) => setState(() {
-          _searchQuery = value;
-          _pageIndex = 0;
-        }),
-        style: const TextStyle(color: _text, fontSize: 14),
-        cursorColor: _maroon,
-        decoration: InputDecoration(
-          hintText: 'Search products, shops...',
-          hintStyle: const TextStyle(color: _mutedLight, fontSize: 14),
-          prefixIcon: IconButton(
+      child: Row(
+        children: [
+          IconButton(
             tooltip: 'Back',
             onPressed: _leaveSearchExperience,
             icon: const Icon(Icons.arrow_back_rounded),
             color: _maroon,
-            iconSize: 21,
+            iconSize: 23,
+            constraints: const BoxConstraints.tightFor(width: 38, height: 52),
+            padding: EdgeInsets.zero,
           ),
-          prefixIconConstraints: const BoxConstraints.tightFor(
-            width: 52,
-            height: 56,
-          ),
-          suffixIcon: _searchQuery.trim().isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Clear search',
-                  onPressed: _clearSearch,
-                  icon: const Icon(Icons.close_rounded, size: 18),
+          const SizedBox(width: 5),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              textInputAction: TextInputAction.search,
+              onSubmitted: _submitSearch,
+              onChanged: _onSearchChanged,
+              style: const TextStyle(color: _text, fontSize: 14),
+              cursorColor: _maroon,
+              decoration: InputDecoration(
+                hintText: 'Search products, shops...',
+                hintStyle: const TextStyle(color: _mutedLight, fontSize: 14),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
                   color: _muted,
+                  size: 21,
                 ),
-          filled: true,
-          fillColor: _surface,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 17,
+                suffixIcon: _searchQuery.trim().isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        color: _muted,
+                      ),
+                filled: true,
+                fillColor: _surface,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 17,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: _maroon.withValues(alpha: .65),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: _maroon.withValues(alpha: .65),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: const BorderSide(color: _maroon, width: 1.3),
+                ),
+              ),
+            ),
           ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: _maroon.withValues(alpha: .65)),
+          const SizedBox(width: 7),
+          IconButton(
+            tooltip: 'Sort results',
+            onPressed: _showSortSheet,
+            icon: const Icon(Icons.swap_vert_rounded),
+            color: _maroon,
+            iconSize: 25,
+            constraints: const BoxConstraints.tightFor(width: 42, height: 50),
+            padding: EdgeInsets.zero,
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide(color: _maroon.withValues(alpha: .65)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: _maroon, width: 1.3),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -1642,13 +1824,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _searchController.selection = TextSelection.collapsed(
       offset: search.query.length,
     );
-    setState(() {
-      _searchQuery = search.query;
-      _pageIndex = 0;
-    });
+    _onSearchChanged(search.query);
+    setState(() => _searchSubmitted = true);
+    _scheduleRemoteSearch(search.query, immediately: true);
+    _searchFocusNode.unfocus();
   }
 
   Widget _buildCatalogHeader(int count) {
+    final String query = _searchQuery.trim();
+    final bool searching = query.isNotEmpty;
+    final String resultCount = count == 1 ? '1 product' : '$count products';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Row(
@@ -1659,7 +1844,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.dealsOnly ? 'Shop Deals' : 'Explore Products',
+                  searching
+                      ? 'Search Results'
+                      : widget.dealsOnly
+                      ? 'Shop Deals'
+                      : 'Explore Products',
                   style: TextStyle(
                     color: _text,
                     fontSize: 24,
@@ -1672,7 +1861,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 const SizedBox(height: 6),
 
                 Text(
-                  count == 1 ? '1 product found' : '$count products found',
+                  searching
+                      ? '$resultCount matching “$query”'
+                      : '$resultCount found',
                   style: const TextStyle(color: _muted, fontSize: 10.5),
                 ),
               ],

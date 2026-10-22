@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:geolocator/geolocator.dart';
@@ -196,6 +197,8 @@ class UpdateBuyerProfileRequest {
 
   final SelectedProfilePhoto? profilePhoto;
 
+  final String? mobileChangeCode;
+
   const UpdateBuyerProfileRequest({
     required this.name,
     required this.email,
@@ -203,6 +206,17 @@ class UpdateBuyerProfileRequest {
     required this.birthday,
     required this.gender,
     this.profilePhoto,
+    this.mobileChangeCode,
+  });
+}
+
+class BuyerProfileVerificationRequiredException implements Exception {
+  final String target;
+  final String message;
+
+  const BuyerProfileVerificationRequiredException({
+    required this.target,
+    required this.message,
   });
 }
 
@@ -354,6 +368,8 @@ typedef PickProfilePhotoCallback = Future<SelectedProfilePhoto?> Function();
 typedef UpdateBuyerProfileCallback =
     Future<BuyerProfileData> Function(UpdateBuyerProfileRequest request);
 
+typedef ResendBuyerMobileChangeCodeCallback = Future<void> Function();
+
 typedef RemoveProfilePhotoCallback = Future<BuyerProfileData> Function();
 
 typedef AddBuyerAddressCallback =
@@ -391,6 +407,8 @@ class AccountScreen extends StatefulWidget {
   final PickProfilePhotoCallback? onPickProfilePhoto;
 
   final UpdateBuyerProfileCallback? onUpdateProfile;
+
+  final ResendBuyerMobileChangeCodeCallback? onResendMobileChangeCode;
 
   final RemoveProfilePhotoCallback? onRemoveProfilePhoto;
 
@@ -438,6 +456,7 @@ class AccountScreen extends StatefulWidget {
     this.onBack,
     this.onPickProfilePhoto,
     this.onUpdateProfile,
+    this.onResendMobileChangeCode,
     this.onRemoveProfilePhoto,
     this.onAddAddress,
     this.loadRegions,
@@ -1442,17 +1461,29 @@ class _AccountScreenState extends State<AccountScreen> {
 
     try {
       final BuyerProfileData previousProfile = _profile;
-
-      final BuyerProfileData updated = await callback(
-        UpdateBuyerProfileRequest(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          phone: _phoneController.text.trim(),
-          birthday: _birthday,
-          gender: _gender,
-          profilePhoto: _selectedPhoto,
-        ),
+      final UpdateBuyerProfileRequest request = UpdateBuyerProfileRequest(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        birthday: _birthday,
+        gender: _gender,
+        profilePhoto: _selectedPhoto,
       );
+      late final BuyerProfileData updated;
+
+      try {
+        updated = await callback(request);
+      } on BuyerProfileVerificationRequiredException catch (verification) {
+        final BuyerProfileData? verified = await _verifyMobileChange(
+          callback,
+          request,
+          verification,
+        );
+        if (verified == null) {
+          return;
+        }
+        updated = verified;
+      }
 
       if (!mounted) {
         return;
@@ -1497,6 +1528,227 @@ class _AccountScreenState extends State<AccountScreen> {
           _savingProfile = false;
         });
       }
+    }
+  }
+
+  Future<BuyerProfileData?> _verifyMobileChange(
+    UpdateBuyerProfileCallback callback,
+    UpdateBuyerProfileRequest request,
+    BuyerProfileVerificationRequiredException verification,
+  ) async {
+    final TextEditingController codeController = TextEditingController();
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+    bool submitting = false;
+    bool resending = false;
+    String? dialogError;
+    String? dialogNotice;
+
+    try {
+      return await showDialog<BuyerProfileData>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              Future<void> submitCode() async {
+                if (submitting || !(formKey.currentState?.validate() ?? false)) {
+                  return;
+                }
+                setDialogState(() {
+                  submitting = true;
+                  dialogError = null;
+                });
+                try {
+                  final BuyerProfileData updated = await callback(
+                    UpdateBuyerProfileRequest(
+                      name: request.name,
+                      email: request.email,
+                      phone: request.phone,
+                      birthday: request.birthday,
+                      gender: request.gender,
+                      profilePhoto: request.profilePhoto,
+                      mobileChangeCode: codeController.text.trim(),
+                    ),
+                  );
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop(updated);
+                  }
+                } catch (error) {
+                  if (dialogContext.mounted) {
+                    setDialogState(() {
+                      submitting = false;
+                      dialogError = _errorText(error);
+                    });
+                  }
+                }
+              }
+
+              Future<void> resendCode() async {
+                final ResendBuyerMobileChangeCodeCallback? resend =
+                    widget.onResendMobileChangeCode;
+                if (resending || resend == null) {
+                  return;
+                }
+                setDialogState(() {
+                  resending = true;
+                  dialogError = null;
+                  dialogNotice = null;
+                });
+                try {
+                  await resend();
+                  if (dialogContext.mounted) {
+                    setDialogState(() {
+                      resending = false;
+                      dialogNotice = 'A new verification code was sent.';
+                    });
+                  }
+                } catch (error) {
+                  if (dialogContext.mounted) {
+                    setDialogState(() {
+                      resending = false;
+                      dialogError = _errorText(error);
+                    });
+                  }
+                }
+              }
+
+              return AlertDialog(
+                backgroundColor: _surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                title: const Text(
+                  'Verify mobile number',
+                  style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+                ),
+                content: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        verification.message.isEmpty
+                            ? 'Enter the six-digit code sent to ${verification.target}.'
+                            : verification.message,
+                        style: const TextStyle(
+                          color: _muted,
+                          fontSize: 14,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      TextFormField(
+                        controller: codeController,
+                        autofocus: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        maxLength: 6,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 22,
+                          letterSpacing: 8,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '------',
+                          counterText: '',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(13),
+                            borderSide: const BorderSide(color: _border),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(13),
+                            borderSide: const BorderSide(color: _border),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(13),
+                            borderSide: const BorderSide(color: _maroon),
+                          ),
+                        ),
+                        validator: (String? value) {
+                          final String code = value?.trim() ?? '';
+                          return RegExp(r'^\d{6}$').hasMatch(code)
+                              ? null
+                              : 'Enter the six-digit code.';
+                        },
+                        onFieldSubmitted: (_) => submitCode(),
+                      ),
+                      if (dialogError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          dialogError!,
+                          style: const TextStyle(
+                            color: _danger,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                      if (dialogNotice != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          dialogNotice!,
+                          style: const TextStyle(
+                            color: _maroon,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed:
+                              resending || widget.onResendMobileChangeCode == null
+                              ? null
+                              : resendCode,
+                          child: Text(
+                            resending ? 'Sending…' : 'Resend code',
+                            style: const TextStyle(color: _maroon),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: submitting
+                        ? null
+                        : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: submitting ? null : submitCode,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _maroon,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                    ),
+                    child: submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Verify and save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      codeController.dispose();
     }
   }
 
@@ -3288,19 +3540,23 @@ class _AccountScreenState extends State<AccountScreen> {
                   return 'Enter a new password.';
                 }
 
-                /*
-                 * Match Laravel:
-                 *
-                 * required
-                 * string
-                 * minimum 8
-                 * confirmed
-                 *
-                 * Do not invent uppercase/number/special-
-                 * character requirements here.
-                 */
                 if (password.length < 8) {
                   return 'Use at least 8 characters.';
+                }
+
+                if (password.length > 72) {
+                  return 'Password must not exceed 72 characters.';
+                }
+
+                if (password == _currentPasswordController.text) {
+                  return 'Choose a password different from your current one.';
+                }
+
+                if (!RegExp(r'[a-z]').hasMatch(password) ||
+                    !RegExp(r'[A-Z]').hasMatch(password) ||
+                    !RegExp(r'\d').hasMatch(password) ||
+                    !RegExp(r'[^A-Za-z0-9]').hasMatch(password)) {
+                  return 'Include uppercase and lowercase letters, a number, and a symbol.';
                 }
 
                 return null;
@@ -3363,7 +3619,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
                   Expanded(
                     child: Text(
-                      'Your new password must contain at least 8 characters and must match the confirmation field.',
+                      'Use 8–72 characters with uppercase and lowercase letters, a number, and a symbol. It must differ from your current password and match the confirmation.',
                       style: TextStyle(
                         color: _brown,
                         fontSize: 12.5,

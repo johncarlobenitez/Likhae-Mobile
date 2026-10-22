@@ -167,6 +167,121 @@ class BuyerOrderTimelineEvent {
   });
 }
 
+List<String> parseBuyerDeliveryProofUrls(
+  Iterable<Map<String, dynamic>> sources,
+) {
+  const List<String> proofKeys = <String>[
+    'proof_url',
+    'proof_file_url',
+    'proof_image_url',
+    'proof_photo_url',
+    'delivery_proof_url',
+    'delivery_proof_path',
+    'delivery_proof_file',
+    'delivery_proof_file_url',
+    'delivery_photo_url',
+    'delivery_image_url',
+    'proof_of_delivery_url',
+    'proof_of_delivery_path',
+    'proof_of_delivery_photo',
+    'delivery_proof_image_url',
+    'delivery_proof_photo_url',
+    'proof_urls',
+    'proof_images',
+    'proof_photos',
+    'proof_files',
+    'proof',
+    'pod_url',
+    'pod_photo_url',
+    'pod_image_url',
+    'pod_photo',
+    'pod_image',
+    'pod_file',
+    'proof_path',
+    'proof_file',
+    'proof_image',
+    'proof_photo',
+    'delivery_proof',
+    'delivery_proof_image',
+    'delivery_proof_images',
+    'delivery_proof_photo',
+    'delivery_proof_photos',
+    'delivery_proofs',
+    'proof_of_delivery',
+    'photo_path',
+    'photo_url',
+    'attachments',
+    'delivery_attempt',
+    'latest_delivery_attempt',
+    'latest_attempt',
+    'delivery_attempts',
+    'delivery',
+    'rider_delivery',
+    'rider_assignment',
+    'assignment',
+    'attempt',
+    'attempts',
+    'events',
+    'tracking_events',
+    'tracking_timeline',
+    'shipment_events',
+    'status_history',
+    'timeline',
+    'data',
+  ];
+  const List<String> mediaKeys = <String>[
+    'url',
+    'image_url',
+    'image',
+    'photo_url',
+    'photo',
+    'file_url',
+    'file',
+    'download_url',
+    'original_url',
+    'file_path',
+    'path',
+    'src',
+  ];
+
+  final List<String> urls = <String>[];
+
+  void addMedia(dynamic value) {
+    if (value is List) {
+      for (final dynamic item in value) {
+        addMedia(item);
+      }
+      return;
+    }
+    if (value is Map) {
+      for (final String key in mediaKeys) {
+        final dynamic nested = value[key];
+        if (nested != null) {
+          addMedia(nested);
+          return;
+        }
+      }
+      for (final String key in proofKeys) {
+        final dynamic nested = value[key];
+        if (nested != null) addMedia(nested);
+      }
+      return;
+    }
+    final String path = value?.toString().trim() ?? '';
+    if (path.isEmpty) return;
+    final String url = AppConfig.resolveMediaUrl(path);
+    if (url.isNotEmpty && !urls.contains(url)) urls.add(url);
+  }
+
+  for (final Map<String, dynamic> source in sources) {
+    for (final String key in proofKeys) {
+      if (source[key] != null) addMedia(source[key]);
+    }
+  }
+
+  return urls;
+}
+
 class BuyerOrderLocation {
   final double latitude;
 
@@ -179,6 +294,70 @@ class BuyerOrderLocation {
     required this.longitude,
     required this.label,
   });
+}
+
+BuyerOrderLocation? parseBuyerOrderLogisticsStop(
+  Map<String, dynamic> row,
+) {
+  final dynamic rawFacility = row['logistics_center'] ??
+      row['logisticsCenter'] ??
+      row['center'] ??
+      row['facility'] ??
+      row['hub'];
+  final Map<String, dynamic> facility = rawFacility is Map
+      ? Map<String, dynamic>.from(rawFacility)
+      : const <String, dynamic>{};
+  final dynamic rawLocation = row['location'] ??
+      facility['location'] ??
+      facility['address'] ??
+      row['address'] ??
+      rawFacility;
+  final Map<String, dynamic> location = rawLocation is Map
+      ? Map<String, dynamic>.from(rawLocation)
+      : row;
+  final String name = <dynamic>[
+    row['label'],
+    row['name'],
+    row['facility_name'],
+    row['hub_name'],
+    row['location_name'],
+    row['current_center_name'],
+    row['origin_center_name'],
+    row['destination_center_name'],
+    facility['business_name'],
+    facility['name'],
+    facility['label'],
+    location['label'],
+    location['name'],
+    location['facility_name'],
+    location['hub_name'],
+    location['location_name'],
+    rawFacility is String ? rawFacility : null,
+    rawLocation is String ? rawLocation : null,
+    row['notes'],
+    row['details'],
+    row['description'],
+    row['message'],
+  ].where((dynamic value) => value != null).join(' ').trim();
+  final double? latitude = double.tryParse(
+    (location['latitude'] ?? location['lat'] ?? location['y'] ?? '').toString(),
+  );
+  final double? longitude = double.tryParse(
+    (location['longitude'] ??
+            location['lng'] ??
+            location['lon'] ??
+            location['x'] ??
+            '')
+        .toString(),
+  );
+  if (latitude != null && longitude != null) {
+    return BuyerOrderLocation(
+      latitude: latitude,
+      longitude: longitude,
+      label: name.isEmpty ? 'Logistics hub' : name,
+    );
+  }
+  return null;
 }
 
 class BuyerOrderData {
@@ -243,9 +422,16 @@ class BuyerOrderData {
 
   final BuyerOrderLocation? orderLocation;
 
+  final BuyerOrderLocation? sellerLocation;
+
   final BuyerOrderLocation? riderLocation;
 
+  /// Logistics facilities visited before the parcel reaches the buyer.
+  final List<BuyerOrderLocation> shipmentRouteStops;
+
   final List<BuyerOrderTimelineEvent> timeline;
+
+  final List<String> deliveryProofImageUrls;
 
   final DateTime? createdAt;
 
@@ -285,8 +471,11 @@ class BuyerOrderData {
     this.tracking,
     this.shipmentId,
     this.orderLocation,
+    this.sellerLocation,
     this.riderLocation,
+    this.shipmentRouteStops = const <BuyerOrderLocation>[],
     this.timeline = const <BuyerOrderTimelineEvent>[],
+    this.deliveryProofImageUrls = const <String>[],
     this.createdAt,
     this.isPreview = false,
     this.allowCancel,
@@ -542,10 +731,39 @@ class BuyerOrderData {
       rawAddress,
       'Delivery destination',
     );
-    final dynamic rawTimeline = json['timeline'] ?? json['tracking_timeline'];
-    final List<BuyerOrderTimelineEvent> timeline = rawTimeline is List
-        ? rawTimeline.whereType<Map>().map((Map item) {
-            final Map<String, dynamic> event = Map<String, dynamic>.from(item);
+    final dynamic rawSellerLocation = json['seller_location'] ??
+        json['seller_address'] ??
+        shipment['seller_location'];
+    final Map<String, dynamic> sellerLocationData = rawSellerLocation is Map
+        ? Map<String, dynamic>.from(rawSellerLocation)
+        : const <String, dynamic>{};
+    final BuyerOrderLocation? sellerLocation = parseLocation(
+      rawSellerLocation,
+      (sellerLocationData['label'] ??
+              sellerLocationData['name'] ??
+              'Seller pickup location')
+          .toString(),
+    );
+    final dynamic rawTimeline = json['timeline'] ??
+        json['tracking_timeline'] ??
+        json['shipment_events'] ??
+        shipment['timeline'] ??
+        shipment['tracking_timeline'] ??
+        shipment['events'];
+    final List<Map<String, dynamic>> timelineRows = rawTimeline is List
+        ? rawTimeline
+              .whereType<Map>()
+              .map((Map item) => Map<String, dynamic>.from(item))
+              .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final List<String> deliveryProofImageUrls =
+        parseBuyerDeliveryProofUrls(<Map<String, dynamic>>[
+          json,
+          shipment,
+          ...timelineRows,
+        ]);
+    final List<BuyerOrderTimelineEvent> timeline = timelineRows.isNotEmpty
+        ? timelineRows.map((Map<String, dynamic> event) {
             final String rawLabel = (event['label'] ??
                     event['status_label'] ??
                     event['status'] ??
@@ -568,7 +786,7 @@ class BuyerOrderData {
                 event['location_name'] ??
                 event['facility_name'] ??
                 event['location'];
-            final String details = rawDetails is Map
+            final String noteDetails = rawDetails is Map
                 ? (rawDetails['label'] ??
                           rawDetails['name'] ??
                           rawDetails['facility_name'] ??
@@ -577,6 +795,32 @@ class BuyerOrderData {
                       .toString()
                       .trim()
                 : rawDetails?.toString().trim() ?? '';
+            final BuyerOrderLocation? eventLocation =
+                parseBuyerOrderLogisticsStop(event);
+            final dynamic rawEventLocation = event['location'] ??
+                event['logistics_center'] ??
+                event['center'];
+            final Map<String, dynamic> eventLocationData =
+                rawEventLocation is Map
+                ? Map<String, dynamic>.from(rawEventLocation)
+                : const <String, dynamic>{};
+            final String eventLocationName = (event['location_name'] ??
+                    event['facility_name'] ??
+                    event['current_center_name'] ??
+                    eventLocationData['business_name'] ??
+                    eventLocationData['name'] ??
+                    eventLocationData['label'] ??
+                    '')
+                .toString()
+                .trim();
+            final String details = <String>[
+              noteDetails,
+              if ((eventLocation?.label ?? eventLocationName).isNotEmpty &&
+                  !noteDetails.toLowerCase().contains(
+                    (eventLocation?.label ?? eventLocationName).toLowerCase(),
+                  ))
+                eventLocation?.label ?? eventLocationName,
+            ].where((String value) => value.isNotEmpty).join(' | ');
             return BuyerOrderTimelineEvent(
               label: label.isEmpty ? 'Shipment update' : label,
               time: _formatOrderTimelineTime(
@@ -587,6 +831,83 @@ class BuyerOrderData {
             );
           }).toList(growable: false)
         : const <BuyerOrderTimelineEvent>[];
+    final dynamic rawRouteStops = json['shipment_route_stops'] ??
+        json['route_stops'] ??
+        json['logistics_stops'] ??
+        json['shipment_route'] ??
+        shipment['shipment_route_stops'] ??
+        shipment['route_stops'] ??
+        shipment['logistics_stops'] ??
+        shipment['stops'];
+    final List<Map<String, dynamic>> routeStopRows = rawRouteStops is List
+        ? rawRouteStops
+              .whereType<Map>()
+              .map((Map item) => Map<String, dynamic>.from(item))
+              .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final List<BuyerOrderLocation> shipmentRouteStops =
+        <BuyerOrderLocation>[];
+    void addRouteStop(BuyerOrderLocation? stop) {
+      if (stop == null ||
+          shipmentRouteStops.any(
+            (BuyerOrderLocation existing) =>
+                existing.latitude == stop.latitude &&
+                existing.longitude == stop.longitude,
+          )) {
+        return;
+      }
+      shipmentRouteStops.add(stop);
+    }
+
+    for (final Map<String, dynamic> stop in routeStopRows) {
+      addRouteStop(parseBuyerOrderLogisticsStop(stop));
+    }
+
+    final dynamic rawTransferLegs =
+        json['transfer_legs'] ?? shipment['transfer_legs'];
+    if (rawTransferLegs is List) {
+      final List<Map<String, dynamic>> transferLegs = rawTransferLegs
+          .whereType<Map>()
+          .map((Map item) => Map<String, dynamic>.from(item))
+          .toList(growable: false);
+      for (final Map<String, dynamic> leg in transferLegs) {
+        addRouteStop(parseBuyerOrderLogisticsStop(<String, dynamic>{
+          'logistics_center': leg['origin_center'] ??
+              leg['origin_logistics_center'] ??
+              leg['origin'],
+          'name': leg['origin_center_name'],
+        }));
+        addRouteStop(parseBuyerOrderLogisticsStop(<String, dynamic>{
+          'logistics_center': leg['destination_center'] ??
+              leg['destination_logistics_center'] ??
+              leg['destination'],
+          'name': leg['destination_center_name'],
+        }));
+      }
+    }
+
+    if (shipmentRouteStops.isEmpty) {
+      for (final Map<String, dynamic> event in timelineRows) {
+        addRouteStop(parseBuyerOrderLogisticsStop(event));
+      }
+    }
+    final BuyerOrderLocation? currentLogisticsCenter =
+        parseBuyerOrderLogisticsStop(<String, dynamic>{
+      'logistics_center': json['current_logistics_center'] ??
+          json['logistics_center'] ??
+          shipment['current_logistics_center'] ??
+          shipment['logistics_center'],
+      'current_center_name': json['current_center_name'] ??
+          shipment['current_center_name'],
+    });
+    if (currentLogisticsCenter != null &&
+        !shipmentRouteStops.any(
+          (BuyerOrderLocation stop) =>
+              stop.latitude == currentLogisticsCenter.latitude &&
+              stop.longitude == currentLogisticsCenter.longitude,
+        )) {
+      shipmentRouteStops.add(currentLogisticsCenter);
+    }
     final String backendStatus =
         (json['status'] ?? json['order_status'] ?? 'pending').toString();
 
@@ -644,6 +965,7 @@ class BuyerOrderData {
             'Order location',
           ) ??
           orderLocation,
+      sellerLocation: sellerLocation,
       riderLocation: parseLocation(
         json['rider_location'] ??
             json['driver_location'] ??
@@ -652,8 +974,10 @@ class BuyerOrderData {
             json['driver'],
         'Rider location',
       ),
+      shipmentRouteStops: shipmentRouteStops,
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()),
       timeline: timeline,
+      deliveryProofImageUrls: deliveryProofImageUrls,
       allowCancel: json['allow_cancel'] as bool?,
       allowMarkReceived: json['allow_mark_received'] as bool?,
       allowReview: json['allow_review'] as bool?,
@@ -779,7 +1103,9 @@ class BuyerOrderData {
     String? paymentStatus,
     List<BuyerOrderTimelineEvent>? timeline,
     BuyerOrderLocation? orderLocation,
+    BuyerOrderLocation? sellerLocation,
     BuyerOrderLocation? riderLocation,
+    List<BuyerOrderLocation>? shipmentRouteStops,
     bool clearRiderLocation = false,
     bool? allowCancel,
     bool? allowMarkReceived,
@@ -787,6 +1113,7 @@ class BuyerOrderData {
     bool? allowReturnRequest,
     bool? hasActiveReturnRequest,
     bool? isPreview,
+    List<String>? deliveryProofImageUrls,
   }) {
     return BuyerOrderData(
       id: id,
@@ -805,10 +1132,14 @@ class BuyerOrderData {
       tracking: tracking,
       shipmentId: shipmentId,
       orderLocation: orderLocation ?? this.orderLocation,
+      sellerLocation: sellerLocation ?? this.sellerLocation,
       riderLocation: clearRiderLocation
           ? null
           : riderLocation ?? this.riderLocation,
+      shipmentRouteStops: shipmentRouteStops ?? this.shipmentRouteStops,
       timeline: timeline ?? this.timeline,
+      deliveryProofImageUrls:
+          deliveryProofImageUrls ?? this.deliveryProofImageUrls,
       createdAt: createdAt,
       isPreview: isPreview ?? this.isPreview,
       allowCancel: allowCancel ?? this.allowCancel,
@@ -861,7 +1192,7 @@ class BuyerOrderData {
     final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
     final String minute = local.minute.toString().padLeft(2, '0');
     final String period = local.hour >= 12 ? 'PM' : 'AM';
-    return '${months[local.month - 1]} ${local.day}, $hour:$minute $period';
+    return '${months[local.month - 1]} ${local.day}\n$hour:$minute $period';
   }
 }
 
@@ -1072,6 +1403,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   bool _receivingOrder = false;
   bool _submittingReview = false;
+  String? _reviewNotice;
+  bool _reviewNoticeIsError = false;
   bool _submittingReturn = false;
   String? _returnSubmissionError;
 
@@ -1625,6 +1958,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       _selectedReviewProductId = order.products.first.id;
 
       _mode = BuyerOrdersMode.review;
+      _reviewNotice = null;
 
       _loadProductReview(order.products.first.id);
     });
@@ -1644,6 +1978,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   void _selectReviewProduct(String productId) {
     setState(() {
       _selectedReviewProductId = productId;
+      _reviewNotice = null;
       _loadProductReview(productId);
     });
   }
@@ -1871,6 +2206,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setSheetState) {
             Future<void> submitCancellation() async {
+              if (submitting || !sheetContext.mounted) {
+                return;
+              }
+
               final String? reason = selectedReason;
 
               if (reason == null || reason.trim().isEmpty) {
@@ -2133,12 +2472,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
       final String message = widget.onSubmitReview == null
           ? 'Reviews cannot be saved yet because order review submission is not connected.'
           : 'This review handler does not support rider ratings and product photos yet.';
-      _showMessage(message, error: true);
+      setState(() {
+        _reviewNotice = message;
+        _reviewNoticeIsError = true;
+      });
       return;
     }
 
     setState(() {
       _submittingReview = true;
+      _reviewNotice = null;
     });
 
     try {
@@ -2171,11 +2514,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
           review: review,
           photos: List<XFile>.unmodifiable(_reviewPhotos),
         );
+        _reviewNotice = 'Review saved. You can still edit the review text.';
+        _reviewNoticeIsError = false;
       });
-
-      _showMessage('Review saved. You can still edit the review text.');
     } catch (error) {
-      _showMessage(_errorText(error), error: true);
+      if (mounted) {
+        setState(() {
+          _reviewNotice = _errorText(error);
+          _reviewNoticeIsError = true;
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -3883,6 +4231,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   },
                 ),
 
+                _buildReviewNotice(),
+
                 const SizedBox(height: 17),
 
                 SizedBox(
@@ -3916,6 +4266,49 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewNotice() {
+    final String? message = _reviewNotice;
+    if (message == null || message.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final Color color = _reviewNoticeIsError ? _danger : _maroon;
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _reviewNoticeIsError
+            ? const Color(0xFFFFF3F2)
+            : const Color(0xFFF4F7F2),
+        border: Border.all(color: color.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            _reviewNoticeIsError
+                ? Icons.error_outline_rounded
+                : Icons.check_circle_outline_rounded,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: color,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

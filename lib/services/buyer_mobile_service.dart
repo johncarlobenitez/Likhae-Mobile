@@ -148,12 +148,11 @@ class BuyerMobileService {
     CartItemData item,
     int quantity,
   ) async {
-    final Response<dynamic> response = await ApiClient.post(
+    final Response<dynamic> response = await ApiClient.patch(
       AppConfig.resolveApiUrl(
         'buyer/cart/items/${Uri.encodeComponent(item.id)}',
       ),
       <String, dynamic>{'quantity': quantity},
-      options: Options(method: 'PATCH'),
     );
     _requirePayload(response);
   }
@@ -169,12 +168,11 @@ class BuyerMobileService {
   }
 
   static Future<void> setDefaultBuyerAddress(BuyerAddressData address) async {
-    final Response<dynamic> response = await ApiClient.post(
+    final Response<dynamic> response = await ApiClient.patch(
       AppConfig.resolveApiUrl(
         'buyer/addresses/${Uri.encodeComponent(address.id)}/default',
       ),
       <String, dynamic>{},
-      options: Options(method: 'PATCH'),
     );
     _requirePayload(response);
   }
@@ -667,14 +665,14 @@ class BuyerMobileService {
     final Map<String, dynamic> fields = <String, dynamic>{
       if (!request.isTextUpdate) 'rating': request.rating,
       if (!request.isTextUpdate) 'rider_rating': request.riderRating,
-      'rider_comment': request.riderReview,
+      if (!request.isTextUpdate) 'rider_comment': request.riderReview,
       'comment': request.review,
     };
 
     Response<dynamic> response = await _postReview(
       endpoint,
       fields,
-      request.photos,
+      request.isTextUpdate ? const <XFile>[] : request.photos,
     );
 
     // A completed order may not have a delivery rider. Laravel then rejects
@@ -687,6 +685,21 @@ class BuyerMobileService {
         'comment': request.review,
       };
       response = await _postReview(endpoint, productOnlyFields, request.photos);
+    }
+
+    // Orders loaded after a previous app session may already have a review,
+    // even though the screen has no local record of it. Laravel rejects rating
+    // and photo changes for those reviews but still accepts a text-only edit.
+    if (!request.isTextUpdate &&
+        (response.statusCode ?? 0) >= 400 &&
+        _responseMessage(response)
+            .toLowerCase()
+            .contains('ratings and photos are locked')) {
+      response = await _postReview(
+        endpoint,
+        <String, dynamic>{'comment': request.review},
+        const <XFile>[],
+      );
     }
 
     _requirePayload(response);
@@ -778,26 +791,43 @@ class BuyerMobileService {
                 '${request.birthday!.month.toString().padLeft(2, '0')}-'
                 '${request.birthday!.day.toString().padLeft(2, '0')}'),
       'sex': request.gender?.backendValue.toUpperCase(),
+      if (request.mobileChangeCode != null)
+        'mobile_change_code': request.mobileChangeCode,
       if (request.profilePhoto != null)
         'profile_photo': MultipartFile.fromBytes(
           request.profilePhoto!.bytes,
           filename: request.profilePhoto!.fileName,
         ),
     };
-    final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl('buyer/profile'),
-      request.profilePhoto == null
-          ? fields
-          : FormData.fromMap(<String, dynamic>{...fields, '_method': 'PATCH'}),
-      options: Options(method: request.profilePhoto == null ? 'PATCH' : 'POST'),
-    );
-    final dynamic user = _requirePayload(response)['user'];
+    final String profileUrl = AppConfig.resolveApiUrl('buyer/profile');
+    final Response<dynamic> response = request.profilePhoto == null
+        ? await ApiClient.patch(profileUrl, fields)
+        : await ApiClient.post(
+            profileUrl,
+            FormData.fromMap(<String, dynamic>{...fields, '_method': 'PATCH'}),
+          );
+    final Map<String, dynamic> payload = _requirePayload(response);
+    if (payload['requires_verification'] == true) {
+      throw BuyerProfileVerificationRequiredException(
+        target: (payload['target'] ?? '').toString(),
+        message: (payload['message'] ?? '').toString(),
+      );
+    }
+    final dynamic user = payload['user'];
     if (user is! Map) {
       throw const FormatException(
         'Updated profile data was not returned by the server.',
       );
     }
     return _profileData(Map<String, dynamic>.from(user));
+  }
+
+  static Future<void> resendMobileChangeCode() async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/profile/mobile-change/resend'),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
   }
 
   static Future<List<BuyerAddressData>> fetchBuyerAddresses() async {
@@ -873,14 +903,13 @@ class BuyerMobileService {
   }
 
   static Future<void> changePassword(ChangeBuyerPasswordRequest request) async {
-    final Response<dynamic> response = await ApiClient.post(
+    final Response<dynamic> response = await ApiClient.put(
       AppConfig.resolveApiUrl('buyer/password'),
       <String, dynamic>{
         'current_password': request.currentPassword,
         'password': request.newPassword,
         'password_confirmation': request.newPasswordConfirmation,
       },
-      options: Options(method: 'PUT'),
     );
     _requirePayload(response);
   }

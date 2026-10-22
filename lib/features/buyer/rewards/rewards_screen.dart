@@ -565,11 +565,9 @@ class _RewardsScreenState
   }
 
   Widget _buildTopBar() => ShopPageHeader(
-    title: 'Little extras', subtitle: 'Your rewards & vouchers.', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-    actions: [
-      if (_refreshing) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-      GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Shop products', onPressed: widget.onBrowseProducts),
-    ],
+    title: 'Little extras',
+    subtitle: 'Your rewards & vouchers.',
+    onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
   );
 
   Widget _buildHeader() {

@@ -245,6 +245,7 @@ class ProductService {
     int perPage = 100,
     int? sellerProfileId,
     bool dealsOnly = false,
+    String? searchQuery,
     String? sort,
     int? maxPages,
   }) async {
@@ -282,6 +283,8 @@ class ProductService {
           'per_page': pageSize,
           'page': page,
           if (dealsOnly) 'deals': true,
+          if (searchQuery != null && searchQuery.trim().isNotEmpty)
+            'q': searchQuery.trim(),
           if (sort != null && sort.trim().isNotEmpty) 'sort': sort,
           if (sellerProfileId != null) 'seller_profile_id': sellerProfileId,
         },

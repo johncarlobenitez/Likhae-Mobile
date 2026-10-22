@@ -15,6 +15,43 @@ class StorePageData {
 }
 
 class StoreService {
+  static Future<List<StoreSellerData>> fetchFollowedShops() async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('buyer/following-stores'),
+      refresh: true,
+    );
+
+    final int statusCode = response.statusCode ?? 500;
+    if (statusCode < 200 || statusCode >= 300) {
+      final dynamic payload = response.data;
+      final String message = payload is Map && payload['message'] != null
+          ? payload['message'].toString()
+          : 'Unable to load followed shops (HTTP $statusCode).';
+      throw Exception(message);
+    }
+
+    final dynamic payload = response.data;
+    final dynamic rawData = payload is Map
+        ? (payload['data'] ?? payload['stores'] ?? payload['sellers'])
+        : payload;
+    final dynamic rawStores = rawData is Map
+        ? (rawData['stores'] ?? rawData['sellers'] ?? rawData['items'])
+        : rawData;
+    if (rawStores is! List) {
+      throw const FormatException('Followed shop data not found.');
+    }
+
+    return rawStores
+        .whereType<Map>()
+        .map(
+          (Map item) => StoreSellerData.fromApi(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .where((StoreSellerData shop) => shop.slug.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
   static Future<StorePageData> fetchStore(String sellerSlug) async {
     final String normalizedSlug = sellerSlug.trim();
     if (normalizedSlug.isEmpty) {

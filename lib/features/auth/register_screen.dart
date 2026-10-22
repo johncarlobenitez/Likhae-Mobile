@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 enum MobileAccountType { buyer, rider }
@@ -12,11 +13,28 @@ class AddressOption {
   const AddressOption({required this.code, required this.name});
 }
 
+class LogisticsCenterOption {
+  final int id;
+  final String code;
+  final String name;
+
+  const LogisticsCenterOption({
+    required this.id,
+    required this.code,
+    required this.name,
+  });
+}
+
 class RegistrationDocument {
   final String name;
   final String? path;
+  final int sizeBytes;
 
-  const RegistrationDocument({required this.name, this.path});
+  const RegistrationDocument({
+    required this.name,
+    this.path,
+    this.sizeBytes = 0,
+  });
 }
 
 class RegisterFormData {
@@ -45,6 +63,8 @@ class RegisterFormData {
 
   final String? vehicleType;
   final String? plateNumber;
+  final int? targetLogisticsCenterId;
+  final String? driversLicenseNumber;
 
   final RegistrationDocument validId;
   final RegistrationDocument? vehicleOrCr;
@@ -74,6 +94,8 @@ class RegisterFormData {
     required this.landmark,
     required this.vehicleType,
     required this.plateNumber,
+    required this.targetLogisticsCenterId,
+    required this.driversLicenseNumber,
     required this.validId,
     required this.vehicleOrCr,
     required this.driversLicense,
@@ -104,6 +126,8 @@ typedef PostalCodeLoader =
       required String municipalityName,
     });
 
+typedef LogisticsCenterLoader = Future<List<LogisticsCenterOption>> Function();
+
 typedef DocumentPickerCallback =
     Future<RegistrationDocument?> Function(RegistrationDocumentType type);
 
@@ -120,6 +144,7 @@ class RegisterScreen extends StatefulWidget {
   final ChildAddressLoader? loadMunicipalities;
   final ChildAddressLoader? loadBarangays;
   final PostalCodeLoader? loadPostalCode;
+  final LogisticsCenterLoader? loadLogisticsCenters;
 
   final DocumentPickerCallback? onPickDocument;
 
@@ -134,6 +159,7 @@ class RegisterScreen extends StatefulWidget {
     this.loadMunicipalities,
     this.loadBarangays,
     this.loadPostalCode,
+    this.loadLogisticsCenters,
     this.onPickDocument,
   });
 
@@ -149,6 +175,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   static const Color _border = Color(0xFFE4E0DA);
   static const Color _fieldBackground = Color(0xFFFBFAF8);
   static const Color _accent = Color(0xFFD94343);
+  static final RegExp _nameInputPattern = RegExp(
+    r"[\p{L}\s'.-]",
+    unicode: true,
+  );
 
   final PageController _pageController = PageController();
 
@@ -185,6 +215,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final TextEditingController _plateNumberController = TextEditingController();
 
+  final TextEditingController _driversLicenseNumberController =
+      TextEditingController();
+
   final TextEditingController _passwordController = TextEditingController();
 
   final TextEditingController _confirmPasswordController =
@@ -198,6 +231,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   DateTime? _birthday;
 
   String? _vehicleType;
+  LogisticsCenterOption? _targetLogisticsCenter;
+  List<LogisticsCenterOption> _logisticsCenters = [];
+  bool _loadingLogisticsCenters = false;
+  String? _logisticsCentersLoadError;
 
   AddressOption? _region;
   AddressOption? _province;
@@ -281,6 +318,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _landmarkController.dispose();
 
     _plateNumberController.dispose();
+    _driversLicenseNumberController.dispose();
 
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -377,10 +415,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _loadLogisticsCenters() async {
+    if (widget.loadLogisticsCenters == null) {
+      setState(() {
+        _logisticsCentersLoadError = 'Logistics hubs are unavailable.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loadingLogisticsCenters = true;
+      _logisticsCentersLoadError = null;
+    });
+
+    try {
+      final List<LogisticsCenterOption> centers =
+          await widget.loadLogisticsCenters!();
+      if (!mounted) return;
+      setState(() {
+        _logisticsCenters = centers;
+        _logisticsCentersLoadError = centers.isEmpty
+            ? 'No active logistics hubs are available.'
+            : null;
+        if (_targetLogisticsCenter != null &&
+            !centers.any((center) => center.id == _targetLogisticsCenter!.id)) {
+          _targetLogisticsCenter = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _logisticsCenters = [];
+        _targetLogisticsCenter = null;
+        _logisticsCentersLoadError = 'Unable to load logistics hubs.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingLogisticsCenters = false;
+        });
+      }
+    }
+  }
+
   Future<void> _onRegionChanged(AddressOption? region) async {
     _postalLookupGeneration++;
     setState(() {
       _region = region;
+      _targetLogisticsCenter = null;
 
       _province = null;
       _municipality = null;
@@ -426,6 +508,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _postalLookupGeneration++;
     setState(() {
       _province = province;
+      _targetLogisticsCenter = null;
 
       _municipality = null;
       _barangay = null;
@@ -469,6 +552,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _postalLookupGeneration++;
     setState(() {
       _municipality = municipality;
+      _targetLogisticsCenter = null;
       _barangay = null;
       _barangays = [];
       _postalController.clear();
@@ -551,15 +635,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _chooseBirthday() async {
     final DateTime today = DateTime.now();
+    final DateTime latestAdultBirthday =
+        DateTime(today.year - 18, today.month, today.day);
 
     final DateTime initialDate =
-        _birthday ?? DateTime(today.year - 18, today.month, today.day);
+        _birthday == null || _birthday!.isAfter(latestAdultBirthday)
+        ? latestAdultBirthday
+        : _birthday!;
 
     final DateTime? selected = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: DateTime(1900),
-      lastDate: today,
+      firstDate: DateTime(today.year - 120, today.month, today.day),
+      lastDate: latestAdultBirthday,
       helpText: 'Select birthday',
     );
 
@@ -610,6 +698,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
 
+      if (document.sizeBytes > 5 * 1024 * 1024) {
+        _showMessage('Each document must be 5 MB or smaller.', error: true);
+        return;
+      }
+
       setState(() {
         switch (type) {
           case RegistrationDocumentType.validId:
@@ -641,6 +734,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     _pageController.jumpToPage(0);
+    if (type == MobileAccountType.rider) {
+      _loadLogisticsCenters();
+    }
   }
 
   bool _validateCurrentStep() {
@@ -825,6 +921,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         plateNumber: _accountType == MobileAccountType.rider
             ? _plateNumberController.text.trim()
             : null,
+        targetLogisticsCenterId: _accountType == MobileAccountType.rider
+            ? _targetLogisticsCenter?.id
+            : null,
+        driversLicenseNumber: _accountType == MobileAccountType.rider
+            ? _driversLicenseNumberController.text.trim()
+            : null,
         validId: _validId!,
         vehicleOrCr: _accountType == MobileAccountType.rider
             ? _vehicleOrCr
@@ -861,6 +963,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (email.isEmpty) {
       return 'Please enter your email.';
+    }
+
+    if (email.length > 255) {
+      return 'Email must be 255 characters or fewer.';
     }
 
     final RegExp emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
@@ -915,7 +1021,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _emailUsedForVerification = email;
         _emailVerificationCodeController.clear();
       });
-      _showMessage('Verification code sent. Check your email.');
+      _showMessage(
+        'Verification code sent. Check your inbox and Spam/Junk folder.',
+      );
     } catch (error) {
       if (!mounted) return;
       _showMessage(_errorMessage(error), error: true);
@@ -1457,11 +1565,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
             autofillHints: const [AutofillHints.givenName],
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.deny(RegExp(r'[0-9]')),
+              FilteringTextInputFormatter.allow(_nameInputPattern),
+            ],
+            maxLength: 50,
             decoration: _inputDecoration(
               hintText: 'Juan',
               prefixIcon: Icons.person_outline_rounded,
-            ),
-            validator: _requiredTextValidator,
+            ).copyWith(counterText: ''),
+            validator: _personNameValidator,
           ),
 
           const SizedBox(height: 18),
@@ -1474,7 +1587,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: _middleNameController,
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
-            decoration: _inputDecoration(hintText: 'Santos'),
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.deny(RegExp(r'[0-9]')),
+              FilteringTextInputFormatter.allow(_nameInputPattern),
+            ],
+            maxLength: 10,
+            decoration: _inputDecoration(
+              hintText: 'Santos',
+            ).copyWith(counterText: ''),
           ),
 
           const SizedBox(height: 18),
@@ -1488,8 +1608,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
             autofillHints: const [AutofillHints.familyName],
-            decoration: _inputDecoration(hintText: 'Dela Cruz'),
-            validator: _requiredTextValidator,
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.deny(RegExp(r'[0-9]')),
+              FilteringTextInputFormatter.allow(_nameInputPattern),
+            ],
+            maxLength: 50,
+            decoration: _inputDecoration(
+              hintText: 'Dela Cruz',
+            ).copyWith(counterText: ''),
+            validator: _personNameValidator,
           ),
 
           const SizedBox(height: 18),
@@ -1505,6 +1632,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             items: const [
               DropdownMenuItem(value: 'Male', child: Text('Male')),
               DropdownMenuItem(value: 'Female', child: Text('Female')),
+              DropdownMenuItem(value: 'Other', child: Text('Other')),
+              DropdownMenuItem(
+                value: 'Prefer not to say',
+                child: Text('Prefer not to say'),
+              ),
             ],
             onChanged: (String? value) {
               setState(() {
@@ -1538,6 +1670,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             validator: (_) {
               if (_birthday == null) {
                 return 'Please select your birthday.';
+              }
+              final int age = _calculateAge(_birthday!);
+              if (age < 18 || age > 120) {
+                return 'Age must be between 18 and 120.';
               }
 
               return null;
@@ -1593,6 +1729,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             readOnly: widget.googleProfile != null,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
+            maxLength: 255,
             autocorrect: false,
             autofillHints: const [AutofillHints.email],
             decoration: _inputDecoration(
@@ -1710,6 +1847,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             Text(
               _emailVerified
                   ? 'Email verified successfully.'
+                  : _emailVerificationCodeSent
+                  ? 'Check your inbox and Spam/Junk folder for the 6-digit code.'
                   : 'Verify your email before continuing.',
               style: TextStyle(
                 color: _emailVerified
@@ -1730,6 +1869,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: _contactController,
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.done,
+            maxLength: 10,
             decoration: _inputDecoration(
               hintText: '917 123 4567',
               prefixText: '+63 ',
@@ -1747,6 +1887,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               if (digits.length != 10) {
                 return 'Enter a 10-digit Philippine mobile number.';
+              }
+              if (!digits.startsWith('9')) {
+                return 'Enter a Philippine mobile number starting with 9.';
               }
 
               return null;
@@ -1843,11 +1986,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: _streetController,
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
+            maxLength: 255,
             decoration: _inputDecoration(
               hintText: 'e.g. Mahogany Street / Purok 3',
               prefixIcon: Icons.signpost_outlined,
-            ),
-            validator: _requiredTextValidator,
+            ).copyWith(counterText: ''),
+            validator: (String? value) {
+              final String? requiredError = _requiredTextValidator(value);
+              if (requiredError != null) return requiredError;
+              return value!.trim().length <= 255
+                  ? null
+                  : 'Use 255 characters or fewer.';
+            },
           ),
 
           const SizedBox(height: 18),
@@ -1859,10 +2009,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           TextFormField(
             controller: _houseNumberController,
             textInputAction: TextInputAction.next,
+            maxLength: 100,
             decoration: _inputDecoration(
               hintText: 'e.g. Blk 12 Lot 3',
               prefixIcon: Icons.home_outlined,
-            ),
+            ).copyWith(counterText: ''),
           ),
 
           const SizedBox(height: 18),
@@ -1878,6 +2029,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
               hintText: 'Auto-filled after barangay',
               prefixIcon: Icons.markunread_mailbox_outlined,
             ),
+            validator: (String? value) =>
+                RegExp(r'^\d{4}$').hasMatch((value ?? '').trim())
+                ? null
+                : 'Select an address with a valid postal code.',
           ),
 
           const SizedBox(height: 18),
@@ -1890,10 +2045,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             controller: _landmarkController,
             textCapitalization: TextCapitalization.sentences,
             textInputAction: TextInputAction.done,
+            maxLength: 255,
             decoration: _inputDecoration(
               hintText: 'e.g. Near barangay hall',
               prefixIcon: Icons.flag_outlined,
-            ),
+            ).copyWith(counterText: ''),
           ),
         ],
       ),
@@ -1909,9 +2065,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _stepHeader(
             number: '04',
             title: 'Vehicle Information',
-            subtitle: 'Enter the vehicle you will use for deliveries.',
+            subtitle:
+                'Choose your assigned hub and enter your vehicle details.',
             icon: Icons.two_wheeler_rounded,
           ),
+
+          _FieldLabel(text: 'Logistics Hub', required: true),
+
+          const SizedBox(height: 7),
+
+          DropdownButtonFormField<int>(
+            initialValue: _targetLogisticsCenter?.id,
+            isExpanded: true,
+            decoration: _inputDecoration(
+              hintText: _loadingLogisticsCenters
+                  ? 'Loading logistics hubs...'
+                  : 'Select your assigned hub',
+              prefixIcon: Icons.home_work_outlined,
+            ),
+            items: _logisticsCenters
+                .map(
+                  (LogisticsCenterOption center) => DropdownMenuItem<int>(
+                    value: center.id,
+                    child: Text(
+                      center.code.isEmpty
+                          ? center.name
+                          : '${center.name} (${center.code})',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: _loadingLogisticsCenters || _logisticsCenters.isEmpty
+                ? null
+                : (int? value) {
+                    setState(() {
+                      _targetLogisticsCenter = value == null
+                          ? null
+                          : _logisticsCenters.firstWhere(
+                              (center) => center.id == value,
+                            );
+                    });
+                  },
+            validator: (int? value) => value == null
+                ? 'Select an active hub in your province and municipality.'
+                : null,
+          ),
+
+          if (_logisticsCentersLoadError != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _logisticsCentersLoadError!,
+                    style: const TextStyle(color: _accent, fontSize: 10.5),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _loadingLogisticsCenters
+                      ? null
+                      : _loadLogisticsCenters,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 5),
+            const Text(
+              'The hub must serve your selected province and municipality.',
+              style: TextStyle(color: _secondaryText, fontSize: 10.5),
+            ),
+          ],
 
           _FieldLabel(text: 'Vehicle Type', required: true),
 
@@ -1926,9 +2152,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             items: const [
               DropdownMenuItem(value: 'motorcycle', child: Text('Motorcycle')),
-              DropdownMenuItem(value: 'car', child: Text('Car')),
+              DropdownMenuItem(value: 'tricycle', child: Text('Tricycle')),
               DropdownMenuItem(value: 'van', child: Text('Van')),
+              DropdownMenuItem(value: 'closed_van', child: Text('Closed Van')),
               DropdownMenuItem(value: 'truck', child: Text('Truck')),
+              DropdownMenuItem(value: 'car', child: Text('Car')),
             ],
             onChanged: (String? value) {
               setState(() {
@@ -1953,12 +2181,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
           TextFormField(
             controller: _plateNumberController,
             textCapitalization: TextCapitalization.characters,
-            maxLength: 30,
+            maxLength: 50,
             decoration: _inputDecoration(
               hintText: 'ABC 1234',
               prefixIcon: Icons.pin_outlined,
             ).copyWith(counterText: ''),
             validator: _requiredTextValidator,
+          ),
+
+          const SizedBox(height: 18),
+
+          _FieldLabel(text: 'Driver’s License Number', required: true),
+
+          const SizedBox(height: 7),
+
+          TextFormField(
+            controller: _driversLicenseNumberController,
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 100,
+            decoration: _inputDecoration(
+              hintText: 'Enter the license number',
+              prefixIcon: Icons.badge_outlined,
+            ).copyWith(counterText: ''),
+            validator: (String? value) {
+              final String? requiredError = _requiredTextValidator(value);
+              if (requiredError != null) return requiredError;
+              return value!.trim().length <= 100
+                  ? null
+                  : 'Use 100 characters or fewer.';
+            },
           ),
         ],
       ),
@@ -1984,7 +2235,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           _DocumentUploadCard(
             title: 'Valid ID',
-            description: 'JPG, JPEG, PNG or PDF',
+            description: 'JPG, JPEG, PNG, WEBP or PDF · up to 5 MB',
             required: true,
             document: _validId,
             icon: Icons.badge_outlined,
@@ -1998,7 +2249,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             _DocumentUploadCard(
               title: 'Vehicle OR / CR',
-              description: 'JPG, JPEG, PNG or PDF',
+              description: 'JPG, JPEG, PNG, WEBP or PDF · up to 5 MB',
               required: true,
               document: _vehicleOrCr,
               icon: Icons.description_outlined,
@@ -2011,7 +2262,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             _DocumentUploadCard(
               title: 'Driver\'s License',
-              description: 'JPG, JPEG, PNG or PDF',
+              description: 'JPG, JPEG, PNG, WEBP or PDF · up to 5 MB',
               required: true,
               document: _driversLicense,
               icon: Icons.credit_card_outlined,
@@ -2342,6 +2593,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
+  String? _personNameValidator(String? value) {
+    final String name = value?.trim() ?? '';
+    if (name.isEmpty) {
+      return 'This field is required.';
+    }
+    if (name.length < 2 || name.length > 50) {
+      return 'Use 2 to 50 characters.';
+    }
+    if (!RegExp(r"^[\p{L}][\p{L}\s'.-]*$", unicode: true).hasMatch(name)) {
+      return 'Use letters, spaces, apostrophes, periods, or hyphens.';
+    }
+    return null;
+  }
+
   String? _passwordValidator(String? value) {
     final String password = value ?? '';
 
@@ -2363,6 +2628,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (!RegExp(r'[0-9]').hasMatch(password)) {
       return 'Include at least one number.';
+    }
+
+    if (!RegExp(r'[\p{P}\p{S}]', unicode: true).hasMatch(password)) {
+      return 'Include at least one symbol.';
     }
 
     return null;
