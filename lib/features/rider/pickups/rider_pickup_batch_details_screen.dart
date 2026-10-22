@@ -108,32 +108,38 @@ class _RiderPickupBatchDetailsScreenState
   }
 
   Future<void> _scanManually() async {
-    final TextEditingController controller = TextEditingController();
+    String enteredCode = '';
     final String? code = await showDialog<String>(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
-        backgroundColor: _surface,
-        title: const Text('Enter tracking code'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(hintText: 'Tracking number'),
-          onSubmitted: (String value) => Navigator.pop(context, value.trim()),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder: (BuildContext dialogContext) {
+        void closeDialog([String? value]) {
+          FocusManager.instance.primaryFocus?.unfocus();
+          Navigator.of(dialogContext).pop(value);
+        }
+
+        return AlertDialog(
+          backgroundColor: _surface,
+          title: const Text('Enter tracking code'),
+          content: TextField(
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(hintText: 'Tracking number'),
+            onChanged: (String value) => enteredCode = value,
+            onSubmitted: (String value) => closeDialog(value.trim()),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Verify'),
-          ),
-        ],
-      ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: closeDialog,
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => closeDialog(enteredCode.trim()),
+              child: const Text('Verify'),
+            ),
+          ],
+        );
+      },
     );
-    controller.dispose();
     if (code == null || code.isEmpty || !mounted) return;
     await _run(
       widget.onScan == null

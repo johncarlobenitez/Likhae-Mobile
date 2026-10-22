@@ -664,7 +664,7 @@ class RiderMobileService {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('rider/pickups/batches/$batchId/scan'),
       <String, dynamic>{
-        'tracking_code': trackingCode.trim(),
+        'scanned_code': trackingCode.trim(),
         'scan_method': scanMethod,
       },
     );

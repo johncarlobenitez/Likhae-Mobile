@@ -141,6 +141,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
+
     final String tracking = _trackingController.text.trim();
 
     if (tracking.isEmpty) {
@@ -199,6 +201,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
   }
 
   Future<void> _confirmPickedUp() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     if (!_verified) {
       _showMessage(
         'Scan and verify the seller waybill before confirming pickup.',
@@ -767,6 +771,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
             enabled: !_verifying,
             autocorrect: false,
             textCapitalization: TextCapitalization.characters,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _verifyParcel(),
             decoration: InputDecoration(
               hintText: 'Tracking code',
               prefixIcon: const Icon(Icons.confirmation_number_outlined),
