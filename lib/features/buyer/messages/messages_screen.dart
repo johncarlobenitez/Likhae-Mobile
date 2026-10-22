@@ -7,6 +7,45 @@ import '../../../shared/widgets/shop_ui.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/core/storage/token_storage.dart';
+import 'package:likhae/core/theme/app_theme.dart';
+
+extension _MessagesPalette on BuildContext {
+  bool get _messagesDark => Theme.of(this).brightness == Brightness.dark;
+
+  Color get messagesBackground => _messagesDark
+      ? AppTheme.darkBackground
+      : ShopColors.canvas;
+  Color get messagesBackgroundSoft => _messagesDark
+      ? AppTheme.darkSurfaceStrong
+      : ShopColors.soft;
+  Color get messagesSurface => _messagesDark
+      ? AppTheme.darkSurface
+      : ShopColors.surface;
+  Color get messagesBorder => _messagesDark
+      ? AppTheme.darkBorder
+      : ShopColors.border;
+  Color get messagesAccent => _messagesDark
+      ? AppTheme.darkMaroonDark
+      : ShopColors.accent;
+  Color get messagesAccentText => _messagesDark
+      ? AppTheme.darkMaroonSoft
+      : ShopColors.accentDark;
+  Color get messagesText => _messagesDark
+      ? AppTheme.darkText
+      : ShopColors.text;
+  Color get messagesMuted => _messagesDark
+      ? AppTheme.darkMuted
+      : ShopColors.muted;
+  Color get messagesFaint => _messagesDark
+      ? AppTheme.darkMutedSoft
+      : ShopColors.faint;
+  Color get messagesTan => _messagesDark
+      ? AppTheme.darkTan
+      : ShopColors.tan;
+  Color get messagesDanger => _messagesDark
+      ? AppTheme.darkDanger
+      : const Color(0xFFB42318);
+}
 
 typedef LoadConversationMessagesCallback =
     Future<List<BuyerMessageData>> Function(BuyerConversationData seller);
@@ -263,27 +302,17 @@ class MessagesScreen extends StatefulWidget {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
-  static const Color _background = ShopColors.canvas;
-
-  static const Color _backgroundSoft = ShopColors.soft;
-
-  static const Color _surface = ShopColors.surface;
-
-  static const Color _border = ShopColors.border;
-
-  static const Color _maroon = ShopColors.accent;
-
-  static const Color _maroonDark = ShopColors.accentDark;
-
-  static const Color _text = ShopColors.text;
-
-  static const Color _muted = ShopColors.muted;
-
-  static const Color _muted2 = ShopColors.faint;
-
-  static const Color _tan = ShopColors.tan;
-
-  static const Color _danger = Color(0xFFB42318);
+  Color get _background => context.messagesBackground;
+  Color get _backgroundSoft => context.messagesBackgroundSoft;
+  Color get _surface => context.messagesSurface;
+  Color get _border => context.messagesBorder;
+  Color get _maroon => context.messagesAccent;
+  Color get _maroonDark => context.messagesAccentText;
+  Color get _text => context.messagesText;
+  Color get _muted => context.messagesMuted;
+  Color get _muted2 => context.messagesFaint;
+  Color get _tan => context.messagesTan;
+  Color get _danger => context.messagesDanger;
 
   static const double _desktopBreakpoint = 820;
 
@@ -908,22 +937,22 @@ class _MessagesScreenState extends State<MessagesScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.photo_camera_outlined,
                     color: _maroon,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Take Photo',
                     style: TextStyle(color: _text, fontWeight: FontWeight.w800),
                   ),
                   onTap: () => Navigator.of(context).pop(ImageSource.camera),
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.photo_library_outlined,
                     color: _maroon,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Choose Photo',
                     style: TextStyle(color: _text, fontWeight: FontWeight.w800),
                   ),
@@ -1326,7 +1355,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 children: [
                   SizedBox(width: 320, child: _buildConversationPanel()),
 
-                  const VerticalDivider(width: 1, thickness: 1, color: _border),
+                  VerticalDivider(width: 1, thickness: 1, color: _border),
 
                   Expanded(
                     child:
@@ -1387,7 +1416,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.circle, color: _maroon, size: 6),
+              Icon(Icons.circle, color: _maroon, size: 6),
               const SizedBox(width: 6),
               Text(
                 'COMMUNICATION',
@@ -1402,10 +1431,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ),
         ),
         const SizedBox(height: 5),
-        const Text(
+        Text(
           'Messages',
           style: TextStyle(
-            color: Color(0xFF432A25),
+            color: _text,
             fontFamily: 'serif',
             fontSize: 38,
             height: 1.05,
@@ -1414,10 +1443,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ),
         ),
         const SizedBox(height: 2),
-        const Text(
+        Text(
           'Keep conversations with sellers in one polished LIKHAE inbox',
           style: TextStyle(
-            color: Color(0xFF8A7163),
+            color: _muted,
             fontSize: 11,
             height: 1.4,
           ),
@@ -1435,11 +1464,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: _surface,
                 border: Border(bottom: BorderSide(color: _border)),
               ),
-              child: const Text(
+              child: Text(
                 'Conversations',
                 style: TextStyle(
                   color: _text,
@@ -1466,7 +1495,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       separatorBuilder: (BuildContext context, int index) {
                         return mobile
                             ? const SizedBox(height: 8)
-                            : const Divider(
+                            : Divider(
                                 height: 1,
                                 thickness: 1,
                                 color: _border,
@@ -1624,7 +1653,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(24, 90, 24, 120),
-      children: const <Widget>[
+      children: <Widget>[
         Icon(Icons.forum_outlined, size: 54, color: _maroon),
         SizedBox(height: 18),
         Text(
@@ -1665,7 +1694,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               borderRadius: BorderRadius.circular(15),
               border: Border.all(color: _border),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(Icons.visibility_outlined, color: _maroon, size: 19),
@@ -1716,7 +1745,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           Container(
             padding: EdgeInsets.fromLTRB(mobile ? 4 : 12, 4, 12, 4),
             constraints: const BoxConstraints(minHeight: 56),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: _surface,
               border: Border(bottom: BorderSide(color: _border)),
             ),
@@ -1730,7 +1759,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         _demoConversationIndex = null;
                       });
                     },
-                    icon: const Icon(Icons.chevron_left, color: _text),
+                    icon: Icon(Icons.chevron_left, color: _text),
                   ),
 
                 _DemoAvatar(initials: conversation.initials, size: 38),
@@ -1745,7 +1774,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         conversation.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: _text,
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -1756,7 +1785,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         conversation.status,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: _muted,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
@@ -1776,7 +1805,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     borderRadius: BorderRadius.circular(100),
                     border: Border.all(color: _border),
                   ),
-                  child: const Text(
+                  child: Text(
                     'PREVIEW',
                     style: TextStyle(
                       color: _maroon,
@@ -1853,7 +1882,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     return Container(
       padding: EdgeInsets.fromLTRB(mobile ? 4 : 12, 4, 12, 4),
       constraints: const BoxConstraints(minHeight: 56),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _surface,
         border: Border(bottom: BorderSide(color: _border)),
       ),
@@ -1867,7 +1896,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   _mobileShowingChat = false;
                 });
               },
-              icon: const Icon(Icons.chevron_left, color: _text),
+              icon: Icon(Icons.chevron_left, color: _text),
             ),
 
           _SellerAvatar(seller: seller, size: 38),
@@ -1882,7 +1911,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   seller.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: _text,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -1905,7 +1934,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         : 'Live messages reconnecting...',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _muted, fontSize: 11),
+                    style: TextStyle(color: _muted, fontSize: 11),
                   ),
                 ],
               ],
@@ -1920,7 +1949,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 onPressed: () => widget.onViewStore!(seller),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: _maroon,
-                  side: const BorderSide(color: _border),
+                  side: BorderSide(color: _border),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(24),
@@ -1944,7 +1973,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Widget _buildMessageStream(BuyerConversationData seller) {
     if (_loadingMessages && _messages.isEmpty) {
-      return const Center(
+      return Center(
         child: SizedBox(
           width: 25,
           height: 25,
@@ -2005,13 +2034,19 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFCECE7),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? AppTheme.darkSurfaceSoft
+                        : const Color(0xFFFCECE7),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFEBC9C0)),
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? AppTheme.darkBorderStrong
+                          : const Color(0xFFEBC9C0),
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.error_outline_rounded,
                         color: _danger,
                         size: 18,
@@ -2022,7 +2057,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       Expanded(
                         child: Text(
                           _messageError!,
-                          style: const TextStyle(color: _danger, fontSize: 12),
+                          style: TextStyle(color: _danger, fontSize: 12),
                         ),
                       ),
 
@@ -2038,11 +2073,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
               if (_messages.isEmpty) ...[
                 const SizedBox(height: 35),
 
-                const Icon(Icons.forum_outlined, size: 42, color: _tan),
+                Icon(Icons.forum_outlined, size: 42, color: _tan),
 
                 const SizedBox(height: 11),
 
-                const Text(
+                Text(
                   'No messages yet',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -2057,7 +2092,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 Text(
                   'Send the first message to ${seller.name}.',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: _muted, fontSize: 12),
+                  style: TextStyle(color: _muted, fontSize: 12),
                 ),
               ],
             ],
@@ -2085,7 +2120,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       // navigation. Adding another clearance here creates the large empty
       // gap visible between the composer and the navigation bar.
       padding: const EdgeInsets.fromLTRB(11, 8, 11, 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _surface,
         border: Border(top: BorderSide(color: _border)),
       ),
@@ -2124,7 +2159,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                                 height: 48,
                                 color: _surface,
                                 alignment: Alignment.center,
-                                child: const Icon(
+                                child: Icon(
                                   Icons.image_outlined,
                                   color: _muted2,
                                 ),
@@ -2139,7 +2174,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Photo attachment',
                             style: TextStyle(
                               color: _text,
@@ -2152,7 +2187,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             attachment.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: _muted, fontSize: 11),
+                            style: TextStyle(color: _muted, fontSize: 11),
                           ),
                         ],
                       ),
@@ -2161,7 +2196,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     IconButton(
                       tooltip: 'Remove attachment',
                       onPressed: _sendingMessage ? null : _removeAttachment,
-                      icon: const Icon(Icons.close_rounded, color: _muted),
+                      icon: Icon(Icons.close_rounded, color: _muted),
                     ),
                   ],
                 ),
@@ -2182,7 +2217,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     style: IconButton.styleFrom(
                       backgroundColor: _surface,
                       foregroundColor: _maroon,
-                      shape: const CircleBorder(
+                      shape: CircleBorder(
                         side: BorderSide(color: _border),
                       ),
                     ),
@@ -2217,7 +2252,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     },
                     decoration: InputDecoration(
                       hintText: hintText,
-                      hintStyle: const TextStyle(color: _muted2, fontSize: 13),
+                      hintStyle: TextStyle(color: _muted2, fontSize: 13),
                       counterText: '',
                       filled: true,
                       fillColor: _surface,
@@ -2227,15 +2262,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(color: _border),
+                        borderSide: BorderSide(color: _border),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(color: _border),
+                        borderSide: BorderSide(color: _border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(color: _tan, width: 1.3),
+                        borderSide: BorderSide(color: _tan, width: 1.3),
                       ),
                     ),
                   ),
@@ -2291,7 +2326,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.chat_bubble_outline_rounded,
                 size: 55,
                 color: _tan,
@@ -2304,7 +2339,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ? 'Seller conversation unavailable'
                     : 'No conversation selected',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: _text,
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
@@ -2318,7 +2353,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ? 'Provide the seller information when starting a new conversation from Product Details.'
                     : 'Select a conversation to start chatting.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: _muted,
                   fontSize: 12.5,
                   height: 1.55,
@@ -2378,7 +2413,7 @@ class _DemoConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: ShopColors.surface,
+      color: context.messagesSurface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -2404,7 +2439,7 @@ class _DemoConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: ShopColors.text,
+                              color: context.messagesText,
                               fontSize: 14,
                               fontWeight: conversation.unread > 0
                                   ? FontWeight.w800
@@ -2417,8 +2452,8 @@ class _DemoConversationTile extends StatelessWidget {
 
                         Text(
                           conversation.time,
-                          style: const TextStyle(
-                            color: ShopColors.faint,
+                          style: TextStyle(
+                            color: context.messagesFaint,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                           ),
@@ -2436,7 +2471,7 @@ class _DemoConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: ShopColors.muted,
+                              color: context.messagesMuted,
                               fontSize: 12.5,
                               fontWeight: conversation.unread > 0
                                   ? FontWeight.w700
@@ -2455,8 +2490,8 @@ class _DemoConversationTile extends StatelessWidget {
                             ),
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                             alignment: Alignment.center,
-                            decoration: const BoxDecoration(
-                              color: ShopColors.accent,
+                            decoration: BoxDecoration(
+                              color: context.messagesAccent,
                               shape: BoxShape.circle,
                             ),
                             child: Text(
@@ -2505,12 +2540,12 @@ class _DemoMessageBubble extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
                 decoration: BoxDecoration(
                   color: message.fromBuyer
-                      ? ShopColors.accent
-                      : ShopColors.surface,
+                      ? context.messagesAccent
+                      : context.messagesSurface,
                   border: Border.all(
                     color: message.fromBuyer
-                        ? ShopColors.accent
-                        : ShopColors.border,
+                        ? context.messagesAccent
+                        : context.messagesBorder,
                   ),
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -2546,7 +2581,7 @@ class _DemoMessageBubble extends StatelessWidget {
                         style: TextStyle(
                           color: message.fromBuyer
                               ? Colors.white
-                              : ShopColors.text,
+                              : context.messagesText,
                           fontSize: 14,
                           height: 1.45,
                           fontWeight: FontWeight.w500,
@@ -2560,7 +2595,7 @@ class _DemoMessageBubble extends StatelessWidget {
                       style: TextStyle(
                         color: message.fromBuyer
                             ? Colors.white70
-                            : ShopColors.muted,
+                            : context.messagesMuted,
                         fontSize: 10,
                       ),
                     ),
@@ -2589,11 +2624,11 @@ class _DemoAvatar extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: ShopColors.accent,
+        color: context.messagesAccent,
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: ShopColors.accent.withValues(alpha: 0.12),
+            color: context.messagesAccent.withValues(alpha: 0.12),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2627,7 +2662,11 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? const Color(0xFFF3E4DE) : ShopColors.surface,
+      color: selected
+          ? Theme.of(context).brightness == Brightness.dark
+                ? AppTheme.darkSurfaceStrong
+                : const Color(0xFFF3E4DE)
+          : context.messagesSurface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -2653,7 +2692,7 @@ class _ConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: ShopColors.text,
+                              color: context.messagesText,
                               fontSize: 13.5,
                               fontWeight: conversation.unread > 0
                                   ? FontWeight.w800
@@ -2667,8 +2706,8 @@ class _ConversationTile extends StatelessWidget {
 
                           Text(
                             conversation.time,
-                            style: const TextStyle(
-                              color: ShopColors.faint,
+                            style: TextStyle(
+                              color: context.messagesFaint,
                               fontSize: 10.5,
                             ),
                           ),
@@ -2688,7 +2727,7 @@ class _ConversationTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: ShopColors.muted,
+                              color: context.messagesMuted,
                               fontSize: 12,
                               fontWeight: conversation.unread > 0
                                   ? FontWeight.w700
@@ -2706,8 +2745,8 @@ class _ConversationTile extends StatelessWidget {
                               minHeight: 20,
                             ),
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            decoration: const BoxDecoration(
-                              color: ShopColors.accent,
+                            decoration: BoxDecoration(
+                              color: context.messagesAccent,
                               shape: BoxShape.circle,
                             ),
                             alignment: Alignment.center,
@@ -2737,10 +2776,6 @@ class _ConversationTile extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  static const Color _maroon = ShopColors.accent;
-  static const Color _surface = ShopColors.surface;
-  static const Color _border = ShopColors.border;
-
   final BuyerMessageData message;
   final BuyerConversationData seller;
   final bool showReceipt;
@@ -2780,9 +2815,13 @@ class _MessageBubble extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
                     decoration: BoxDecoration(
-                      color: message.fromBuyer ? _maroon : _surface,
+                      color: message.fromBuyer
+                          ? context.messagesAccent
+                          : context.messagesSurface,
                       border: Border.all(
-                        color: message.fromBuyer ? _maroon : _border,
+                        color: message.fromBuyer
+                            ? context.messagesAccent
+                            : context.messagesBorder,
                       ),
                       borderRadius: BorderRadius.circular(15),
                     ),
@@ -2809,7 +2848,7 @@ class _MessageBubble extends StatelessWidget {
                             style: TextStyle(
                               color: message.fromBuyer
                                   ? Colors.white
-                                  : ShopColors.text,
+                                  : context.messagesText,
                               fontSize: 14,
                               height: 1.45,
                             ),
@@ -2823,7 +2862,7 @@ class _MessageBubble extends StatelessWidget {
                             style: TextStyle(
                               color: message.fromBuyer
                                   ? Colors.white70
-                                  : ShopColors.muted,
+                                  : context.messagesMuted,
                               fontSize: 10,
                             ),
                           ),
@@ -2847,8 +2886,8 @@ class _MessageBubble extends StatelessWidget {
                             : seller.isOnline == true
                             ? 'Delivered'
                             : 'Sent',
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style: TextStyle(
+                          color: context.messagesMuted,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                         ),
@@ -2879,16 +2918,16 @@ class _ReceiptAvatar extends StatelessWidget {
       width: 16,
       height: 16,
       clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: ShopColors.soft,
+        color: context.messagesBackgroundSoft,
       ),
       child: url == null || url.isEmpty
           ? Center(
               child: Text(
                 initial,
-                style: const TextStyle(
-                  color: ShopColors.accent,
+                style: TextStyle(
+                  color: context.messagesAccent,
                   fontSize: 8,
                   fontWeight: FontWeight.w800,
                 ),
@@ -2900,8 +2939,8 @@ class _ReceiptAvatar extends StatelessWidget {
               errorBuilder: (context, error, stackTrace) => Center(
                 child: Text(
                   initial,
-                  style: const TextStyle(
-                    color: ShopColors.accent,
+                  style: TextStyle(
+                    color: context.messagesAccent,
                     fontSize: 8,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2981,15 +3020,20 @@ class _ProductInquiryCard extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 420),
             padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: <Color>[ShopColors.accent, Color(0xFF642920)],
+                colors: <Color>[
+                  context.messagesAccent,
+                  Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF4E2523)
+                      : const Color(0xFF642920),
+                ],
               ),
               borderRadius: BorderRadius.circular(20),
               boxShadow: <BoxShadow>[
                 BoxShadow(
-                  color: ShopColors.accent.withValues(alpha: 0.15),
+                  color: context.messagesAccent.withValues(alpha: 0.15),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -3108,7 +3152,7 @@ class _SellerStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color textColor = isOnline == true
         ? const Color(0xFF256F4A)
-        : ShopColors.muted;
+        : context.messagesMuted;
 
     return Row(
       children: [
@@ -3119,7 +3163,7 @@ class _SellerStatus extends StatelessWidget {
             decoration: BoxDecoration(
               color: isOnline == true
                   ? const Color(0xFF256F4A)
-                  : ShopColors.faint,
+                  : context.messagesFaint,
               shape: BoxShape.circle,
             ),
           ),
@@ -3161,11 +3205,11 @@ class _SellerAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: ShopColors.accent,
+        color: context.messagesAccent,
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: ShopColors.accent.withValues(alpha: 0.12),
+            color: context.messagesAccent.withValues(alpha: 0.12),
             blurRadius: 12,
             offset: const Offset(0, 5),
           ),
@@ -3214,7 +3258,7 @@ class _InitialAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: ShopColors.accent,
+      color: context.messagesAccent,
       alignment: Alignment.center,
       child: Text(
         initials,
