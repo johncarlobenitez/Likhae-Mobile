@@ -2398,18 +2398,12 @@ class _AccountScreenState extends State<AccountScreen> {
     ];
 
     if (widget.showNavigationTabs) {
+      if (actions.isEmpty) return const SizedBox.shrink();
       return Padding(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
         child: Row(
-          children: [
-            GlassIconButton(
-              icon: Icons.arrow_back_rounded,
-              label: 'Back',
-              onPressed: handleBack,
-            ),
-            const Spacer(),
-            ...actions,
-          ],
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: actions,
         ),
       );
     }

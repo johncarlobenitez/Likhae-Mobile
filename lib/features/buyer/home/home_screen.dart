@@ -877,7 +877,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                 Icon(Icons.search_rounded, size: 22, color: maroon),
                 const SizedBox(width: 11),
                 Expanded(child: Text('Search products, categories, local sellers...', style: TextStyle(color: muted, fontSize: 13))),
-                Icon(Icons.tune_rounded, size: 19, color: muted),
               ])),
             ),
           ),
