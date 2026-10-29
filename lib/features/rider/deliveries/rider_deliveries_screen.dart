@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/sized_network_image.dart';
 import 'rider_delivery_models.dart';
 
 class RiderDeliveriesScreen extends StatefulWidget {
@@ -631,8 +632,8 @@ class _DeliveryImage extends StatelessWidget {
       );
     }
 
-    return Image.network(
-      url,
+    return SizedNetworkImage(
+      url: url,
       fit: BoxFit.cover,
       errorBuilder: (
         BuildContext context,

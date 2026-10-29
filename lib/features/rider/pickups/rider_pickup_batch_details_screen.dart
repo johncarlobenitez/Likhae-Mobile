@@ -75,10 +75,7 @@ class _RiderPickupBatchDetailsScreenState
         if (latest != null) {
           _batch = latest;
         } else {
-          _batch = _batch.copyWith(
-            status: 'COMPLETED',
-            statusLabel: 'Completed',
-          );
+          message = '$success The server did not return an updated batch status.';
         }
       } catch (error) {
         message = '$success Refresh failed: $error';
@@ -622,7 +619,18 @@ class _RiderPickupBatchDetailsScreenState
   }
 
   String _itemStatusLabel(RiderPickupBatchItemData parcel) {
-    if (parcel.wasCollected) return 'Collected';
+    if (parcel.wasCollected) {
+      final String shipmentStatus = parcel.shipmentStatus
+          .trim()
+          .toUpperCase();
+      return switch (shipmentStatus) {
+        'PICKED_UP' => 'Picked up from seller',
+        'AT_SORTING_CENTER' => 'Received at sorting center',
+        'SORTED' => 'Received and sorted',
+        '' => 'Pickup complete · status unavailable',
+        final status => 'Pickup complete · ${status.replaceAll('_', ' ')}',
+      };
+    }
     if (parcel.normalizedStatus == 'REJECTED') return 'Not collected';
     if (parcel.normalizedStatus == 'CANCELLED') return 'Cancelled';
     return parcel.assignmentStatus.replaceAll('_', ' ').toLowerCase();

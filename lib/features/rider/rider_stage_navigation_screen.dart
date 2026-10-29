@@ -5,9 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
+import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
 import 'package:mapbox_navigation_sdk/mapbox_navigation_sdk.dart' as navigation;
 
+import '../../core/api/api_client.dart';
 import '../../core/config/app_config.dart';
 import '../../services/rider_mobile_service.dart';
 import 'pickups/rider_pickups_screen.dart';
@@ -29,23 +30,17 @@ class RiderStageNavigationScreen extends StatefulWidget {
 
 class _RiderStageNavigationScreenState
     extends State<RiderStageNavigationScreen> {
-  static const String _mapboxAccessToken =
-      String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
+  static const String _mapboxNavigationToken = String.fromEnvironment(
+    'MAPBOX_ACCESS_TOKEN',
+  );
   static const Color _maroon = Color(0xFF7A2430);
   static const Color _riderBlue = Color(0xFF1976D2);
   static const Color _muted = Color(0xFF766C65);
   static const Color _routeColor = Color(0xFF7A2A22);
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 15),
-    ),
-  );
-
-  mapbox.MapboxMap? _map;
-  mapbox.CircleAnnotationManager? _markers;
-  mapbox.PolylineAnnotationManager? _routeLines;
+  maplibre.MapLibreSession? _map;
+  maplibre.CircleAnnotationManager? _markers;
+  maplibre.PolylineAnnotationManager? _routeLines;
   StreamSubscription<Position>? _positionSubscription;
   Position? _latestPosition;
   LatLng? _lastRouteOrigin;
@@ -62,12 +57,12 @@ class _RiderStageNavigationScreenState
   bool _locationPostErrorShown = false;
   String _status = 'Waiting for rider GPS.';
 
-  bool get _supportsMapbox =>
+  bool get _supportsMapLibre =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
 
-  bool get _hasMapToken => _mapboxAccessToken.trim().isNotEmpty;
+  bool get _hasMapToken => _mapboxNavigationToken.trim().isNotEmpty;
 
   double? get _destinationLatitude => widget.toLogisticsCenter
       ? widget.pickup.logisticsCenterLatitude
@@ -80,10 +75,14 @@ class _RiderStageNavigationScreenState
   LatLng? get _destination {
     final double? latitude = _destinationLatitude;
     final double? longitude = _destinationLongitude;
-    if (latitude == null || longitude == null ||
-        !latitude.isFinite || !longitude.isFinite ||
-        latitude < -90 || latitude > 90 ||
-        longitude < -180 || longitude > 180 ||
+    if (latitude == null ||
+        longitude == null ||
+        !latitude.isFinite ||
+        !longitude.isFinite ||
+        latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180 ||
         (latitude == 0 && longitude == 0)) {
       return null;
     }
@@ -129,7 +128,7 @@ class _RiderStageNavigationScreenState
           : 'The seller has not saved an exact map pin.';
       return;
     }
-    if (_supportsMapbox) unawaited(_startLocationTracking());
+    if (_supportsMapLibre) unawaited(_startLocationTracking());
   }
 
   @override
@@ -142,7 +141,7 @@ class _RiderStageNavigationScreenState
     if (event.eventType == navigation.MapBoxEvent.route_build_failed ||
         event.eventType == navigation.MapBoxEvent.route_build_no_routes_found) {
       if (mounted) {
-        setState(() => _status = 'Mapbox could not find a driving route.');
+        setState(() => _status = 'The driving route service could not find a route.');
       }
     }
   }
@@ -151,7 +150,8 @@ class _RiderStageNavigationScreenState
     try {
       final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted) setState(() => _status = 'Turn on device location to share GPS.');
+        if (mounted)
+          setState(() => _status = 'Turn on device location to share GPS.');
         return;
       }
 
@@ -161,23 +161,34 @@ class _RiderStageNavigationScreenState
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (mounted) setState(() => _status = 'Location permission is required for rider GPS.');
+        if (mounted)
+          setState(
+            () => _status = 'Location permission is required for rider GPS.',
+          );
         return;
       }
 
       _locationPermissionReady = true;
       if (mounted) setState(() => _status = 'Waiting for a precise GPS fix.');
       await _positionSubscription?.cancel();
-      _positionSubscription = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation,
-          distanceFilter: 5,
-        ),
-      ).listen(_onPosition, onError: (_) {
-        if (mounted) setState(() => _status = 'Device GPS is temporarily unavailable.');
-      });
+      _positionSubscription =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.bestForNavigation,
+              distanceFilter: 5,
+            ),
+          ).listen(
+            _onPosition,
+            onError: (_) {
+              if (mounted)
+                setState(
+                  () => _status = 'Device GPS is temporarily unavailable.',
+                );
+            },
+          );
     } catch (error) {
-      if (mounted) setState(() => _status = 'Could not start rider GPS: $error');
+      if (mounted)
+        setState(() => _status = 'Could not start rider GPS: $error');
     }
   }
 
@@ -191,16 +202,21 @@ class _RiderStageNavigationScreenState
 
   void _postLocationIfNeeded(Position position, LatLng location) {
     if (!AppConfig.apiEnabled || _assignmentIds.isEmpty) return;
-    if (!position.accuracy.isFinite || position.accuracy < 0 ||
+    if (!position.accuracy.isFinite ||
+        position.accuracy < 0 ||
         position.accuracy > 250) {
-      if (mounted) setState(() => _status = 'GPS accuracy is too low; waiting for a better fix.');
+      if (mounted)
+        setState(
+          () => _status = 'GPS accuracy is too low; waiting for a better fix.',
+        );
       return;
     }
 
     final DateTime now = DateTime.now();
     final DateTime? lastPost = _lastLocationPostAt;
     final LatLng? lastLocation = _lastPostedLocation;
-    if (lastPost != null && now.difference(lastPost) < const Duration(seconds: 15)) {
+    if (lastPost != null &&
+        now.difference(lastPost) < const Duration(seconds: 15)) {
       if (lastLocation == null ||
           Geolocator.distanceBetween(
                 lastLocation.latitude,
@@ -221,25 +237,29 @@ class _RiderStageNavigationScreenState
   Future<void> _uploadLocation(Position position) async {
     final List<int> assignmentIds = _assignmentIds;
     try {
-      await Future.wait<void>(assignmentIds.map((int assignmentId) {
-        return RiderMobileService.updateLiveLocation(
-          assignmentId: assignmentId,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          accuracy: position.accuracy,
-          recordedAt: position.timestamp,
-        );
-      }));
+      await Future.wait<void>(
+        assignmentIds.map((int assignmentId) {
+          return RiderMobileService.updateLiveLocation(
+            assignmentId: assignmentId,
+            latitude: position.latitude,
+            longitude: position.longitude,
+            accuracy: position.accuracy,
+            recordedAt: position.timestamp,
+          );
+        }),
+      );
       _locationPostErrorShown = false;
     } catch (error) {
       if (mounted && !_locationPostErrorShown) {
         _locationPostErrorShown = true;
-        _showMessage('GPS is visible on this device but could not sync: $error');
+        _showMessage(
+          'GPS is visible on this device but could not sync: $error',
+        );
       }
     }
   }
 
-  Future<void> _onMapCreated(mapbox.MapboxMap map) async {
+  Future<void> _onMapCreated(maplibre.MapLibreSession map) async {
     _map = map;
     _markers = await map.annotations.createCircleAnnotationManager();
     _routeLines = await map.annotations.createPolylineAnnotationManager();
@@ -250,23 +270,23 @@ class _RiderStageNavigationScreenState
   }
 
   Future<void> _syncMap(LatLng? origin) async {
-    final mapbox.MapboxMap? map = _map;
-    final mapbox.CircleAnnotationManager? markerManager = _markers;
+    final maplibre.MapLibreSession? map = _map;
+    final maplibre.CircleAnnotationManager? markerManager = _markers;
     final LatLng? destination = _destination;
     if (map == null || markerManager == null || destination == null) return;
 
     await markerManager.deleteAll();
-    await markerManager.createMulti(<mapbox.CircleAnnotationOptions>[
-      mapbox.CircleAnnotationOptions(
-        geometry: _toMapboxPoint(destination),
+    await markerManager.createMulti(<maplibre.CircleAnnotationOptions>[
+      maplibre.CircleAnnotationOptions(
+        geometry: _toMapLibrePoint(destination),
         circleColor: _maroon.toARGB32(),
         circleRadius: 11,
         circleStrokeColor: Colors.white.toARGB32(),
         circleStrokeWidth: 3,
       ),
       if (origin != null)
-        mapbox.CircleAnnotationOptions(
-          geometry: _toMapboxPoint(origin),
+        maplibre.CircleAnnotationOptions(
+          geometry: _toMapLibrePoint(origin),
           circleColor: _riderBlue.toARGB32(),
           circleRadius: 9,
           circleStrokeColor: Colors.white.toARGB32(),
@@ -276,24 +296,31 @@ class _RiderStageNavigationScreenState
 
     if (!_cameraPositioned) {
       if (origin != null) {
-        final mapbox.CameraOptions camera = await map.cameraForCoordinatesPadding(
-          <mapbox.Point>[_toMapboxPoint(origin), _toMapboxPoint(destination)],
-          mapbox.CameraOptions(
-            padding: mapbox.MbxEdgeInsets(
-              top: 48,
-              left: 48,
-              bottom: 48,
-              right: 48,
-            ),
-          ),
-          null,
-          15,
-          null,
-        );
+        final maplibre.CameraOptions camera = await map
+            .cameraForCoordinatesPadding(
+              <maplibre.Point>[
+                _toMapLibrePoint(origin),
+                _toMapLibrePoint(destination),
+              ],
+              maplibre.CameraOptions(
+                padding: maplibre.MbxEdgeInsets(
+                  top: 48,
+                  left: 48,
+                  bottom: 48,
+                  right: 48,
+                ),
+              ),
+              null,
+              15,
+              null,
+            );
         await map.setCamera(camera);
       } else {
         await map.setCamera(
-          mapbox.CameraOptions(center: _toMapboxPoint(destination), zoom: 14),
+          maplibre.CameraOptions(
+            center: _toMapLibrePoint(destination),
+            zoom: 14,
+          ),
         );
       }
       _cameraPositioned = true;
@@ -303,8 +330,8 @@ class _RiderStageNavigationScreenState
   }
 
   Future<void> _drawRoute(LatLng origin, LatLng destination) async {
-    final mapbox.PolylineAnnotationManager? manager = _routeLines;
-    if (manager == null || !_hasMapToken || _routeRequestInProgress) return;
+    final maplibre.PolylineAnnotationManager? manager = _routeLines;
+    if (manager == null || _routeRequestInProgress) return;
     final LatLng? previousOrigin = _lastRouteOrigin;
     final DateTime? previousRequestAt = _lastRouteRequestAt;
     if (previousOrigin != null &&
@@ -328,39 +355,38 @@ class _RiderStageNavigationScreenState
         '${origin.longitude},${origin.latitude};'
         '${destination.longitude},${destination.latitude}';
     try {
-      final Response<Map<String, dynamic>> response =
-          await _dio.get<Map<String, dynamic>>(
-        'https://api.mapbox.com/directions/v5/mapbox/driving-traffic/$coordinates',
-        queryParameters: <String, dynamic>{
-          'access_token': _mapboxAccessToken,
-          'geometries': 'geojson',
-          'overview': 'full',
-          'steps': false,
-        },
+      final Response<dynamic> response = await ApiClient.get(
+        'maps/route',
+        queryParameters: <String, dynamic>{'waypoints': coordinates},
       );
       final List<dynamic> routes =
           response.data?['routes'] as List<dynamic>? ?? const <dynamic>[];
       if (routes.isEmpty) throw StateError('No driving route was returned.');
-      final Map<String, dynamic> route =
-          Map<String, dynamic>.from(routes.first as Map);
-      final Map<String, dynamic> geometry =
-          Map<String, dynamic>.from(route['geometry'] as Map);
+      final Map<String, dynamic> route = Map<String, dynamic>.from(
+        routes.first as Map,
+      );
+      final Map<String, dynamic> geometry = Map<String, dynamic>.from(
+        route['geometry'] as Map,
+      );
       final List<dynamic> coordinatesList =
           geometry['coordinates'] as List<dynamic>? ?? const <dynamic>[];
-      final List<mapbox.Position> positions = coordinatesList
+      final List<maplibre.Position> positions = coordinatesList
           .whereType<List<dynamic>>()
           .where((List<dynamic> pair) => pair.length >= 2)
-          .map((List<dynamic> pair) => mapbox.Position(
-                (pair[0] as num).toDouble(),
-                (pair[1] as num).toDouble(),
-              ))
+          .map(
+            (List<dynamic> pair) => maplibre.Position(
+              (pair[0] as num).toDouble(),
+              (pair[1] as num).toDouble(),
+            ),
+          )
           .toList(growable: false);
-      if (positions.length < 2) throw StateError('The driving route was incomplete.');
+      if (positions.length < 2)
+        throw StateError('The driving route was incomplete.');
 
       await manager.deleteAll();
       await manager.create(
-        mapbox.PolylineAnnotationOptions(
-          geometry: mapbox.LineString(coordinates: positions),
+        maplibre.PolylineAnnotationOptions(
+          geometry: maplibre.LineString(coordinates: positions),
           lineColor: _routeColor.toARGB32(),
           lineWidth: 5,
           lineOpacity: 0.85,
@@ -376,7 +402,10 @@ class _RiderStageNavigationScreenState
         });
       }
     } catch (error) {
-      if (mounted) setState(() => _status = 'Map route is temporarily unavailable: $error');
+      if (mounted)
+        setState(
+          () => _status = 'Map route is temporarily unavailable: $error',
+        );
     } finally {
       _routeRequestInProgress = false;
     }
@@ -388,7 +417,7 @@ class _RiderStageNavigationScreenState
       _showMessage('The saved destination coordinates are unavailable.');
       return;
     }
-    if (!_supportsMapbox) {
+    if (!_supportsMapLibre) {
       _showMessage('Mapbox navigation is available on Android and iOS.');
       return;
     }
@@ -453,7 +482,8 @@ class _RiderStageNavigationScreenState
             options: options,
           )
           .timeout(const Duration(seconds: 7));
-      if (started == false) throw StateError('Mapbox could not start the route.');
+      if (started == false)
+        throw StateError('Mapbox could not start the route.');
     } catch (error) {
       if (mounted) _showMessage('Unable to start navigation: $error');
     } finally {
@@ -461,9 +491,9 @@ class _RiderStageNavigationScreenState
     }
   }
 
-  mapbox.Point _toMapboxPoint(LatLng point) => mapbox.Point(
-        coordinates: mapbox.Position(point.longitude, point.latitude),
-      );
+  maplibre.Point _toMapLibrePoint(LatLng point) => maplibre.Point(
+    coordinates: maplibre.Position(point.longitude, point.latitude),
+  );
 
   String _formatDistance(double? meters) {
     if (meters == null || !meters.isFinite) return '—';
@@ -495,16 +525,20 @@ class _RiderStageNavigationScreenState
       appBar: AppBar(
         backgroundColor: const Color(0xFFFBF7F2),
         foregroundColor: const Color(0xFF3B211B),
-        title: Text(widget.toLogisticsCenter ? 'Navigate to Logistics' : 'Navigate to Seller'),
+        title: Text(
+          widget.toLogisticsCenter
+              ? 'Navigate to Logistics'
+              : 'Navigate to Seller',
+        ),
       ),
       body: SafeArea(
         child: Column(
           children: <Widget>[
             Expanded(
-              child: _supportsMapbox && _hasMapToken && destination != null
-                  ? mapbox.MapWidget(
-                      viewport: mapbox.CameraViewportState(
-                        center: _toMapboxPoint(destination),
+              child: _supportsMapLibre && destination != null
+                  ? maplibre.MapLibreMapWidget(
+                      viewport: maplibre.MapLibreViewport(
+                        center: _toMapLibrePoint(destination),
                         zoom: 13,
                       ),
                       onMapCreated: _onMapCreated,
@@ -515,11 +549,9 @@ class _RiderStageNavigationScreenState
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(
-                            !_supportsMapbox
-                                ? 'Mapbox navigation is available on Android and iOS.'
-                                : !_hasMapToken
-                                    ? 'Add MAPBOX_ACCESS_TOKEN to load the map.'
-                                    : 'The saved destination coordinates are unavailable.',
+                            !_supportsMapLibre
+                                ? 'The interactive map is available on Android and iOS.'
+                                : 'The saved destination coordinates are unavailable.',
                             textAlign: TextAlign.center,
                             style: const TextStyle(color: _muted, height: 1.5),
                           ),
@@ -571,7 +603,10 @@ class _RiderStageNavigationScreenState
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text(_status, style: const TextStyle(color: _muted, fontSize: 12)),
+                  Text(
+                    _status,
+                    style: const TextStyle(color: _muted, fontSize: 12),
+                  ),
                   const SizedBox(height: 14),
                   SizedBox(
                     height: 50,
@@ -622,9 +657,21 @@ class _RouteMetric extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label, style: const TextStyle(color: _RiderStageNavigationScreenState._muted, fontSize: 10)),
+          Text(
+            label,
+            style: const TextStyle(
+              color: _RiderStageNavigationScreenState._muted,
+              fontSize: 10,
+            ),
+          ),
           const SizedBox(height: 3),
-          Text(value, style: const TextStyle(color: _RiderStageNavigationScreenState._maroon, fontWeight: FontWeight.w900)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _RiderStageNavigationScreenState._maroon,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );

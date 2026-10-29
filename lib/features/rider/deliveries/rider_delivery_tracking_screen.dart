@@ -8,9 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
+import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
 import 'package:mapbox_navigation_sdk/mapbox_navigation_sdk.dart' as navigation;
 
+import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/rider_mobile_service.dart';
@@ -59,7 +60,7 @@ class RiderDeliveryTrackingScreen extends StatefulWidget {
 
 class _RiderDeliveryTrackingScreenState
     extends State<RiderDeliveryTrackingScreen> {
-  static const String _mapboxAccessToken = String.fromEnvironment(
+  static const String _mapboxNavigationToken = String.fromEnvironment(
     'MAPBOX_ACCESS_TOKEN',
   );
 
@@ -101,7 +102,6 @@ class _RiderDeliveryTrackingScreenState
   );
 
   final ImagePicker _imagePicker = ImagePicker();
-  final Dio _dio = Dio();
 
   final TextEditingController _receiverController = TextEditingController();
 
@@ -132,23 +132,20 @@ class _RiderDeliveryTrackingScreenState
   double _zoomLevel = 14;
   LatLng _lastMapCenter = _defaultCenter;
 
-  mapbox.MapboxMap? _mapboxMap;
-  mapbox.CircleAnnotationManager? _mapMarkers;
-  mapbox.PointAnnotationManager? _riderMarkers;
-  mapbox.PolylineAnnotationManager? _routeLines;
+  maplibre.MapLibreSession? _mapLibreMap;
+  maplibre.CircleAnnotationManager? _mapMarkers;
+  maplibre.PointAnnotationManager? _riderMarkers;
+  maplibre.PolylineAnnotationManager? _routeLines;
   Uint8List? _riderMarkerImage;
 
-  bool get _supportsMapbox {
-    if (kIsWeb) {
-      return false;
-    }
-
-    return defaultTargetPlatform == TargetPlatform.android ||
+  bool get _supportsMapLibre {
+    return kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
   }
 
-  bool get _canShowMapbox {
-    return _supportsMapbox && _mapboxAccessToken.isNotEmpty;
+  bool get _canShowMap {
+    return _supportsMapLibre;
   }
 
   bool get _usingPreview {
@@ -317,13 +314,13 @@ class _RiderDeliveryTrackingScreenState
         oldWidget.delivery != widget.delivery) {
       _geocodedBuyerLocation = null;
       _lastRouteDestination = null;
-      _syncMapboxMarkers();
+      _syncMapLibreMarkers();
       _resolveBuyerLocation();
     }
   }
 
   Future<void> _startRiderLocationTracking() async {
-    if (!_supportsMapbox) {
+    if (!_supportsMapLibre) {
       return;
     }
 
@@ -388,7 +385,7 @@ class _RiderDeliveryTrackingScreenState
           }
 
           _syncRiderLocationIfNeeded(position, nextLocation, now);
-          _syncMapboxMarkers();
+          _syncMapLibreMarkers();
         });
   }
 
@@ -455,9 +452,7 @@ class _RiderDeliveryTrackingScreenState
       return;
     }
 
-    if (_displayDeliveryLocation != null ||
-        _usingPreview ||
-        _mapboxAccessToken.isEmpty) {
+    if (_displayDeliveryLocation != null || _usingPreview) {
       return;
     }
 
@@ -476,17 +471,10 @@ class _RiderDeliveryTrackingScreenState
     }
 
     try {
-      final Response<Map<String, dynamic>> response = await _dio
-          .get<Map<String, dynamic>>(
-            'https://api.mapbox.com/search/geocode/v6/forward',
-            queryParameters: <String, dynamic>{
-              'q': address,
-              'country': 'ph',
-              'autocomplete': false,
-              'limit': 1,
-              'access_token': _mapboxAccessToken,
-            },
-          );
+      final Response<dynamic> response = await ApiClient.get(
+        'maps/geocode',
+        queryParameters: <String, dynamic>{'text': address},
+      );
 
       final List<dynamic> features =
           response.data?['features'] as List<dynamic>? ?? <dynamic>[];
@@ -520,7 +508,7 @@ class _RiderDeliveryTrackingScreenState
       setState(() {
         _geocodedBuyerLocation = LatLng(latitude, longitude);
       });
-      await _syncMapboxMarkers();
+      await _syncMapLibreMarkers();
     } catch (_) {
       // The map keeps its unavailable state when an address cannot be resolved.
     } finally {
@@ -538,8 +526,8 @@ class _RiderDeliveryTrackingScreenState
     }
   }
 
-  Future<void> _onMapboxMapCreated(mapbox.MapboxMap map) async {
-    _mapboxMap = map;
+  Future<void> _onMapLibreSessionCreated(maplibre.MapLibreSession map) async {
+    _mapLibreMap = map;
     _mapMarkers = await map.annotations.createCircleAnnotationManager();
     _riderMarkers = await map.annotations.createPointAnnotationManager();
     _routeLines = await map.annotations.createPolylineAnnotationManager();
@@ -550,7 +538,7 @@ class _RiderDeliveryTrackingScreenState
       // A blue location dot is used if the rider icon cannot be rendered.
     }
 
-    await _syncMapboxMarkers();
+    await _syncMapLibreMarkers();
   }
 
   Future<Uint8List> _createRiderMarkerImage() async {
@@ -616,10 +604,10 @@ class _RiderDeliveryTrackingScreenState
     );
   }
 
-  Future<void> _syncMapboxMarkers() async {
-    final mapbox.MapboxMap? map = _mapboxMap;
-    final mapbox.CircleAnnotationManager? manager = _mapMarkers;
-    final mapbox.PointAnnotationManager? riderManager = _riderMarkers;
+  Future<void> _syncMapLibreMarkers() async {
+    final maplibre.MapLibreSession? map = _mapLibreMap;
+    final maplibre.CircleAnnotationManager? manager = _mapMarkers;
+    final maplibre.PointAnnotationManager? riderManager = _riderMarkers;
 
     if (map == null || manager == null) {
       return;
@@ -633,11 +621,11 @@ class _RiderDeliveryTrackingScreenState
     final Uint8List? riderMarkerImage = _riderMarkerImage;
     final bool canShowRiderIcon =
         rider != null && riderManager != null && riderMarkerImage != null;
-    final List<mapbox.CircleAnnotationOptions> annotations =
-        <mapbox.CircleAnnotationOptions>[
+    final List<maplibre.CircleAnnotationOptions> annotations =
+        <maplibre.CircleAnnotationOptions>[
           if (destination != null)
-            mapbox.CircleAnnotationOptions(
-              geometry: _toMapboxPoint(destination),
+            maplibre.CircleAnnotationOptions(
+              geometry: _toMapLibrePoint(destination),
               circleColor: _routeColor.toARGB32(),
               circleRadius: 11,
               circleStrokeColor: Colors.white.toARGB32(),
@@ -645,8 +633,8 @@ class _RiderDeliveryTrackingScreenState
               circleSortKey: 2,
             ),
           if (rider != null && !canShowRiderIcon)
-            mapbox.CircleAnnotationOptions(
-              geometry: _toMapboxPoint(rider),
+            maplibre.CircleAnnotationOptions(
+              geometry: _toMapLibrePoint(rider),
               circleColor: _riderColor.toARGB32(),
               circleRadius: 10,
               circleStrokeColor: Colors.white.toARGB32(),
@@ -661,10 +649,10 @@ class _RiderDeliveryTrackingScreenState
 
     if (rider != null && riderManager != null && riderMarkerImage != null) {
       await riderManager.create(
-        mapbox.PointAnnotationOptions(
-          geometry: _toMapboxPoint(rider),
+        maplibre.PointAnnotationOptions(
+          geometry: _toMapLibrePoint(rider),
           image: riderMarkerImage,
-          iconAnchor: mapbox.IconAnchor.CENTER,
+          iconAnchor: maplibre.IconAnchor.center,
           iconSize: 0.55,
           symbolSortKey: 3,
         ),
@@ -672,20 +660,24 @@ class _RiderDeliveryTrackingScreenState
     }
 
     if (destination != null && rider != null) {
-      final mapbox.CameraOptions camera = await map.cameraForCoordinatesPadding(
-        <mapbox.Point>[_toMapboxPoint(rider), _toMapboxPoint(destination)],
-        mapbox.CameraOptions(
-          padding: mapbox.MbxEdgeInsets(
-            top: 42,
-            left: 42,
-            bottom: 42,
-            right: 42,
-          ),
-        ),
-        null,
-        15,
-        null,
-      );
+      final maplibre.CameraOptions camera = await map
+          .cameraForCoordinatesPadding(
+            <maplibre.Point>[
+              _toMapLibrePoint(rider),
+              _toMapLibrePoint(destination),
+            ],
+            maplibre.CameraOptions(
+              padding: maplibre.MbxEdgeInsets(
+                top: 42,
+                left: 42,
+                bottom: 42,
+                right: 42,
+              ),
+            ),
+            null,
+            15,
+            null,
+          );
       _lastMapCenter = _mapCenter;
       _zoomLevel = camera.zoom ?? 14;
       await map.setCamera(camera);
@@ -693,8 +685,8 @@ class _RiderDeliveryTrackingScreenState
       _lastMapCenter = _mapCenter;
       _zoomLevel = annotations.isEmpty ? 11 : 14;
       await map.setCamera(
-        mapbox.CameraOptions(
-          center: _toMapboxPoint(_lastMapCenter),
+        maplibre.CameraOptions(
+          center: _toMapLibrePoint(_lastMapCenter),
           zoom: _zoomLevel,
         ),
       );
@@ -704,15 +696,15 @@ class _RiderDeliveryTrackingScreenState
   }
 
   Future<void> _zoomMap(double step) async {
-    final mapbox.MapboxMap? map = _mapboxMap;
+    final maplibre.MapLibreSession? map = _mapLibreMap;
     if (map == null) {
       return;
     }
 
     _zoomLevel = (_zoomLevel + step).clamp(3.0, 18.0);
     await map.setCamera(
-      mapbox.CameraOptions(
-        center: _toMapboxPoint(_lastMapCenter),
+      maplibre.CameraOptions(
+        center: _toMapLibrePoint(_lastMapCenter),
         zoom: _zoomLevel,
       ),
     );
@@ -722,12 +714,12 @@ class _RiderDeliveryTrackingScreenState
     required LatLng? rider,
     required LatLng? destination,
   }) async {
-    final mapbox.PolylineAnnotationManager? manager = _routeLines;
+    final maplibre.PolylineAnnotationManager? manager = _routeLines;
     if (manager == null) {
       return;
     }
 
-    if (rider == null || destination == null || _mapboxAccessToken.isEmpty) {
+    if (rider == null || destination == null) {
       await manager.deleteAll();
       return;
     }
@@ -760,15 +752,9 @@ class _RiderDeliveryTrackingScreenState
       final String coordinates =
           '${rider.longitude},${rider.latitude};'
           '${destination.longitude},${destination.latitude}';
-      final Response<Map<String, dynamic>>
-      response = await _dio.get<Map<String, dynamic>>(
-        'https://api.mapbox.com/directions/v5/mapbox/driving-traffic/$coordinates',
-        queryParameters: <String, dynamic>{
-          'access_token': _mapboxAccessToken,
-          'geometries': 'geojson',
-          'overview': 'full',
-          'steps': false,
-        },
+      final Response<dynamic> response = await ApiClient.get(
+        'maps/route',
+        queryParameters: <String, dynamic>{'waypoints': coordinates},
       );
 
       final List<dynamic> routes =
@@ -786,11 +772,11 @@ class _RiderDeliveryTrackingScreenState
       );
       final List<dynamic> rawCoordinates =
           geometry['coordinates'] as List<dynamic>;
-      final List<mapbox.Position> positions = rawCoordinates.map((
+      final List<maplibre.Position> positions = rawCoordinates.map((
         dynamic value,
       ) {
         final List<dynamic> coordinate = value as List<dynamic>;
-        return mapbox.Position(
+        return maplibre.Position(
           (coordinate[0] as num).toDouble(),
           (coordinate[1] as num).toDouble(),
         );
@@ -802,8 +788,8 @@ class _RiderDeliveryTrackingScreenState
 
       await manager.deleteAll();
       await manager.create(
-        mapbox.PolylineAnnotationOptions(
-          geometry: mapbox.LineString(coordinates: positions),
+        maplibre.PolylineAnnotationOptions(
+          geometry: maplibre.LineString(coordinates: positions),
           lineColor: _routeColor.toARGB32(),
           lineWidth: 5,
           lineOpacity: 0.85,
@@ -814,15 +800,15 @@ class _RiderDeliveryTrackingScreenState
       _lastRouteOrigin = rider;
       _lastRouteDestination = destination;
     } catch (_) {
-      // Keep the markers visible when Mapbox cannot calculate a route.
+      // Keep the markers visible when the routing service is unavailable.
     } finally {
       _routeRequestInProgress = false;
     }
   }
 
-  mapbox.Point _toMapboxPoint(LatLng point) {
-    return mapbox.Point(
-      coordinates: mapbox.Position(point.longitude, point.latitude),
+  maplibre.Point _toMapLibrePoint(LatLng point) {
+    return maplibre.Point(
+      coordinates: maplibre.Position(point.longitude, point.latitude),
     );
   }
 
@@ -896,12 +882,12 @@ class _RiderDeliveryTrackingScreenState
       return;
     }
 
-    if (!_supportsMapbox) {
+    if (!_supportsMapLibre) {
       _showMessage('Mapbox navigation is available on Android and iOS.');
       return;
     }
 
-    if (_mapboxAccessToken.isEmpty) {
+    if (_mapboxNavigationToken.isEmpty) {
       _showMessage('Add your Mapbox access token before starting navigation.');
       return;
     }
@@ -998,7 +984,6 @@ class _RiderDeliveryTrackingScreenState
   @override
   void dispose() {
     _positionSubscription?.cancel();
-    _dio.close();
     _receiverController.dispose();
     _failedReasonController.dispose();
 
@@ -1425,14 +1410,14 @@ class _RiderDeliveryTrackingScreenState
             height: 310,
             child: Stack(
               children: <Widget>[
-                if (_canShowMapbox)
+                if (_canShowMap)
                   Positioned.fill(
-                    child: mapbox.MapWidget(
-                      viewport: mapbox.CameraViewportState(
-                        center: _toMapboxPoint(_lastMapCenter),
+                    child: maplibre.MapLibreMapWidget(
+                      viewport: maplibre.MapLibreViewport(
+                        center: _toMapLibrePoint(_lastMapCenter),
                         zoom: _zoomLevel,
                       ),
-                      onMapCreated: _onMapboxMapCreated,
+                      onMapCreated: _onMapLibreSessionCreated,
                     ),
                   )
                 else
@@ -1443,9 +1428,7 @@ class _RiderDeliveryTrackingScreenState
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(
-                            _supportsMapbox
-                                ? 'Add MAPBOX_ACCESS_TOKEN to your Flutter run configuration to load the map.'
-                                : 'Mapbox Maps SDK is available on Android and iOS.',
+                            'The interactive map is available on Android, iOS, and web.',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: _muted,
@@ -1458,7 +1441,7 @@ class _RiderDeliveryTrackingScreenState
                       ),
                     ),
                   ),
-                if (_canShowMapbox)
+                if (_canShowMap)
                   Positioned(
                     right: 16,
                     bottom: 20,
@@ -1511,7 +1494,7 @@ class _RiderDeliveryTrackingScreenState
                       ],
                     ),
                   ),
-                if (_canShowMapbox && !hasDestination)
+                if (_canShowMap && !hasDestination)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: Center(
@@ -1951,7 +1934,11 @@ class _RiderDeliveryTrackingScreenState
                 File(photo.path),
                 fit: BoxFit.contain,
                 errorBuilder:
-                    (BuildContext context, Object error, StackTrace? stackTrace) {
+                    (
+                      BuildContext context,
+                      Object error,
+                      StackTrace? stackTrace,
+                    ) {
                       return const Center(
                         child: Icon(
                           Icons.broken_image_outlined,

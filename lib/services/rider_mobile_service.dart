@@ -14,6 +14,7 @@ import '../features/rider/messages/rider_messages_screen.dart';
 import '../features/buyer/notifications/notifications_screen.dart';
 import '../features/rider/pickups/rider_pickups_screen.dart';
 import '../features/rider/profile/rider_profile_screen.dart';
+import '../features/rider/transfers/rider_inter_hub_transfers_screen.dart';
 import 'realtime_service.dart';
 
 class RiderDashboardSnapshot {
@@ -206,11 +207,12 @@ class RiderMobileService {
   }
 
   static Future<RiderPickupData?> fetchPickupBatch(int batchId) async {
-    final RiderPickupsSnapshot snapshot = await fetchPickups();
-    for (final RiderPickupData pickup in snapshot.pickups) {
-      if (pickup.id == batchId) return pickup;
-    }
-    return null;
+    final Map<String, dynamic> payload = await _getPayload(
+      'rider/pickups/batches/$batchId',
+    );
+    final dynamic rawData = payload['data'];
+    if (rawData == null) return null;
+    return RiderPickupData.fromApi(_map(rawData, 'pickup batch'));
   }
 
   static Future<List<RiderHistoryData>> fetchHistory() async {
@@ -219,6 +221,67 @@ class RiderMobileService {
         .map((Map row) => Map<String, dynamic>.from(row))
         .map(RiderHistoryData.fromApi)
         .toList(growable: false);
+  }
+
+  static Future<List<RiderInterHubTransferData>>
+  fetchInterHubTransfers() async {
+    const String endpoint = 'rider/transfers';
+    return (await _getRows(endpoint))
+        .whereType<Map>()
+        .map((Map row) => Map<String, dynamic>.from(row))
+        .map(RiderInterHubTransferData.fromApi)
+        .toList(growable: false);
+  }
+
+  static Future<void> _postTransferAction(
+    String endpoint,
+    Map<String, dynamic> fields,
+  ) async {
+    final Response<dynamic> response;
+    try {
+      response = await ApiClient.post(
+        AppConfig.resolveApiUrl(endpoint),
+        fields,
+        options: Options(
+          connectTimeout: const Duration(seconds: 10),
+          sendTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+    } on DioException catch (error) {
+      throw RiderApiException(ApiClient.formatError(error));
+    }
+    _requirePayload(response);
+  }
+
+  static Future<void> acceptInterHubTransfer(int manifestId) {
+    return _postTransferAction(
+      'rider/transfers/$manifestId/accept',
+      const <String, dynamic>{},
+    );
+  }
+
+  static Future<void> declineInterHubTransfer(int manifestId, String reason) {
+    return _postTransferAction(
+      'rider/transfers/$manifestId/decline',
+      <String, dynamic>{'reason': reason.trim()},
+    );
+  }
+
+  static Future<void> startInterHubTransfer(
+    int manifestId,
+    Map<int, String> scannedCodes,
+  ) {
+    return _postTransferAction(
+      'rider/transfers/$manifestId/start',
+      <String, dynamic>{
+        'scanned_codes': <String, String>{
+          for (final MapEntry<int, String> scan in scannedCodes.entries)
+            scan.key.toString(): scan.value.trim(),
+        },
+        'scan_method': 'MANUAL',
+      },
+    );
   }
 
   static Future<RiderEarningsSnapshot> fetchEarnings() async {
@@ -664,11 +727,22 @@ class RiderMobileService {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('rider/pickups/batches/$batchId/scan'),
       <String, dynamic>{
-        'scanned_code': trackingCode.trim(),
+        'tracking_code': trackingCode.trim(),
         'scan_method': scanMethod,
       },
     );
-    _requirePayload(response);
+    final Map<String, dynamic> payload = _requirePayload(response);
+    final dynamic rawData = payload['data'];
+    final String shipmentStatus = rawData is Map
+        ? (rawData['shipment_status'] ?? '').toString().trim().toUpperCase()
+        : '';
+    if (shipmentStatus != 'PICKED_UP') {
+      throw FormatException(
+        shipmentStatus.isEmpty
+            ? 'The server did not confirm the parcel pickup status.'
+            : 'The server returned an unexpected shipment status: $shipmentStatus.',
+      );
+    }
   }
 
   static Future<void> markPickupNotCollected({
@@ -768,6 +842,9 @@ class RiderMobileService {
         'items',
         'assignments',
         'pickups',
+        'transfers',
+        'inter_hub_transfers',
+        'manifests',
         'rows',
         'records',
       ]) {
@@ -780,6 +857,9 @@ class RiderMobileService {
       'items',
       'assignments',
       'pickups',
+      'transfers',
+      'inter_hub_transfers',
+      'manifests',
       'rows',
       'records',
     ]) {

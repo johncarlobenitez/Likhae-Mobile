@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/sized_network_image.dart';
+
 class RiderProfileData {
   final int id;
 
@@ -152,10 +154,22 @@ class RiderProfileData {
     return 'RID-${id.toString().padLeft(4, '0')}';
   }
 
-  bool get supportsAvailabilityStatus {
-    final String normalized = vehicleType.trim().toLowerCase();
-    return normalized == 'motorcycle' || normalized == 'tricycle';
-  }
+  String get normalizedVehicleType =>
+      vehicleType.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
+
+  bool get isLocalBarangay =>
+      const <String>{'motorcycle', 'tricycle'}.contains(normalizedVehicleType);
+
+  bool get isInterLogistics => const <String>{
+    'van',
+    'closed_van',
+    'truck',
+    'car',
+  }.contains(normalizedVehicleType);
+
+  bool get hasOperationalRole => isLocalBarangay || isInterLogistics;
+
+  bool get supportsAvailabilityStatus => isLocalBarangay;
 
   String get initials {
     final List<String> parts = name
@@ -683,10 +697,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                 ),
                 child: profile.profilePhotoUrl?.trim().isNotEmpty == true
                     ? ClipOval(
-                        child: Image.network(
-                          profile.profilePhotoUrl!,
-                          width: 88,
-                          height: 88,
+                        child: SizedNetworkImage(
+                          url: profile.profilePhotoUrl!,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Text(
                             profile.initials,

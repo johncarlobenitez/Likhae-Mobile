@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/config/app_config.dart';
+import '../../shared/widgets/sized_network_image.dart';
 
 /// Accepts the canonical API image or the first product photo in a batch.
 String? riderProductImageUrl(Map<String, dynamic> row) {
@@ -97,21 +98,19 @@ class RiderProductImage extends StatelessWidget {
       ),
       child: url.isEmpty
           ? const Icon(Icons.inventory_2_outlined, color: Color(0xFFA99386))
-          : Image.network(
-              url,
+          : SizedNetworkImage(
+              url: url,
               fit: BoxFit.cover,
               semanticLabel: semanticLabel,
-              loadingBuilder: (context, child, progress) => progress == null
-                  ? child
-                  : const Center(
-                      child: SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF561C17),
-                        ),
-                      ),
-                    ),
+              placeholder: const Center(
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF561C17),
+                  ),
+                ),
+              ),
               errorBuilder: (context, error, stackTrace) => const Icon(
                 Icons.broken_image_outlined,
                 color: Color(0xFFA99386),

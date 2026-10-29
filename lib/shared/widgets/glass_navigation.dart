@@ -8,8 +8,9 @@ class GlassNavigationDestination {
   final IconData selectedIcon;
   final String label;
   final VoidCallback onTap;
+  final int badgeCount;
 
-  const GlassNavigationDestination({required this.icon, required this.selectedIcon, required this.label, required this.onTap});
+  const GlassNavigationDestination({required this.icon, required this.selectedIcon, required this.label, required this.onTap, this.badgeCount = 0});
 }
 
 class GlassNavigationBar extends StatelessWidget {
@@ -26,10 +27,15 @@ class GlassNavigationBar extends StatelessWidget {
     final duration = media.disableAnimations ? Duration.zero : const Duration(milliseconds: 300);
     final labelSize = destinations.length > 4 ? 10.0 : 11.0;
     final height = 68 + (media.textScaler.scale(labelSize) - labelSize).clamp(0.0, 24.0);
+    final Color navigationSurfaceTint = dark
+        ? const Color(0xFF292225)
+        : const Color(0xFFFFF5F1);
     return GlassSurface(
       radius: 36,
       padding: const EdgeInsets.all(6),
-      opacity: .94,
+      opacity: .88,
+      tintColor: navigationSurfaceTint,
+      borderColor: colors.primary.withValues(alpha: dark ? .38 : .27),
       child: SizedBox(
         height: height,
         child: LayoutBuilder(builder: (context, constraints) {
@@ -42,9 +48,11 @@ class GlassNavigationBar extends StatelessWidget {
               left: index * itemWidth, top: 0, bottom: 0, width: itemWidth,
               child: IgnorePointer(child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: dark ? .20 : .085),
+                  color: colors.primary,
                   borderRadius: BorderRadius.circular(29),
-                  border: Border.all(color: Colors.white.withValues(alpha: dark ? .10 : .7)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: dark ? .20 : .28),
+                  ),
                 ),
               )),
             ),
@@ -70,15 +78,19 @@ class GlassNavigationBar extends StatelessWidget {
                             AnimatedScale(
                               scale: i == currentIndex ? 1.06 : 1,
                               duration: duration,
-                              child: Icon(i == currentIndex ? destinations[i].selectedIcon : destinations[i].icon,
-                                color: i == currentIndex ? colors.primary : colors.onSurface.withValues(alpha: .60), size: 23),
+                              child: Badge.count(
+                                count: destinations[i].badgeCount,
+                                isLabelVisible: destinations[i].badgeCount > 0,
+                                child: Icon(i == currentIndex ? destinations[i].selectedIcon : destinations[i].icon,
+                                  color: i == currentIndex ? colors.onPrimary : colors.onSurface.withValues(alpha: .60), size: 23),
+                              ),
                             ),
                             const SizedBox(height: 5),
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 2),
                               child: Text(destinations[i].label, maxLines: 1, overflow: TextOverflow.ellipsis,
                                 style: TextStyle(fontSize: labelSize, fontWeight: i == currentIndex ? FontWeight.w700 : FontWeight.w500,
-                                  color: i == currentIndex ? colors.primary : colors.onSurface.withValues(alpha: .65))),
+                                  color: i == currentIndex ? colors.onPrimary : colors.onSurface.withValues(alpha: .65))),
                             ),
                           ]),
                         )),

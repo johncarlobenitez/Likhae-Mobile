@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/sized_network_image.dart';
 import '../rider_product_image.dart';
 
 class RiderHistoryData {
@@ -785,34 +786,19 @@ class _HistoryImage
                 size: 25,
               ),
             )
-          : Image.network(
-              url,
+          : SizedNetworkImage(
+              url: url,
               fit: BoxFit.cover,
-              loadingBuilder: (
-                BuildContext context,
-                Widget child,
-                ImageChunkEvent?
-                    loadingProgress,
-              ) {
-                if (loadingProgress ==
-                    null) {
-                  return child;
-                }
-
-                return const Center(
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child:
-                        CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(
-                        0xFF561C17,
-                      ),
-                    ),
+              placeholder: const Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF561C17),
                   ),
-                );
-              },
+                ),
+              ),
               errorBuilder: (
                 BuildContext context,
                 Object error,

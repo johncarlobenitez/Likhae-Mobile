@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/sized_network_image.dart';
 import '../rider_product_image.dart';
 
 class RiderPickupStatsData {
@@ -971,8 +972,8 @@ class _PickupImage extends StatelessWidget {
           ? const Center(
               child: Icon(Icons.inventory_2_outlined, color: Color(0xFFA99386)),
             )
-          : Image.network(
-              url,
+          : SizedNetworkImage(
+              url: url,
               fit: BoxFit.cover,
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {

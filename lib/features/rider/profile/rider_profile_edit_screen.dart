@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
+import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
 
 import '../../../services/philippine_address_service.dart';
 import '../../../services/rider_mobile_service.dart';
@@ -30,9 +30,6 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   static const Color _maroonSoft = Color(0xFFF1E4D7);
   static const Color _text = Color(0xFF3B211B);
   static const Color _muted = Color(0xFF987865);
-  static const String _mapboxToken = String.fromEnvironment(
-    'MAPBOX_ACCESS_TOKEN',
-  );
   static const LatLng _defaultMapCenter = LatLng(13.4, 122.0);
 
   final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
@@ -61,8 +58,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   AddressOption? _province;
   AddressOption? _municipality;
   AddressOption? _barangay;
-  mapbox.MapboxMap? _map;
-  mapbox.CircleAnnotationManager? _markerManager;
+  maplibre.MapLibreSession? _map;
+  maplibre.CircleAnnotationManager? _markerManager;
   LatLng? _selectedLocation;
   Uint8List? _newProfilePhoto;
   String? _profilePhotoFileName;
@@ -79,10 +76,9 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   String? _addressError;
 
   bool get _canShowMap =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS) &&
-      _mapboxToken.trim().isNotEmpty;
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
 
   @override
   void initState() {
@@ -393,7 +389,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
         _addressError = null;
       });
       await _map?.setCamera(
-        mapbox.CameraOptions(center: _mapPoint(location), zoom: 16),
+        maplibre.CameraOptions(center: _mapPoint(location), zoom: 16),
       );
       await _syncAddressMarker();
     } catch (error) {
@@ -512,14 +508,14 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     }
   }
 
-  Future<void> _onMapCreated(mapbox.MapboxMap map) async {
+  Future<void> _onMapCreated(maplibre.MapLibreSession map) async {
     _map = map;
     _markerManager = await map.annotations.createCircleAnnotationManager();
     await _syncAddressMarker();
   }
 
-  void _onMapTap(mapbox.MapContentGestureContext context) {
-    final mapbox.Position point = context.point.coordinates;
+  void _onMapTap(maplibre.MapContentGestureContext context) {
+    final maplibre.Position point = context.point.coordinates;
     setState(() {
       _selectedLocation = LatLng(point.lat.toDouble(), point.lng.toDouble());
       _pinConfirmed = true;
@@ -529,15 +525,15 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   }
 
   Future<void> _syncAddressMarker() async {
-    final mapbox.CircleAnnotationManager? manager = _markerManager;
+    final maplibre.CircleAnnotationManager? manager = _markerManager;
     if (manager == null) return;
     await manager.deleteAll();
     final LatLng? location = _selectedLocation;
     if (location == null) return;
     await manager.create(
-      mapbox.CircleAnnotationOptions(
-        geometry: mapbox.Point(
-          coordinates: mapbox.Position(location.longitude, location.latitude),
+      maplibre.CircleAnnotationOptions(
+        geometry: maplibre.Point(
+          coordinates: maplibre.Position(location.longitude, location.latitude),
         ),
         circleColor: _maroon.toARGB32(),
         circleRadius: 10,
@@ -547,8 +543,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     );
   }
 
-  mapbox.Point _mapPoint(LatLng location) => mapbox.Point(
-    coordinates: mapbox.Position(location.longitude, location.latitude),
+  maplibre.Point _mapPoint(LatLng location) => maplibre.Point(
+    coordinates: maplibre.Position(location.longitude, location.latitude),
   );
 
   void _showMessage(String message, {bool error = false}) {
@@ -694,17 +690,15 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                         final String plate = value?.trim() ?? '';
                         if (plate.isEmpty) return 'Enter your plate number.';
                         if (plate.length > 50 ||
-                            !RegExp(r'^[A-Za-z0-9][A-Za-z0-9 -]*$')
-                                .hasMatch(plate)) {
+                            !RegExp(
+                              r'^[A-Za-z0-9][A-Za-z0-9 -]*$',
+                            ).hasMatch(plate)) {
                           return 'Use letters, numbers, spaces, or hyphens.';
                         }
                         return null;
                       },
                     ),
-                    _readOnlyRow(
-                      'Logistics Center',
-                      _profile.logisticsCenter,
-                    ),
+                    _readOnlyRow('Logistics Center', _profile.logisticsCenter),
                     _readOnlyRow(
                       'Areas',
                       _profile.serviceAreas.isEmpty
@@ -961,7 +955,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
           borderRadius: BorderRadius.circular(14),
         ),
         child: const Text(
-          'The map is unavailable without MAPBOX_ACCESS_TOKEN. You can still use device location to set the address pin.',
+          'Interactive address maps are available on Android, iOS, and web. You can also use device location to set the address pin.',
           textAlign: TextAlign.center,
           style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
         ),
@@ -971,8 +965,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
       borderRadius: BorderRadius.circular(14),
       child: SizedBox(
         height: 220,
-        child: mapbox.MapWidget(
-          viewport: mapbox.CameraViewportState(
+        child: maplibre.MapLibreMapWidget(
+          viewport: maplibre.MapLibreViewport(
             center: _mapPoint(center),
             zoom: _selectedLocation == null ? 5 : 16,
           ),

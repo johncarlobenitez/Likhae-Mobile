@@ -24,6 +24,9 @@ class RiderScannerScreen extends StatefulWidget {
   /// Useful when scanning from a specific pickup assignment.
   final String? expectedTrackingCode;
 
+  /// Return the tracking code with its input method instead of just the code.
+  final bool returnScanDetails;
+
   final bool showSignOut;
 
   const RiderScannerScreen({
@@ -31,6 +34,7 @@ class RiderScannerScreen extends StatefulWidget {
     this.onScanned,
     this.onSignOut,
     this.expectedTrackingCode,
+    this.returnScanDetails = false,
     this.showSignOut = true,
   });
 
@@ -83,12 +87,16 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
     }
 
     String? detectedCode;
+    String detectedMethod = 'BARCODE';
 
     for (final Barcode barcode in capture.barcodes) {
       final String code = barcode.rawValue?.trim() ?? '';
 
       if (code.isNotEmpty) {
         detectedCode = code;
+        detectedMethod = barcode.format.name.toLowerCase().contains('qr')
+            ? 'QR'
+            : 'BARCODE';
         break;
       }
     }
@@ -97,10 +105,13 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       return;
     }
 
-    await _processTrackingCode(detectedCode);
+    await _processTrackingCode(detectedCode, scanMethod: detectedMethod);
   }
 
-  Future<void> _processTrackingCode(String rawCode) async {
+  Future<void> _processTrackingCode(
+    String rawCode, {
+    String scanMethod = 'MANUAL',
+  }) async {
     if (_handlingScan) {
       return;
     }
@@ -169,7 +180,14 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       /// If scanner was pushed from another page,
       /// return the scanned tracking code.
       if (context.canPop()) {
-        context.pop(code);
+        if (widget.returnScanDetails) {
+          context.pop(<String, String>{
+            'scanned_code': code,
+            'scan_method': scanMethod,
+          });
+        } else {
+          context.pop(code);
+        }
       }
     } catch (error) {
       if (!mounted) {
