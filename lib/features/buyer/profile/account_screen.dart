@@ -5,11 +5,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:likhae/core/api/api_client.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
+import '../../../shared/widgets/sized_network_image.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
+import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
 
 import '../../auth/register_screen.dart'
     show AddressLoader, AddressOption, ChildAddressLoader, PostalCodeLoader;
@@ -158,10 +160,7 @@ class BuyerAccountSnapshot {
   final BuyerProfileData profile;
   final List<BuyerAddressData> addresses;
 
-  const BuyerAccountSnapshot({
-    required this.profile,
-    required this.addresses,
-  });
+  const BuyerAccountSnapshot({required this.profile, required this.addresses});
 }
 
 class SelectedProfilePhoto {
@@ -233,6 +232,10 @@ class BuyerAddressData {
   final String? municipality;
   final String? province;
   final String? region;
+  final String? regionCode;
+  final String? provinceCode;
+  final String? municipalityCode;
+  final String? barangayCode;
   final String? postalCode;
   final String? landmark;
   final double? latitude;
@@ -255,6 +258,10 @@ class BuyerAddressData {
     this.municipality,
     this.province,
     this.region,
+    this.regionCode,
+    this.provinceCode,
+    this.municipalityCode,
+    this.barangayCode,
     this.postalCode,
     this.landmark,
     this.latitude,
@@ -297,6 +304,10 @@ class BuyerAddressData {
       municipality: municipality,
       province: province,
       region: region,
+      regionCode: regionCode,
+      provinceCode: provinceCode,
+      municipalityCode: municipalityCode,
+      barangayCode: barangayCode,
       postalCode: postalCode,
       landmark: landmark,
       latitude: latitude,
@@ -368,12 +379,22 @@ typedef PickProfilePhotoCallback = Future<SelectedProfilePhoto?> Function();
 typedef UpdateBuyerProfileCallback =
     Future<BuyerProfileData> Function(UpdateBuyerProfileRequest request);
 
+typedef RequestBuyerEmailChangeCallback = Future<void> Function(String email);
+typedef VerifyBuyerEmailChangeCallback =
+    Future<BuyerProfileData> Function(String code);
+
 typedef ResendBuyerMobileChangeCodeCallback = Future<void> Function();
 
 typedef RemoveProfilePhotoCallback = Future<BuyerProfileData> Function();
 
 typedef AddBuyerAddressCallback =
     Future<BuyerAddressData> Function(CreateBuyerAddressRequest request);
+
+typedef UpdateBuyerAddressCallback =
+    Future<BuyerAddressData> Function(
+      String addressId,
+      CreateBuyerAddressRequest request,
+    );
 
 typedef DeleteBuyerAddressCallback =
     Future<void> Function(BuyerAddressData address);
@@ -383,6 +404,9 @@ typedef SetDefaultBuyerAddressCallback =
 
 typedef ChangeBuyerPasswordCallback =
     Future<void> Function(ChangeBuyerPasswordRequest request);
+
+typedef DeleteBuyerAccountCallback =
+    Future<void> Function(String password, String confirmation);
 
 typedef RefreshBuyerAccountCallback = Future<BuyerAccountSnapshot> Function();
 
@@ -408,11 +432,19 @@ class AccountScreen extends StatefulWidget {
 
   final UpdateBuyerProfileCallback? onUpdateProfile;
 
+  final RequestBuyerEmailChangeCallback? onRequestEmailChange;
+
+  final VerifyBuyerEmailChangeCallback? onVerifyEmailChange;
+
+  final ResendBuyerMobileChangeCodeCallback? onResendEmailChangeCode;
+
   final ResendBuyerMobileChangeCodeCallback? onResendMobileChangeCode;
 
   final RemoveProfilePhotoCallback? onRemoveProfilePhoto;
 
   final AddBuyerAddressCallback? onAddAddress;
+
+  final UpdateBuyerAddressCallback? onUpdateAddress;
 
   final AddressLoader? loadRegions;
   final ChildAddressLoader? loadProvinces;
@@ -426,13 +458,19 @@ class AccountScreen extends StatefulWidget {
 
   final ChangeBuyerPasswordCallback? onChangePassword;
 
+  final DeleteBuyerAccountCallback? onDeleteAccount;
+
+  final VoidCallback? onReviewHistory;
+
   final VoidCallback? onSystemSettings;
 
   final VoidCallback? onVouchers;
 
-  /// When false, this account tab is rendered as a dedicated page without
-  /// showing the Me-section navigation tiles again.
+  /// Shows the horizontal account navigation tiles above the active section.
   final bool showNavigationTabs;
+
+  /// Shows a back button when this section was opened as a dedicated page.
+  final bool showBackButton;
 
   final RefreshBuyerAccountCallback? onRefresh;
 
@@ -456,9 +494,13 @@ class AccountScreen extends StatefulWidget {
     this.onBack,
     this.onPickProfilePhoto,
     this.onUpdateProfile,
+    this.onRequestEmailChange,
+    this.onVerifyEmailChange,
+    this.onResendEmailChangeCode,
     this.onResendMobileChangeCode,
     this.onRemoveProfilePhoto,
     this.onAddAddress,
+    this.onUpdateAddress,
     this.loadRegions,
     this.loadProvinces,
     this.loadMunicipalities,
@@ -467,9 +509,12 @@ class AccountScreen extends StatefulWidget {
     this.onDeleteAddress,
     this.onSetDefaultAddress,
     this.onChangePassword,
+    this.onDeleteAccount,
+    this.onReviewHistory,
     this.onSystemSettings,
     this.onVouchers,
     this.showNavigationTabs = true,
+    this.showBackButton = false,
     this.onRefresh,
     this.onLogout,
     this.onProfileChanged,
@@ -482,9 +527,6 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
-  static const String _mapboxAccessToken =
-      String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
-
   static const Color _background = ShopColors.canvas;
 
   static const Color _surface = ShopColors.surface;
@@ -525,6 +567,7 @@ class _AccountScreenState extends State<AccountScreen> {
   bool _removingPhoto = false;
 
   bool _addingAddress = false;
+  String? _editingAddressId;
 
   final Set<String> _deletingAddressIds = <String>{};
   final Set<String> _defaultingAddressIds = <String>{};
@@ -574,7 +617,6 @@ class _AccountScreenState extends State<AccountScreen> {
 
   final TextEditingController _addressSearchController =
       TextEditingController();
-  final Dio _addressGeocoder = Dio();
 
   AddressOption? _selectedRegion;
   AddressOption? _selectedProvince;
@@ -593,8 +635,8 @@ class _AccountScreenState extends State<AccountScreen> {
   int _addressOptionsRequest = 0;
   int _postalCodeLookupGeneration = 0;
 
-  mapbox.MapboxMap? _addressMap;
-  mapbox.CircleAnnotationManager? _addressMarkerManager;
+  maplibre.MapLibreSession? _addressMap;
+  maplibre.CircleAnnotationManager? _addressMarkerManager;
 
   LatLng? _selectedAddressLocation;
   LatLng _addressMapCenter = _defaultAddressMapCenter;
@@ -616,6 +658,10 @@ class _AccountScreenState extends State<AccountScreen> {
   bool _showCurrentPassword = false;
   bool _showNewPassword = false;
   bool _showConfirmPassword = false;
+
+  final Map<BuyerAccountTab, GlobalKey> _tabKeys = <BuyerAccountTab, GlobalKey>{
+    for (final BuyerAccountTab tab in BuyerAccountTab.values) tab: GlobalKey(),
+  };
 
   @override
   void initState() {
@@ -644,6 +690,10 @@ class _AccountScreenState extends State<AccountScreen> {
     _recipientNameController = TextEditingController(text: _profile.name);
 
     _addressPhoneController = TextEditingController(text: _profile.phone);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureActiveTabVisible();
+    });
 
     if (_activeTab == BuyerAccountTab.addresses) {
       unawaited(_loadAddressRegions());
@@ -694,6 +744,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
     if (oldWidget.initialTab != widget.initialTab) {
       _activeTab = widget.initialTab;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _ensureActiveTabVisible();
+      });
       if (_activeTab == BuyerAccountTab.addresses) {
         unawaited(_loadAddressRegions());
       }
@@ -744,8 +797,8 @@ class _AccountScreenState extends State<AccountScreen> {
       _addressMapZoom = 16;
       unawaited(
         _addressMap!.setCamera(
-          mapbox.CameraOptions(
-            center: _toMapboxPoint(location),
+          maplibre.CameraOptions(
+            center: _toMapLibrePoint(location),
             zoom: _addressMapZoom,
           ),
         ),
@@ -754,25 +807,22 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   bool get _canShowAddressMap {
-    if (kIsWeb) {
-      return false;
-    }
-
     final bool supportedPlatform =
+        kIsWeb ||
         defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
-    return supportedPlatform && _mapboxAccessToken.isNotEmpty;
+    return supportedPlatform;
   }
 
-  Future<void> _onAddressMapCreated(mapbox.MapboxMap map) async {
+  Future<void> _onAddressMapCreated(maplibre.MapLibreSession map) async {
     _addressMap = map;
-    _addressMarkerManager =
-        await map.annotations.createCircleAnnotationManager();
+    _addressMarkerManager = await map.annotations
+        .createCircleAnnotationManager();
     await _syncAddressMarker();
   }
 
   Future<void> _syncAddressMarker() async {
-    final mapbox.CircleAnnotationManager? manager = _addressMarkerManager;
+    final maplibre.CircleAnnotationManager? manager = _addressMarkerManager;
     if (manager == null) {
       return;
     }
@@ -785,8 +835,8 @@ class _AccountScreenState extends State<AccountScreen> {
     }
 
     await manager.create(
-      mapbox.CircleAnnotationOptions(
-        geometry: _toMapboxPoint(location),
+      maplibre.CircleAnnotationOptions(
+        geometry: _toMapLibrePoint(location),
         circleColor: _maroon.toARGB32(),
         circleRadius: 11,
         circleStrokeColor: Colors.white.toARGB32(),
@@ -795,17 +845,17 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  void _onAddressMapTap(mapbox.MapContentGestureContext context) {
-    _setAddressLocation(_fromMapboxPoint(context.point));
+  void _onAddressMapTap(maplibre.MapContentGestureContext context) {
+    _setAddressLocation(_fromMapLibrePoint(context.point));
   }
 
-  mapbox.Point _toMapboxPoint(LatLng location) {
-    return mapbox.Point(
-      coordinates: mapbox.Position(location.longitude, location.latitude),
+  maplibre.Point _toMapLibrePoint(LatLng location) {
+    return maplibre.Point(
+      coordinates: maplibre.Position(location.longitude, location.latitude),
     );
   }
 
-  LatLng _fromMapboxPoint(mapbox.Point point) {
+  LatLng _fromMapLibrePoint(maplibre.Point point) {
     return LatLng(
       point.coordinates.lat.toDouble(),
       point.coordinates.lng.toDouble(),
@@ -879,12 +929,12 @@ class _AccountScreenState extends State<AccountScreen> {
 
   void _refreshAddressPinAfterLocationChange() {
     unawaited(_syncAddressMarker());
-    final mapbox.MapboxMap? map = _addressMap;
+    final maplibre.MapLibreSession? map = _addressMap;
     if (map != null) {
       unawaited(
         map.setCamera(
-          mapbox.CameraOptions(
-            center: _toMapboxPoint(_defaultAddressMapCenter),
+          maplibre.CameraOptions(
+            center: _toMapLibrePoint(_defaultAddressMapCenter),
             zoom: 14,
           ),
         ),
@@ -932,7 +982,8 @@ class _AccountScreenState extends State<AccountScreen> {
       final List<AddressOption> options = await loadProvinces(value.code);
       if (!mounted ||
           request != _addressOptionsRequest ||
-          _selectedRegion?.code != value.code) return;
+          _selectedRegion?.code != value.code)
+        return;
       setState(() => _addressProvinces = options);
     } catch (_) {
       if (mounted && request == _addressOptionsRequest) {
@@ -974,7 +1025,8 @@ class _AccountScreenState extends State<AccountScreen> {
       final List<AddressOption> options = await loadMunicipalities(value.code);
       if (!mounted ||
           request != _addressOptionsRequest ||
-          _selectedProvince?.code != value.code) return;
+          _selectedProvince?.code != value.code)
+        return;
       setState(() => _addressMunicipalities = options);
     } catch (_) {
       if (mounted && request == _addressOptionsRequest) {
@@ -1012,7 +1064,8 @@ class _AccountScreenState extends State<AccountScreen> {
       final List<AddressOption> options = await loadBarangays(value.code);
       if (!mounted ||
           request != _addressOptionsRequest ||
-          _selectedMunicipality?.code != value.code) return;
+          _selectedMunicipality?.code != value.code)
+        return;
       setState(() => _addressBarangays = options);
     } catch (_) {
       if (mounted && request == _addressOptionsRequest) {
@@ -1063,7 +1116,8 @@ class _AccountScreenState extends State<AccountScreen> {
       );
       if (!mounted ||
           lookupGeneration != _postalCodeLookupGeneration ||
-          _selectedBarangay?.code != value.code) return;
+          _selectedBarangay?.code != value.code)
+        return;
       final String normalizedPostalCode = postalCode?.trim() ?? '';
       setState(() {
         _postalCodeController.text = normalizedPostalCode;
@@ -1105,10 +1159,7 @@ class _AccountScreenState extends State<AccountScreen> {
             isExpanded: true,
             decoration: InputDecoration(
               hintText: loading ? 'Loading...' : hint,
-              hintStyle: const TextStyle(
-                color: ShopColors.faint,
-                fontSize: 14,
-              ),
+              hintStyle: const TextStyle(color: ShopColors.faint, fontSize: 14),
               isDense: true,
               filled: true,
               fillColor: ShopColors.canvas,
@@ -1147,10 +1198,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 .map(
                   (AddressOption option) => DropdownMenuItem<AddressOption>(
                     value: option,
-                    child: Text(
-                      option.name,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(option.name, overflow: TextOverflow.ellipsis),
                   ),
                 )
                 .toList(growable: false),
@@ -1235,6 +1283,7 @@ class _AccountScreenState extends State<AccountScreen> {
       ],
     );
   }
+
   Future<void> _findAddress() async {
     final String searchText = _addressSearchController.text.trim();
     final String query = <String>[
@@ -1256,36 +1305,21 @@ class _AccountScreenState extends State<AccountScreen> {
       return;
     }
 
-    const String mapboxToken = String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
-    if (mapboxToken.isEmpty) {
-      setState(() {
-        _addressLocationMessage =
-            'Enter an address or tap the map. Address search needs MAPBOX_ACCESS_TOKEN.';
-      });
-      return;
-    }
-
     setState(() {
       _findingAddress = true;
       _addressLocationMessage = null;
     });
 
     try {
-      final Response<dynamic> response = await _addressGeocoder.get(
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json',
-        queryParameters: <String, dynamic>{
-          'access_token': mapboxToken,
-          'country': 'ph',
-          'limit': 1,
-        },
+      final Response<dynamic> response = await ApiClient.get(
+        'maps/geocode',
+        queryParameters: <String, dynamic>{'text': query},
       );
       final dynamic features = response.data is Map
           ? (response.data as Map)['features']
           : null;
       final dynamic coordinates = features is List && features.isNotEmpty
-          ? (features.first is Map
-              ? (features.first as Map)['center']
-              : null)
+          ? (features.first is Map ? (features.first as Map)['center'] : null)
           : null;
 
       if (coordinates is! List || coordinates.length < 2) {
@@ -1381,11 +1415,31 @@ class _AccountScreenState extends State<AccountScreen> {
       _activeTab = tab;
     });
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureActiveTabVisible();
+    });
+
     if (tab == BuyerAccountTab.addresses) {
       unawaited(_loadAddressRegions());
     }
 
     widget.onTabChanged?.call(tab);
+  }
+
+  void _ensureActiveTabVisible() {
+    if (!mounted || !widget.showNavigationTabs) return;
+
+    final BuildContext? tabContext = _tabKeys[_activeTab]?.currentContext;
+    if (tabContext == null) return;
+
+    unawaited(
+      Scrollable.ensureVisible(
+        tabContext,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      ),
+    );
   }
 
   Future<void> _pickPhoto() async {
@@ -1461,7 +1515,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
     try {
       final BuyerProfileData previousProfile = _profile;
-      final UpdateBuyerProfileRequest request = UpdateBuyerProfileRequest(
+      UpdateBuyerProfileRequest request = UpdateBuyerProfileRequest(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -1469,6 +1523,29 @@ class _AccountScreenState extends State<AccountScreen> {
         gender: _gender,
         profilePhoto: _selectedPhoto,
       );
+      if (request.email.toLowerCase() != _profile.email.toLowerCase()) {
+        final RequestBuyerEmailChangeCallback? requestEmail =
+            widget.onRequestEmailChange;
+        if (requestEmail == null || widget.onVerifyEmailChange == null) {
+          throw Exception('Email verification is not available right now.');
+        }
+        await requestEmail(request.email);
+        final BuyerProfileData? verified = await _verifyEmailChange();
+        if (verified == null) return;
+        setState(() {
+          _profile = verified;
+          _emailController.text = verified.email;
+        });
+        widget.onProfileChanged?.call(verified);
+        request = UpdateBuyerProfileRequest(
+          name: request.name,
+          email: verified.email,
+          phone: request.phone,
+          birthday: request.birthday,
+          gender: request.gender,
+          profilePhoto: request.profilePhoto,
+        );
+      }
       late final BuyerProfileData updated;
 
       try {
@@ -1531,6 +1608,132 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
+  Future<BuyerProfileData?> _verifyEmailChange() async {
+    final VerifyBuyerEmailChangeCallback? verify = widget.onVerifyEmailChange;
+    if (verify == null) return null;
+    final TextEditingController codeController = TextEditingController();
+    bool submitting = false;
+    bool resending = false;
+    String? error;
+    String? notice;
+    try {
+      return await showDialog<BuyerProfileData>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) => StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            Future<void> submit() async {
+              if (submitting || codeController.text.trim().length != 6) {
+                setDialogState(() => error = 'Enter the six-digit code.');
+                return;
+              }
+              setDialogState(() {
+                submitting = true;
+                error = null;
+              });
+              try {
+                final BuyerProfileData result = await verify(
+                  codeController.text.trim(),
+                );
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop(result);
+                }
+              } catch (exception) {
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    submitting = false;
+                    error = _errorText(exception);
+                  });
+                }
+              }
+            }
+
+            Future<void> resend() async {
+              final ResendBuyerMobileChangeCodeCallback? callback =
+                  widget.onResendEmailChangeCode;
+              if (callback == null || resending) return;
+              setDialogState(() {
+                resending = true;
+                error = null;
+                notice = null;
+              });
+              try {
+                await callback();
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    resending = false;
+                    notice = 'A new code was sent to the new email address.';
+                  });
+                }
+              } catch (exception) {
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    resending = false;
+                    error = _errorText(exception);
+                  });
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Verify new email'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text(
+                    'Enter the six-digit code sent to your new email address.',
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: codeController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Verification code',
+                    ),
+                  ),
+                  if (notice != null)
+                    Text(notice!, style: const TextStyle(color: Colors.green)),
+                  if (error != null)
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: resending ? null : resend,
+                      child: Text(resending ? 'Sending…' : 'Resend code'),
+                    ),
+                  ),
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: submitting ? null : submit,
+                  child: submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Verify email'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      codeController.dispose();
+    }
+  }
+
   Future<BuyerProfileData?> _verifyMobileChange(
     UpdateBuyerProfileCallback callback,
     UpdateBuyerProfileRequest request,
@@ -1551,7 +1754,8 @@ class _AccountScreenState extends State<AccountScreen> {
           return StatefulBuilder(
             builder: (BuildContext context, StateSetter setDialogState) {
               Future<void> submitCode() async {
-                if (submitting || !(formKey.currentState?.validate() ?? false)) {
+                if (submitting ||
+                    !(formKey.currentState?.validate() ?? false)) {
                   return;
                 }
                 setDialogState(() {
@@ -1694,17 +1898,15 @@ class _AccountScreenState extends State<AccountScreen> {
                         const SizedBox(height: 8),
                         Text(
                           dialogNotice!,
-                          style: const TextStyle(
-                            color: _maroon,
-                            fontSize: 12,
-                          ),
+                          style: const TextStyle(color: _maroon, fontSize: 12),
                         ),
                       ],
                       Align(
                         alignment: Alignment.centerLeft,
                         child: TextButton(
                           onPressed:
-                              resending || widget.onResendMobileChangeCode == null
+                              resending ||
+                                  widget.onResendMobileChangeCode == null
                               ? null
                               : resendCode,
                           child: Text(
@@ -1907,9 +2109,12 @@ class _AccountScreenState extends State<AccountScreen> {
       return;
     }
 
-    final AddBuyerAddressCallback? callback = widget.onAddAddress;
+    final String? editingId = _editingAddressId;
+    final AddBuyerAddressCallback? addCallback = widget.onAddAddress;
+    final UpdateBuyerAddressCallback? updateCallback = widget.onUpdateAddress;
 
-    if (callback == null) {
+    if ((editingId == null && addCallback == null) ||
+        (editingId != null && updateCallback == null)) {
       _showMessage('Address saving will be connected to Laravel later.');
 
       return;
@@ -1920,28 +2125,29 @@ class _AccountScreenState extends State<AccountScreen> {
     });
 
     try {
-      final BuyerAddressData address = await callback(
-        CreateBuyerAddressRequest(
-          label: _addressLabelController.text.trim(),
-          recipientName: _recipientNameController.text.trim(),
-          contactNumber: _addressPhoneController.text.trim(),
-          houseNumber: _houseNumberController.text.trim(),
-          street: _streetController.text.trim(),
-          barangay: _selectedBarangay?.name ?? '',
-          municipality: _selectedMunicipality?.name ?? '',
-          province: _selectedProvince?.name ?? '',
-          region: _selectedRegion?.name ?? '',
-          regionCode: _selectedRegion?.code,
-          provinceCode: _selectedProvince?.code,
-          municipalityCode: _selectedMunicipality?.code,
-          barangayCode: _selectedBarangay?.code,
-          postalCode: _postalCodeController.text.trim(),
-          landmark: _landmarkController.text.trim(),
-           latitude: _selectedAddressLocation?.latitude,
-           longitude: _selectedAddressLocation?.longitude,
-          isDefault: _newAddressIsDefault,
-        ),
+      final CreateBuyerAddressRequest request = CreateBuyerAddressRequest(
+        label: _addressLabelController.text.trim(),
+        recipientName: _recipientNameController.text.trim(),
+        contactNumber: _addressPhoneController.text.trim(),
+        houseNumber: _houseNumberController.text.trim(),
+        street: _streetController.text.trim(),
+        barangay: _selectedBarangay?.name ?? '',
+        municipality: _selectedMunicipality?.name ?? '',
+        province: _selectedProvince?.name ?? '',
+        region: _selectedRegion?.name ?? '',
+        regionCode: _selectedRegion?.code,
+        provinceCode: _selectedProvince?.code,
+        municipalityCode: _selectedMunicipality?.code,
+        barangayCode: _selectedBarangay?.code,
+        postalCode: _postalCodeController.text.trim(),
+        landmark: _landmarkController.text.trim(),
+        latitude: _selectedAddressLocation?.latitude,
+        longitude: _selectedAddressLocation?.longitude,
+        isDefault: _newAddressIsDefault,
       );
+      final BuyerAddressData address = editingId == null
+          ? await addCallback!(request)
+          : await updateCallback!(editingId, request);
 
       if (!mounted) {
         return;
@@ -1957,14 +2163,23 @@ class _AccountScreenState extends State<AccountScreen> {
               .toList();
         }
 
-        _addresses.add(address);
+        if (editingId == null) {
+          _addresses.add(address);
+        } else {
+          final int index = _addresses.indexWhere(
+            (BuyerAddressData current) => current.id == editingId,
+          );
+          if (index >= 0) _addresses[index] = address;
+        }
 
         _resetAddressForm();
       });
 
       _notifyAddressesChanged();
 
-      _showMessage('Delivery address saved.');
+      _showMessage(
+        editingId == null ? 'Delivery address saved.' : 'Address updated.',
+      );
     } catch (error) {
       _showMessage(_errorText(error), error: true);
     } finally {
@@ -1976,7 +2191,126 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
+  AddressOption? _matchAddressOption(
+    Iterable<AddressOption> options,
+    String? code,
+    String? name,
+  ) {
+    for (final AddressOption option in options) {
+      if (code != null && code.trim().isNotEmpty && option.code == code) {
+        return option;
+      }
+    }
+    final String target = (name ?? '').trim().toLowerCase();
+    if (target.isEmpty) return null;
+    for (final AddressOption option in options) {
+      if (option.name.trim().toLowerCase() == target) return option;
+    }
+    return null;
+  }
+
+  Future<void> _editAddress(BuyerAddressData address) async {
+    if (_addingAddress) return;
+    _resetAddressForm();
+    setState(() {
+      _editingAddressId = address.id;
+      _addressLabelController.text = address.label;
+      _recipientNameController.text = address.recipientName;
+      _addressPhoneController.text = address.contactNumber;
+      _houseNumberController.text = address.houseNumber ?? '';
+      _streetController.text = address.street ?? '';
+      _landmarkController.text = address.landmark ?? '';
+      _postalCodeController.text = address.postalCode ?? '';
+      _newAddressIsDefault = address.isDefault;
+      _selectedAddressLocation =
+          address.latitude != null && address.longitude != null
+          ? LatLng(address.latitude!, address.longitude!)
+          : null;
+      if (_selectedAddressLocation != null) {
+        _addressMapCenter = _selectedAddressLocation!;
+      }
+      _addressSearchController.text = address.displayAddress;
+    });
+    await _loadAddressRegions();
+    final AddressOption? region = _matchAddressOption(
+      _addressRegions,
+      address.regionCode,
+      address.region,
+    );
+    if (region == null) {
+      if (mounted)
+        _showMessage(
+          'Could not load the address region for editing.',
+          error: true,
+        );
+      return;
+    }
+    await _onAddressRegionChanged(region);
+    final AddressOption? province = _matchAddressOption(
+      _addressProvinces,
+      address.provinceCode,
+      address.province,
+    );
+    if (province == null) {
+      if (mounted)
+        _showMessage(
+          'Could not load the address province for editing.',
+          error: true,
+        );
+      return;
+    }
+    await _onAddressProvinceChanged(province);
+    final AddressOption? municipality = _matchAddressOption(
+      _addressMunicipalities,
+      address.municipalityCode,
+      address.municipality,
+    );
+    if (municipality == null) {
+      if (mounted)
+        _showMessage(
+          'Could not load the address municipality for editing.',
+          error: true,
+        );
+      return;
+    }
+    await _onAddressMunicipalityChanged(municipality);
+    final AddressOption? barangay = _matchAddressOption(
+      _addressBarangays,
+      address.barangayCode,
+      address.barangay,
+    );
+    if (barangay == null) {
+      if (mounted)
+        _showMessage(
+          'Could not load the address barangay for editing.',
+          error: true,
+        );
+      return;
+    }
+    await _onAddressBarangayChanged(barangay);
+    if (!mounted) return;
+    setState(() {
+      _postalCodeController.text = address.postalCode ?? '';
+      _selectedAddressLocation =
+          address.latitude != null && address.longitude != null
+          ? LatLng(address.latitude!, address.longitude!)
+          : null;
+      if (_selectedAddressLocation != null) {
+        _addressMapCenter = _selectedAddressLocation!;
+      }
+    });
+    unawaited(_syncAddressMarker());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Scrollable.ensureVisible(
+        _addressFormKey.currentContext ?? context,
+        duration: const Duration(milliseconds: 250),
+      );
+    });
+  }
+
   void _resetAddressForm() {
+    _editingAddressId = null;
     _addressLabelController.text = 'Home';
 
     _recipientNameController.text = _profile.name;
@@ -2015,12 +2349,12 @@ class _AccountScreenState extends State<AccountScreen> {
     _addressLocationMessage = null;
 
     unawaited(_syncAddressMarker());
-    final mapbox.MapboxMap? map = _addressMap;
+    final maplibre.MapLibreSession? map = _addressMap;
     if (map != null) {
       unawaited(
         map.setCamera(
-          mapbox.CameraOptions(
-            center: _toMapboxPoint(_defaultAddressMapCenter),
+          maplibre.CameraOptions(
+            center: _toMapLibrePoint(_defaultAddressMapCenter),
             zoom: _addressMapZoom,
           ),
         ),
@@ -2119,8 +2453,7 @@ class _AccountScreenState extends State<AccountScreen> {
     if (address.isDefault || _defaultingAddressIds.contains(address.id)) {
       return;
     }
-    final SetDefaultBuyerAddressCallback? callback =
-        widget.onSetDefaultAddress;
+    final SetDefaultBuyerAddressCallback? callback = widget.onSetDefaultAddress;
     if (callback == null) {
       _showMessage('Setting the default address is not connected.');
       return;
@@ -2291,10 +2624,6 @@ class _AccountScreenState extends State<AccountScreen> {
                     const SizedBox(height: 14),
 
                     if (widget.showNavigationTabs) ...[
-                      _buildSampleMessages(),
-
-                      const SizedBox(height: 14),
-
                       _buildTabs(),
 
                       const SizedBox(height: 13),
@@ -2398,12 +2727,22 @@ class _AccountScreenState extends State<AccountScreen> {
     ];
 
     if (widget.showNavigationTabs) {
-      if (actions.isEmpty) return const SizedBox.shrink();
+      if (actions.isEmpty && !widget.showBackButton) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: actions,
+          children: [
+            if (widget.showBackButton)
+              IconButton(
+                tooltip: 'Back',
+                onPressed: handleBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+            const Spacer(),
+            ...actions,
+          ],
         ),
       );
     }
@@ -2513,205 +2852,109 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  Widget _buildSampleMessages() {
-    const List<_AccountSampleMessage> messages = <_AccountSampleMessage>[
-      _AccountSampleMessage(
-        icon: Icons.person_outline_rounded,
-        title: 'Profile tip',
-        message:
-            'Keep your name, email, and contact number updated so checkout details stay accurate.',
-      ),
-      _AccountSampleMessage(
-        icon: Icons.location_on_outlined,
-        title: 'Delivery tip',
-        message:
-            'Add a complete delivery address before placing an order for a smoother checkout.',
-      ),
-      _AccountSampleMessage(
-        icon: Icons.lock_outline_rounded,
-        title: 'Security tip',
-        message:
-            'Use at least 8 characters for your password and keep it private.',
-      ),
-    ];
+  Widget _buildTabs() {
+    final List<BuyerAccountTab> tabs = BuyerAccountTab.values;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'HELPFUL MESSAGES',
-            style: TextStyle(
-              color: _maroon,
-              fontSize: 11.5,
-              letterSpacing: 1.35,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Quick account reminders',
-            style: TextStyle(
-              color: _text,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...List<Widget>.generate(messages.length, (int index) {
-            final _AccountSampleMessage item = messages[index];
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        const double spacing = 8;
+        final double tabWidth = constraints.maxWidth >= 760
+            ? (constraints.maxWidth - spacing * (tabs.length - 1)) / tabs.length
+            : 152;
 
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: index == messages.length - 1 ? 0 : 10,
-              ),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _soft,
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: _border),
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              for (int index = 0; index < tabs.length; index++) ...[
+                if (index > 0) const SizedBox(width: spacing),
+                SizedBox(
+                  width: tabWidth,
+                  height: 62,
+                  child: _buildTab(tabs[index], compact: true),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: ShopColors.accentSoft,
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: Icon(item.icon, color: _maroon, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.title,
-                            style: const TextStyle(
-                              color: _text,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            item.message,
-                            style: const TextStyle(
-                              color: _muted,
-                              fontSize: 12.5,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildTabs() {
-    return SizedBox(
-      height: 58,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: BuyerAccountTab.values.length,
-        separatorBuilder: (BuildContext context, int index) {
-          return const SizedBox(width: 7);
+  Widget _buildTab(BuyerAccountTab tab, {bool compact = false}) {
+    final bool selected = tab == _activeTab;
+
+    return Material(
+      key: _tabKeys[tab],
+      color: selected ? ShopColors.accentSoft : _surface,
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        onTap: () {
+          if (selected) return;
+
+          if (tab == BuyerAccountTab.vouchers && widget.onVouchers != null) {
+            widget.onVouchers!();
+            return;
+          }
+          if (tab == BuyerAccountTab.settings &&
+              widget.onSystemSettings != null) {
+            widget.onSystemSettings!();
+            return;
+          }
+          if (widget.onTabChanged != null) {
+            widget.onTabChanged!(tab);
+            return;
+          }
+          _changeTab(tab);
         },
-        itemBuilder: (BuildContext context, int index) {
-          final BuyerAccountTab tab = BuyerAccountTab.values[index];
-
-          final bool selected = tab == _activeTab;
-
-          return Material(
-            color: selected ? ShopColors.accentSoft : _surface,
+        borderRadius: BorderRadius.circular(13),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 11),
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(13),
-            child: InkWell(
-              onTap: () {
-                if (tab == BuyerAccountTab.vouchers &&
-                    widget.onVouchers != null) {
-                  widget.onVouchers!();
-                  return;
-                }
-                if (tab == BuyerAccountTab.settings &&
-                    widget.onSystemSettings != null) {
-                  widget.onSystemSettings!();
-                  return;
-                }
-                if (widget.onTabChanged != null) {
-                  widget.onTabChanged!(tab);
-                  return;
-                }
-                _changeTab(tab);
-              },
-              borderRadius: BorderRadius.circular(13),
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 130),
-                padding: const EdgeInsets.symmetric(horizontal: 13),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: selected ? _tan : _border),
-                ),
-                child: Row(
+            border: Border.all(color: selected ? _tan : _border),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                tab.icon,
+                color: selected ? _maroon : _muted,
+                size: compact ? 16 : 18,
+              ),
+              SizedBox(width: compact ? 5 : 8),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      tab.icon,
-                      color: selected ? _maroon : _muted,
-                      size: 18,
+                    Text(
+                      tab.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected ? _maroon : _text,
+                        fontSize: compact ? 11.5 : 13,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-
-                    const SizedBox(width: 8),
-
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tab.label,
-                          style: TextStyle(
-                            color: selected ? _maroon : _text,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-
-                        const SizedBox(height: 2),
-
-                        Text(
-                          tab.description,
-                          style: const TextStyle(
-                            color: _muted2,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 2),
+                    Text(
+                      tab.description,
+                      maxLines: compact ? 2 : 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _muted2,
+                        fontSize: compact ? 9.5 : 11.5,
+                        height: compact ? 1.1 : null,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-          );
-        },
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2896,6 +3139,15 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
                 ],
               ),
+            ),
+
+            const SizedBox(height: 14),
+
+            const _AccountTip(
+              icon: Icons.person_outline_rounded,
+              title: 'Profile tip',
+              message:
+                  'Keep your name, email, and contact number updated so checkout details stay accurate.',
             ),
 
             const SizedBox(height: 18),
@@ -3086,10 +3338,139 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
               ),
             ),
+            if (widget.onReviewHistory != null) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: widget.onReviewHistory,
+                icon: const Icon(Icons.rate_review_outlined),
+                label: const Text('My review history'),
+              ),
+            ],
+            if (widget.onDeleteAccount != null) ...[
+              const SizedBox(height: 22),
+              const Divider(),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _savingProfile ? null : _deleteAccount,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFB42318),
+                  ),
+                  icon: const Icon(Icons.person_off_outlined),
+                  label: const Text('Close buyer account'),
+                ),
+              ),
+              const Text(
+                'Active orders must be completed or cancelled before the account can be closed.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _deleteAccount() async {
+    final DeleteBuyerAccountCallback? callback = widget.onDeleteAccount;
+    if (callback == null) return;
+    final TextEditingController passwordController = TextEditingController();
+    final TextEditingController confirmationController =
+        TextEditingController();
+    String? error;
+    bool submitting = false;
+    try {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) => StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            Future<void> submit() async {
+              if (submitting) return;
+              if (confirmationController.text.trim() != 'DELETE') {
+                setDialogState(() => error = 'Type DELETE to confirm.');
+                return;
+              }
+              setDialogState(() {
+                submitting = true;
+                error = null;
+              });
+              try {
+                await callback(
+                  passwordController.text,
+                  confirmationController.text.trim(),
+                );
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop(true);
+                }
+              } catch (exception) {
+                if (dialogContext.mounted) {
+                  setDialogState(() {
+                    submitting = false;
+                    error = _errorText(exception);
+                  });
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Close buyer account?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Text(
+                    'This deactivates your account. Enter your password and type DELETE to continue.',
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Current password',
+                    ),
+                  ),
+                  TextField(
+                    controller: confirmationController,
+                    decoration: const InputDecoration(labelText: 'Type DELETE'),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                  ],
+                ],
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: submitting ? null : submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFB42318),
+                  ),
+                  child: submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Close account'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (confirmed == true && mounted && widget.onLogout != null) {
+        await widget.onLogout!();
+      }
+    } finally {
+      passwordController.dispose();
+      confirmationController.dispose();
+    }
   }
 
   Widget _buildAddressesSection() {
@@ -3101,6 +3482,15 @@ class _AccountScreenState extends State<AccountScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const _AccountTip(
+            icon: Icons.location_on_outlined,
+            title: 'Delivery tip',
+            message:
+                'Add a complete delivery address before placing an order for a smoother checkout.',
+          ),
+
+          const SizedBox(height: 12),
+
           if (_addresses.isEmpty)
             Container(
               padding: const EdgeInsets.all(18),
@@ -3131,6 +3521,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   deleting: _deletingAddressIds.contains(address.id),
                   settingDefault: _defaultingAddressIds.contains(address.id),
                   onSetDefault: () => _setDefaultAddress(address),
+                  onEdit: () => _editAddress(address),
                   onDelete: () {
                     _deleteAddress(address);
                   },
@@ -3151,8 +3542,10 @@ class _AccountScreenState extends State<AccountScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    'Add delivery address',
+                  Text(
+                    _editingAddressId == null
+                        ? 'Add delivery address'
+                        : 'Edit delivery address',
                     style: TextStyle(
                       color: ShopColors.text,
                       fontSize: 21,
@@ -3221,7 +3614,8 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
 
                   _AddressInput(
-                    label: 'Building / Subdivision, Landmark / Additional Details',
+                    label:
+                        'Building / Subdivision, Landmark / Additional Details',
                     controller: _landmarkController,
                     hint: 'Building, subdivision, or nearby landmark',
                     prefixIcon: Icons.flag_outlined,
@@ -3300,8 +3694,10 @@ class _AccountScreenState extends State<AccountScreen> {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text(
-                              'Save Address',
+                          : Text(
+                              _editingAddressId == null
+                                  ? 'Save Address'
+                                  : 'Update Address',
                               style: TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w800,
@@ -3309,6 +3705,15 @@ class _AccountScreenState extends State<AccountScreen> {
                             ),
                     ),
                   ),
+                  if (_editingAddressId != null) ...[
+                    const SizedBox(height: 4),
+                    TextButton(
+                      onPressed: _addingAddress
+                          ? null
+                          : () => setState(_resetAddressForm),
+                      child: const Text('Cancel editing'),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -3422,9 +3827,9 @@ class _AccountScreenState extends State<AccountScreen> {
           SizedBox(
             height: 230,
             child: _canShowAddressMap
-                ? mapbox.MapWidget(
-                    viewport: mapbox.CameraViewportState(
-                      center: _toMapboxPoint(_addressMapCenter),
+                ? maplibre.MapLibreMapWidget(
+                    viewport: maplibre.MapLibreViewport(
+                      center: _toMapLibrePoint(_addressMapCenter),
                       zoom: _addressMapZoom,
                     ),
                     onMapCreated: _onAddressMapCreated,
@@ -3436,8 +3841,8 @@ class _AccountScreenState extends State<AccountScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Text(
                       kIsWeb
-                          ? 'Mapbox Maps SDK is available on Android and iOS.'
-                          : 'Add MAPBOX_ACCESS_TOKEN to your Flutter run configuration to load the map.',
+                          ? 'The interactive address map is available on Android, iOS, and web.'
+                          : 'Interactive address maps are unavailable on this device.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: _muted,
@@ -3454,7 +3859,11 @@ class _AccountScreenState extends State<AccountScreen> {
               selectedLocation == null
                   ? 'Tap the map, search your barangay, or use device location to pin the delivery point.'
                   : 'Pinned for rider: ${selectedLocation.latitude.toStringAsFixed(6)}, ${selectedLocation.longitude.toStringAsFixed(6)}',
-              style: const TextStyle(color: _muted, fontSize: 11.5, height: 1.4),
+              style: const TextStyle(
+                color: _muted,
+                fontSize: 11.5,
+                height: 1.4,
+              ),
             ),
           ),
           if (_addressLocationMessage != null)
@@ -3597,32 +4006,11 @@ class _AccountScreenState extends State<AccountScreen> {
 
             const SizedBox(height: 17),
 
-            Container(
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: _soft,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _border),
-              ),
-              child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.shield_outlined, color: _maroon, size: 18),
-
-                  SizedBox(width: 8),
-
-                  Expanded(
-                    child: Text(
-                      'Use 8–72 characters with uppercase and lowercase letters, a number, and a symbol. It must differ from your current password and match the confirmation.',
-                      style: TextStyle(
-                        color: _brown,
-                        fontSize: 12.5,
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            const _AccountTip(
+              icon: Icons.shield_outlined,
+              title: 'Security tip',
+              message:
+                  'Use 8–72 characters with uppercase and lowercase letters, a number, and a symbol. Choose a password different from your current one, confirm it below, and keep it private.',
             ),
 
             const SizedBox(height: 18),
@@ -3741,16 +4129,60 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 }
 
-class _AccountSampleMessage {
+class _AccountTip extends StatelessWidget {
   final IconData icon;
   final String title;
   final String message;
 
-  const _AccountSampleMessage({
+  const _AccountTip({
     required this.icon,
     required this.title,
     required this.message,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: ShopColors.soft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ShopColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: ShopColors.accent, size: 19),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: ShopColors.secondaryText,
+                    fontSize: 12.5,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AccountStatusBadge extends StatelessWidget {
@@ -3923,34 +4355,23 @@ class _ProfileAvatar extends StatelessWidget {
                   },
             )
           : remote != null && remote.isNotEmpty
-          ? Image.network(
-              remote,
+          ? SizedNetworkImage(
+              url: remote,
               fit: BoxFit.cover,
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
                     return _AvatarInitial(value: profile.initial);
                   },
-              loadingBuilder:
-                  (
-                    BuildContext context,
-                    Widget child,
-                    ImageChunkEvent? progress,
-                  ) {
-                    if (progress == null) {
-                      return child;
-                    }
-
-                    return const Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: ShopColors.accent,
-                        ),
-                      ),
-                    );
-                  },
+              placeholder: const Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: ShopColors.accent,
+                  ),
+                ),
+              ),
             )
           : _AvatarInitial(value: profile.initial),
     );
@@ -3985,6 +4406,7 @@ class _AddressCard extends StatelessWidget {
   final bool deleting;
   final bool settingDefault;
   final VoidCallback onSetDefault;
+  final VoidCallback onEdit;
 
   final VoidCallback onDelete;
 
@@ -3993,6 +4415,7 @@ class _AddressCard extends StatelessWidget {
     required this.deleting,
     required this.settingDefault,
     required this.onSetDefault,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -4001,9 +4424,7 @@ class _AddressCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: address.isDefault
-            ? const Color(0xFFFFF4F0)
-            : ShopColors.surface,
+        color: address.isDefault ? const Color(0xFFFFF4F0) : ShopColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: address.isDefault
@@ -4116,6 +4537,11 @@ class _AddressCard extends StatelessWidget {
 
           Column(
             children: [
+              IconButton(
+                tooltip: 'Edit address',
+                onPressed: deleting || settingDefault ? null : onEdit,
+                icon: const Icon(Icons.edit_outlined, size: 19),
+              ),
               if (!address.isDefault)
                 TextButton(
                   onPressed: settingDefault ? null : onSetDefault,
@@ -4362,34 +4788,4 @@ class _MessageBanner extends StatelessWidget {
       ),
     );
   }
-}
-
-InputDecoration _accountInputDecoration({required String hintText}) {
-  return InputDecoration(
-    hintText: hintText,
-    hintStyle: const TextStyle(color: ShopColors.faint, fontSize: 13.5),
-    filled: true,
-    fillColor: ShopColors.surface,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: ShopColors.border),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: ShopColors.border),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: ShopColors.accent, width: 1.3),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFB42318)),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFB42318), width: 1.3),
-    ),
-  );
 }

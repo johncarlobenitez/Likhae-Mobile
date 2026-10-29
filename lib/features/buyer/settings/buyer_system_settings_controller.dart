@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../services/buyer_mobile_service.dart';
 
 class BuyerSystemSettingsController extends ChangeNotifier {
   BuyerSystemSettingsController._();
@@ -22,6 +24,7 @@ class BuyerSystemSettingsController extends ChangeNotifier {
   bool deliveryUpdates = true;
   bool chatNotifications = true;
   bool promotionUpdates = true;
+  bool showOnlineStatus = true;
   bool showAiAssistant = true;
   bool aiResponseSound = false;
   bool notificationSounds = true;
@@ -35,6 +38,59 @@ class BuyerSystemSettingsController extends ChangeNotifier {
   ThemeMode get themeMode => ThemeController.instance.value;
 
   Future<void> load() => _loadFuture ??= _load();
+
+  Future<bool> refreshServerSettings() async {
+    if (!AppConfig.apiEnabled) return false;
+    try {
+      final Map<String, dynamic> remote =
+          await BuyerMobileService.fetchBuyerSettings();
+      orderUpdates = _readApiBool(remote, 'order_updates', orderUpdates);
+      deliveryUpdates = _readApiBool(
+        remote,
+        'delivery_updates',
+        deliveryUpdates,
+      );
+      chatNotifications = _readApiBool(
+        remote,
+        'chat_updates',
+        chatNotifications,
+      );
+      promotionUpdates = _readApiBool(
+        remote,
+        'promotion_updates',
+        promotionUpdates,
+      );
+      showOnlineStatus = _readApiBool(
+        remote,
+        'show_online_status',
+        showOnlineStatus,
+      );
+      showAiAssistant = _readApiBool(
+        remote,
+        'ai_assistant_enabled',
+        showAiAssistant,
+      );
+      aiResponseSound = _readApiBool(
+        remote,
+        'ai_response_sound',
+        aiResponseSound,
+      );
+      notificationSounds = _readApiBool(
+        remote,
+        'notification_sounds',
+        notificationSounds,
+      );
+      final String theme = (remote['theme'] ?? '').toString();
+      for (final ThemeMode mode in ThemeMode.values) {
+        if (mode.name == theme) ThemeController.instance.value = mode;
+      }
+      await _enqueueWrite(_encode());
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<void> _load() async {
     try {
@@ -105,6 +161,54 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     } catch (_) {
       // Keep the usable defaults if secure storage is temporarily unavailable.
     }
+    if (AppConfig.apiEnabled) {
+      try {
+        final Map<String, dynamic> remote =
+            await BuyerMobileService.fetchBuyerSettings();
+        orderUpdates = _readApiBool(remote, 'order_updates', orderUpdates);
+        deliveryUpdates = _readApiBool(
+          remote,
+          'delivery_updates',
+          deliveryUpdates,
+        );
+        chatNotifications = _readApiBool(
+          remote,
+          'chat_updates',
+          chatNotifications,
+        );
+        promotionUpdates = _readApiBool(
+          remote,
+          'promotion_updates',
+          promotionUpdates,
+        );
+        showOnlineStatus = _readApiBool(
+          remote,
+          'show_online_status',
+          showOnlineStatus,
+        );
+        showAiAssistant = _readApiBool(
+          remote,
+          'ai_assistant_enabled',
+          showAiAssistant,
+        );
+        aiResponseSound = _readApiBool(
+          remote,
+          'ai_response_sound',
+          aiResponseSound,
+        );
+        notificationSounds = _readApiBool(
+          remote,
+          'notification_sounds',
+          notificationSounds,
+        );
+        final String theme = (remote['theme'] ?? '').toString();
+        for (final ThemeMode mode in ThemeMode.values) {
+          if (mode.name == theme) ThemeController.instance.value = mode;
+        }
+      } catch (_) {
+        // Keep device settings available if the account settings endpoint is offline.
+      }
+    }
     notifyListeners();
   }
 
@@ -119,6 +223,7 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     bool? deliveryUpdates,
     bool? chatNotifications,
     bool? promotionUpdates,
+    bool? showOnlineStatus,
     bool? showAiAssistant,
     bool? aiResponseSound,
     bool? notificationSounds,
@@ -133,6 +238,7 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     this.deliveryUpdates = deliveryUpdates ?? this.deliveryUpdates;
     this.chatNotifications = chatNotifications ?? this.chatNotifications;
     this.promotionUpdates = promotionUpdates ?? this.promotionUpdates;
+    this.showOnlineStatus = showOnlineStatus ?? this.showOnlineStatus;
     this.showAiAssistant = showAiAssistant ?? this.showAiAssistant;
     this.aiResponseSound = aiResponseSound ?? this.aiResponseSound;
     this.notificationSounds = notificationSounds ?? this.notificationSounds;
@@ -149,7 +255,27 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> save() => _enqueueWrite(_encode());
+  Future<bool> save({bool syncServer = true}) async {
+    await _enqueueWrite(_encode());
+    if (!syncServer || !AppConfig.apiEnabled) return true;
+    try {
+      await BuyerMobileService.saveBuyerSettings(<String, dynamic>{
+        'order_updates': orderUpdates,
+        'delivery_updates': deliveryUpdates,
+        'chat_updates': chatNotifications,
+        'promotion_updates': promotionUpdates,
+        'show_online_status': showOnlineStatus,
+        'ai_assistant_enabled': showAiAssistant,
+        'ai_response_sound': aiResponseSound,
+        'notification_sounds': notificationSounds,
+        'theme': themeMode.name,
+        'language': 'en',
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   bool allowsNotification({required String category}) {
     switch (category) {
@@ -189,6 +315,13 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     return value is bool ? value : fallback;
   }
 
+  bool _readApiBool(Map<String, dynamic> settings, String key, bool fallback) {
+    final dynamic value = settings[key];
+    if (value is bool) return value;
+    if (value == null) return fallback;
+    return value.toString() == '1' || value.toString().toLowerCase() == 'true';
+  }
+
   void _persist() {
     unawaited(_enqueueWrite(_encode()).catchError((Object _) {}));
   }
@@ -207,6 +340,7 @@ class BuyerSystemSettingsController extends ChangeNotifier {
       'deliveryUpdates': deliveryUpdates,
       'chatNotifications': chatNotifications,
       'promotionUpdates': promotionUpdates,
+      'showOnlineStatus': showOnlineStatus,
       'showAiAssistant': showAiAssistant,
       'aiResponseSound': aiResponseSound,
       'notificationSounds': notificationSounds,

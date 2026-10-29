@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/features/buyer/products/products_screen.dart';
@@ -149,10 +150,119 @@ class BuyerOrderProductData {
   }
 }
 
+class BuyerSellerOrderData {
+  final String id;
+  final String orderNumber;
+  final String status;
+  final String sellerName;
+  final int? sellerId;
+  final String? sellerSlug;
+  final String? sellerAvatarUrl;
+  final List<BuyerOrderProductData> products;
+  final List<BuyerOrderParcelData> parcels;
+
+  const BuyerSellerOrderData({
+    required this.id,
+    required this.orderNumber,
+    required this.status,
+    required this.sellerName,
+    required this.products,
+    this.parcels = const <BuyerOrderParcelData>[],
+    this.sellerId,
+    this.sellerSlug,
+    this.sellerAvatarUrl,
+  });
+
+  factory BuyerSellerOrderData.fromApi(Map<String, dynamic> json) {
+    final dynamic rawSeller = json['seller'];
+    final Map<String, dynamic> seller = rawSeller is Map
+        ? Map<String, dynamic>.from(rawSeller)
+        : const <String, dynamic>{};
+    final dynamic rawProducts = json['products'] ?? json['items'];
+    final List<BuyerOrderProductData> products = rawProducts is List
+        ? rawProducts
+              .whereType<Map>()
+              .map((Map item) {
+                final Map<String, dynamic> product = Map<String, dynamic>.from(
+                  item,
+                );
+                final String rawImage = (product['image_url'] ?? '')
+                    .toString()
+                    .trim();
+                final String imageUrl = rawImage.isEmpty
+                    ? ''
+                    : AppConfig.resolveMediaUrl(rawImage);
+                return BuyerOrderProductData(
+                  id: (product['id'] ?? product['product_id'] ?? '').toString(),
+                  productId: int.tryParse(
+                    (product['product_id'] ?? '').toString(),
+                  ),
+                  name: (product['name'] ?? 'Product').toString(),
+                  variant: _formatOrderVariant(product['variant']),
+                  imageUrl: imageUrl.isEmpty ? null : imageUrl,
+                  imageUrls: imageUrl.isEmpty
+                      ? const <String>[]
+                      : <String>[imageUrl],
+                  price:
+                      double.tryParse(
+                        (product['unit_price'] ?? product['price'] ?? 0)
+                            .toString(),
+                      ) ??
+                      0,
+                  quantity:
+                      int.tryParse((product['quantity'] ?? 1).toString()) ?? 1,
+                );
+              })
+              .toList(growable: false)
+        : const <BuyerOrderProductData>[];
+    final dynamic rawParcels =
+        json['shipments'] ?? json['parcels'] ?? json['shipment'];
+    final Iterable<dynamic> parcelRows = rawParcels is List
+        ? rawParcels
+        : rawParcels is Map
+        ? <dynamic>[rawParcels]
+        : const <dynamic>[];
+    final List<BuyerOrderParcelData> parcels = parcelRows
+        .whereType<Map>()
+        .map(
+          (Map item) =>
+              BuyerOrderParcelData.fromApi(Map<String, dynamic>.from(item)),
+        )
+        .toList(growable: false);
+    final String rawAvatar = (seller['avatar_url'] ?? '').toString().trim();
+
+    return BuyerSellerOrderData(
+      id: (json['id'] ?? json['seller_order_id'] ?? '').toString(),
+      orderNumber: (json['seller_order_number'] ?? json['order_number'] ?? '')
+          .toString(),
+      status: (json['status_label'] ?? json['status'] ?? '').toString(),
+      sellerName: (seller['name'] ?? seller['business_name'] ?? 'Seller')
+          .toString(),
+      sellerId: int.tryParse(
+        (json['seller_user_id'] ??
+                json['seller_id'] ??
+                seller['seller_user_id'] ??
+                seller['user_id'] ??
+                seller['id'] ??
+                '')
+            .toString(),
+      ),
+      sellerSlug: (seller['slug'] ?? '').toString(),
+      sellerAvatarUrl: rawAvatar.isEmpty
+          ? null
+          : AppConfig.resolveMediaUrl(rawAvatar),
+      products: products,
+      parcels: parcels,
+    );
+  }
+}
+
 class BuyerOrderTimelineEvent {
   final String label;
 
   final String time;
+
+  final DateTime? occurredAt;
 
   final bool done;
 
@@ -164,7 +274,27 @@ class BuyerOrderTimelineEvent {
     required this.time,
     required this.done,
     this.details = '',
+    this.occurredAt,
   });
+}
+
+String _formatBuyerReturnDate(DateTime date) {
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final DateTime local = date.toLocal();
+  return '${months[local.month - 1]} ${local.day}, ${local.year}';
 }
 
 List<String> parseBuyerDeliveryProofUrls(
@@ -289,17 +419,271 @@ class BuyerOrderLocation {
 
   final String label;
 
+  final String? id;
+
+  final List<String> transferLegIds;
+
+  final int? sequenceNo;
+
+  final String? centerRole;
+
+  final String? progressStatus;
+
   const BuyerOrderLocation({
     required this.latitude,
     required this.longitude,
     required this.label,
+    this.id,
+    this.transferLegIds = const <String>[],
+    this.sequenceNo,
+    this.centerRole,
+    this.progressStatus,
   });
+
+  BuyerOrderLocation copyWith({
+    String? id,
+    List<String>? transferLegIds,
+    int? sequenceNo,
+    String? centerRole,
+    String? progressStatus,
+  }) => BuyerOrderLocation(
+    latitude: latitude,
+    longitude: longitude,
+    label: label,
+    id: id ?? this.id,
+    transferLegIds: transferLegIds ?? this.transferLegIds,
+    sequenceNo: sequenceNo ?? this.sequenceNo,
+    centerRole: centerRole ?? this.centerRole,
+    progressStatus: progressStatus ?? this.progressStatus,
+  );
 }
 
-BuyerOrderLocation? parseBuyerOrderLogisticsStop(
-  Map<String, dynamic> row,
-) {
-  final dynamic rawFacility = row['logistics_center'] ??
+class BuyerRiderInfo {
+  final String? name;
+  final String? photoUrl;
+  final String? vehicleType;
+  final String? plateNumber;
+
+  const BuyerRiderInfo({
+    this.name,
+    this.photoUrl,
+    this.vehicleType,
+    this.plateNumber,
+  });
+
+  bool get hasVisibleInfo =>
+      (name?.isNotEmpty ?? false) ||
+      (photoUrl?.isNotEmpty ?? false) ||
+      (vehicleType?.isNotEmpty ?? false) ||
+      (plateNumber?.isNotEmpty ?? false);
+
+  factory BuyerRiderInfo.fromApi(Map<String, dynamic> json) {
+    final dynamic rawProfile = json['rider_profile'] ?? json['profile'];
+    final Map<String, dynamic> profile = rawProfile is Map
+        ? Map<String, dynamic>.from(rawProfile)
+        : const <String, dynamic>{};
+    final dynamic rawUser = json['user'] ?? profile['user'];
+    final Map<String, dynamic> user = rawUser is Map
+        ? Map<String, dynamic>.from(rawUser)
+        : const <String, dynamic>{};
+
+    String? firstText(Iterable<dynamic> values) {
+      for (final dynamic value in values) {
+        final String text = value?.toString().trim() ?? '';
+        if (text.isNotEmpty) return text;
+      }
+      return null;
+    }
+
+    final String? photoPath = firstText(<dynamic>[
+      json['profile_photo_url'],
+      json['photo_url'],
+      json['avatar_url'],
+      profile['profile_photo_url'],
+      profile['photo_url'],
+      user['profile_photo_url'],
+    ]);
+
+    return BuyerRiderInfo(
+      name: firstText(<dynamic>[json['name'], json['full_name'], user['name']]),
+      photoUrl: photoPath == null ? null : AppConfig.resolveMediaUrl(photoPath),
+      vehicleType: firstText(<dynamic>[
+        json['vehicle_type'],
+        profile['vehicle_type'],
+      ]),
+      plateNumber: firstText(<dynamic>[
+        json['plate_number'],
+        profile['plate_number'],
+      ]),
+    );
+  }
+}
+
+class BuyerRiderSnapshot {
+  final BuyerOrderLocation? location;
+  final BuyerRiderInfo? rider;
+
+  const BuyerRiderSnapshot({this.location, this.rider});
+}
+
+class BuyerOrderParcelData {
+  final String id;
+  final String? trackingNumber;
+  final String status;
+  final String statusLabel;
+  final String? sellerOrderNumber;
+  final String? sellerName;
+  final String? destination;
+  final BuyerOrderLocation? riderLocation;
+  final BuyerRiderInfo? rider;
+  final List<BuyerOrderTimelineEvent> timeline;
+  final List<String> deliveryProofAttemptIds;
+
+  const BuyerOrderParcelData({
+    required this.id,
+    required this.status,
+    required this.statusLabel,
+    this.trackingNumber,
+    this.sellerOrderNumber,
+    this.sellerName,
+    this.destination,
+    this.riderLocation,
+    this.rider,
+    this.timeline = const <BuyerOrderTimelineEvent>[],
+    this.deliveryProofAttemptIds = const <String>[],
+  });
+
+  BuyerOrderParcelData copyWith({
+    String? status,
+    String? statusLabel,
+    BuyerOrderLocation? riderLocation,
+    bool clearRiderLocation = false,
+    BuyerRiderInfo? rider,
+    bool clearRider = false,
+    List<BuyerOrderTimelineEvent>? timeline,
+  }) {
+    return BuyerOrderParcelData(
+      id: id,
+      trackingNumber: trackingNumber,
+      status: status ?? this.status,
+      statusLabel: statusLabel ?? this.statusLabel,
+      sellerOrderNumber: sellerOrderNumber,
+      sellerName: sellerName,
+      destination: destination,
+      riderLocation: clearRiderLocation
+          ? null
+          : riderLocation ?? this.riderLocation,
+      rider: clearRider ? null : rider ?? this.rider,
+      timeline: timeline ?? this.timeline,
+      deliveryProofAttemptIds: deliveryProofAttemptIds,
+    );
+  }
+
+  factory BuyerOrderParcelData.fromApi(Map<String, dynamic> json) {
+    final dynamic rawLocation = json['rider_location'];
+    BuyerOrderLocation? riderLocation;
+    if (rawLocation is Map) {
+      final Map<String, dynamic> location = Map<String, dynamic>.from(
+        rawLocation,
+      );
+      final double? latitude = double.tryParse(
+        (location['latitude'] ?? '').toString(),
+      );
+      final double? longitude = double.tryParse(
+        (location['longitude'] ?? '').toString(),
+      );
+      if (latitude != null && longitude != null) {
+        riderLocation = BuyerOrderLocation(
+          latitude: latitude,
+          longitude: longitude,
+          label: 'Rider location',
+        );
+      }
+    }
+    final dynamic rawRider =
+        json['rider'] ?? json['rider_info'] ?? json['assigned_rider'];
+    BuyerRiderInfo? rider;
+    if (rawRider is Map) {
+      final BuyerRiderInfo parsedRider = BuyerRiderInfo.fromApi(
+        Map<String, dynamic>.from(rawRider),
+      );
+      if (parsedRider.hasVisibleInfo) rider = parsedRider;
+    }
+    final dynamic rawEvents = json['events'];
+    final List<BuyerOrderTimelineEvent> timeline = rawEvents is List
+        ? rawEvents
+              .whereType<Map>()
+              .map((Map raw) {
+                final Map<String, dynamic> event = Map<String, dynamic>.from(
+                  raw,
+                );
+                final DateTime? occurredAt = DateTime.tryParse(
+                  (event['occurred_at'] ?? '').toString(),
+                );
+                return BuyerOrderTimelineEvent(
+                  label:
+                      (event['label'] ?? event['status'] ?? 'Shipment update')
+                          .toString(),
+                  time: occurredAt == null ? '' : _formatParcelTime(occurredAt),
+                  done: true,
+                  details: (event['notes'] ?? '').toString(),
+                  occurredAt: occurredAt,
+                );
+              })
+              .toList(growable: false)
+        : const <BuyerOrderTimelineEvent>[];
+    final dynamic rawAttempts = json['delivery_attempts'];
+    final List<String> proofIds = rawAttempts is List
+        ? rawAttempts
+              .whereType<Map>()
+              .where((Map attempt) => attempt['proof_available'] == true)
+              .map((Map attempt) => (attempt['id'] ?? '').toString())
+              .where((String id) => id.isNotEmpty)
+              .toList(growable: false)
+        : const <String>[];
+    return BuyerOrderParcelData(
+      id: (json['id'] ?? '').toString(),
+      trackingNumber: json['tracking_number']?.toString(),
+      status: (json['current_status'] ?? json['status'] ?? '').toString(),
+      statusLabel:
+          (json['status_label'] ?? json['current_status'] ?? 'Shipment update')
+              .toString(),
+      sellerOrderNumber: json['seller_order_number']?.toString(),
+      sellerName: json['seller_name']?.toString(),
+      destination: json['destination']?.toString(),
+      riderLocation: riderLocation,
+      rider: rider,
+      timeline: timeline,
+      deliveryProofAttemptIds: proofIds,
+    );
+  }
+}
+
+String _formatParcelTime(DateTime value) {
+  final DateTime local = value.toLocal();
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final String minute = local.minute.toString().padLeft(2, '0');
+  final String period = local.hour >= 12 ? 'PM' : 'AM';
+  return '${months[local.month - 1]} ${local.day}, ${local.year} · $hour:$minute $period';
+}
+
+BuyerOrderLocation? parseBuyerOrderLogisticsStop(Map<String, dynamic> row) {
+  final dynamic rawFacility =
+      row['logistics_center'] ??
       row['logisticsCenter'] ??
       row['center'] ??
       row['facility'] ??
@@ -307,7 +691,8 @@ BuyerOrderLocation? parseBuyerOrderLogisticsStop(
   final Map<String, dynamic> facility = rawFacility is Map
       ? Map<String, dynamic>.from(rawFacility)
       : const <String, dynamic>{};
-  final dynamic rawLocation = row['location'] ??
+  final dynamic rawLocation =
+      row['location'] ??
       facility['location'] ??
       facility['address'] ??
       row['address'] ??
@@ -351,10 +736,35 @@ BuyerOrderLocation? parseBuyerOrderLogisticsStop(
         .toString(),
   );
   if (latitude != null && longitude != null) {
+    String? firstValue(Iterable<dynamic> values) {
+      for (final dynamic value in values) {
+        final String text = value?.toString().trim() ?? '';
+        if (text.isNotEmpty) return text;
+      }
+      return null;
+    }
+
+    final String? transferLegId = firstValue(<dynamic>[
+      row['transfer_leg_id'],
+      row['transferLegId'],
+      row['leg_id'],
+    ]);
     return BuyerOrderLocation(
       latitude: latitude,
       longitude: longitude,
       label: name.isEmpty ? 'Logistics hub' : name,
+      id: firstValue(<dynamic>[row['id'], facility['id'], row['center_id']]),
+      transferLegIds: transferLegId == null
+          ? const <String>[]
+          : <String>[transferLegId],
+      sequenceNo: int.tryParse(
+        (row['sequence_no'] ?? row['sequence'] ?? '').toString(),
+      ),
+      centerRole: firstValue(<dynamic>[row['center_role'], row['role']]),
+      progressStatus: firstValue(<dynamic>[
+        row['status'],
+        row['progress_status'],
+      ]),
     );
   }
   return null;
@@ -404,6 +814,12 @@ class BuyerOrderData {
 
   final List<BuyerOrderProductData> products;
 
+  /// Seller-specific parts of a Laravel parent order.
+  final List<BuyerSellerOrderData> sellerOrders;
+
+  /// Independent shipment parcels attached to this order.
+  final List<BuyerOrderParcelData> parcels;
+
   final double total;
 
   final String buyerName;
@@ -439,16 +855,16 @@ class BuyerOrderData {
   /// Preview orders are never submitted to Laravel and expose no actions.
   final bool isPreview;
 
-  /// Optional explicit capability flags.
-  ///
-  /// Once Laravel mobile APIs exist, these are the safest
-  /// values to return because the server remains the source
-  /// of truth for which actions are currently allowed.
+  /// Optional explicit capability flags from Laravel.
+  /// The server's delivery-PIN flag takes precedence; when it is absent,
+  /// mobile applies the same status and destination checks as a fallback.
   final bool? allowCancel;
   final bool? allowMarkReceived;
   final bool? allowReview;
   final bool? allowReturnRequest;
+  final DateTime? returnDeadline;
   final bool hasActiveReturnRequest;
+  final bool canConfirmDeliveryPin;
 
   const BuyerOrderData({
     required this.id,
@@ -456,6 +872,8 @@ class BuyerOrderData {
     required this.statusLabel,
     required this.payment,
     required this.products,
+    this.sellerOrders = const <BuyerSellerOrderData>[],
+    this.parcels = const <BuyerOrderParcelData>[],
     required this.total,
     required this.buyerName,
     required this.shippingAddress,
@@ -482,7 +900,9 @@ class BuyerOrderData {
     this.allowMarkReceived,
     this.allowReview,
     this.allowReturnRequest,
+    this.returnDeadline,
     this.hasActiveReturnRequest = false,
+    this.canConfirmDeliveryPin = false,
   });
 
   factory BuyerOrderData.fromApi(Map<String, dynamic> json) {
@@ -537,6 +957,32 @@ class BuyerOrderData {
     final Map<String, dynamic> sellerOrder = rawSellerOrder is Map
         ? Map<String, dynamic>.from(rawSellerOrder)
         : const <String, dynamic>{};
+    final dynamic rawSellerOrders =
+        json['seller_orders'] ?? json['sellerOrders'];
+    final List<BuyerSellerOrderData> sellerOrders = rawSellerOrders is List
+        ? rawSellerOrders
+              .whereType<Map>()
+              .map(
+                (Map item) => BuyerSellerOrderData.fromApi(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList(growable: false)
+        : const <BuyerSellerOrderData>[];
+    final dynamic rawParcels = json['parcels'] ?? json['shipments'];
+    final List<BuyerOrderParcelData> parcels = rawParcels is List
+        ? rawParcels
+              .whereType<Map>()
+              .map(
+                (Map item) => BuyerOrderParcelData.fromApi(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList(growable: false)
+        : const <BuyerOrderParcelData>[];
+    final BuyerSellerOrderData? firstSellerOrder = sellerOrders.isEmpty
+        ? null
+        : sellerOrders.first;
     final dynamic rawShipment =
         json['shipment'] ?? json['parcel'] ?? json['latest_shipment'];
     final dynamic shipmentValue = rawShipment is List && rawShipment.isNotEmpty
@@ -555,7 +1001,8 @@ class BuyerOrderData {
     final Map<String, dynamic> firstProduct = rawFirstProduct is Map
         ? Map<String, dynamic>.from(rawFirstProduct)
         : firstItem;
-    final dynamic rawFirstSeller = firstItem['seller'] ??
+    final dynamic rawFirstSeller =
+        firstItem['seller'] ??
         firstItem['store'] ??
         firstProduct['seller'] ??
         firstProduct['store'];
@@ -584,6 +1031,7 @@ class BuyerOrderData {
       firstSeller['business_name'],
       firstSeller['store_name'],
       firstSeller['name'],
+      firstSellerOrder?.sellerName,
     ]);
     final String? resolvedSellerOrderNumber = firstNonEmptyText(<dynamic>[
       json['seller_order_number'],
@@ -596,6 +1044,7 @@ class BuyerOrderData {
       sellerOrder['id'],
       firstItem['seller_order_number'],
       firstProduct['seller_order_number'],
+      firstSellerOrder?.orderNumber,
     ]);
     final int? resolvedSellerId = int.tryParse(
       <dynamic>[
@@ -614,6 +1063,7 @@ class BuyerOrderData {
             firstSeller['seller_user_id'],
             firstSeller['id'],
             firstSeller['seller_id'],
+            firstSellerOrder?.sellerId,
           ]
           .firstWhere((dynamic value) => value != null, orElse: () => '')
           .toString(),
@@ -627,6 +1077,7 @@ class BuyerOrderData {
       firstProduct['seller_slug'],
       firstSeller['slug'],
       firstSeller['store_slug'],
+      firstSellerOrder?.sellerSlug,
     ]);
     final String? resolvedSellerAvatar = firstNonEmptyText(<dynamic>[
       json['seller_avatar'],
@@ -639,6 +1090,7 @@ class BuyerOrderData {
       firstProduct['seller_avatar_url'],
       firstSeller['logo_url'],
       firstSeller['avatar_url'],
+      firstSellerOrder?.sellerAvatarUrl,
     ]);
     final List<BuyerOrderProductData> products = rawItems is List
         ? rawItems
@@ -651,10 +1103,11 @@ class BuyerOrderData {
                 final Map<String, dynamic> details = nestedProduct is Map
                     ? Map<String, dynamic>.from(nestedProduct)
                     : product;
-                final String? primaryImage = (product['image_url'] ??
-                        details['image_url'] ??
-                        details['image'])
-                    ?.toString();
+                final String? primaryImage =
+                    (product['image_url'] ??
+                            details['image_url'] ??
+                            details['image'])
+                        ?.toString();
                 final List<String> galleryImages = _parseOrderImageUrls(
                   product['images'] ??
                       details['images'] ??
@@ -669,7 +1122,8 @@ class BuyerOrderData {
                   ...galleryImages,
                 ]) {
                   final String resolved = AppConfig.resolveMediaUrl(value);
-                  if (resolved.isNotEmpty && !resolvedImages.contains(resolved)) {
+                  if (resolved.isNotEmpty &&
+                      !resolvedImages.contains(resolved)) {
                     resolvedImages.add(resolved);
                   }
                 }
@@ -731,7 +1185,8 @@ class BuyerOrderData {
       rawAddress,
       'Delivery destination',
     );
-    final dynamic rawSellerLocation = json['seller_location'] ??
+    final dynamic rawSellerLocation =
+        json['seller_location'] ??
         json['seller_address'] ??
         shipment['seller_location'];
     final Map<String, dynamic> sellerLocationData = rawSellerLocation is Map
@@ -744,7 +1199,8 @@ class BuyerOrderData {
               'Seller pickup location')
           .toString(),
     );
-    final dynamic rawTimeline = json['timeline'] ??
+    final dynamic rawTimeline =
+        json['timeline'] ??
         json['tracking_timeline'] ??
         json['shipment_events'] ??
         shipment['timeline'] ??
@@ -756,82 +1212,98 @@ class BuyerOrderData {
               .map((Map item) => Map<String, dynamic>.from(item))
               .toList(growable: false)
         : const <Map<String, dynamic>>[];
-    final List<String> deliveryProofImageUrls =
-        parseBuyerDeliveryProofUrls(<Map<String, dynamic>>[
-          json,
-          shipment,
-          ...timelineRows,
-        ]);
+    final List<String> deliveryProofImageUrls = parseBuyerDeliveryProofUrls(
+      <Map<String, dynamic>>[json, shipment, ...timelineRows],
+    );
     final List<BuyerOrderTimelineEvent> timeline = timelineRows.isNotEmpty
-        ? timelineRows.map((Map<String, dynamic> event) {
-            final String rawLabel = (event['label'] ??
-                    event['status_label'] ??
-                    event['status'] ??
-                    event['current_status'] ??
-                    'Shipment update')
-                .toString()
-                .trim();
-            final String label = rawLabel
-                .replaceAll(RegExp(r'[_-]+'), ' ')
-                .replaceAll(RegExp(r'\s+'), ' ')
-                .split(' ')
-                .where((String word) => word.isNotEmpty)
-                .map((String word) =>
-                    '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
-                .join(' ');
-            final dynamic rawDetails = event['notes'] ??
-                event['details'] ??
-                event['description'] ??
-                event['message'] ??
-                event['location_name'] ??
-                event['facility_name'] ??
-                event['location'];
-            final String noteDetails = rawDetails is Map
-                ? (rawDetails['label'] ??
-                          rawDetails['name'] ??
-                          rawDetails['facility_name'] ??
-                          rawDetails['location_name'] ??
-                          '')
-                      .toString()
-                      .trim()
-                : rawDetails?.toString().trim() ?? '';
-            final BuyerOrderLocation? eventLocation =
-                parseBuyerOrderLogisticsStop(event);
-            final dynamic rawEventLocation = event['location'] ??
-                event['logistics_center'] ??
-                event['center'];
-            final Map<String, dynamic> eventLocationData =
-                rawEventLocation is Map
-                ? Map<String, dynamic>.from(rawEventLocation)
-                : const <String, dynamic>{};
-            final String eventLocationName = (event['location_name'] ??
+        ? timelineRows
+              .map((Map<String, dynamic> event) {
+                final String rawLabel =
+                    (event['label'] ??
+                            event['status_label'] ??
+                            event['status'] ??
+                            event['current_status'] ??
+                            'Shipment update')
+                        .toString()
+                        .trim();
+                final String label = rawLabel
+                    .replaceAll(RegExp(r'[_-]+'), ' ')
+                    .replaceAll(RegExp(r'\s+'), ' ')
+                    .split(' ')
+                    .where((String word) => word.isNotEmpty)
+                    .map(
+                      (String word) =>
+                          '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+                    )
+                    .join(' ');
+                final dynamic rawDetails =
+                    event['notes'] ??
+                    event['details'] ??
+                    event['description'] ??
+                    event['message'] ??
+                    event['location_name'] ??
                     event['facility_name'] ??
-                    event['current_center_name'] ??
-                    eventLocationData['business_name'] ??
-                    eventLocationData['name'] ??
-                    eventLocationData['label'] ??
-                    '')
-                .toString()
-                .trim();
-            final String details = <String>[
-              noteDetails,
-              if ((eventLocation?.label ?? eventLocationName).isNotEmpty &&
-                  !noteDetails.toLowerCase().contains(
-                    (eventLocation?.label ?? eventLocationName).toLowerCase(),
-                  ))
-                eventLocation?.label ?? eventLocationName,
-            ].where((String value) => value.isNotEmpty).join(' | ');
-            return BuyerOrderTimelineEvent(
-              label: label.isEmpty ? 'Shipment update' : label,
-              time: _formatOrderTimelineTime(
-                event['occurred_at'] ?? event['created_at'] ?? event['time'],
-              ),
-              done: event['done'] is bool ? event['done'] as bool : true,
-              details: details,
-            );
-          }).toList(growable: false)
+                    event['location'];
+                final String noteDetails = rawDetails is Map
+                    ? (rawDetails['label'] ??
+                              rawDetails['name'] ??
+                              rawDetails['facility_name'] ??
+                              rawDetails['location_name'] ??
+                              '')
+                          .toString()
+                          .trim()
+                    : rawDetails?.toString().trim() ?? '';
+                final BuyerOrderLocation? eventLocation =
+                    parseBuyerOrderLogisticsStop(event);
+                final dynamic rawEventLocation =
+                    event['location'] ??
+                    event['logistics_center'] ??
+                    event['center'];
+                final Map<String, dynamic> eventLocationData =
+                    rawEventLocation is Map
+                    ? Map<String, dynamic>.from(rawEventLocation)
+                    : const <String, dynamic>{};
+                final String eventLocationName =
+                    (event['location_name'] ??
+                            event['facility_name'] ??
+                            event['current_center_name'] ??
+                            eventLocationData['business_name'] ??
+                            eventLocationData['name'] ??
+                            eventLocationData['label'] ??
+                            '')
+                        .toString()
+                        .trim();
+                final String details = <String>[
+                  noteDetails,
+                  if ((eventLocation?.label ?? eventLocationName).isNotEmpty &&
+                      !noteDetails.toLowerCase().contains(
+                        (eventLocation?.label ?? eventLocationName)
+                            .toLowerCase(),
+                      ))
+                    eventLocation?.label ?? eventLocationName,
+                ].where((String value) => value.isNotEmpty).join(' | ');
+                return BuyerOrderTimelineEvent(
+                  label: label.isEmpty ? 'Shipment update' : label,
+                  time: _formatOrderTimelineTime(
+                    event['occurred_at'] ??
+                        event['created_at'] ??
+                        event['time'],
+                  ),
+                  done: event['done'] is bool ? event['done'] as bool : true,
+                  details: details,
+                  occurredAt: DateTime.tryParse(
+                    (event['occurred_at'] ??
+                            event['created_at'] ??
+                            event['time'] ??
+                            '')
+                        .toString(),
+                  ),
+                );
+              })
+              .toList(growable: false)
         : const <BuyerOrderTimelineEvent>[];
-    final dynamic rawRouteStops = json['shipment_route_stops'] ??
+    final dynamic rawRouteStops =
+        json['shipment_route_stops'] ??
         json['route_stops'] ??
         json['logistics_stops'] ??
         json['shipment_route'] ??
@@ -845,15 +1317,33 @@ class BuyerOrderData {
               .map((Map item) => Map<String, dynamic>.from(item))
               .toList(growable: false)
         : const <Map<String, dynamic>>[];
-    final List<BuyerOrderLocation> shipmentRouteStops =
-        <BuyerOrderLocation>[];
+    final List<BuyerOrderLocation> shipmentRouteStops = <BuyerOrderLocation>[];
     void addRouteStop(BuyerOrderLocation? stop) {
-      if (stop == null ||
-          shipmentRouteStops.any(
-            (BuyerOrderLocation existing) =>
-                existing.latitude == stop.latitude &&
-                existing.longitude == stop.longitude,
-          )) {
+      if (stop == null) return;
+      final int existingIndex = shipmentRouteStops.indexWhere(
+        (BuyerOrderLocation existing) =>
+            existing.latitude == stop.latitude &&
+            existing.longitude == stop.longitude,
+      );
+      if (existingIndex >= 0) {
+        final BuyerOrderLocation existing = shipmentRouteStops[existingIndex];
+        final List<String> transferLegIds = <String>{
+          ...existing.transferLegIds,
+          ...stop.transferLegIds,
+        }.toList(growable: false);
+        if (transferLegIds.length != existing.transferLegIds.length ||
+            existing.id == null && stop.id != null ||
+            existing.sequenceNo == null && stop.sequenceNo != null ||
+            existing.centerRole == null && stop.centerRole != null ||
+            existing.progressStatus == null && stop.progressStatus != null) {
+          shipmentRouteStops[existingIndex] = existing.copyWith(
+            id: existing.id ?? stop.id,
+            transferLegIds: transferLegIds,
+            sequenceNo: existing.sequenceNo ?? stop.sequenceNo,
+            centerRole: existing.centerRole ?? stop.centerRole,
+            progressStatus: existing.progressStatus ?? stop.progressStatus,
+          );
+        }
         return;
       }
       shipmentRouteStops.add(stop);
@@ -871,18 +1361,34 @@ class BuyerOrderData {
           .map((Map item) => Map<String, dynamic>.from(item))
           .toList(growable: false);
       for (final Map<String, dynamic> leg in transferLegs) {
-        addRouteStop(parseBuyerOrderLogisticsStop(<String, dynamic>{
-          'logistics_center': leg['origin_center'] ??
-              leg['origin_logistics_center'] ??
-              leg['origin'],
-          'name': leg['origin_center_name'],
-        }));
-        addRouteStop(parseBuyerOrderLogisticsStop(<String, dynamic>{
-          'logistics_center': leg['destination_center'] ??
-              leg['destination_logistics_center'] ??
-              leg['destination'],
-          'name': leg['destination_center_name'],
-        }));
+        addRouteStop(
+          parseBuyerOrderLogisticsStop(<String, dynamic>{
+            'logistics_center':
+                leg['origin_center'] ??
+                leg['origin_logistics_center'] ??
+                leg['origin'],
+            'name': leg['origin_center_name'],
+            'transfer_leg_id':
+                leg['id'] ?? leg['transfer_leg_id'] ?? leg['leg_id'],
+            'sequence_no': leg['sequence_no'] ?? leg['sequence'],
+            'center_role': 'origin',
+            'status': leg['status'],
+          }),
+        );
+        addRouteStop(
+          parseBuyerOrderLogisticsStop(<String, dynamic>{
+            'logistics_center':
+                leg['destination_center'] ??
+                leg['destination_logistics_center'] ??
+                leg['destination'],
+            'name': leg['destination_center_name'],
+            'transfer_leg_id':
+                leg['id'] ?? leg['transfer_leg_id'] ?? leg['leg_id'],
+            'sequence_no': leg['sequence_no'] ?? leg['sequence'],
+            'center_role': 'destination',
+            'status': leg['status'],
+          }),
+        );
       }
     }
 
@@ -893,13 +1399,14 @@ class BuyerOrderData {
     }
     final BuyerOrderLocation? currentLogisticsCenter =
         parseBuyerOrderLogisticsStop(<String, dynamic>{
-      'logistics_center': json['current_logistics_center'] ??
-          json['logistics_center'] ??
-          shipment['current_logistics_center'] ??
-          shipment['logistics_center'],
-      'current_center_name': json['current_center_name'] ??
-          shipment['current_center_name'],
-    });
+          'logistics_center':
+              json['current_logistics_center'] ??
+              json['logistics_center'] ??
+              shipment['current_logistics_center'] ??
+              shipment['logistics_center'],
+          'current_center_name':
+              json['current_center_name'] ?? shipment['current_center_name'],
+        });
     if (currentLogisticsCenter != null &&
         !shipmentRouteStops.any(
           (BuyerOrderLocation stop) =>
@@ -910,6 +1417,34 @@ class BuyerOrderData {
     }
     final String backendStatus =
         (json['status'] ?? json['order_status'] ?? 'pending').toString();
+    String normalizeStatus(dynamic value) => value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replaceAll('-', '_')
+        .replaceAll(' ', '_');
+
+    const Set<String> terminalStatuses = <String>{
+      'delivered',
+      'completed',
+      'cancelled',
+      'canceled',
+      'returned',
+      'refunded',
+    };
+    final dynamic serverPinEligibility = json['can_confirm_delivery_pin'];
+    final List<String> shipmentStatuses = <String>[
+      ...parcels.map((BuyerOrderParcelData parcel) => parcel.status),
+      if (shipment['current_status'] != null)
+        shipment['current_status'].toString(),
+      if (shipment['status'] != null) shipment['status'].toString(),
+    ].map(normalizeStatus).where((String value) => value.isNotEmpty).toList();
+    final bool canConfirmDeliveryPin = serverPinEligibility is bool
+        ? serverPinEligibility
+        : address.trim().isNotEmpty &&
+              parseLocation(rawAddress, 'Delivery destination') == null &&
+              !terminalStatuses.contains(normalizeStatus(backendStatus)) &&
+              !shipmentStatuses.any(terminalStatuses.contains);
 
     return BuyerOrderData(
       id: (json['id'] ?? json['order_number'] ?? '').toString(),
@@ -924,6 +1459,8 @@ class BuyerOrderData {
           .toString(),
       paymentStatus: json['payment_status']?.toString(),
       products: products,
+      sellerOrders: sellerOrders,
+      parcels: parcels,
       total:
           double.tryParse(
             (json['total'] ?? json['grand_total'] ?? json['order_total'] ?? 0)
@@ -940,13 +1477,15 @@ class BuyerOrderData {
           ? null
           : AppConfig.resolveMediaUrl(resolvedSellerAvatar),
       shippingAddress: address,
-      tracking: (json['tracking_number'] ??
-              json['tracking'] ??
-              shipment['tracking_number'] ??
-              shipment['tracking_code'] ??
-              shipment['tracking'])
-          ?.toString(),
-      shipmentId: (json['shipment_id'] ??
+      tracking:
+          (json['tracking_number'] ??
+                  json['tracking'] ??
+                  shipment['tracking_number'] ??
+                  shipment['tracking_code'] ??
+                  shipment['tracking'])
+              ?.toString(),
+      shipmentId:
+          (json['shipment_id'] ??
                   shipment['shipment_id'] ??
                   shipment['id'] ??
                   '')
@@ -954,11 +1493,10 @@ class BuyerOrderData {
               .trim()
               .isEmpty
           ? null
-          : (json['shipment_id'] ??
-                  shipment['shipment_id'] ??
-                  shipment['id'])
-              .toString(),
-      orderLocation: parseLocation(
+          : (json['shipment_id'] ?? shipment['shipment_id'] ?? shipment['id'])
+                .toString(),
+      orderLocation:
+          parseLocation(
             json['order_location'] ??
                 json['shipment_location'] ??
                 json['current_order_location'],
@@ -982,7 +1520,11 @@ class BuyerOrderData {
       allowMarkReceived: json['allow_mark_received'] as bool?,
       allowReview: json['allow_review'] as bool?,
       allowReturnRequest: json['allow_return_request'] as bool?,
+      returnDeadline: DateTime.tryParse(
+        (json['return_deadline'] ?? '').toString(),
+      ),
       hasActiveReturnRequest: json['has_active_return_request'] == true,
+      canConfirmDeliveryPin: canConfirmDeliveryPin,
     );
   }
 
@@ -1073,9 +1615,28 @@ class BuyerOrderData {
       return allowMarkReceived!;
     }
 
-    /// Laravel should only allow this when delivery has
-    /// actually reached delivered.
-    return normalizedStatus == 'delivered';
+    if (normalizedStatus != 'processing' || hasActiveReturnRequest) {
+      return false;
+    }
+
+    // Match Laravel's all-seller-orders/all-shipments eligibility check.
+    // Without grouped seller orders, mobile cannot confirm that each seller
+    // order has a parcel, so it fails closed and relies on Laravel's flag.
+    if (sellerOrders.isEmpty) {
+      return false;
+    }
+
+    return sellerOrders.every((BuyerSellerOrderData sellerOrder) {
+      return sellerOrder.parcels.isNotEmpty &&
+          sellerOrder.parcels.every(
+            (BuyerOrderParcelData parcel) =>
+                parcel.status.trim().toLowerCase().replaceAll(
+                  RegExp(r'[-\s]+'),
+                  '_',
+                ) ==
+                'delivered',
+          );
+    });
   }
 
   bool get canReview {
@@ -1096,22 +1657,97 @@ class BuyerOrderData {
     return eligible.contains(normalizedStatus);
   }
 
+  DateTime? get returnDeadlineForDisplay {
+    if (returnDeadline != null) {
+      return returnDeadline;
+    }
+
+    final List<BuyerOrderTimelineEvent> events = <BuyerOrderTimelineEvent>[
+      ...timeline,
+      ...parcels.expand((BuyerOrderParcelData parcel) => parcel.timeline),
+    ];
+    DateTime? latestDeliveredAt;
+    for (final BuyerOrderTimelineEvent event in events) {
+      final String eventStatus = event.label.trim().toLowerCase().replaceAll(
+        RegExp(r'[\s_-]+'),
+        '',
+      );
+      final DateTime? occurredAt = event.occurredAt;
+      if (eventStatus == 'delivered' &&
+          occurredAt != null &&
+          (latestDeliveredAt == null ||
+              occurredAt.isAfter(latestDeliveredAt))) {
+        latestDeliveredAt = occurredAt;
+      }
+    }
+
+    return latestDeliveredAt?.add(const Duration(days: 5));
+  }
+
+  String get returnRequestSubtitle {
+    if (hasActiveReturnRequest) {
+      return 'A return or refund request is already in progress.';
+    }
+
+    final DateTime? deadline = returnDeadlineForDisplay;
+    if (canRequestReturn) {
+      return deadline == null
+          ? 'You can request a return or refund.'
+          : 'Submit by ' + _formatBuyerReturnDate(deadline) + '.';
+    }
+
+    if (normalizedStatus == 'cancelled' || normalizedStatus == 'canceled') {
+      return 'Cancelled orders are not eligible for return or refund.';
+    }
+
+    final bool allParcelsDelivered =
+        parcels.isNotEmpty &&
+        parcels.every((BuyerOrderParcelData parcel) {
+          final String parcelStatus = parcel.status
+              .trim()
+              .toLowerCase()
+              .replaceAll(RegExp(r'[- ]+'), '_');
+          return parcelStatus == 'delivered' || parcelStatus == 'completed';
+        });
+    if (parcels.isNotEmpty && !allParcelsDelivered) {
+      return 'Available after all parcels are delivered.';
+    }
+
+    if (deadline != null && DateTime.now().isAfter(deadline)) {
+      return 'Return window ended ' + _formatBuyerReturnDate(deadline) + '.';
+    }
+
+    if (parcels.isEmpty) {
+      return 'Available after delivery.';
+    }
+
+    return 'Return or refund is not available for this order right now.';
+  }
+
   BuyerOrderData copyWith({
+    String? tracking,
+    bool clearTracking = false,
+    String? shipmentId,
     String? status,
     String? backendStatus,
     String? statusLabel,
     String? paymentStatus,
     List<BuyerOrderTimelineEvent>? timeline,
+    List<BuyerOrderParcelData>? parcels,
     BuyerOrderLocation? orderLocation,
     BuyerOrderLocation? sellerLocation,
     BuyerOrderLocation? riderLocation,
     List<BuyerOrderLocation>? shipmentRouteStops,
     bool clearRiderLocation = false,
+    bool clearSellerLocation = false,
+    bool clearOrderLocation = false,
     bool? allowCancel,
     bool? allowMarkReceived,
     bool? allowReview,
     bool? allowReturnRequest,
+    DateTime? returnDeadline,
     bool? hasActiveReturnRequest,
+    bool? canConfirmDeliveryPin,
     bool? isPreview,
     List<String>? deliveryProofImageUrls,
   }) {
@@ -1125,14 +1761,20 @@ class BuyerOrderData {
       payment: payment,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       products: products,
+      sellerOrders: sellerOrders,
+      parcels: parcels ?? this.parcels,
       total: total,
       buyerName: buyerName,
       buyerContact: buyerContact,
       shippingAddress: shippingAddress,
-      tracking: tracking,
-      shipmentId: shipmentId,
-      orderLocation: orderLocation ?? this.orderLocation,
-      sellerLocation: sellerLocation ?? this.sellerLocation,
+      tracking: clearTracking ? null : tracking ?? this.tracking,
+      shipmentId: shipmentId ?? this.shipmentId,
+      orderLocation: clearOrderLocation
+          ? null
+          : orderLocation ?? this.orderLocation,
+      sellerLocation: clearSellerLocation
+          ? null
+          : sellerLocation ?? this.sellerLocation,
       riderLocation: clearRiderLocation
           ? null
           : riderLocation ?? this.riderLocation,
@@ -1146,8 +1788,11 @@ class BuyerOrderData {
       allowMarkReceived: allowMarkReceived ?? this.allowMarkReceived,
       allowReview: allowReview ?? this.allowReview,
       allowReturnRequest: allowReturnRequest ?? this.allowReturnRequest,
+      returnDeadline: returnDeadline ?? this.returnDeadline,
       hasActiveReturnRequest:
           hasActiveReturnRequest ?? this.hasActiveReturnRequest,
+      canConfirmDeliveryPin:
+          canConfirmDeliveryPin ?? this.canConfirmDeliveryPin,
     );
   }
 
@@ -1161,13 +1806,14 @@ class BuyerOrderData {
       String raw = '';
       if (item is Map) {
         final Map<String, dynamic> image = Map<String, dynamic>.from(item);
-        raw = (image['url'] ??
-                image['image_url'] ??
-                image['image'] ??
-                image['file_path'] ??
-                image['path'] ??
-                '')
-            .toString();
+        raw =
+            (image['url'] ??
+                    image['image_url'] ??
+                    image['image'] ??
+                    image['file_path'] ??
+                    image['path'] ??
+                    '')
+                .toString();
       } else if (item != null) {
         raw = item.toString();
       }
@@ -1186,8 +1832,18 @@ class BuyerOrderData {
     }
     final DateTime local = parsed.toLocal();
     const List<String> months = <String>[
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
     final String minute = local.minute.toString().padLeft(2, '0');
@@ -1245,18 +1901,23 @@ class _SubmittedProductReview {
 
 class BuyerOrderReturnRequest {
   final BuyerOrderData order;
-
-  final String requestType;
-
-  final String reason;
-
-  final String details;
+  final String issueCategory;
+  final String issueReason;
+  final String description;
+  final String refundMethod;
+  final Map<String, int> quantitiesByItem;
+  final String buyerEmail;
+  final List<XFile> evidence;
 
   const BuyerOrderReturnRequest({
     required this.order,
-    required this.requestType,
-    required this.reason,
-    required this.details,
+    required this.issueCategory,
+    required this.issueReason,
+    required this.description,
+    this.refundMethod = 'original_payment_method',
+    required this.quantitiesByItem,
+    required this.buyerEmail,
+    required this.evidence,
   });
 }
 
@@ -1264,6 +1925,14 @@ typedef CancelOrderCallback =
     Future<void> Function(BuyerOrderData order, String reason, String note);
 
 typedef ReceiveOrderCallback = Future<void> Function(BuyerOrderData order);
+typedef ConfirmOrderDeliveryPinCallback =
+    Future<void> Function(
+      BuyerOrderData order,
+      double latitude,
+      double longitude,
+    );
+typedef BuyAgainCallback =
+    Future<Map<String, dynamic>> Function(BuyerOrderData order);
 
 /// Legacy callback kept so existing page wiring does not
 /// immediately break.
@@ -1285,11 +1954,12 @@ typedef SubmitReturnCallback =
 
 /// Preferred request-object callback.
 typedef SubmitOrderReturnCallback =
-    Future<void> Function(BuyerOrderReturnRequest request);
+    Future<String?> Function(BuyerOrderReturnRequest request);
 
 typedef BuyerOrderCallback = void Function(BuyerOrderData order);
 
 typedef OrdersRefreshCallback = Future<List<BuyerOrderData>> Function();
+typedef PickReturnEvidenceCallback = Future<List<XFile>> Function();
 
 class OrdersScreen extends StatefulWidget {
   final List<BuyerOrderData> orders;
@@ -1315,14 +1985,19 @@ class OrdersScreen extends StatefulWidget {
 
   final VoidCallback? onBack;
   final VoidCallback? onShopProducts;
+  final VoidCallback? onViewReturns;
+  final VoidCallback? onTrackByNumber;
 
   final BuyerOrderCallback? onTrackOrder;
+  final BuyerOrderCallback? onOpenOrderDetails;
   final BuyerOrderCallback? onContactSeller;
   final BuyerOrderCallback? onViewStore;
-  final VoidCallback? onOpenHelpCenter;
+  final BuyerOrderCallback? onOpenHelpCenter;
 
   final CancelOrderCallback? onCancelOrder;
   final ReceiveOrderCallback? onReceiveOrder;
+  final ConfirmOrderDeliveryPinCallback? onConfirmDeliveryPin;
+  final BuyAgainCallback? onBuyAgain;
 
   /// Legacy order-level review callback.
   final SubmitReviewCallback? onSubmitReview;
@@ -1337,6 +2012,8 @@ class OrdersScreen extends StatefulWidget {
   /// Preferred return request callback.
   final SubmitOrderReturnCallback? onSubmitReturnRequest;
 
+  final PickReturnEvidenceCallback? pickReturnEvidence;
+
   final OrdersRefreshCallback? onRefresh;
 
   const OrdersScreen({
@@ -1350,16 +2027,22 @@ class OrdersScreen extends StatefulWidget {
     this.buyerNotice,
     this.onBack,
     this.onShopProducts,
+    this.onViewReturns,
+    this.onTrackByNumber,
     this.onTrackOrder,
+    this.onOpenOrderDetails,
     this.onContactSeller,
     this.onViewStore,
     this.onOpenHelpCenter,
     this.onCancelOrder,
     this.onReceiveOrder,
+    this.onConfirmDeliveryPin,
+    this.onBuyAgain,
     this.onSubmitReview,
     this.onSubmitProductReview,
     this.onSubmitReturn,
     this.onSubmitReturnRequest,
+    this.pickReturnEvidence,
     this.onRefresh,
   });
 
@@ -1402,6 +2085,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String? _selectedReviewProductId;
 
   bool _receivingOrder = false;
+  final Set<String> _confirmingDeliveryPinOrderIds = <String>{};
   bool _submittingReview = false;
   String? _reviewNotice;
   bool _reviewNoticeIsError = false;
@@ -1418,33 +2102,69 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   final TextEditingController _returnDetailsController =
       TextEditingController();
+  final TextEditingController _returnEmailController = TextEditingController();
 
   int _rating = 5;
   int _riderRating = 5;
   List<XFile> _reviewPhotos = <XFile>[];
 
-  String? _returnRequestType;
+  String? _returnIssueCategory;
   String? _returnReason;
+  String _returnRefundMethod = 'original_payment_method';
+  final Map<String, int> _returnQuantities = <String, int>{};
+  List<XFile> _returnEvidence = <XFile>[];
+  bool _confirmReturnCashTerms = false;
+  bool _confirmReturnRequest = false;
 
   final Set<String> _reviewedProductIds = <String>{};
   final Map<String, _SubmittedProductReview> _submittedReviews =
       <String, _SubmittedProductReview>{};
 
-  final List<String> _returnTypes = const <String>[
-    'Return and refund',
-    'Refund only',
-  ];
+  static const Map<String, String> _returnIssueLabels = <String, String>{
+    'DAMAGED': 'Received damaged item(s)',
+    'DEFECTIVE': 'Product is defective / does not work',
+    'INCORRECT': 'Received incorrect item(s)',
+    'MISSING': 'Did not receive some/all of the item(s)',
+    'OTHER': 'Others',
+  };
 
-  final List<String> _returnReasons = const <String>[
-    'Damaged item',
-    'Defective item',
-    'Wrong product',
-    'Wrong variation',
-    'Missing item',
-    'Missing parts',
-    'Significantly different from description',
-    'Other',
-  ];
+  static const Map<String, List<String>> _returnIssueReasons =
+      <String, List<String>>{
+        'DAMAGED': <String>[
+          'Scratched item',
+          'Bent item',
+          'Shattered item',
+          'Cracked item',
+          'Dented item',
+          'Torn or ripped item',
+          'Other physical damage',
+        ],
+        'DEFECTIVE': <String>[
+          'Product does not turn on',
+          'Product is not functioning properly',
+          'Product stopped working',
+          'Some functions/features do not work',
+          'Product is defective upon arrival',
+          'Other product defect',
+        ],
+        'INCORRECT': <String>[
+          'Wrong product',
+          'Wrong variation',
+          'Wrong color',
+          'Wrong size',
+          'Wrong model',
+          'Wrong quantity/item sent',
+        ],
+        'MISSING': <String>[
+          'Parcel was not delivered',
+          'Missing part of the order',
+          'Missing item(s) from the parcel',
+          'Empty parcel received',
+        ],
+        'OTHER': <String>[
+          'I want to return the item in its original/sealed condition.',
+        ],
+      };
 
   final List<String> _cancelReasons = const <String>[
     'Changed my mind',
@@ -1826,6 +2546,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     _reviewController.dispose();
     _riderReviewController.dispose();
     _returnDetailsController.dispose();
+    _returnEmailController.dispose();
 
     super.dispose();
   }
@@ -1842,16 +2563,23 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return null;
     }
 
+    // The detail route stores the parent order ID. Check it first so a
+    // matching tracking or shipment reference on another order cannot win.
     for (final BuyerOrderData order in _orders) {
-      final Set<String> orderReferences = <String>{
-        order.id,
-        order.orderNumber ?? '',
-        order.sellerOrderNumber ?? '',
-        order.tracking ?? '',
-        order.shipmentId ?? '',
-      }.map((String value) => value.trim().toLowerCase())
-          .where((String value) => value.isNotEmpty)
-          .toSet();
+      if (order.id.trim().toLowerCase() == reference) return order;
+    }
+
+    for (final BuyerOrderData order in _orders) {
+      final Set<String> orderReferences =
+          <String>{
+                order.orderNumber ?? '',
+                order.sellerOrderNumber ?? '',
+                order.tracking ?? '',
+                order.shipmentId ?? '',
+              }
+              .map((String value) => value.trim().toLowerCase())
+              .where((String value) => value.isNotEmpty)
+              .toSet();
       if (orderReferences.contains(reference)) {
         return order;
       }
@@ -1995,22 +2723,29 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return;
       }
 
-      // Laravel currently accepts one image per product review.
-      const int maxPhotos = 1;
+      const int maxPhotos = 5;
       const int maxPhotoBytes = 5 * 1024 * 1024;
       final List<XFile> accepted = <XFile>[];
-      bool oversizedPhoto = false;
+      bool rejectedPhoto = false;
 
       for (final XFile photo in selected) {
         if (_reviewPhotos.length + accepted.length >= maxPhotos) {
           break;
         }
 
-        if (await photo.length() > maxPhotoBytes) {
-          oversizedPhoto = true;
+        final String extension = photo.name.split('.').last.toLowerCase();
+        if (!const <String>{'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) {
+          rejectedPhoto = true;
           continue;
         }
-        accepted.add(photo);
+        if (await photo.length() > maxPhotoBytes) {
+          rejectedPhoto = true;
+          continue;
+        }
+        if (!_reviewPhotos.any((XFile current) => current.path == photo.path) &&
+            !accepted.any((XFile current) => current.path == photo.path)) {
+          accepted.add(photo);
+        }
       }
 
       if (!mounted) {
@@ -2021,13 +2756,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
         _reviewPhotos = <XFile>[..._reviewPhotos, ...accepted];
       });
 
-      if (oversizedPhoto) {
+      if (rejectedPhoto) {
         _showMessage(
-          'Each product photo must be 5 MB or smaller.',
+          'Product photos must be valid JPG, PNG, or WebP images under 5 MB.',
           error: true,
         );
       } else if (selected.length > accepted.length) {
-        _showMessage('You can attach one product photo.');
+        _showMessage('You can attach up to five product photos.');
       }
     } catch (error) {
       if (mounted) {
@@ -2038,26 +2773,72 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   void _openReturn(BuyerOrderData order) {
     if (!order.canRequestReturn) {
-      _showMessage(
-        'This order is not currently eligible for a return or refund request.',
-        error: true,
-      );
+      _showMessage(order.returnRequestSubtitle, error: true);
 
       return;
     }
 
     _returnDetailsController.clear();
+    _returnEmailController.clear();
 
     setState(() {
       _returnSubmissionError = null;
       _selectedOrderId = order.id;
 
-      _returnRequestType = null;
-
+      _returnIssueCategory = null;
       _returnReason = null;
+      _returnRefundMethod = 'original_payment_method';
+      _returnQuantities.clear();
+      _returnEvidence = <XFile>[];
+      _confirmReturnCashTerms = false;
+      _confirmReturnRequest = false;
 
       _mode = BuyerOrdersMode.returnRequest;
     });
+  }
+
+  Future<void> _addReturnEvidence() async {
+    try {
+      final List<XFile> selected = widget.pickReturnEvidence == null
+          ? await ImagePicker().pickMultiImage(
+              imageQuality: 85,
+              maxWidth: 1600,
+              maxHeight: 1600,
+            )
+          : await widget.pickReturnEvidence!();
+      if (!mounted || selected.isEmpty) return;
+      final List<XFile> accepted = List<XFile>.from(_returnEvidence);
+      final int previousCount = accepted.length;
+      bool rejectedEvidence = false;
+      for (final XFile file in selected) {
+        if (accepted.length >= 5) break;
+        final String extension = file.name.split('.').last.toLowerCase();
+        if (!const <String>{'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) {
+          rejectedEvidence = true;
+          continue;
+        }
+        if (await file.length() > 5 * 1024 * 1024) {
+          rejectedEvidence = true;
+          continue;
+        }
+        if (!accepted.any((XFile current) => current.path == file.path)) {
+          accepted.add(file);
+        }
+      }
+      if (!mounted) return;
+      setState(() => _returnEvidence = accepted);
+      if (rejectedEvidence) {
+        _showMessage(
+          'Return photos must be valid JPG, PNG, or WebP images under 5 MB.',
+          error: true,
+        );
+      } else if (previousCount + selected.length > accepted.length) {
+        _showMessage('You can attach up to five return photos.');
+      }
+    } catch (error) {
+      if (mounted)
+        _showMessage('Unable to select evidence: $error', error: true);
+    }
   }
 
   Future<void> _refresh() async {
@@ -2078,6 +2859,90 @@ class _OrdersScreenState extends State<OrdersScreen> {
       });
     } catch (error) {
       _showMessage(_errorText(error), error: true);
+    }
+  }
+
+  Future<void> _buyAgain(BuyerOrderData order) async {
+    final BuyAgainCallback? callback = widget.onBuyAgain;
+    if (callback == null) return;
+    try {
+      final Map<String, dynamic> result = await callback(order);
+      final int added = int.tryParse((result['added'] ?? 0).toString()) ?? 0;
+      final int unavailable =
+          int.tryParse((result['unavailable'] ?? 0).toString()) ?? 0;
+      _showMessage(
+        added == 0
+            ? 'None of the items in this order are currently available.'
+            : '$added item${added == 1 ? '' : 's'} added to your cart${unavailable > 0 ? '; $unavailable unavailable' : ''}.',
+      );
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
+    }
+  }
+
+  Future<void> _confirmDeliveryPin(BuyerOrderData order) async {
+    final ConfirmOrderDeliveryPinCallback? callback =
+        widget.onConfirmDeliveryPin;
+    if (callback == null) return;
+    if (!order.canConfirmDeliveryPin) {
+      _showMessage(
+        'This order is no longer eligible for delivery-pin confirmation. Refresh your orders.',
+        error: true,
+      );
+      return;
+    }
+    if (!_confirmingDeliveryPinOrderIds.add(order.id)) return;
+    setState(() {});
+    try {
+      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showMessage(
+          'Turn on location services to confirm the delivery pin.',
+          error: true,
+        );
+        return;
+      }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _showMessage(
+          'Allow location access to confirm the delivery pin.',
+          error: true,
+        );
+        return;
+      }
+      final Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      await callback(order, position.latitude, position.longitude);
+      if (!mounted) return;
+      final int index = _orders.indexWhere(
+        (BuyerOrderData current) => current.id == order.id,
+      );
+      if (index >= 0) {
+        setState(() {
+          _orders[index] = _orders[index].copyWith(
+            canConfirmDeliveryPin: false,
+            orderLocation: BuyerOrderLocation(
+              latitude: position.latitude,
+              longitude: position.longitude,
+              label: 'Delivery destination',
+            ),
+          );
+        });
+      }
+      _showMessage('Delivery pin confirmed for this order.');
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) {
+        setState(() => _confirmingDeliveryPinOrderIds.remove(order.id));
+      }
     }
   }
 
@@ -2217,10 +3082,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               }
 
               if (reason == 'Other' && noteController.text.trim().isEmpty) {
-                _showMessage(
-                  'Add a note when you choose Other.',
-                  error: true,
-                );
+                _showMessage('Add a note when you choose Other.', error: true);
                 return;
               }
 
@@ -2541,27 +3403,30 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
 
     if (!order.canRequestReturn) {
+      _showMessage(order.returnRequestSubtitle, error: true);
+
+      return;
+    }
+
+    if (!(_returnFormKey.currentState?.validate() ?? false)) return;
+
+    if (_returnIssueCategory == null || _returnReason == null) return;
+    if (_returnQuantities.isEmpty) {
       _showMessage(
-        'This order is not currently eligible for a return or refund request.',
+        'Select at least one item to return or refund.',
         error: true,
       );
-
       return;
     }
-
-    if (!(_returnFormKey.currentState?.validate() ?? false)) {
+    if (_returnEvidence.isEmpty) {
+      _showMessage('Add at least one photo showing the issue.', error: true);
       return;
     }
-
-    setState(() {
-      _returnSubmissionError = null;
-    });
-
-    final String? requestType = _returnRequestType;
-
-    final String? reason = _returnReason;
-
-    if (requestType == null || reason == null) {
+    if (!_confirmReturnCashTerms || !_confirmReturnRequest) {
+      _showMessage(
+        'Confirm both return and refund acknowledgements.',
+        error: true,
+      );
       return;
     }
 
@@ -2575,22 +3440,33 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     setState(() {
       _submittingReturn = true;
+      _returnSubmissionError = null;
     });
 
     try {
       final String details = _returnDetailsController.text.trim();
+      String? requestId;
 
       if (widget.onSubmitReturnRequest != null) {
-        await widget.onSubmitReturnRequest!(
+        requestId = await widget.onSubmitReturnRequest!(
           BuyerOrderReturnRequest(
             order: order,
-            requestType: requestType,
-            reason: reason,
-            details: details,
+            issueCategory: _returnIssueCategory!,
+            issueReason: _returnReason!,
+            description: details,
+            refundMethod: _returnRefundMethod,
+            quantitiesByItem: Map<String, int>.unmodifiable(_returnQuantities),
+            buyerEmail: _returnEmailController.text.trim(),
+            evidence: List<XFile>.unmodifiable(_returnEvidence),
           ),
         );
       } else {
-        await widget.onSubmitReturn!(order, requestType, reason, details);
+        await widget.onSubmitReturn!(
+          order,
+          _returnIssueLabels[_returnIssueCategory!] ?? _returnIssueCategory!,
+          _returnReason!,
+          details,
+        );
       }
 
       if (!mounted) {
@@ -2615,7 +3491,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
         });
       }
 
-      _showMessage('Return / refund request submitted.');
+      _showMessage(
+        requestId == null || requestId.isEmpty
+            ? 'Return / refund request submitted.'
+            : 'Return / refund request $requestId submitted.',
+      );
 
       final BuyerOrderData updatedOrder = index >= 0
           ? _orders[index]
@@ -2803,7 +3683,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final List<BuyerOrderData> visibleOrders = _visibleOrders;
 
     return CustomScrollView(
-                  key: const PageStorageKey<String>('buyer-orders-scroll'),
+      key: const PageStorageKey<String>('buyer-orders-scroll'),
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverPadding(
@@ -2855,7 +3735,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   child: _OrderCard(
                     order: order,
                     onOpen: () {
-                      _openDetails(order);
+                      final BuyerOrderCallback? openOrderDetails =
+                          widget.onOpenOrderDetails;
+                      if (openOrderDetails != null) {
+                        openOrderDetails(order);
+                      } else {
+                        _openDetails(order);
+                      }
                     },
                     onTrack: widget.onTrackOrder == null
                         ? null
@@ -2882,12 +3768,30 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             _openReturn(order);
                           }
                         : null,
-                    onContactSeller: widget.onContactSeller == null ||
-                            order.sellerId == null ||
-                            order.sellerId! < 1
+                    onBuyAgain: widget.onBuyAgain == null
+                        ? null
+                        : () => _buyAgain(order),
+                    onConfirmDeliveryPin:
+                        order.canConfirmDeliveryPin &&
+                            widget.onConfirmDeliveryPin != null
+                        ? () => _confirmDeliveryPin(order)
+                        : null,
+                    confirmingDeliveryPin: _confirmingDeliveryPinOrderIds
+                        .contains(order.id),
+                    onContactSeller:
+                        widget.onContactSeller == null ||
+                            (order.sellerOrders.isEmpty
+                                ? order.sellerId == null || order.sellerId! < 1
+                                : !order.sellerOrders.any(
+                                        (BuyerSellerOrderData sellerOrder) =>
+                                            (sellerOrder.sellerId ?? 0) > 0,
+                                      ) &&
+                                      !(order.sellerOrders.length == 1 &&
+                                          (order.sellerId ?? 0) > 0))
                         ? null
                         : () => widget.onContactSeller!(order),
-                    onViewStore: widget.onViewStore == null ||
+                    onViewStore:
+                        widget.onViewStore == null ||
                             order.sellerName?.trim().isEmpty != false
                         ? null
                         : () => widget.onViewStore!(order),
@@ -2907,25 +3811,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: ShopColors.accentSoft,
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: const Text(
-                'ORDER CENTER',
-                style: TextStyle(
-                  color: _maroonDark,
-                  fontSize: 9,
-                  letterSpacing: 1.1,
-                  fontWeight: FontWeight.w800,
-                ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: ShopColors.accentSoft,
+              borderRadius: BorderRadius.circular(100),
+            ),
+            child: const Text(
+              'ORDER CENTER',
+              style: TextStyle(
+                color: _maroonDark,
+                fontSize: 9,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.w800,
               ),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 4),
         const Text(
@@ -3205,9 +4108,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildOrderSummaryCard(BuyerOrderData order) {
-    final String orderReference = order.orderNumber?.trim().isNotEmpty == true
-        ? order.orderNumber!.trim()
-        : order.id;
+    final String trackingReference = order.tracking?.trim().isNotEmpty == true
+        ? order.tracking!.trim()
+        : order.shipmentId?.trim().isNotEmpty == true
+        ? order.shipmentId!.trim()
+        : '';
 
     return _BuyerDetailCard(
       padding: const EdgeInsets.all(15),
@@ -3243,7 +4148,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Order $orderReference',
+                  trackingReference.isNotEmpty
+                      ? 'Tracking ID $trackingReference'
+                      : 'Tracking ID pending',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -3265,8 +4172,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          _StatusBadge(label: order.statusLabel, status: order.tabStatus),
         ],
       ),
     );
@@ -3457,7 +4362,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          if (order.buyerContact?.trim().isNotEmpty == true) ...[
+                          if (order.buyerContact?.trim().isNotEmpty ==
+                              true) ...[
                             const SizedBox(height: 2),
                             Text(
                               order.buyerContact!,
@@ -3672,19 +4578,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           _BuyerDetailActionRow(
             icon: Icons.settings_backup_restore_rounded,
             title: 'Request a return or refund',
-            subtitle: order.canRequestReturn
-                ? 'Submit a request for this order.'
-                : 'Available depending on the order status.',
-            onTap: () {
-              if (order.canRequestReturn) {
-                _openReturn(order);
-                return;
-              }
-              _showMessage(
-                'This order is not currently eligible for a return or refund request.',
-                error: true,
-              );
-            },
+            subtitle: order.returnRequestSubtitle,
+            onTap: order.canRequestReturn ? () => _openReturn(order) : null,
           ),
           const Divider(height: 1, indent: 58, endIndent: 14, color: _border),
           _BuyerDetailActionRow(
@@ -3706,7 +4601,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             subtitle: 'Get help with your purchase.',
             onTap: () {
               if (widget.onOpenHelpCenter != null) {
-                widget.onOpenHelpCenter!();
+                widget.onOpenHelpCenter!(order);
                 return;
               }
               _showMessage('The help center is currently unavailable.');
@@ -3718,6 +4613,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildBuyerOrderInfoCard(BuyerOrderData order) {
+    final String trackingId = order.tracking?.trim() ?? '';
+
     return _BuyerDetailCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3750,7 +4647,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'ORDER ID',
+                        'TRACKING ID',
                         style: TextStyle(
                           color: ShopColors.muted,
                           fontSize: 9,
@@ -3760,7 +4657,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        order.id,
+                        trackingId.isEmpty ? 'Not assigned yet' : trackingId,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -3773,7 +4670,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => _copyOrderId(order.id),
+                  onPressed: trackingId.isEmpty
+                      ? null
+                      : () => _copyTrackingId(trackingId),
                   style: TextButton.styleFrom(
                     foregroundColor: ShopColors.accentDark,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -3800,10 +4699,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Future<void> _copyOrderId(String orderId) async {
-    await Clipboard.setData(ClipboardData(text: orderId));
+  Future<void> _copyTrackingId(String trackingId) async {
+    await Clipboard.setData(ClipboardData(text: trackingId));
     if (mounted) {
-      _showMessage('Order ID copied.');
+      _showMessage('Tracking ID copied.');
     }
   }
 
@@ -3846,6 +4745,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
           label: 'Return/Refund',
           onPressed: () => _openReturn(order),
         ),
+      if (widget.onConfirmDeliveryPin != null &&
+          (order.canConfirmDeliveryPin ||
+              _confirmingDeliveryPinOrderIds.contains(order.id)))
+        _BuyerDetailBottomButton(
+          label: _confirmingDeliveryPinOrderIds.contains(order.id)
+              ? 'Confirming...'
+              : 'Confirm delivery pin',
+          filled: true,
+          onPressed: _confirmingDeliveryPinOrderIds.contains(order.id)
+              ? null
+              : () => _confirmDeliveryPin(order),
+        ),
       if (order.canMarkReceived)
         _BuyerDetailBottomButton(
           label: _receivingOrder ? 'Updating...' : 'Order Received',
@@ -3872,13 +4783,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
           color: Colors.white,
           border: Border(top: BorderSide(color: _border)),
         ),
-        child: Row(
-          children: [
-            for (int index = 0; index < actions.length; index++) ...[
-              if (index > 0) const SizedBox(width: 9),
-              Expanded(child: actions[index]),
-            ],
-          ],
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double buttonWidth = (constraints.maxWidth - 9) / 2;
+            return Wrap(
+              spacing: 9,
+              runSpacing: 8,
+              children: actions
+                  .map(
+                    (Widget action) =>
+                        SizedBox(width: buttonWidth, child: action),
+                  )
+                  .toList(growable: false),
+            );
+          },
         ),
       ),
     );
@@ -4316,6 +5234,113 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
+  Widget _buildReturnItemSelector(BuyerOrderProductData product) {
+    final bool selected = _returnQuantities.containsKey(product.id);
+    final int quantity = _returnQuantities[product.id] ?? 1;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xFFFFF7F5) : const Color(0xFFFAFAFA),
+        border: Border.all(
+          color: selected ? _maroon.withOpacity(0.25) : _border,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: selected,
+            activeColor: _maroon,
+            onChanged: _submittingReturn
+                ? null
+                : (bool? value) {
+                    setState(() {
+                      if (value == true) {
+                        _returnQuantities[product.id] = 1;
+                      } else {
+                        _returnQuantities.remove(product.id);
+                      }
+                    });
+                  },
+          ),
+          Expanded(child: _SelectedProduct(product: product)),
+          if (selected) ...[
+            const SizedBox(width: 8),
+            DropdownButton<int>(
+              value: quantity,
+              underline: const SizedBox.shrink(),
+              items: List<DropdownMenuItem<int>>.generate(
+                product.safeQuantity,
+                (int index) => DropdownMenuItem<int>(
+                  value: index + 1,
+                  child: Text('Qty ${index + 1}'),
+                ),
+              ),
+              onChanged: _submittingReturn
+                  ? null
+                  : (int? value) {
+                      if (value != null) {
+                        setState(() => _returnQuantities[product.id] = value);
+                      }
+                    },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReturnEvidenceTile(int index) {
+    final XFile file = _returnEvidence[index];
+    return SizedBox(
+      width: 76,
+      height: 76,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: FutureBuilder<List<int>>(
+                future: file.readAsBytes(),
+                builder:
+                    (BuildContext context, AsyncSnapshot<List<int>> snapshot) {
+                      if (!snapshot.hasData) {
+                        return const ColoredBox(
+                          color: _soft,
+                          child: Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        );
+                      }
+                      return Image.memory(
+                        Uint8List.fromList(snapshot.data!),
+                        fit: BoxFit.cover,
+                      );
+                    },
+              ),
+            ),
+          ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: InkWell(
+              onTap: _submittingReturn
+                  ? null
+                  : () => setState(() => _returnEvidence.removeAt(index)),
+              borderRadius: BorderRadius.circular(24),
+              child: const CircleAvatar(
+                radius: 12,
+                backgroundColor: _maroon,
+                child: Icon(Icons.close_rounded, color: Colors.white, size: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReturnMode() {
     final BuyerOrderData? order = _selectedOrder;
 
@@ -4353,9 +5378,27 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const SizedBox(height: 7),
 
           const Text(
-            'Provide the request type, reason, and details for review.',
+            'Select the affected items, describe the issue, and attach clear photos.',
             style: TextStyle(color: _muted, fontSize: 12.5),
           ),
+
+          if (order.returnDeadlineForDisplay != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              order.canRequestReturn
+                  ? 'Submit by ' +
+                        _formatBuyerReturnDate(
+                          order.returnDeadlineForDisplay!,
+                        ) +
+                        '. Eligibility ends after this date.'
+                  : order.returnRequestSubtitle,
+              style: const TextStyle(
+                color: _maroon,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
 
           const SizedBox(height: 17),
 
@@ -4369,74 +5412,72 @@ class _OrdersScreenState extends State<OrdersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (order.products.isNotEmpty)
-                  _SelectedProduct(product: order.products.first),
+                const _InputLabel(text: 'Items affected'),
 
-                if (order.products.length > 1) ...[
-                  const SizedBox(height: 7),
+                const SizedBox(height: 7),
 
-                  Text(
-                    '+${order.products.length - 1} additional ${order.products.length - 1 == 1 ? 'product' : 'products'} in this order',
-                    style: const TextStyle(color: _muted, fontSize: 11),
-                  ),
-                ],
+                for (final BuyerOrderProductData product in order.products)
+                  _buildReturnItemSelector(product),
 
-                if (order.products.isNotEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Divider(height: 1, color: _border),
-                  ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(height: 1, color: _border),
+                ),
 
-                const _InputLabel(text: 'Request type'),
+                const _InputLabel(text: 'Issue category'),
 
                 const SizedBox(height: 7),
 
                 DropdownButtonFormField<String>(
-                  initialValue: _returnRequestType,
+                  initialValue: _returnIssueCategory,
                   isExpanded: true,
-                  decoration: _inputDecoration(hintText: 'Choose an option'),
-                  items: _returnTypes.map((String type) {
+                  decoration: _inputDecoration(hintText: 'Choose an issue'),
+                  items: _returnIssueLabels.entries.map((
+                    MapEntry<String, String> entry,
+                  ) {
                     return DropdownMenuItem<String>(
-                      value: type,
-                      child: Text(type),
+                      value: entry.key,
+                      child: Text(entry.value),
                     );
                   }).toList(),
                   onChanged: _submittingReturn
                       ? null
                       : (String? value) {
                           setState(() {
-                            _returnRequestType = value;
+                            _returnIssueCategory = value;
+                            _returnReason = null;
                           });
                         },
                   validator: (String? value) {
                     if (value == null || value.isEmpty) {
-                      return 'Choose a request type.';
+                      return 'Choose an issue category.';
                     }
-
-                    if (value.length > 80) {
-                      return 'Request type is too long.';
-                    }
-
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                const _InputLabel(text: 'Reason'),
+                const _InputLabel(text: 'Specific issue'),
 
                 const SizedBox(height: 7),
 
                 DropdownButtonFormField<String>(
                   initialValue: _returnReason,
                   isExpanded: true,
-                  decoration: _inputDecoration(hintText: 'Choose a reason'),
-                  items: _returnReasons.map((String reason) {
-                    return DropdownMenuItem<String>(
-                      value: reason,
-                      child: Text(reason),
-                    );
-                  }).toList(),
+                  decoration: _inputDecoration(
+                    hintText: 'Choose what happened',
+                  ),
+                  items:
+                      (_returnIssueReasons[_returnIssueCategory] ??
+                              const <String>[])
+                          .map((String reason) {
+                            return DropdownMenuItem<String>(
+                              value: reason,
+                              child: Text(reason),
+                            );
+                          })
+                          .toList(),
                   onChanged: _submittingReturn
                       ? null
                       : (String? value) {
@@ -4446,7 +5487,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         },
                   validator: (String? value) {
                     if (value == null || value.isEmpty) {
-                      return 'Choose a reason.';
+                      return 'Choose the specific issue.';
                     }
 
                     if (value.length > 255) {
@@ -4459,7 +5500,67 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
                 const SizedBox(height: 16),
 
-                const _InputLabel(text: 'Explain what happened'),
+                const _InputLabel(text: 'Refund method'),
+
+                const SizedBox(height: 7),
+
+                DropdownButtonFormField<String>(
+                  initialValue: _returnRefundMethod,
+                  isExpanded: true,
+                  decoration: _inputDecoration(
+                    hintText: 'Choose a refund method',
+                  ),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem<String>(
+                      value: 'original_payment_method',
+                      child: Text('Original payment method'),
+                    ),
+                    DropdownMenuItem<String>(
+                      value: 'cash',
+                      child: Text('Cash refund'),
+                    ),
+                  ],
+                  onChanged: _submittingReturn
+                      ? null
+                      : (String? value) {
+                          if (value == null) return;
+                          setState(() => _returnRefundMethod = value);
+                        },
+                  validator: (String? value) => value == null || value.isEmpty
+                      ? 'Choose a refund method.'
+                      : null,
+                ),
+
+                const SizedBox(height: 16),
+
+                const _InputLabel(text: 'Contact email'),
+
+                const SizedBox(height: 7),
+
+                TextFormField(
+                  controller: _returnEmailController,
+                  enabled: !_submittingReturn,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: _inputDecoration(
+                    hintText: 'Email for case updates',
+                  ),
+                  validator: (String? value) {
+                    final String email = value?.trim() ?? '';
+                    if (email.isEmpty) return 'Enter your email address.';
+                    if (!RegExp(
+                      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                    ).hasMatch(email)) {
+                      return 'Enter a valid email address.';
+                    }
+                    if (email.length > 255) return 'Email address is too long.';
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                const _InputLabel(text: 'Describe the issue'),
 
                 const SizedBox(height: 7),
 
@@ -4468,7 +5569,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   enabled: !_submittingReturn,
                   minLines: 5,
                   maxLines: 7,
-                  maxLength: 3000,
+                  maxLength: 2000,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: _inputDecoration(
                     hintText: 'Give enough detail to review this request.',
@@ -4480,16 +5581,105 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       return 'Explain what happened.';
                     }
 
-                    if (text.length < 20) {
-                      return 'Please provide at least 20 characters.';
+                    if (text.length < 10) {
+                      return 'Please provide at least 10 characters.';
                     }
 
-                    if (text.length > 3000) {
-                      return 'Details must not exceed 3000 characters.';
+                    if (text.length > 2000) {
+                      return 'Details must not exceed 2000 characters.';
                     }
 
                     return null;
                   },
+                ),
+
+                const SizedBox(height: 16),
+
+                const _InputLabel(text: 'Photo evidence'),
+
+                const SizedBox(height: 4),
+
+                const Text(
+                  'Add at least one clear photo. Up to five photos, 5 MB each.',
+                  style: TextStyle(color: _muted, fontSize: 11.5),
+                ),
+
+                const SizedBox(height: 9),
+
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    for (int index = 0; index < _returnEvidence.length; index++)
+                      _buildReturnEvidenceTile(index),
+                    if (_returnEvidence.length < 5)
+                      OutlinedButton(
+                        key: const ValueKey<String>(
+                          'buyer-return-add-evidence',
+                        ),
+                        onPressed: _submittingReturn
+                            ? null
+                            : _addReturnEvidence,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _maroon,
+                          side: const BorderSide(color: _border),
+                          minimumSize: const Size(76, 76),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Icon(Icons.add_photo_alternate_outlined),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: 12),
+
+                Material(
+                  color: Colors.transparent,
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: _confirmReturnCashTerms,
+                    activeColor: _maroon,
+                    title: const Text(
+                      'I understand the refund amount and method follow the platform’s return and refund policy.',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 11.5,
+                        height: 1.4,
+                      ),
+                    ),
+                    onChanged: _submittingReturn
+                        ? null
+                        : (bool? value) => setState(
+                            () => _confirmReturnCashTerms = value ?? false,
+                          ),
+                  ),
+                ),
+
+                Material(
+                  color: Colors.transparent,
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    value: _confirmReturnRequest,
+                    activeColor: _maroon,
+                    title: const Text(
+                      'I confirm these details are accurate and authorize this request to be reviewed.',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 11.5,
+                        height: 1.4,
+                      ),
+                    ),
+                    onChanged: _submittingReturn
+                        ? null
+                        : (bool? value) => setState(
+                            () => _confirmReturnRequest = value ?? false,
+                          ),
+                  ),
                 ),
 
                 const SizedBox(height: 15),
@@ -4704,6 +5894,9 @@ class _OrderCard extends StatelessWidget {
   final VoidCallback? onReceive;
   final VoidCallback? onReview;
   final VoidCallback? onReturn;
+  final VoidCallback? onBuyAgain;
+  final VoidCallback? onConfirmDeliveryPin;
+  final bool confirmingDeliveryPin;
   final VoidCallback? onContactSeller;
   final VoidCallback? onViewStore;
 
@@ -4717,6 +5910,9 @@ class _OrderCard extends StatelessWidget {
     required this.onReceive,
     required this.onReview,
     required this.onReturn,
+    required this.onBuyAgain,
+    required this.onConfirmDeliveryPin,
+    required this.confirmingDeliveryPin,
     required this.onContactSeller,
     required this.onViewStore,
     required this.receiving,
@@ -4755,8 +5951,6 @@ class _OrderCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    _StatusBadge(label: order.statusLabel, status: order.tabStatus),
                   ],
                 ),
                 if (_placedLabel(order.createdAt).isNotEmpty) ...[
@@ -4829,7 +6023,8 @@ class _OrderCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: _ParcelUpdateCard(
                 order: order,
-                onTap: (order.tracking?.trim().isNotEmpty == true ||
+                onTap:
+                    (order.tracking?.trim().isNotEmpty == true ||
                         order.shipmentId?.trim().isNotEmpty == true)
                     ? onTrack
                     : null,
@@ -4907,7 +6102,10 @@ class _OrderCard extends StatelessWidget {
                     onCancel != null ||
                     onReceive != null ||
                     onReview != null ||
-                    onReturn != null) ...[
+                    onReturn != null ||
+                    onBuyAgain != null ||
+                    onConfirmDeliveryPin != null ||
+                    confirmingDeliveryPin) ...[
                   const SizedBox(height: 12),
 
                   Align(
@@ -4917,6 +6115,23 @@ class _OrderCard extends StatelessWidget {
                       spacing: 7,
                       runSpacing: 7,
                       children: [
+                        if (onBuyAgain != null)
+                          _SmallActionButton(
+                            text: 'Buy Again',
+                            onPressed: onBuyAgain,
+                          ),
+
+                        if (onConfirmDeliveryPin != null ||
+                            confirmingDeliveryPin)
+                          _SmallActionButton(
+                            text: confirmingDeliveryPin
+                                ? 'Confirming...'
+                                : 'Confirm delivery pin',
+                            onPressed: confirmingDeliveryPin
+                                ? null
+                                : onConfirmDeliveryPin,
+                          ),
+
                         if (onCancel != null)
                           _SmallActionButton(
                             text: 'Cancel',
@@ -5025,8 +6240,7 @@ class _ParcelUpdateCard extends StatelessWidget {
     final String details = latestEvent?.details.trim().isNotEmpty == true
         ? latestEvent!.details
         : _fallbackDetails;
-    final String trackingReference =
-        order.tracking?.trim().isNotEmpty == true
+    final String trackingReference = order.tracking?.trim().isNotEmpty == true
         ? order.tracking!.trim()
         : order.shipmentId?.trim() ?? '';
 
@@ -5308,9 +6522,7 @@ class _SmallActionButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: danger
-              ? const Color(0xFFB42318)
-              : ShopColors.accent,
+          foregroundColor: danger ? const Color(0xFFB42318) : ShopColors.accent,
           side: BorderSide(
             color: danger ? const Color(0xFFE5B4A9) : ShopColors.tan,
           ),
@@ -5322,71 +6534,6 @@ class _SmallActionButton extends StatelessWidget {
         child: Text(
           text,
           style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final String label;
-  final String status;
-
-  const _StatusBadge({required this.label, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final Color background;
-    final Color foreground;
-
-    switch (status) {
-      case 'completed':
-        background = const Color(0xFFEAF6EE);
-
-        foreground = const Color(0xFF237A44);
-
-        break;
-
-      case 'cancelled':
-        background = const Color(0xFFFCEBE8);
-
-        foreground = const Color(0xFFB42318);
-
-        break;
-
-      case 'returns':
-        background = const Color(0xFFFFF3DC);
-
-        foreground = const Color(0xFF906010);
-
-        break;
-
-      case 'to-receive':
-        background = const Color(0xFFEAF1FF);
-
-        foreground = const Color(0xFF315B9A);
-
-        break;
-
-      default:
-        background = ShopColors.accentSoft;
-
-        foreground = ShopColors.accent;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: foreground,
-          fontSize: 9.5,
-          letterSpacing: 1,
-          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -5422,7 +6569,7 @@ class _BuyerDetailActionRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _BuyerDetailActionRow({
     required this.icon,
@@ -5448,7 +6595,13 @@ class _BuyerDetailActionRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(11),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, color: ShopColors.secondaryText, size: 18),
+              child: Icon(
+                icon,
+                color: onTap == null
+                    ? ShopColors.faint
+                    : ShopColors.secondaryText,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 11),
             Expanded(
@@ -5457,8 +6610,10 @@ class _BuyerDetailActionRow extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: ShopColors.text,
+                    style: TextStyle(
+                      color: onTap == null
+                          ? ShopColors.secondaryText
+                          : ShopColors.text,
                       fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                     ),
@@ -5477,15 +6632,17 @@ class _BuyerDetailActionRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            const Padding(
-              padding: EdgeInsets.only(top: 1),
-              child: Icon(
-                Icons.chevron_right_rounded,
-                color: ShopColors.faint,
-                size: 23,
+            if (onTap != null) ...[
+              const SizedBox(width: 8),
+              const Padding(
+                padding: EdgeInsets.only(top: 1),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: ShopColors.faint,
+                  size: 23,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -5582,10 +6739,7 @@ class _SelectedProduct extends StatelessWidget {
 
                 Text(
                   product.variant!,
-                  style: const TextStyle(
-                    color: ShopColors.muted,
-                    fontSize: 11,
-                  ),
+                  style: const TextStyle(color: ShopColors.muted, fontSize: 11),
                 ),
               ],
 
@@ -5682,9 +6836,18 @@ class _OrderProductImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = url?.trim() ?? '';
-    if (value.isEmpty) return const Center(child: Icon(Icons.inventory_2_outlined,
-      color: ShopColors.faint, size: 34));
-    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 34);
+    if (value.isEmpty)
+      return const Center(
+        child: Icon(
+          Icons.inventory_2_outlined,
+          color: ShopColors.faint,
+          size: 34,
+        ),
+      );
+    return SizedNetworkImage(
+      url: AppConfig.resolveMediaUrl(value),
+      iconSize: 34,
+    );
   }
 }
 

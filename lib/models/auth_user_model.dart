@@ -20,8 +20,13 @@ class AuthUserModel {
   final List<String> mobileRoles;
 
   factory AuthUserModel.fromJson(Map<String, dynamic> json) {
-    final dynamic rawRoles = json['roles'] ?? json['mobile_roles'] ?? <dynamic>[];
-    final dynamic rawMobileRoles = json['mobile_roles'] ?? <dynamic>[];
+    final String? accountType = json['account_type']?.toString();
+    final List<String> accountRoles = accountType == null || accountType.isEmpty
+        ? const <String>[]
+        : <String>[accountType];
+    final dynamic rawRoles =
+        json['roles'] ?? json['mobile_roles'] ?? accountRoles;
+    final dynamic rawMobileRoles = json['mobile_roles'] ?? accountRoles;
 
     return AuthUserModel(
       id: int.tryParse(json['id']?.toString() ?? '') ?? 0,

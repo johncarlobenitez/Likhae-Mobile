@@ -9,6 +9,7 @@ import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
 import '../core/storage/token_storage.dart';
 import '../models/auth_user_model.dart';
+import '../models/platform_policy.dart';
 import '../features/auth/register_screen.dart';
 import 'wishlist_service.dart';
 
@@ -19,6 +20,23 @@ class GoogleRegistrationRequiredException implements Exception {
 
   @override
   String toString() => 'Complete your buyer registration to continue.';
+}
+
+class AuthSessionExpiredException implements Exception {
+  const AuthSessionExpiredException();
+
+  @override
+  String toString() => 'Your session has expired. Please sign in again.';
+}
+
+class AuthenticatedUserSession {
+  final AuthUserModel user;
+  final List<PlatformPolicy> pendingPolicies;
+
+  const AuthenticatedUserSession({
+    required this.user,
+    this.pendingPolicies = const <PlatformPolicy>[],
+  });
 }
 
 class AuthService {
@@ -132,7 +150,7 @@ class AuthService {
     'inactive_account' =>
       'This LIKHAE account is inactive. Contact support for help.',
     'mobile_access_required' =>
-      'This account does not have Buyer or Rider mobile access.',
+      'This account does not have Buyer, Rider, or Logistics mobile access.',
     _ => 'Google sign-in could not be completed. Please try again.',
   };
 
@@ -367,6 +385,7 @@ class AuthService {
     required String deviceName,
   }) async {
     if (!AppConfig.apiEnabled) {
+      await TokenStorage.writeToken('demo-token');
       final Map<String, dynamic> dummyUser = <String, dynamic>{
         'id': 1,
         'name': 'Demo Buyer',
@@ -410,31 +429,50 @@ class AuthService {
 
     final String? newToken = (payload['token'] ?? payload['access_token'])
         ?.toString();
-    if (newToken != null && newToken.isNotEmpty) {
-      await TokenStorage.writeToken(newToken);
-      await WishlistService.clearLocalWishlist();
+    if (newToken == null || newToken.trim().isEmpty) {
+      throw const FormatException(
+        'Login response did not include a session token.',
+      );
     }
+    await TokenStorage.writeToken(newToken.trim());
+    await WishlistService.clearLocalWishlist();
 
     return payload;
   }
 
-  static Future<AuthUserModel> getCurrentUser() async {
+  static Future<AuthenticatedUserSession> getCurrentSession() async {
     if (!AppConfig.apiEnabled) {
-      return AuthUserModel(
-        id: 1,
-        name: 'Demo Buyer',
-        email: 'buyer@likhae.test',
-        contactNumber: '+639000000001',
-        status: 'active',
-        emailVerified: true,
-        roles: const <String>['buyer'],
-        mobileRoles: const <String>['buyer'],
+      return AuthenticatedUserSession(
+        user: AuthUserModel(
+          id: 1,
+          name: 'Demo Buyer',
+          email: 'buyer@likhae.test',
+          contactNumber: '+639000000001',
+          status: 'active',
+          emailVerified: true,
+          roles: const <String>['buyer'],
+          mobileRoles: const <String>['buyer'],
+        ),
       );
     }
 
     final Response<dynamic> response = await ApiClient.get(
       AppConfig.resolveApiUrl('auth/me'),
     );
+
+    final int statusCode = response.statusCode ?? 500;
+    if (statusCode == 401) {
+      await TokenStorage.clearToken();
+      throw const AuthSessionExpiredException();
+    }
+    if (statusCode < 200 || statusCode >= 300) {
+      final dynamic responseData = response.data;
+      final String message =
+          responseData is Map && responseData['message'] != null
+          ? responseData['message'].toString()
+          : 'Unable to verify your saved session.';
+      throw Exception(message);
+    }
 
     final dynamic payload = response.data;
     if (payload is! Map<String, dynamic>) {
@@ -446,7 +484,53 @@ class AuthService {
       throw const FormatException('User data not found in auth/me response.');
     }
 
-    return AuthUserModel.fromJson(userData);
+    return AuthenticatedUserSession(
+      user: AuthUserModel.fromJson(userData),
+      pendingPolicies: PlatformPolicy.parseList(payload['pending_policies']),
+    );
+  }
+
+  static Future<AuthUserModel> getCurrentUser() async {
+    return (await getCurrentSession()).user;
+  }
+
+  static Future<List<PlatformPolicy>> acceptPendingPolicies(
+    List<PlatformPolicy> policies,
+  ) async {
+    final Map<String, String> versions = <String, String>{
+      for (final PlatformPolicy policy in policies)
+        policy.id.toString(): policy.version,
+    };
+    final Map<String, bool> acknowledgements = <String, bool>{
+      for (final PlatformPolicy policy in policies)
+        policy.id.toString(): true,
+    };
+
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('policies/accept'),
+      <String, dynamic>{
+        'policy_acceptances': versions,
+        'policy_acknowledgements': acknowledgements,
+      },
+    );
+    final int statusCode = response.statusCode ?? 500;
+    if (statusCode < 200 || statusCode >= 300) {
+      throw Exception(
+        ApiClient.formatError(
+          DioException.badResponse(
+            statusCode: statusCode,
+            requestOptions: response.requestOptions,
+            response: response,
+          ),
+        ),
+      );
+    }
+
+    final dynamic payload = response.data;
+    if (payload is! Map<String, dynamic>) {
+      throw const FormatException('Invalid policy acceptance response.');
+    }
+    return PlatformPolicy.parseList(payload['pending_policies']);
   }
 
   static Future<void> logout() async {

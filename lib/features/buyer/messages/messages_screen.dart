@@ -3,48 +3,44 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/sized_network_image.dart';
 import '../../../shared/widgets/shop_ui.dart';
+import 'message_models.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/core/storage/token_storage.dart';
 import 'package:likhae/core/theme/app_theme.dart';
 
+export 'message_models.dart'
+    show
+        BuyerConversationPresenceData,
+        BuyerMessageData,
+        MessageOrderContext,
+        MessageOrderProduct;
+
 extension _MessagesPalette on BuildContext {
   bool get _messagesDark => Theme.of(this).brightness == Brightness.dark;
 
-  Color get messagesBackground => _messagesDark
-      ? AppTheme.darkBackground
-      : ShopColors.canvas;
-  Color get messagesBackgroundSoft => _messagesDark
-      ? AppTheme.darkSurfaceStrong
-      : ShopColors.soft;
-  Color get messagesSurface => _messagesDark
-      ? AppTheme.darkSurface
-      : ShopColors.surface;
-  Color get messagesBorder => _messagesDark
-      ? AppTheme.darkBorder
-      : ShopColors.border;
-  Color get messagesAccent => _messagesDark
-      ? AppTheme.darkMaroonDark
-      : ShopColors.accent;
-  Color get messagesAccentText => _messagesDark
-      ? AppTheme.darkMaroonSoft
-      : ShopColors.accentDark;
-  Color get messagesText => _messagesDark
-      ? AppTheme.darkText
-      : ShopColors.text;
-  Color get messagesMuted => _messagesDark
-      ? AppTheme.darkMuted
-      : ShopColors.muted;
-  Color get messagesFaint => _messagesDark
-      ? AppTheme.darkMutedSoft
-      : ShopColors.faint;
-  Color get messagesTan => _messagesDark
-      ? AppTheme.darkTan
-      : ShopColors.tan;
-  Color get messagesDanger => _messagesDark
-      ? AppTheme.darkDanger
-      : const Color(0xFFB42318);
+  Color get messagesBackground =>
+      _messagesDark ? AppTheme.darkBackground : ShopColors.canvas;
+  Color get messagesBackgroundSoft =>
+      _messagesDark ? AppTheme.darkSurfaceStrong : ShopColors.soft;
+  Color get messagesSurface =>
+      _messagesDark ? AppTheme.darkSurface : ShopColors.surface;
+  Color get messagesBorder =>
+      _messagesDark ? AppTheme.darkBorder : ShopColors.border;
+  Color get messagesAccent =>
+      _messagesDark ? AppTheme.darkMaroonDark : ShopColors.accent;
+  Color get messagesAccentText =>
+      _messagesDark ? AppTheme.darkMaroonSoft : ShopColors.accentDark;
+  Color get messagesText => _messagesDark ? AppTheme.darkText : ShopColors.text;
+  Color get messagesMuted =>
+      _messagesDark ? AppTheme.darkMuted : ShopColors.muted;
+  Color get messagesFaint =>
+      _messagesDark ? AppTheme.darkMutedSoft : ShopColors.faint;
+  Color get messagesTan => _messagesDark ? AppTheme.darkTan : ShopColors.tan;
+  Color get messagesDanger =>
+      _messagesDark ? AppTheme.darkDanger : const Color(0xFFB42318);
 }
 
 typedef LoadConversationMessagesCallback =
@@ -65,6 +61,13 @@ typedef SendBuyerAttachmentCallback =
 
 typedef ConversationMessageStreamBuilder =
     Stream<BuyerMessageData> Function(BuyerConversationData seller);
+
+typedef BuyerConversationPresenceRefreshCallback =
+    Future<BuyerConversationPresenceData> Function(
+      BuyerConversationData seller,
+    );
+
+typedef BuyerPresenceHeartbeatCallback = Future<void> Function();
 
 typedef RefreshConversationsCallback =
     Future<List<BuyerConversationData>> Function();
@@ -88,6 +91,7 @@ class BuyerConversationData {
   final String time;
 
   final int unread;
+  final MessageOrderContext? orderContext;
 
   /// Display-only seller status supplied by Laravel.
   ///
@@ -119,6 +123,7 @@ class BuyerConversationData {
     this.lastMessage = '',
     this.time = '',
     this.unread = 0,
+    this.orderContext,
     this.statusLabel,
     this.isOnline,
   });
@@ -128,6 +133,7 @@ class BuyerConversationData {
     String? lastMessage,
     String? time,
     int? unread,
+    MessageOrderContext? orderContext,
     String? statusLabel,
     bool? isOnline,
   }) {
@@ -140,6 +146,7 @@ class BuyerConversationData {
       lastMessage: lastMessage ?? this.lastMessage,
       time: time ?? this.time,
       unread: unread ?? this.unread,
+      orderContext: orderContext ?? this.orderContext,
       statusLabel: statusLabel ?? this.statusLabel,
       isOnline: isOnline ?? this.isOnline,
     );
@@ -158,43 +165,6 @@ class BuyerConversationData {
     }
 
     return parts.map((String part) => part[0].toUpperCase()).join();
-  }
-}
-
-class BuyerMessageData {
-  final String id;
-
-  final String body;
-  final String time;
-
-  final bool fromBuyer;
-
-  /// Optional attachment returned by Laravel.
-  /// Existing text-only messages can leave these null.
-  final String? attachmentUrl;
-  final String? attachmentName;
-
-  /// True when the other conversation participant has read this message.
-  /// Null means the API did not provide a read receipt.
-  final bool? seenByRecipient;
-
-  const BuyerMessageData({
-    required this.id,
-    required this.body,
-    required this.time,
-    required this.fromBuyer,
-    this.attachmentUrl,
-    this.attachmentName,
-    this.seenByRecipient,
-  });
-
-  bool get hasAttachment => attachmentUrl?.trim().isNotEmpty == true;
-
-  bool get isAttachmentPlaceholder {
-    return RegExp(
-      r'^\[(photo|image|attachment)\]$',
-      caseSensitive: false,
-    ).hasMatch(body.trim());
   }
 }
 
@@ -273,6 +243,10 @@ class MessagesScreen extends StatefulWidget {
 
   final RefreshConversationsCallback? onRefreshConversations;
 
+  final BuyerConversationPresenceRefreshCallback? onRefreshConversationPresence;
+
+  final BuyerPresenceHeartbeatCallback? onPresenceHeartbeat;
+
   /// Keep this configurable in case Laravel validation
   /// changes later.
   final int maxMessageLength;
@@ -294,14 +268,17 @@ class MessagesScreen extends StatefulWidget {
     this.onSendAttachment,
     this.messageStreamBuilder,
     this.onRefreshConversations,
-    this.maxMessageLength = 2000,
+    this.onRefreshConversationPresence,
+    this.onPresenceHeartbeat,
+    this.maxMessageLength = 1000,
   });
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
 }
 
-class _MessagesScreenState extends State<MessagesScreen> {
+class _MessagesScreenState extends State<MessagesScreen>
+    with WidgetsBindingObserver {
   Color get _background => context.messagesBackground;
   Color get _backgroundSoft => context.messagesBackgroundSoft;
   Color get _surface => context.messagesSurface;
@@ -344,6 +321,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Timer? _reconnectTimer;
 
+  Timer? _presenceTimer;
+
   bool _mobileShowingChat = false;
 
   bool _loadingMessages = false;
@@ -351,6 +330,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   bool _sendingMessage = false;
 
   bool _refreshingConversations = false;
+
+  bool _refreshingPresence = false;
+
+  bool _appInForeground = true;
 
   bool _realtimeConnected = false;
 
@@ -361,6 +344,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _conversations = List<BuyerConversationData>.from(widget.conversations);
 
@@ -382,6 +366,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       }
 
       _initializeActiveConversation();
+      _startPresencePolling();
     });
   }
 
@@ -470,13 +455,98 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void dispose() {
     _reconnectTimer?.cancel();
 
+    _presenceTimer?.cancel();
+
     _messageSubscription?.cancel();
 
     _messageController.dispose();
 
     _messageScrollController.dispose();
 
+    WidgetsBinding.instance.removeObserver(this);
+
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appInForeground = state == AppLifecycleState.resumed;
+    if (_appInForeground) {
+      unawaited(_refreshPresenceAndReceipt());
+    }
+  }
+
+  void _startPresencePolling() {
+    if (widget.onPresenceHeartbeat == null &&
+        widget.onRefreshConversationPresence == null) {
+      return;
+    }
+    unawaited(_refreshPresenceAndReceipt());
+    _presenceTimer?.cancel();
+    _presenceTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!mounted ||
+          !_appInForeground ||
+          !TickerMode.valuesOf(context).enabled) {
+        return;
+      }
+      unawaited(_refreshPresenceAndReceipt());
+    });
+  }
+
+  Future<void> _refreshPresenceAndReceipt() async {
+    if (_refreshingPresence || !mounted) return;
+    _refreshingPresence = true;
+    try {
+      try {
+        await widget.onPresenceHeartbeat?.call();
+      } catch (_) {
+        // Receipt polling can still work when a presence heartbeat fails.
+      }
+
+      final BuyerConversationData? seller = _activeSeller;
+      final BuyerConversationPresenceRefreshCallback? refresh =
+          widget.onRefreshConversationPresence;
+      if (seller == null || seller.conversationId.isEmpty || refresh == null) {
+        return;
+      }
+
+      final BuyerConversationPresenceData presence = await refresh(seller);
+      if (!mounted || !_isActiveSeller(seller)) return;
+      final DateTime? recipientReadAt = presence.recipientReadAt;
+      setState(() {
+        _activeSeller = seller.copyWith(
+          isOnline: presence.isOnline,
+          statusLabel: presence.isOnline ? 'Online' : 'Offline',
+        );
+        final int conversationIndex = _conversations.indexWhere(
+          (BuyerConversationData current) => _sameSeller(current, seller),
+        );
+        if (conversationIndex >= 0) {
+          _conversations[conversationIndex] = _conversations[conversationIndex]
+              .copyWith(
+                isOnline: presence.isOnline,
+                statusLabel: presence.isOnline ? 'Online' : 'Offline',
+              );
+        }
+        if (recipientReadAt != null) {
+          _messages = _messages
+              .map((BuyerMessageData message) {
+                final DateTime? sentAt = message.sentAt;
+                if (message.fromBuyer &&
+                    sentAt != null &&
+                    !sentAt.isAfter(recipientReadAt)) {
+                  return message.copyWith(seenByRecipient: true);
+                }
+                return message;
+              })
+              .toList(growable: false);
+        }
+      });
+    } catch (_) {
+      // Keep the last known presence and receipt while the API reconnects.
+    } finally {
+      _refreshingPresence = false;
+    }
   }
 
   BuyerConversationData? _resolveInitialSeller() {
@@ -485,7 +555,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
     if (suppliedSeller != null) {
       for (final BuyerConversationData seller in _conversations) {
         if (_sameSeller(seller, suppliedSeller)) {
-          return seller;
+          return seller.copyWith(
+            orderContext: suppliedSeller.orderContext ?? seller.orderContext,
+          );
         }
       }
 
@@ -527,7 +599,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
     if (previousActive != null) {
       for (final BuyerConversationData seller in _conversations) {
         if (_sameSeller(seller, previousActive)) {
-          return seller;
+          return seller.copyWith(
+            orderContext: previousActive.orderContext ?? seller.orderContext,
+          );
         }
       }
 
@@ -546,7 +620,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
       return a.sellerId == b.sellerId;
     }
 
-    return a.slug == b.slug;
+    final String aSlug = a.slug.trim().toLowerCase();
+    final String bSlug = b.slug.trim().toLowerCase();
+    if (aSlug.isNotEmpty && aSlug == bSlug) {
+      return true;
+    }
+
+    final String aName = a.name.trim().toLowerCase();
+    final String bName = b.name.trim().toLowerCase();
+    return aName.isNotEmpty && aName == bName;
   }
 
   MessageProductReference? get _activeProductReference {
@@ -635,7 +717,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
     setState(() {
       _mobileShowingChat = true;
 
-      _activeSeller = seller.copyWith(unread: 0);
+      _activeSeller = seller.copyWith(
+        unread: 0,
+        orderContext: alreadySelected
+            ? _activeSeller?.orderContext ?? seller.orderContext
+            : seller.orderContext,
+      );
 
       _markConversationReadLocally(seller);
 
@@ -890,13 +977,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
       return;
     }
 
+    final String preview = message.hasAttachment &&
+            (message.body.trim().isEmpty || message.isAttachmentPlaceholder)
+        ? 'Photo'
+        : message.body;
+
     final int index = _conversations.indexWhere(
       (BuyerConversationData current) => _sameSeller(current, seller),
     );
 
     if (index >= 0) {
       _conversations[index] = _conversations[index].copyWith(
-        lastMessage: message.body,
+        lastMessage: preview,
         time: message.time,
         unread: 0,
       );
@@ -914,7 +1006,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
      */
     _conversations.insert(
       0,
-      seller.copyWith(lastMessage: message.body, time: message.time, unread: 0),
+      seller.copyWith(lastMessage: preview, time: message.time, unread: 0),
     );
   }
 
@@ -937,10 +1029,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: Icon(
-                    Icons.photo_camera_outlined,
-                    color: _maroon,
-                  ),
+                  leading: Icon(Icons.photo_camera_outlined, color: _maroon),
                   title: Text(
                     'Take Photo',
                     style: TextStyle(color: _text, fontWeight: FontWeight.w800),
@@ -948,10 +1037,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   onTap: () => Navigator.of(context).pop(ImageSource.camera),
                 ),
                 ListTile(
-                  leading: Icon(
-                    Icons.photo_library_outlined,
-                    color: _maroon,
-                  ),
+                  leading: Icon(Icons.photo_library_outlined, color: _maroon),
                   title: Text(
                     'Choose Photo',
                     style: TextStyle(color: _text, fontWeight: FontWeight.w800),
@@ -1132,10 +1218,31 @@ class _MessagesScreenState extends State<MessagesScreen> {
         return;
       }
 
+      final bool createdConversation =
+          seller.conversationId.isEmpty && sent.conversationId.isNotEmpty;
+
+      if (sent.conversationId.isNotEmpty &&
+          sent.conversationId != seller.conversationId) {
+        setState(() {
+          _activeSeller = seller.copyWith(conversationId: sent.conversationId);
+        });
+      }
+
       _appendMessage(sent);
 
       _messageController.clear();
       await _refreshConversations();
+
+      // A Contact seller entry can start without an existing conversation.
+      // The first successful send creates it, so attach the live reply stream
+      // now that Laravel has returned its conversation ID.
+      final BuyerConversationData? activeSeller = _activeSeller;
+      if (createdConversation &&
+          mounted &&
+          activeSeller != null &&
+          activeSeller.conversationId.isNotEmpty) {
+        await _connectRealtime(activeSeller);
+      }
     } catch (error) {
       _showMessage(_errorText(error), error: true);
     } finally {
@@ -1173,7 +1280,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
       if (previousActive != null) {
         for (final BuyerConversationData seller in refreshed) {
           if (_sameSeller(seller, previousActive)) {
-            updatedActive = seller;
+            updatedActive = seller.copyWith(
+              orderContext: previousActive.orderContext,
+            );
             break;
           }
         }
@@ -1445,11 +1554,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         const SizedBox(height: 2),
         Text(
           'Keep conversations with sellers in one polished LIKHAE inbox',
-          style: TextStyle(
-            color: _muted,
-            fontSize: 11,
-            height: 1.4,
-          ),
+          style: TextStyle(color: _muted, fontSize: 11, height: 1.4),
         ),
       ],
     ),
@@ -1495,11 +1600,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       separatorBuilder: (BuildContext context, int index) {
                         return mobile
                             ? const SizedBox(height: 8)
-                            : Divider(
-                                height: 1,
-                                thickness: 1,
-                                color: _border,
-                              );
+                            : Divider(height: 1, thickness: 1, color: _border);
                       },
                       itemBuilder: (BuildContext context, int index) {
                         final BuyerConversationData conversation =
@@ -1867,6 +1968,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
         children: [
           _buildChatHeader(seller, mobile: mobile),
 
+          if (seller.orderContext != null)
+            _OrderContextStrip(orderContext: seller.orderContext!),
+
           Expanded(child: _buildMessageStream(seller)),
 
           _buildComposer(seller),
@@ -2217,12 +2321,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     style: IconButton.styleFrom(
                       backgroundColor: _surface,
                       foregroundColor: _maroon,
-                      shape: CircleBorder(
-                        side: BorderSide(color: _border),
-                      ),
+                      shape: CircleBorder(side: BorderSide(color: _border)),
                     ),
                     icon: _pickingAttachment
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
@@ -2326,11 +2428,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.chat_bubble_outline_rounded,
-                size: 55,
-                color: _tan,
-              ),
+              Icon(Icons.chat_bubble_outline_rounded, size: 55, color: _tan),
 
               const SizedBox(height: 14),
 
@@ -2353,11 +2451,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ? 'Provide the seller information when starting a new conversation from Product Details.'
                     : 'Select a conversation to start chatting.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 12.5,
-                  height: 1.55,
-                ),
+                style: TextStyle(color: _muted, fontSize: 12.5, height: 1.55),
               ),
             ],
           ),
@@ -2933,8 +3027,8 @@ class _ReceiptAvatar extends StatelessWidget {
                 ),
               ),
             )
-          : Image.network(
-              AppConfig.resolveMediaUrl(url),
+          : SizedNetworkImage(
+              url: AppConfig.resolveMediaUrl(url),
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Center(
                 child: Text(
@@ -2982,16 +3076,23 @@ class _MessageAttachmentImageState extends State<_MessageAttachmentImage> {
               return const SizedBox(width: 220, height: 150);
             }
 
-            return Image.network(
-              widget.url,
-              headers: snapshot.data,
+            return SizedBox(
               width: 220,
               height: 150,
-              fit: BoxFit.cover,
-              errorBuilder:
-                  (BuildContext context, Object error, StackTrace? stackTrace) {
-                    return const SizedBox(width: 220, height: 150);
-                  },
+              child: SizedNetworkImage(
+                url: widget.url,
+                headers: snapshot.data,
+                fit: BoxFit.cover,
+                placeholder: const SizedBox(width: 220, height: 150),
+                errorBuilder:
+                    (
+                      BuildContext context,
+                      Object error,
+                      StackTrace? stackTrace,
+                    ) {
+                      return const SizedBox(width: 220, height: 150);
+                    },
+              ),
             );
           },
     );
@@ -3054,8 +3155,8 @@ class _ProductInquiryCard extends StatelessWidget {
                     ),
                   ),
                   child: product.imageUrl?.trim().isNotEmpty == true
-                      ? Image.network(
-                          product.imageUrl!,
+                      ? SizedNetworkImage(
+                          url: product.imageUrl!,
                           fit: BoxFit.cover,
                           errorBuilder:
                               (
@@ -3141,6 +3242,162 @@ class _ProductInquiryCard extends StatelessWidget {
   }
 }
 
+class _OrderContextStrip extends StatelessWidget {
+  final MessageOrderContext orderContext;
+
+  const _OrderContextStrip({required this.orderContext});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 9, 14, 10),
+      decoration: BoxDecoration(
+        color: context.messagesSurface,
+        border: Border(bottom: BorderSide(color: context.messagesBorder)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                size: 15,
+                color: context.messagesAccent,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'ORDER CONTEXT',
+                style: TextStyle(
+                  color: context.messagesAccent,
+                  fontSize: 9.5,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'Order ${orderContext.orderReference}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: context.messagesText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (orderContext.status.trim().isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    orderContext.status,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      color: context.messagesMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (orderContext.products.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 62,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: orderContext.products.length,
+                separatorBuilder: (BuildContext context, int index) =>
+                    const SizedBox(width: 8),
+                itemBuilder: (BuildContext context, int index) {
+                  final MessageOrderProduct product =
+                      orderContext.products[index];
+                  final String imageUrl = product.imageUrl?.trim() ?? '';
+                  final List<String> details = <String>[
+                    'Qty ${product.quantity}',
+                    if (product.variant?.trim().isNotEmpty == true)
+                      product.variant!.trim(),
+                  ];
+
+                  return Container(
+                    width: 250,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: context.messagesBackgroundSoft,
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(color: context.messagesBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: context.messagesSurface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: imageUrl.isEmpty
+                              ? Icon(
+                                  Icons.shopping_bag_outlined,
+                                  color: context.messagesMuted,
+                                  size: 20,
+                                )
+                              : SizedNetworkImage(
+                                  url: AppConfig.resolveMediaUrl(imageUrl),
+                                  iconSize: 20,
+                                ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                product.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: context.messagesText,
+                                  fontSize: 10.5,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                details.join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: context.messagesMuted,
+                                  fontSize: 9.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SellerStatus extends StatelessWidget {
   final String label;
 
@@ -3217,30 +3474,19 @@ class _SellerAvatar extends StatelessWidget {
       ),
       child: url == null || url.isEmpty
           ? _InitialAvatar(initials: seller.initials)
-          : Image.network(
-              url,
+          : SizedNetworkImage(
+              url: url,
               fit: BoxFit.cover,
-              loadingBuilder:
-                  (
-                    BuildContext context,
-                    Widget child,
-                    ImageChunkEvent? progress,
-                  ) {
-                    if (progress == null) {
-                      return child;
-                    }
-
-                    return const Center(
-                      child: SizedBox(
-                        width: 15,
-                        height: 15,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.5,
-                          color: Colors.white,
-                        ),
-                      ),
-                    );
-                  },
+              placeholder: const Center(
+                child: SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
                     return _InitialAvatar(initials: seller.initials);

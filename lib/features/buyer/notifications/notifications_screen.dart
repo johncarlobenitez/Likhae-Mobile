@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 
-import '../../../services/realtime_service.dart';
-
 enum BuyerNotificationType {
   orders,
   deliveries,
   messages,
   rewards,
   account,
+  stores,
+  announcements,
   general,
 }
 
@@ -32,6 +32,12 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
 
       case BuyerNotificationType.account:
         return 'account';
+
+      case BuyerNotificationType.stores:
+        return 'stores';
+
+      case BuyerNotificationType.announcements:
+        return 'announcements';
 
       case BuyerNotificationType.general:
         return 'general';
@@ -55,6 +61,12 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
       case BuyerNotificationType.account:
         return 'Account';
 
+      case BuyerNotificationType.stores:
+        return 'Stores';
+
+      case BuyerNotificationType.announcements:
+        return 'Announcements';
+
       case BuyerNotificationType.general:
         return 'General';
     }
@@ -77,6 +89,12 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
       case BuyerNotificationType.account:
         return Icons.person_outline_rounded;
 
+      case BuyerNotificationType.stores:
+        return Icons.storefront_outlined;
+
+      case BuyerNotificationType.announcements:
+        return Icons.campaign_outlined;
+
       case BuyerNotificationType.general:
         return Icons.notifications_none_rounded;
     }
@@ -94,6 +112,10 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
         return const Color(0xFFF6EDE2);
       case BuyerNotificationType.account:
         return const Color(0xFFF3E9E6);
+      case BuyerNotificationType.stores:
+        return const Color(0xFFEAF2EA);
+      case BuyerNotificationType.announcements:
+        return const Color(0xFFF5ECDE);
       case BuyerNotificationType.general:
         return const Color(0xFFF1ECE7);
     }
@@ -111,6 +133,10 @@ extension BuyerNotificationTypeInfo on BuyerNotificationType {
         return const Color(0xFF91622B);
       case BuyerNotificationType.account:
         return const Color(0xFF83504B);
+      case BuyerNotificationType.stores:
+        return const Color(0xFF3F7251);
+      case BuyerNotificationType.announcements:
+        return const Color(0xFF8A642B);
       case BuyerNotificationType.general:
         return ShopColors.secondaryText;
     }
@@ -124,6 +150,8 @@ enum NotificationFilter {
   messages,
   rewards,
   account,
+  stores,
+  announcements,
   general,
 }
 
@@ -147,6 +175,12 @@ extension NotificationFilterInfo on NotificationFilter {
 
       case NotificationFilter.account:
         return 'Account';
+
+      case NotificationFilter.stores:
+        return 'Stores';
+
+      case NotificationFilter.announcements:
+        return 'Announcements';
 
       case NotificationFilter.general:
         return 'General';
@@ -172,6 +206,12 @@ extension NotificationFilterInfo on NotificationFilter {
 
       case NotificationFilter.account:
         return BuyerNotificationType.account;
+
+      case NotificationFilter.stores:
+        return BuyerNotificationType.stores;
+
+      case NotificationFilter.announcements:
+        return BuyerNotificationType.announcements;
 
       case NotificationFilter.general:
         return BuyerNotificationType.general;
@@ -397,9 +437,18 @@ class BuyerNotificationData {
       case 'rider_safety_updates':
         return BuyerNotificationType.account;
 
+      case 'stores':
+      case 'store':
+      case 'store_follow':
+      case 'store_update':
+        return BuyerNotificationType.stores;
+
+      case 'announcement':
+      case 'announcements':
+        return BuyerNotificationType.announcements;
+
       case 'general':
       case 'system':
-      case 'announcement':
         return BuyerNotificationType.general;
     }
 
@@ -454,6 +503,8 @@ typedef NotificationTapCallback =
     Future<void> Function(BuyerNotificationData notification);
 
 typedef MarkAllNotificationsReadCallback = Future<void> Function();
+typedef MarkNotificationReadCallback = Future<void> Function(String id);
+typedef DismissAnnouncementCallback = Future<void> Function(String id);
 
 typedef RefreshNotificationsCallback =
     Future<List<BuyerNotificationData>> Function();
@@ -474,14 +525,17 @@ class NotificationsScreen extends StatefulWidget {
   /// Message notification -> Messages
   /// Reward notification  -> Rewards
   ///
-  /// This callback does NOT automatically mark the
-  /// notification as read because the current Buyer flow
-  /// only guarantees a "mark all read" operation.
+  /// The screen marks unread notifications as read before
+  /// invoking this callback when [onMarkAsRead] is provided.
   final NotificationTapCallback? onNotificationTap;
 
   /// Corresponds to the Laravel buyer notification
   /// mark-all-read operation.
   final MarkAllNotificationsReadCallback? onMarkAllAsRead;
+
+  final MarkNotificationReadCallback? onMarkAsRead;
+
+  final DismissAnnouncementCallback? onDismissAnnouncement;
 
   /// Reload the authoritative notification list from Laravel.
   final RefreshNotificationsCallback? onRefresh;
@@ -499,6 +553,8 @@ class NotificationsScreen extends StatefulWidget {
     this.onBack,
     this.onNotificationTap,
     this.onMarkAllAsRead,
+    this.onMarkAsRead,
+    this.onDismissAnnouncement,
     this.onRefresh,
     this.realtimeStreamBuilder,
     this.onUnreadCountChanged,
@@ -526,8 +582,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   static const Color _muted = ShopColors.muted;
 
   static const Color _muted2 = ShopColors.faint;
-
-  static const Color _tan = ShopColors.tan;
 
   static const Color _danger = Color(0xFFB42318);
 
@@ -734,14 +788,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
 
     try {
-      /*
-       * Opening a notification and marking a notification
-       * as read are intentionally separate concerns.
-       *
-       * We do NOT locally flip unread=false here because the
-       * known Laravel Buyer notification flow guarantees
-       * mark-all-read, not a per-notification read endpoint.
-       */
+      final MarkNotificationReadCallback? markAsRead = widget.onMarkAsRead;
+      if (notification.unread && markAsRead != null) {
+        await markAsRead(notification.id);
+        if (!mounted) return;
+        setState(() {
+          final int index = _notifications.indexWhere(
+            (BuyerNotificationData item) => item.id == notification.id,
+          );
+          if (index >= 0) {
+            _notifications[index] = _notifications[index].copyWith(
+              unread: false,
+            );
+          }
+        });
+        _notifyUnreadCountChanged();
+      }
       await callback(notification);
     } catch (error) {
       _showMessage(_errorText(error), error: true);
@@ -751,6 +813,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _openingNotificationIds.remove(notification.id);
         });
       }
+    }
+  }
+
+  Future<void> _dismissAnnouncement(BuyerNotificationData notification) async {
+    final DismissAnnouncementCallback? callback = widget.onDismissAnnouncement;
+    if (callback == null ||
+        notification.type != BuyerNotificationType.announcements) {
+      return;
+    }
+    try {
+      await callback(notification.id);
+      if (!mounted) return;
+      setState(() {
+        _notifications.removeWhere(
+          (BuyerNotificationData item) => item.id == notification.id,
+        );
+      });
+      _notifyUnreadCountChanged();
+      _showMessage('Announcement dismissed.');
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
     }
   }
 
@@ -879,8 +962,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           GlassIconButton(
             icon: Icons.arrow_back_rounded,
             label: 'Back',
-            onPressed:
-                widget.onBack ?? () => Navigator.of(context).maybePop(),
+            onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -1105,6 +1187,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onTap: () {
               _openNotification(notification);
             },
+            onDismiss:
+                notification.type == BuyerNotificationType.announcements &&
+                    widget.onDismissAnnouncement != null
+                ? () => _dismissAnnouncement(notification)
+                : null,
           );
         }),
       ),
@@ -1174,6 +1261,7 @@ class _NotificationTile extends StatelessWidget {
   final bool showDivider;
 
   final VoidCallback onTap;
+  final VoidCallback? onDismiss;
 
   const _NotificationTile({
     required this.notification,
@@ -1181,6 +1269,7 @@ class _NotificationTile extends StatelessWidget {
     required this.enabled,
     required this.showDivider,
     required this.onTap,
+    this.onDismiss,
   });
 
   @override
@@ -1349,6 +1438,16 @@ class _NotificationTile extends StatelessWidget {
                     color: ShopColors.accent,
                     shape: BoxShape.circle,
                   ),
+                ),
+              ],
+
+              if (onDismiss != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  onPressed: onDismiss,
+                  tooltip: 'Dismiss announcement',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close_rounded, size: 18),
                 ),
               ],
             ],

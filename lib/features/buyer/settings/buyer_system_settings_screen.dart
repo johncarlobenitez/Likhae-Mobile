@@ -153,6 +153,14 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
                               onChanged: (bool value) =>
                                   settings.update(promotionUpdates: value),
                             ),
+                            _SettingSwitch(
+                              title: 'Show Online Status',
+                              description:
+                                  'Let sellers know when you are available in Messages.',
+                              value: settings.showOnlineStatus,
+                              onChanged: (bool value) =>
+                                  settings.update(showOnlineStatus: value),
+                            ),
                           ],
                   ),
                 ),
@@ -329,10 +337,18 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
     final Widget saveButton = FilledButton(
       onPressed: () async {
         try {
-          await BuyerSystemSettingsController.instance.save();
+          final bool synced = await BuyerSystemSettingsController.instance.save(
+            syncServer: !riderMode,
+          );
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Settings saved on this device.')),
+            SnackBar(
+              content: Text(
+                riderMode || synced
+                    ? 'Settings saved.'
+                    : 'Device settings saved. Account sync is unavailable right now.',
+              ),
+            ),
           );
         } catch (_) {
           if (!context.mounted) return;

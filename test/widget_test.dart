@@ -1,15 +1,18 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:likhae/app.dart';
 import 'package:likhae/features/buyer/orders/orders_screen.dart';
 
 void main() {
-  testWidgets('App smoke test — renders without crashing',
-      (WidgetTester tester) async {
+  testWidgets('App smoke test — renders without crashing', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const LikhaeApp());
-    await tester.pumpAndSettle();
 
-    // The app should build and display something on screen.
+    // The initial route can keep a live progress indicator running, so the
+    // smoke test only needs the first frame to verify that the app builds.
+    expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.byType(LikhaeApp), findsOneWidget);
   });
 

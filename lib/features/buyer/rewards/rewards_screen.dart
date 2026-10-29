@@ -2,11 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 
-enum RewardsTab {
-  vouchers,
-  points,
-  cashback,
-}
+enum RewardsTab { vouchers, points, cashback }
 
 extension RewardsTabInfo on RewardsTab {
   String get label {
@@ -76,6 +72,11 @@ class RewardVoucherData {
   final double? discountAmount;
   final double? minimumOrderAmount;
   final double? maximumDiscountAmount;
+  final int? voucherId;
+  final String voucherType;
+  final bool isCollected;
+  final bool canClaim;
+  final String? unavailableReason;
 
   /// Optional explicit usability supplied by Laravel.
   ///
@@ -98,6 +99,11 @@ class RewardVoucherData {
     this.minimumOrderAmount,
     this.maximumDiscountAmount,
     this.canUse,
+    this.voucherId,
+    this.voucherType = 'seller',
+    this.isCollected = false,
+    this.canClaim = false,
+    this.unavailableReason,
   });
 }
 
@@ -111,6 +117,8 @@ class RewardsData {
   final List<CashbackActivityData> cashbackActivities;
   final int pointsPerCompletedOrder;
   final int pointsPerReview;
+  final int minimumPointsRedemption;
+  final int pointsPerPeso;
   final double cashbackRate;
 
   const RewardsData({
@@ -123,6 +131,8 @@ class RewardsData {
     required this.cashbackActivities,
     required this.pointsPerCompletedOrder,
     required this.pointsPerReview,
+    this.minimumPointsRedemption = 100,
+    this.pointsPerPeso = 100,
     required this.cashbackRate,
   });
 }
@@ -172,9 +182,9 @@ class CashbackActivityData {
 
 typedef RewardsRefreshCallback = Future<RewardsData> Function();
 
-typedef RewardVoucherCallback = void Function(
-  RewardVoucherData voucher,
-);
+typedef RewardVoucherCallback = void Function(RewardVoucherData voucher);
+
+typedef RewardVoucherClaimCallback = Future<void> Function(int voucherId);
 
 class RewardsScreen extends StatefulWidget {
   final RewardsTab initialTab;
@@ -188,8 +198,7 @@ class RewardsScreen extends StatefulWidget {
   final double availableCashback;
   final double pendingCashback;
 
-  final List<CashbackActivityData>
-      cashbackActivities;
+  final List<CashbackActivityData> cashbackActivities;
 
   /// Current Buyer rewards rules.
   ///
@@ -197,6 +206,8 @@ class RewardsScreen extends StatefulWidget {
   /// redesigned if the Laravel rewards rules change later.
   final int pointsPerCompletedOrder;
   final int pointsPerReview;
+  final int minimumPointsRedemption;
+  final int pointsPerPeso;
 
   /// 0.02 = 2%
   final double cashbackRate;
@@ -204,10 +215,7 @@ class RewardsScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onBrowseProducts;
 
-  /// Retained for compatibility with the previous page.
-  ///
-  /// This page deliberately does not imply that points or
-  /// cashback are automatically redeemable during Checkout.
+  /// Opens the cart so buyers can redeem points during Checkout.
   final VoidCallback? onGoToCheckout;
 
   /// Preferred behavior:
@@ -219,6 +227,8 @@ class RewardsScreen extends StatefulWidget {
   /// as used.
   final RewardVoucherCallback? onUseVoucher;
 
+  final RewardVoucherClaimCallback? onClaimVoucher;
+
   final ValueChanged<RewardsTab>? onTabChanged;
 
   final RewardsRefreshCallback? onRefresh;
@@ -226,81 +236,65 @@ class RewardsScreen extends StatefulWidget {
   const RewardsScreen({
     super.key,
     this.initialTab = RewardsTab.vouchers,
-    this.activeVouchers =
-        const <RewardVoucherData>[],
-    this.voucherHistory =
-        const <VoucherHistoryData>[],
+    this.activeVouchers = const <RewardVoucherData>[],
+    this.voucherHistory = const <VoucherHistoryData>[],
     this.pointsBalance = 0,
-    this.pointActivities =
-        const <PointsActivityData>[],
+    this.pointActivities = const <PointsActivityData>[],
     this.availableCashback = 0,
     this.pendingCashback = 0,
-    this.cashbackActivities =
-        const <CashbackActivityData>[],
+    this.cashbackActivities = const <CashbackActivityData>[],
     this.pointsPerCompletedOrder = 50,
     this.pointsPerReview = 20,
+    this.minimumPointsRedemption = 100,
+    this.pointsPerPeso = 100,
     this.cashbackRate = 0.02,
     this.onBack,
     this.onBrowseProducts,
     this.onGoToCheckout,
     this.onUseVoucher,
+    this.onClaimVoucher,
     this.onTabChanged,
     this.onRefresh,
   });
 
   @override
-  State<RewardsScreen> createState() =>
-      _RewardsScreenState();
+  State<RewardsScreen> createState() => _RewardsScreenState();
 }
 
-class _RewardsScreenState
-    extends State<RewardsScreen> {
-  static const Color _background =
-      ShopColors.canvas;
+class _RewardsScreenState extends State<RewardsScreen> {
+  static const Color _background = ShopColors.canvas;
 
-  static const Color _backgroundSoft =
-      ShopColors.soft;
+  static const Color _backgroundSoft = ShopColors.soft;
 
-  static const Color _backgroundAlt =
-      ShopColors.soft;
+  static const Color _backgroundAlt = ShopColors.soft;
 
-  static const Color _surface =
-      ShopColors.surface;
+  static const Color _surface = ShopColors.surface;
 
-  static const Color _border =
-      ShopColors.border;
+  static const Color _border = ShopColors.border;
 
-  static const Color _maroon =
-      ShopColors.accent;
+  static const Color _maroon = ShopColors.accent;
 
-  static const Color _maroon2 =
-      Color(0xFF642920);
+  static const Color _maroon2 = Color(0xFF642920);
 
-  static const Color _maroonDark =
-      ShopColors.accentDark;
+  static const Color _maroonDark = ShopColors.accentDark;
 
-  static const Color _text =
-      ShopColors.text;
+  static const Color _text = ShopColors.text;
 
-  static const Color _brown =
-      ShopColors.secondaryText;
+  static const Color _brown = ShopColors.secondaryText;
 
-  static const Color _muted =
-      ShopColors.muted;
+  static const Color _muted = ShopColors.muted;
 
-  static const Color _tan =
-      ShopColors.tan;
+  static const Color _tan = ShopColors.tan;
 
-  static const Color _warning =
-      Color(0xFF9A5B11);
+  static const Color _warning = Color(0xFF9A5B11);
 
-  static const Color _danger =
-      Color(0xFFB42318);
+  static const Color _danger = Color(0xFFB42318);
 
   late RewardsTab _activeTab;
   late RewardsData _data;
 
   bool _refreshing = false;
+  final Set<int> _claimingVoucherIds = <int>{};
 
   @override
   void initState() {
@@ -311,22 +305,18 @@ class _RewardsScreenState
   }
 
   @override
-  void didUpdateWidget(
-    covariant RewardsScreen oldWidget,
-  ) {
-    super.didUpdateWidget(
-      oldWidget,
-    );
+  void didUpdateWidget(covariant RewardsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.initialTab !=
-        widget.initialTab) {
-      _activeTab =
-          widget.initialTab;
+    if (oldWidget.initialTab != widget.initialTab) {
+      _activeTab = widget.initialTab;
     }
     if (oldWidget.activeVouchers != widget.activeVouchers ||
         oldWidget.voucherHistory != widget.voucherHistory ||
         oldWidget.pointsBalance != widget.pointsBalance ||
         oldWidget.pointActivities != widget.pointActivities ||
+        oldWidget.minimumPointsRedemption != widget.minimumPointsRedemption ||
+        oldWidget.pointsPerPeso != widget.pointsPerPeso ||
         oldWidget.availableCashback != widget.availableCashback ||
         oldWidget.pendingCashback != widget.pendingCashback ||
         oldWidget.cashbackActivities != widget.cashbackActivities) {
@@ -345,14 +335,14 @@ class _RewardsScreenState
     pointsPerCompletedOrder: widget.pointsPerCompletedOrder,
     pointsPerReview: widget.pointsPerReview,
     cashbackRate: widget.cashbackRate,
+    minimumPointsRedemption: widget.minimumPointsRedemption,
+    pointsPerPeso: widget.pointsPerPeso,
   );
 
   Future<void> _refresh() async {
-    final RewardsRefreshCallback? callback =
-        widget.onRefresh;
+    final RewardsRefreshCallback? callback = widget.onRefresh;
 
-    if (callback == null ||
-        _refreshing) {
+    if (callback == null || _refreshing) {
       return;
     }
 
@@ -367,12 +357,7 @@ class _RewardsScreenState
         _data = refreshed;
       });
     } catch (error) {
-      _showMessage(
-        _errorText(
-          error,
-        ),
-        error: true,
-      );
+      _showMessage(_errorText(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -382,9 +367,7 @@ class _RewardsScreenState
     }
   }
 
-  void _changeTab(
-    RewardsTab tab,
-  ) {
+  void _changeTab(RewardsTab tab) {
     if (_activeTab == tab) {
       return;
     }
@@ -393,14 +376,10 @@ class _RewardsScreenState
       _activeTab = tab;
     });
 
-    widget.onTabChanged?.call(
-      tab,
-    );
+    widget.onTabChanged?.call(tab);
   }
 
-  void _useVoucher(
-    RewardVoucherData voucher,
-  ) {
+  void _useVoucher(RewardVoucherData voucher) {
     if (voucher.canUse == false) {
       _showMessage(
         'This voucher is not currently available for use.',
@@ -410,8 +389,7 @@ class _RewardsScreenState
       return;
     }
 
-    final RewardVoucherCallback? callback =
-        widget.onUseVoucher;
+    final RewardVoucherCallback? callback = widget.onUseVoucher;
 
     if (callback == null) {
       return;
@@ -425,133 +403,95 @@ class _RewardsScreenState
      * The actual voucher must still be validated during
      * Checkout by Laravel.
      */
-    callback(
-      voucher,
-    );
+    callback(voucher);
   }
 
-  void _showMessage(
-    String message, {
-    bool error = false,
-  }) {
+  Future<void> _claimVoucher(RewardVoucherData voucher) async {
+    final int? voucherId = voucher.voucherId;
+    final RewardVoucherClaimCallback? callback = widget.onClaimVoucher;
+    if (!voucher.canClaim || voucherId == null || callback == null) return;
+    if (!_claimingVoucherIds.add(voucherId)) return;
+    setState(() {});
+    try {
+      await callback(voucherId);
+      await _refresh();
+      if (mounted) _showMessage('Voucher added to your Rewards.');
+    } catch (error) {
+      if (mounted) _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) {
+        setState(() => _claimingVoucherIds.remove(voucherId));
+      } else {
+        _claimingVoucherIds.remove(voucherId);
+      }
+    }
+  }
+
+  void _showMessage(String message, {bool error = false}) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    )
+    ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          behavior:
-              SnackBarBehavior.floating,
-          backgroundColor:
-              error
-                  ? _danger
-                  : _maroonDark,
-          margin:
-              const EdgeInsets.all(
-            16,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: error ? _danger : _maroonDark,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
-          shape:
-              RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(
-              14,
-            ),
-          ),
-          content:
-              Text(
+          content: Text(
             message,
-            style:
-                const TextStyle(
-              color:
-                  Colors.white,
-              fontWeight:
-                  FontWeight.w500,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
       );
   }
 
-  String _errorText(
-    Object error,
-  ) {
-    return error
-        .toString()
-        .replaceFirst(
-          'Exception: ',
-          '',
-        );
+  String _errorText(Object error) {
+    return error.toString().replaceFirst('Exception: ', '');
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          _background,
+      backgroundColor: _background,
       body: SafeArea(
         bottom: false,
-        child:
-            Column(
+        child: Column(
           children: [
             _buildTopBar(),
 
             Expanded(
-              child:
-                  RefreshIndicator(
-                color:
-                    _maroon,
-                onRefresh:
-                    _refresh,
-                child:
-                    ListView(
-                  physics:
-                      const AlwaysScrollableScrollPhysics(),
-                  padding:
-                      const EdgeInsets.fromLTRB(
-                    14,
-                    14,
-                    14,
-                    100,
-                  ),
+              child: RefreshIndicator(
+                color: _maroon,
+                onRefresh: _refresh,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
                   children: [
                     _buildHeader(),
 
-                    const SizedBox(
-                      height: 18,
-                    ),
+                    const SizedBox(height: 18),
 
                     _buildOverviewCards(),
 
-                    const SizedBox(
-                      height: 18,
-                    ),
+                    const SizedBox(height: 18),
 
                     _buildTabs(),
 
-                    const SizedBox(
-                      height: 18,
-                    ),
+                    const SizedBox(height: 18),
 
                     AnimatedSwitcher(
-                      duration:
-                          const Duration(
-                        milliseconds:
-                            220,
-                      ),
-                      child:
-                          KeyedSubtree(
-                        key:
-                            ValueKey<RewardsTab>(
-                          _activeTab,
-                        ),
-                        child:
-                            _buildActiveTab(),
+                      duration: const Duration(milliseconds: 220),
+                      child: KeyedSubtree(
+                        key: ValueKey<RewardsTab>(_activeTab),
+                        child: _buildActiveTab(),
                       ),
                     ),
                   ],
@@ -572,175 +512,93 @@ class _RewardsScreenState
 
   Widget _buildHeader() {
     return Container(
-      width:
-          double.infinity,
-      padding:
-          const EdgeInsets.all(
-        20,
-      ),
-      decoration:
-          BoxDecoration(
-        borderRadius:
-            BorderRadius.circular(24),
-        border:
-            Border.all(
-          color:
-              _border,
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _border),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[_surface, _backgroundSoft, _backgroundAlt],
         ),
-        gradient:
-            const LinearGradient(
-          begin:
-              Alignment.topLeft,
-          end:
-              Alignment.bottomRight,
-          colors:
-              <Color>[
-            _surface,
-            _backgroundSoft,
-            _backgroundAlt,
-          ],
-        ),
-        boxShadow:
-            <BoxShadow>[
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color:
-                _maroon.withValues(
-              alpha: 0.055,
-            ),
-            blurRadius:
-                24,
-            offset:
-                const Offset(
-              0,
-              10,
-            ),
+            color: _maroon.withValues(alpha: 0.055),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      child:
-          Stack(
+      child: Stack(
         children: [
           Positioned(
-            right:
-                -45,
-            top:
-                -55,
-            child:
-                Container(
-              width:
-                  150,
-              height:
-                  150,
-              decoration:
-                  BoxDecoration(
-                shape:
-                    BoxShape.circle,
-                color:
-                    _tan.withValues(
-                  alpha: 0.14,
-                ),
+            right: -45,
+            top: -55,
+            child: Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _tan.withValues(alpha: 0.14),
               ),
             ),
           ),
 
           Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'BUYER BENEFITS',
-                style:
-                    TextStyle(
-                  color:
-                      _maroon,
-                  fontSize:
-                      8.5,
-                  letterSpacing:
-                      1.7,
-                  fontWeight:
-                      FontWeight.w800,
+                style: TextStyle(
+                  color: _maroon,
+                  fontSize: 8.5,
+                  letterSpacing: 1.7,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
-              const SizedBox(
-                height: 7,
-              ),
+              const SizedBox(height: 7),
 
               const Text(
                 'Rewards &\nVouchers',
-                style:
-                    TextStyle(
-                  color:
-                      _text,
-                  fontSize:
-                      30,
-                  height:
-                      1,
-                  letterSpacing:
-                      -0.8,
-                  fontWeight:
-                      FontWeight.w800,
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 30,
+                  height: 1,
+                  letterSpacing: -0.8,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
-              const SizedBox(
-                height: 9,
-              ),
+              const SizedBox(height: 9),
 
               const Text(
                 'Review your current benefits and reward activity from LIKHAE.',
-                style:
-                    TextStyle(
-                  color:
-                      _muted,
-                  fontSize:
-                      11,
-                  height:
-                      1.5,
-                ),
+                style: TextStyle(color: _muted, fontSize: 11, height: 1.5),
               ),
 
-              const SizedBox(
-                height: 16,
-              ),
+              const SizedBox(height: 16),
 
               SizedBox(
-                height:
-                    43,
-                child:
-                    ElevatedButton.icon(
-                  onPressed:
-                      widget.onBrowseProducts,
-                  style:
-                      OutlinedButton.styleFrom(
+                height: 43,
+                child: ElevatedButton.icon(
+                  onPressed: widget.onBrowseProducts,
+                  style: OutlinedButton.styleFrom(
                     backgroundColor: _maroon,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     minimumSize: const Size(148, 46),
-                    shape:
-                        RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(
-                        12,
-                      ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  icon:
-                      const Icon(
-                    Icons
-                        .shopping_bag_outlined,
-                    size:
-                        17,
-                  ),
-                  label:
-                      const Text(
+                  icon: const Icon(Icons.shopping_bag_outlined, size: 17),
+                  label: const Text(
                     'Browse Products',
-                    style:
-                        TextStyle(
-                      fontSize:
-                          10.5,
-                      fontWeight:
-                          FontWeight.w800,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -754,83 +612,45 @@ class _RewardsScreenState
 
   Widget _buildOverviewCards() {
     return LayoutBuilder(
-      builder:
-          (
-        BuildContext context,
-        BoxConstraints constraints,
-      ) {
-        final int columns =
-            constraints.maxWidth >=
-                    720
-                ? 3
-                : constraints.maxWidth >=
-                        430
-                    ? 3
-                    : 1;
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int columns = constraints.maxWidth >= 720
+            ? 3
+            : constraints.maxWidth >= 430
+            ? 3
+            : 1;
 
-        const double spacing =
-            9;
+        const double spacing = 9;
 
-        final double width =
-            columns == 1
-                ? constraints.maxWidth
-                : (constraints.maxWidth -
-                        (spacing *
-                            (columns -
-                                1))) /
-                    columns;
+        final double width = columns == 1
+            ? constraints.maxWidth
+            : (constraints.maxWidth - (spacing * (columns - 1))) / columns;
 
         return Wrap(
-          spacing:
-              spacing,
-          runSpacing:
-              spacing,
-          children:
-              <Widget>[
+          spacing: spacing,
+          runSpacing: spacing,
+          children: <Widget>[
             SizedBox(
-              width:
-                  width,
-              child:
-                  _RewardStatCard(
-                icon:
-                    Icons
-                        .confirmation_number_outlined,
-                label:
-                    'Active vouchers',
-                value:
-                    '${_data.activeVouchers.length}',
+              width: width,
+              child: _RewardStatCard(
+                icon: Icons.confirmation_number_outlined,
+                label: 'Active vouchers',
+                value: '${_data.activeVouchers.length}',
               ),
             ),
             SizedBox(
-              width:
-                  width,
-              child:
-                  _RewardStatCard(
-                icon:
-                    Icons
-                        .stars_rounded,
-                label:
-                    'Reward points',
-                value:
-                    _formatInteger(
-                  _data.pointsBalance,
-                ),
+              width: width,
+              child: _RewardStatCard(
+                icon: Icons.stars_rounded,
+                label: 'Reward points',
+                value: _formatInteger(_data.pointsBalance),
               ),
             ),
             SizedBox(
-              width:
-                  width,
-              child:
-                  _RewardStatCard(
-                icon:
-                    Icons
-                        .account_balance_wallet_outlined,
-                label:
-                    'Cashback',
-                value:
-                    _formatMoney(
-                  _data.availableCashback,
-                ),
+              width: width,
+              child: _RewardStatCard(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Cashback',
+                value: _formatMoney(_data.availableCashback),
               ),
             ),
           ],
@@ -853,7 +673,9 @@ class _RewardsScreenState
             border: Border.all(color: _border),
           ),
           child: Row(
-            children: List<Widget>.generate(RewardsTab.values.length, (int index) {
+            children: List<Widget>.generate(RewardsTab.values.length, (
+              int index,
+            ) {
               final RewardsTab tab = RewardsTab.values[index];
               final bool selected = tab == _activeTab;
 
@@ -926,89 +748,59 @@ class _RewardsScreenState
 
   Widget _buildVouchers() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionHeading(
-          kicker:
-              'AVAILABLE',
-          title:
-              'My Vouchers',
+          kicker: 'AVAILABLE',
+          title: 'My Vouchers',
           description:
               'Seller voucher campaigns currently available to your buyer account.',
         ),
 
-        const SizedBox(
-          height:
-              14,
-        ),
+        const SizedBox(height: 14),
 
         if (_data.activeVouchers.isEmpty)
           _buildNoVoucherCard()
         else
-          ..._data.activeVouchers.map(
-            (
-              RewardVoucherData voucher,
-            ) {
-              return Padding(
-                padding:
-                    const EdgeInsets.only(
-                  bottom:
-                      11,
-                ),
-                child:
-                    _VoucherCard(
-                  voucher:
-                      voucher,
-                  canOpen:
-                      widget.onUseVoucher !=
-                              null &&
-                          voucher.canUse !=
-                              false,
-                  onUse:
-                      () {
-                    _useVoucher(
-                      voucher,
-                    );
-                  },
-                ),
-              );
-            },
-          ),
+          ..._data.activeVouchers.map((RewardVoucherData voucher) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 11),
+              child: _VoucherCard(
+                voucher: voucher,
+                canClaim: widget.onClaimVoucher != null && voucher.canClaim,
+                claiming:
+                    voucher.voucherId != null &&
+                    _claimingVoucherIds.contains(voucher.voucherId),
+                canOpen:
+                    widget.onUseVoucher != null &&
+                    voucher.canUse != false &&
+                    (voucher.isCollected ||
+                        voucher.voucherType == 'platform' ||
+                        voucher.voucherType == 'shipping'),
+                onClaim: () => _claimVoucher(voucher),
+                onUse: () {
+                  _useVoucher(voucher);
+                },
+              ),
+            );
+          }),
 
-        const SizedBox(
-          height:
-              8,
-        ),
+        const SizedBox(height: 8),
 
         _RewardPanel(
-          title:
-              'Voucher History',
-          icon:
-              Icons
-                  .history_rounded,
-          child:
-              _data.voucherHistory.isEmpty
-                  ? const _SimpleEmptyRow(
-                      title:
-                          'No voucher history yet',
-                      subtitle:
-                          'Used or expired voucher activity will appear here when available.',
-                    )
-                  : Column(
-                      children:
-                          _data.voucherHistory
-                              .map(
-                        (
-                          VoucherHistoryData item,
-                        ) {
-                          return _VoucherHistoryRow(
-                            item:
-                                item,
-                          );
-                        },
-                      ).toList(),
-                    ),
+          title: 'Voucher History',
+          icon: Icons.history_rounded,
+          child: _data.voucherHistory.isEmpty
+              ? const _SimpleEmptyRow(
+                  title: 'No voucher history yet',
+                  subtitle:
+                      'Used or expired voucher activity will appear here when available.',
+                )
+              : Column(
+                  children: _data.voucherHistory.map((VoucherHistoryData item) {
+                    return _VoucherHistoryRow(item: item);
+                  }).toList(),
+                ),
         ),
       ],
     );
@@ -1016,119 +808,70 @@ class _RewardsScreenState
 
   Widget _buildNoVoucherCard() {
     return Container(
-      padding:
-          const EdgeInsets.all(
-        17,
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: _surface,
+        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(20),
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            _surface,
-        border:
-            Border.all(
-          color:
-              _border,
-        ),
-        borderRadius:
-            BorderRadius.circular(20),
-      ),
-      child:
-          Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width:
-                    54,
-                height:
-                    54,
-                decoration:
-                    BoxDecoration(
-                  color:
-                      ShopColors.accentSoft,
-                  borderRadius:
-                      BorderRadius.circular(
-                    15,
-                  ),
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: ShopColors.accentSoft,
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                alignment:
-                    Alignment.center,
-                child:
-                    const Text(
+                alignment: Alignment.center,
+                child: const Text(
                   '%',
-                  style:
-                      TextStyle(
-                    color:
-                        _maroon,
-                    fontSize:
-                        18,
-                    fontWeight:
-                        FontWeight.w800,
+                  style: TextStyle(
+                    color: _maroon,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
 
-              const SizedBox(
-                width:
-                    12,
-              ),
+              const SizedBox(width: 12),
 
               const Expanded(
-                child:
-                    Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'NO ACTIVE VOUCHERS',
-                      style:
-                          TextStyle(
-                        color:
-                            _maroon,
-                        fontSize:
-                            7.5,
-                        letterSpacing:
-                            1,
-                        fontWeight:
-                            FontWeight.w800,
+                      style: TextStyle(
+                        color: _maroon,
+                        fontSize: 7.5,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
-                    SizedBox(
-                      height:
-                          4,
-                    ),
+                    SizedBox(height: 4),
 
                     Text(
                       'No seller vouchers yet',
-                      style:
-                          TextStyle(
-                        color:
-                            _text,
-                        fontSize:
-                            15,
-                        fontWeight:
-                            FontWeight.w800,
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
-                    SizedBox(
-                      height:
-                          4,
-                    ),
+                    SizedBox(height: 4),
 
                     Text(
                       'Available seller voucher campaigns will appear here.',
-                      style:
-                          TextStyle(
-                        color:
-                            _muted,
-                        fontSize:
-                            9.5,
-                        height:
-                            1.4,
+                      style: TextStyle(
+                        color: _muted,
+                        fontSize: 9.5,
+                        height: 1.4,
                       ),
                     ),
                   ],
@@ -1137,55 +880,26 @@ class _RewardsScreenState
             ],
           ),
 
-          if (widget.onBrowseProducts !=
-              null) ...[
-            const SizedBox(
-              height:
-                  15,
-            ),
+          if (widget.onBrowseProducts != null) ...[
+            const SizedBox(height: 15),
 
             SizedBox(
-              width:
-                  double.infinity,
-              height:
-                  44,
-              child:
-                  ElevatedButton.icon(
-                onPressed:
-                    widget.onBrowseProducts,
-                style:
-                    ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _maroon,
-                  foregroundColor:
-                      Colors.white,
-                  elevation:
-                      0,
-                  shape:
-                      RoundedRectangleBorder(
-                    borderRadius:
-                        BorderRadius.circular(
-                      12,
-                    ),
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: widget.onBrowseProducts,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _maroon,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                icon:
-                    const Icon(
-                  Icons
-                      .storefront_outlined,
-                  size:
-                      17,
-                ),
-                label:
-                    const Text(
+                icon: const Icon(Icons.storefront_outlined, size: 17),
+                label: const Text(
                   'Browse Products',
-                  style:
-                      TextStyle(
-                    fontSize:
-                        10.5,
-                    fontWeight:
-                        FontWeight.w800,
-                  ),
+                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
                 ),
               ),
             ),
@@ -1197,209 +911,103 @@ class _RewardsScreenState
 
   Widget _buildPoints() {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionHeading(
-          kicker:
-              'LOYALTY',
-          title:
-              'Reward Points',
-          description:
-              'Reward points recorded from eligible buyer activity.',
+          kicker: 'LOYALTY',
+          title: 'Reward Points',
+          description: 'Reward points recorded from eligible buyer activity.',
         ),
 
-        const SizedBox(
-          height:
-              14,
-        ),
+        const SizedBox(height: 14),
 
         Container(
-          padding:
-              const EdgeInsets.all(
-            22,
-          ),
-          decoration:
-              BoxDecoration(
-            borderRadius:
-                BorderRadius.circular(
-              21,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(21),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[_maroon, _maroon2, _maroonDark],
             ),
-            gradient:
-                const LinearGradient(
-              begin:
-                  Alignment.topLeft,
-              end:
-                  Alignment.bottomRight,
-              colors:
-                  <Color>[
-                _maroon,
-                _maroon2,
-                _maroonDark,
-              ],
-            ),
-            boxShadow:
-                <BoxShadow>[
+            boxShadow: <BoxShadow>[
               BoxShadow(
-                color:
-                    _maroon.withValues(
-                  alpha: 0.18,
-                ),
-                blurRadius:
-                    28,
-                offset:
-                    const Offset(
-                  0,
-                  13,
-                ),
+                color: _maroon.withValues(alpha: 0.18),
+                blurRadius: 28,
+                offset: const Offset(0, 13),
               ),
             ],
           ),
-          child:
-              Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Row(
                 children: [
-                  Icon(
-                    Icons
-                        .stars_rounded,
-                    color:
-                        Color(
-                      0xFFE8C8B2,
-                    ),
-                    size:
-                        19,
-                  ),
+                  Icon(Icons.stars_rounded, color: Color(0xFFE8C8B2), size: 19),
 
-                  SizedBox(
-                    width:
-                        7,
-                  ),
+                  SizedBox(width: 7),
 
                   Text(
                     'Current points',
-                    style:
-                        TextStyle(
-                      color:
-                          Color(
-                        0xFFE8C8B2,
-                      ),
-                      fontSize:
-                          10.5,
-                      fontWeight:
-                          FontWeight.w700,
+                    style: TextStyle(
+                      color: Color(0xFFE8C8B2),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(
-                height:
-                    10,
-              ),
+              const SizedBox(height: 10),
 
               Text(
-                _formatInteger(
-                  _data.pointsBalance,
-                ),
-                style:
-                    const TextStyle(
-                  color:
-                      Colors.white,
-                  fontSize:
-                      42,
-                  height:
-                      1,
-                  letterSpacing:
-                      -1.2,
-                  fontWeight:
-                      FontWeight.w800,
+                _formatInteger(_data.pointsBalance),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 42,
+                  height: 1,
+                  letterSpacing: -1.2,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
-              const SizedBox(
-                height:
-                    5,
-              ),
+              const SizedBox(height: 5),
 
               const Text(
                 'LIKHAE Reward Points',
-                style:
-                    TextStyle(
-                  color:
-                      Color(
-                    0xFFF4DED4,
-                  ),
-                  fontSize:
-                      10,
-                  fontWeight:
-                      FontWeight.w600,
+                style: TextStyle(
+                  color: Color(0xFFF4DED4),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
 
-              const SizedBox(
-                height:
-                    19,
-              ),
+              const SizedBox(height: 19),
 
               Container(
-                width:
-                    double.infinity,
-                padding:
-                    const EdgeInsets.only(
-                  top:
-                      15,
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 15),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0x33FFFFFF))),
                 ),
-                decoration:
-                    const BoxDecoration(
-                  border:
-                      Border(
-                    top:
-                        BorderSide(
-                      color:
-                          Color(
-                        0x33FFFFFF,
-                      ),
-                    ),
-                  ),
-                ),
-                child:
-                    const Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
-                      Icons
-                          .info_outline_rounded,
-                      color:
-                          Color(
-                        0xFFE8C8B2,
-                      ),
-                      size:
-                          16,
+                      Icons.info_outline_rounded,
+                      color: Color(0xFFE8C8B2),
+                      size: 16,
                     ),
 
-                    SizedBox(
-                      width:
-                          7,
-                    ),
+                    SizedBox(width: 7),
 
                     Expanded(
-                      child:
-                          Text(
-                        'The server remains the source of truth for your point balance and activity.',
-                        style:
-                            TextStyle(
-                          color:
-                              Color(
-                            0xFFF4DED4,
-                          ),
-                          fontSize:
-                              9.5,
-                          height:
-                              1.4,
+                      child: Text(
+                        '${_formatInteger(_data.pointsPerPeso)} points = PHP 1 checkout discount; minimum ${_formatInteger(_data.minimumPointsRedemption)} points.',
+                        style: const TextStyle(
+                          color: Color(0xFFF4DED4),
+                          fontSize: 9.5,
+                          height: 1.4,
                         ),
                       ),
                     ),
@@ -1410,266 +1018,177 @@ class _RewardsScreenState
           ),
         ),
 
-        const SizedBox(
-          height:
-              13,
-        ),
+        const SizedBox(height: 13),
 
         _RewardPanel(
-          title:
-              'How Points Are Earned',
-          icon:
-              Icons
-                  .add_circle_outline,
-          child:
-              Column(
+          title: 'How Points Are Earned',
+          icon: Icons.add_circle_outline,
+          child: Column(
             children: [
               _EarnPointCard(
-                value:
-                    '+${_data.pointsPerCompletedOrder}',
-                label:
-                    'Completed / delivered order',
-                icon:
-                    Icons
-                        .check_circle_outline,
+                value: '+${_data.pointsPerCompletedOrder}',
+                label: 'Completed / delivered order',
+                icon: Icons.check_circle_outline,
               ),
 
-              const SizedBox(
-                height:
-                    9,
-              ),
+              const SizedBox(height: 9),
 
               _EarnPointCard(
-                value:
-                    '+${_data.pointsPerReview}',
-                label:
-                    'Product review',
-                icon:
-                    Icons
-                        .rate_review_outlined,
+                value: '+${_data.pointsPerReview}',
+                label: 'Product review',
+                icon: Icons.rate_review_outlined,
               ),
             ],
           ),
         ),
 
-        const SizedBox(
-          height:
-              13,
-        ),
+        if (widget.onGoToCheckout != null) ...[
+          const SizedBox(height: 13),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: OutlinedButton.icon(
+              onPressed: widget.onGoToCheckout,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _maroon,
+                side: const BorderSide(color: _tan),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.shopping_bag_outlined, size: 17),
+              label: const Text(
+                'Use points at checkout',
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 13),
 
         _RewardPanel(
-          title:
-              'Points Activity',
-          icon:
-              Icons
-                  .history_rounded,
-          child:
-              _data.pointActivities.isEmpty
-                  ? const _SimpleEmptyRow(
-                      title:
-                          'No points activity yet',
-                      subtitle:
-                          'Eligible order and review activity will appear here.',
-                    )
-                  : Column(
-                      children:
-                          _data.pointActivities
-                              .map(
-                        (
-                          PointsActivityData activity,
-                        ) {
-                          return _PointsActivityRow(
-                            activity:
-                                activity,
-                          );
-                        },
-                      ).toList(),
-                    ),
+          title: 'Points Activity',
+          icon: Icons.history_rounded,
+          child: _data.pointActivities.isEmpty
+              ? const _SimpleEmptyRow(
+                  title: 'No points activity yet',
+                  subtitle:
+                      'Eligible order and review activity will appear here.',
+                )
+              : Column(
+                  children: _data.pointActivities.map((
+                    PointsActivityData activity,
+                  ) {
+                    return _PointsActivityRow(activity: activity);
+                  }).toList(),
+                ),
         ),
       ],
     );
   }
 
   Widget _buildCashback() {
-    final double safeAvailable =
-        _data.availableCashback < 0
-            ? 0
-            : _data.availableCashback;
+    final double safeAvailable = _data.availableCashback < 0
+        ? 0
+        : _data.availableCashback;
 
-    final double safePending =
-        _data.pendingCashback < 0
-            ? 0
-            : _data.pendingCashback;
+    final double safePending = _data.pendingCashback < 0
+        ? 0
+        : _data.pendingCashback;
 
-    final double safeRate =
-        _data.cashbackRate < 0
-            ? 0
-            : _data.cashbackRate;
+    final double safeRate = _data.cashbackRate < 0 ? 0 : _data.cashbackRate;
 
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionHeading(
-          kicker:
-              'BUYER SAVINGS',
-          title:
-              'Cashback',
+          kicker: 'BUYER SAVINGS',
+          title: 'Cashback',
           description:
               'Cashback recorded from eligible completed buyer orders.',
         ),
 
-        const SizedBox(
-          height:
-              14,
-        ),
+        const SizedBox(height: 14),
 
         Container(
-          padding:
-              const EdgeInsets.all(
-            20,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: _border),
           ),
-          decoration:
-              BoxDecoration(
-            color:
-                _surface,
-            borderRadius:
-                BorderRadius.circular(24),
-            border:
-                Border.all(
-              color:
-                  _border,
-            ),
-          ),
-          child:
-              Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Row(
                 children: [
                   Icon(
-                    Icons
-                        .account_balance_wallet_outlined,
-                    color:
-                        _maroon,
-                    size:
-                        19,
+                    Icons.account_balance_wallet_outlined,
+                    color: _maroon,
+                    size: 19,
                   ),
 
-                  SizedBox(
-                    width:
-                        7,
-                  ),
+                  SizedBox(width: 7),
 
                   Text(
                     'Earned cashback',
-                    style:
-                        TextStyle(
-                      color:
-                          _muted,
-                      fontSize:
-                          10.5,
-                      fontWeight:
-                          FontWeight.w700,
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(
-                height:
-                    9,
-              ),
+              const SizedBox(height: 9),
 
               Text(
-                _formatMoney(
-                  safeAvailable,
-                ),
-                style:
-                    const TextStyle(
-                  color:
-                      _maroon,
-                  fontSize:
-                      32,
-                  height:
-                      1,
-                  letterSpacing:
-                      -0.8,
-                  fontWeight:
-                      FontWeight.w800,
+                _formatMoney(safeAvailable),
+                style: const TextStyle(
+                  color: _maroon,
+                  fontSize: 32,
+                  height: 1,
+                  letterSpacing: -0.8,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
 
-              const SizedBox(
-                height:
-                    11,
-              ),
+              const SizedBox(height: 11),
 
               Text(
                 safeRate > 0
                     ? 'Current cashback rate: ${_formatPercentage(safeRate)}'
                     : 'Cashback rate is not currently available.',
-                style:
-                    const TextStyle(
-                  color:
-                      _muted,
-                  fontSize:
-                      9.5,
-                  height:
-                      1.4,
+                style: const TextStyle(
+                  color: _muted,
+                  fontSize: 9.5,
+                  height: 1.4,
                 ),
               ),
 
-              if (widget.onBrowseProducts !=
-                  null) ...[
-                const SizedBox(
-                  height:
-                      17,
-                ),
+              if (widget.onBrowseProducts != null) ...[
+                const SizedBox(height: 17),
 
                 SizedBox(
-                  width:
-                      double.infinity,
-                  height:
-                      45,
-                  child:
-                      OutlinedButton.icon(
-                    onPressed:
-                        widget.onBrowseProducts,
-                    style:
-                        OutlinedButton.styleFrom(
-                      foregroundColor:
-                          _maroon,
-                      side:
-                          const BorderSide(
-                        color:
-                            _tan,
-                      ),
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(
-                          12,
-                        ),
+                  width: double.infinity,
+                  height: 45,
+                  child: OutlinedButton.icon(
+                    onPressed: widget.onBrowseProducts,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _maroon,
+                      side: const BorderSide(color: _tan),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    icon:
-                        const Icon(
-                      Icons
-                          .shopping_bag_outlined,
-                      size:
-                          17,
-                    ),
-                    label:
-                        const Text(
+                    icon: const Icon(Icons.shopping_bag_outlined, size: 17),
+                    label: const Text(
                       'Browse Products',
-                      style:
-                          TextStyle(
-                        fontSize:
-                            10.5,
-                        fontWeight:
-                            FontWeight.w800,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
@@ -1679,114 +1198,53 @@ class _RewardsScreenState
           ),
         ),
 
-        const SizedBox(
-          height:
-              13,
-        ),
+        const SizedBox(height: 13),
 
         _RewardPanel(
-          title:
-              'Cashback Status',
-          icon:
-              Icons
-                  .savings_outlined,
-          child:
-              Column(
+          title: 'Cashback Status',
+          icon: Icons.savings_outlined,
+          child: Column(
             children: [
               _CashbackBalanceRow(
-                label:
-                    'Earned cashback',
-                value:
-                    _formatMoney(
-                  safeAvailable,
-                ),
-                icon:
-                    Icons
-                        .account_balance_wallet_outlined,
-                emphasized:
-                    true,
+                label: 'Earned cashback',
+                value: _formatMoney(safeAvailable),
+                icon: Icons.account_balance_wallet_outlined,
+                emphasized: true,
               ),
 
-              const SizedBox(
-                height:
-                    10,
-              ),
+              const SizedBox(height: 10),
 
               _CashbackBalanceRow(
-                label:
-                    'Pending cashback',
-                value:
-                    _formatMoney(
-                  safePending,
-                ),
-                icon:
-                    Icons
-                        .schedule_rounded,
+                label: 'Pending cashback',
+                value: _formatMoney(safePending),
+                icon: Icons.schedule_rounded,
               ),
 
-              const SizedBox(
-                height:
-                    13,
-              ),
+              const SizedBox(height: 13),
 
               Container(
-                width:
-                    double.infinity,
-                padding:
-                    const EdgeInsets.all(
-                  12,
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF6DE),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFEAD39A)),
                 ),
-                decoration:
-                    BoxDecoration(
-                  color:
-                      const Color(
-                    0xFFFFF6DE,
-                  ),
-                  borderRadius:
-                      BorderRadius.circular(
-                    12,
-                  ),
-                  border:
-                      Border.all(
-                    color:
-                        const Color(
-                      0xFFEAD39A,
-                    ),
-                  ),
-                ),
-                child:
-                    const Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons
-                          .info_outline_rounded,
-                      color:
-                          _warning,
-                      size:
-                          18,
-                    ),
+                    Icon(Icons.info_outline_rounded, color: _warning, size: 18),
 
-                    SizedBox(
-                      width:
-                          8,
-                    ),
+                    SizedBox(width: 8),
 
                     Expanded(
-                      child:
-                          Text(
+                      child: Text(
                         'This page only displays cashback recorded by the rewards system. Checkout redemption should only be enabled when the backend explicitly supports it.',
-                        style:
-                            TextStyle(
-                          color:
-                              _warning,
-                          fontSize:
-                              9,
-                          height:
-                              1.45,
-                          fontWeight:
-                              FontWeight.w700,
+                        style: TextStyle(
+                          color: _warning,
+                          fontSize: 9,
+                          height: 1.45,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -1797,100 +1255,58 @@ class _RewardsScreenState
           ),
         ),
 
-        const SizedBox(
-          height:
-              13,
-        ),
+        const SizedBox(height: 13),
 
         _RewardPanel(
-          title:
-              'Cashback Activity',
-          icon:
-              Icons
-                  .history_rounded,
-          child:
-              _data.cashbackActivities.isEmpty
-                  ? const _SimpleEmptyRow(
-                      title:
-                          'No cashback activity yet',
-                      subtitle:
-                          'Eligible cashback activity will appear here.',
-                    )
-                  : Column(
-                      children:
-                          _data.cashbackActivities
-                              .map(
-                        (
-                          CashbackActivityData activity,
-                        ) {
-                          return _CashbackActivityRow(
-                            activity:
-                                activity,
-                          );
-                        },
-                      ).toList(),
-                    ),
+          title: 'Cashback Activity',
+          icon: Icons.history_rounded,
+          child: _data.cashbackActivities.isEmpty
+              ? const _SimpleEmptyRow(
+                  title: 'No cashback activity yet',
+                  subtitle: 'Eligible cashback activity will appear here.',
+                )
+              : Column(
+                  children: _data.cashbackActivities.map((
+                    CashbackActivityData activity,
+                  ) {
+                    return _CashbackActivityRow(activity: activity);
+                  }).toList(),
+                ),
         ),
       ],
     );
   }
 
-  static String _formatMoney(
-    double value,
-  ) {
-    final double safeValue =
-        value < 0
-            ? 0
-            : value;
+  static String _formatMoney(double value) {
+    final double safeValue = value < 0 ? 0 : value;
 
     return '₱${safeValue.toStringAsFixed(2)}';
   }
 
-  static String _formatPercentage(
-    double rate,
-  ) {
-    final double percentage =
-        rate * 100;
+  static String _formatPercentage(double rate) {
+    final double percentage = rate * 100;
 
-    if (percentage ==
-        percentage.roundToDouble()) {
+    if (percentage == percentage.roundToDouble()) {
       return '${percentage.toStringAsFixed(0)}%';
     }
 
     return '${percentage.toStringAsFixed(2)}%';
   }
 
-  static String _formatInteger(
-    int value,
-  ) {
-    final int safeValue =
-        value < 0
-            ? 0
-            : value;
+  static String _formatInteger(int value) {
+    final int safeValue = value < 0 ? 0 : value;
 
-    final String digits =
-        safeValue.toString();
+    final String digits = safeValue.toString();
 
-    final StringBuffer result =
-        StringBuffer();
+    final StringBuffer result = StringBuffer();
 
-    for (int index = 0;
-        index < digits.length;
-        index++) {
-      final int remaining =
-          digits.length -
-              index;
+    for (int index = 0; index < digits.length; index++) {
+      final int remaining = digits.length - index;
 
-      result.write(
-        digits[index],
-      );
+      result.write(digits[index]);
 
-      if (remaining > 1 &&
-          remaining % 3 ==
-              1) {
-        result.write(
-          ',',
-        );
+      if (remaining > 1 && remaining % 3 == 1) {
+        result.write(',');
       }
     }
 
@@ -1898,8 +1314,7 @@ class _RewardsScreenState
   }
 }
 
-class _RewardStatCard
-    extends StatelessWidget {
+class _RewardStatCard extends StatelessWidget {
   final IconData icon;
 
   final String label;
@@ -1912,88 +1327,41 @@ class _RewardStatCard
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      constraints:
-          const BoxConstraints(
-        minHeight:
-            92,
+      constraints: const BoxConstraints(minHeight: 92),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: ShopColors.border),
       ),
-      padding:
-          const EdgeInsets.all(
-        12,
-      ),
-      decoration:
-          BoxDecoration(
-        color:
-            ShopColors.surface,
-        borderRadius:
-            BorderRadius.circular(
-          15,
-        ),
-        border:
-            Border.all(
-          color:
-              ShopColors.border,
-        ),
-      ),
-      child:
-          Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
-        mainAxisAlignment:
-            MainAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            color:
-                ShopColors.accent,
-            size:
-                19,
-          ),
+          Icon(icon, color: ShopColors.accent, size: 19),
 
-          const SizedBox(
-            height:
-                8,
-          ),
+          const SizedBox(height: 8),
 
           Text(
             value,
-            maxLines:
-                1,
-            overflow:
-                TextOverflow.ellipsis,
-            style:
-                const TextStyle(
-              color:
-                  ShopColors.text,
-              fontSize:
-                  15,
-              fontWeight:
-                  FontWeight.w800,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: ShopColors.text,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
             ),
           ),
 
-          const SizedBox(
-            height:
-                2,
-          ),
+          const SizedBox(height: 2),
 
           Text(
             label,
-            maxLines:
-                1,
-            overflow:
-                TextOverflow.ellipsis,
-            style:
-                const TextStyle(
-              color:
-                  ShopColors.muted,
-              fontSize:
-                  8.5,
-            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: ShopColors.muted, fontSize: 8.5),
           ),
         ],
       ),
@@ -2001,8 +1369,7 @@ class _RewardStatCard
   }
 }
 
-class _SectionHeading
-    extends StatelessWidget {
+class _SectionHeading extends StatelessWidget {
   final String kicker;
   final String title;
   final String description;
@@ -2014,65 +1381,41 @@ class _SectionHeading
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           kicker,
-          style:
-              const TextStyle(
-            color:
-                ShopColors.accent,
-            fontSize:
-                8.5,
-            letterSpacing:
-                1.5,
-            fontWeight:
-                FontWeight.w800,
+          style: const TextStyle(
+            color: ShopColors.accent,
+            fontSize: 8.5,
+            letterSpacing: 1.5,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
-        const SizedBox(
-          height:
-              5,
-        ),
+        const SizedBox(height: 5),
 
         Text(
           title,
-          style:
-              const TextStyle(
-            color:
-                ShopColors.text,
-            fontSize:
-                24,
-            height:
-                1.05,
-            letterSpacing:
-                -0.6,
-            fontWeight:
-                FontWeight.w800,
+          style: const TextStyle(
+            color: ShopColors.text,
+            fontSize: 24,
+            height: 1.05,
+            letterSpacing: -0.6,
+            fontWeight: FontWeight.w800,
           ),
         ),
 
-        const SizedBox(
-          height:
-              6,
-        ),
+        const SizedBox(height: 6),
 
         Text(
           description,
-          style:
-              const TextStyle(
-            color:
-                ShopColors.muted,
-            fontSize:
-                10.5,
-            height:
-                1.45,
+          style: const TextStyle(
+            color: ShopColors.muted,
+            fontSize: 10.5,
+            height: 1.45,
           ),
         ),
       ],
@@ -2080,221 +1423,139 @@ class _SectionHeading
   }
 }
 
-class _VoucherCard
-    extends StatelessWidget {
+class _VoucherCard extends StatelessWidget {
   final RewardVoucherData voucher;
 
+  final bool canClaim;
+
+  final bool claiming;
+
   final bool canOpen;
+
+  final VoidCallback onClaim;
 
   final VoidCallback onUse;
 
   const _VoucherCard({
     required this.voucher,
+    required this.canClaim,
+    required this.claiming,
     required this.canOpen,
+    required this.onClaim,
     required this.onUse,
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final bool explicitlyUnavailable =
-        voucher.canUse ==
-            false;
+  Widget build(BuildContext context) {
+    final bool explicitlyUnavailable = voucher.canUse == false;
 
     return Container(
-      decoration:
-          BoxDecoration(
-        color:
-            ShopColors.surface,
-        borderRadius:
-            BorderRadius.circular(24),
-        border:
-            Border.all(
-          color:
-              ShopColors.border,
-        ),
-        boxShadow:
-            <BoxShadow>[
+      decoration: BoxDecoration(
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: ShopColors.border),
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color:
-                ShopColors.accent.withValues(
-              alpha: 0.045,
-            ),
-            blurRadius:
-                20,
-            offset:
-                const Offset(
-              0,
-              8,
-            ),
+            color: ShopColors.accent.withValues(alpha: 0.045),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child:
-          Column(
+      child: Column(
         children: [
           Padding(
-            padding:
-                const EdgeInsets.all(
-              16,
-            ),
-            child:
-                Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width:
-                      56,
-                  height:
-                      56,
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        ShopColors.accentSoft,
-                    borderRadius:
-                        BorderRadius.circular(
-                      15,
-                    ),
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: ShopColors.accentSoft,
+                    borderRadius: BorderRadius.circular(15),
                   ),
-                  alignment:
-                      Alignment.center,
-                  child:
-                      Text(
+                  alignment: Alignment.center,
+                  child: Text(
                     voucher.icon,
-                    maxLines:
-                        1,
-                    overflow:
-                        TextOverflow.ellipsis,
-                    style:
-                        const TextStyle(
-                      color:
-                          ShopColors.accent,
-                      fontSize:
-                          17,
-                      fontWeight:
-                          FontWeight.w800,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: ShopColors.accent,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
 
-                const SizedBox(
-                  width:
-                      12,
-                ),
+                const SizedBox(width: 12),
 
                 Expanded(
-                  child:
-                      Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        voucher.status
-                            .toUpperCase(),
-                        style:
-                            TextStyle(
-                          color:
-                              explicitlyUnavailable
-                                  ? ShopColors.muted
-                                  : ShopColors.accent,
-                          fontSize:
-                              7.5,
-                          letterSpacing:
-                              1.1,
-                          fontWeight:
-                              FontWeight.w800,
+                        voucher.status.toUpperCase(),
+                        style: TextStyle(
+                          color: explicitlyUnavailable
+                              ? ShopColors.muted
+                              : ShopColors.accent,
+                          fontSize: 7.5,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
 
-                      const SizedBox(
-                        height:
-                            4,
-                      ),
+                      const SizedBox(height: 4),
 
                       Text(
                         voucher.value,
-                        style:
-                            const TextStyle(
-                          color:
-                              ShopColors.text,
-                          fontSize:
-                              18,
-                          height:
-                              1.1,
-                          fontWeight:
-                              FontWeight.w800,
+                        style: const TextStyle(
+                          color: ShopColors.text,
+                          fontSize: 18,
+                          height: 1.1,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
 
-                      if (voucher.campaignName
-                              ?.trim()
-                              .isNotEmpty ==
-                          true) ...[
-                        const SizedBox(
-                          height:
-                              4,
-                        ),
+                      if (voucher.campaignName?.trim().isNotEmpty == true) ...[
+                        const SizedBox(height: 4),
 
                         Text(
                           voucher.campaignName!,
-                          maxLines:
-                              1,
-                          overflow:
-                              TextOverflow.ellipsis,
-                          style:
-                              const TextStyle(
-                            color:
-                                ShopColors.secondaryText,
-                            fontSize:
-                                9.5,
-                            fontWeight:
-                                FontWeight.w700,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ShopColors.secondaryText,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
 
-                      if (voucher.sellerName
-                              ?.trim()
-                              .isNotEmpty ==
-                          true) ...[
-                        const SizedBox(
-                          height:
-                              3,
-                        ),
+                      if (voucher.sellerName?.trim().isNotEmpty == true) ...[
+                        const SizedBox(height: 3),
 
                         Text(
                           'From ${voucher.sellerName}',
-                          maxLines:
-                              1,
-                          overflow:
-                              TextOverflow.ellipsis,
-                          style:
-                              const TextStyle(
-                            color:
-                                ShopColors.muted,
-                            fontSize:
-                                8.5,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ShopColors.muted,
+                            fontSize: 8.5,
                           ),
                         ),
                       ],
 
-                      const SizedBox(
-                        height:
-                            5,
-                      ),
+                      const SizedBox(height: 5),
 
                       Text(
                         voucher.condition,
-                        style:
-                            const TextStyle(
-                          color:
-                              ShopColors.muted,
-                          fontSize:
-                              9.5,
-                          height:
-                              1.45,
+                        style: const TextStyle(
+                          color: ShopColors.muted,
+                          fontSize: 9.5,
+                          height: 1.45,
                         ),
                       ),
                     ],
@@ -2304,80 +1565,43 @@ class _VoucherCard
             ),
           ),
 
-          const Divider(
-            height:
-                1,
-            color:
-                ShopColors.border,
-          ),
+          const Divider(height: 1, color: ShopColors.border),
 
           Padding(
-            padding:
-                const EdgeInsets.all(
-              15,
-            ),
-            child:
-                Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.stretch,
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(
-                    horizontal:
-                        10,
-                    vertical:
-                        8,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
                   ),
-                  decoration:
-                      BoxDecoration(
-                    color:
-                        ShopColors.soft,
-                    borderRadius:
-                        BorderRadius.circular(
-                      9,
-                    ),
-                    border:
-                        Border.all(
-                      color:
-                          ShopColors.border,
-                    ),
+                  decoration: BoxDecoration(
+                    color: ShopColors.soft,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: ShopColors.border),
                   ),
-                  child:
-                      Row(
+                  child: Row(
                     children: [
                       const Icon(
-                        Icons
-                            .local_offer_outlined,
-                        color:
-                            ShopColors.accent,
-                        size:
-                            16,
+                        Icons.local_offer_outlined,
+                        color: ShopColors.accent,
+                        size: 16,
                       ),
 
-                      const SizedBox(
-                        width:
-                            7,
-                      ),
+                      const SizedBox(width: 7),
 
                       Expanded(
-                        child:
-                            Text(
+                        child: Text(
                           voucher.code,
-                          maxLines:
-                              1,
-                          overflow:
-                              TextOverflow.ellipsis,
-                          style:
-                              const TextStyle(
-                            color:
-                                ShopColors.accent,
-                            fontSize:
-                                10,
-                            letterSpacing:
-                                0.7,
-                            fontWeight:
-                                FontWeight.w800,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: ShopColors.accent,
+                            fontSize: 10,
+                            letterSpacing: 0.7,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -2385,95 +1609,80 @@ class _VoucherCard
                   ),
                 ),
 
-                if (voucher.expires
-                    .trim()
-                    .isNotEmpty) ...[
-                  const SizedBox(
-                    height:
-                        7,
-                  ),
+                if (voucher.expires.trim().isNotEmpty) ...[
+                  const SizedBox(height: 7),
 
                   Text(
                     'Expires ${voucher.expires}',
-                    style:
-                        const TextStyle(
-                      color:
-                          ShopColors.faint,
-                      fontSize:
-                          8.5,
+                    style: const TextStyle(
+                      color: ShopColors.faint,
+                      fontSize: 8.5,
                     ),
                   ),
                 ],
 
-                if (canOpen) ...[
-                  const SizedBox(
-                    height:
-                        12,
+                if (voucher.unavailableReason?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    'Unavailable: ${voucher.unavailableReason}',
+                    style: const TextStyle(
+                      color: Color(0xFFB42318),
+                      fontSize: 8.5,
+                    ),
                   ),
+                ],
+
+                if (canClaim || canOpen) ...[
+                  const SizedBox(height: 12),
 
                   SizedBox(
-                    height:
-                        44,
-                    child:
-                        ElevatedButton.icon(
-                      onPressed:
-                          onUse,
-                      style:
-                          ElevatedButton.styleFrom(
-                        backgroundColor:
-                            ShopColors.accent,
-                        foregroundColor:
-                            Colors.white,
-                        elevation:
-                            0,
-                        shape:
-                            RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(
-                            12,
-                          ),
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      onPressed: claiming
+                          ? null
+                          : canClaim
+                          ? onClaim
+                          : onUse,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ShopColors.accent,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      icon:
-                          const Icon(
-                        Icons
-                            .shopping_bag_outlined,
-                        size:
-                            16,
+                      icon: Icon(
+                        canClaim
+                            ? Icons.add_circle_outline_rounded
+                            : Icons.shopping_bag_outlined,
+                        size: 16,
                       ),
-                      label:
-                          const Text(
-                        'Shop With Voucher',
-                        style:
-                            TextStyle(
-                          fontSize:
-                              10.5,
-                          fontWeight:
-                              FontWeight.w800,
+                      label: Text(
+                        claiming
+                            ? 'Claiming…'
+                            : canClaim
+                            ? 'Claim Voucher'
+                            : 'Shop With Voucher',
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(
-                    height:
-                        7,
-                  ),
-
-                  const Text(
-                    'The voucher is still validated by the server during Checkout.',
-                    textAlign:
-                        TextAlign.center,
-                    style:
-                        TextStyle(
-                      color:
-                          ShopColors.faint,
-                      fontSize:
-                          8,
-                      height:
-                          1.35,
+                  if (canOpen) ...[
+                    const SizedBox(height: 7),
+                    const Text(
+                      'The voucher is still validated by the server during Checkout.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: ShopColors.faint,
+                        fontSize: 8,
+                        height: 1.35,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ],
             ),
@@ -2484,8 +1693,7 @@ class _VoucherCard
   }
 }
 
-class _RewardPanel
-    extends StatelessWidget {
+class _RewardPanel extends StatelessWidget {
   final String title;
 
   final IconData icon;
@@ -2499,86 +1707,46 @@ class _RewardPanel
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.all(
-        16,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: ShopColors.border),
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            ShopColors.surface,
-        borderRadius:
-            BorderRadius.circular(24),
-        border:
-            Border.all(
-          color:
-              ShopColors.border,
-        ),
-      ),
-      child:
-          Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width:
-                    37,
-                height:
-                    37,
-                decoration:
-                    BoxDecoration(
-                  color:
-                      ShopColors.accentSoft,
-                  borderRadius:
-                      BorderRadius.circular(
-                    11,
-                  ),
+                width: 37,
+                height: 37,
+                decoration: BoxDecoration(
+                  color: ShopColors.accentSoft,
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                alignment:
-                    Alignment.center,
-                child:
-                    Icon(
-                  icon,
-                  color:
-                      ShopColors.accent,
-                  size:
-                      18,
-                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: ShopColors.accent, size: 18),
               ),
 
-              const SizedBox(
-                width:
-                    9,
-              ),
+              const SizedBox(width: 9),
 
               Expanded(
-                child:
-                    Text(
+                child: Text(
                   title,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.text,
-                    fontSize:
-                        14,
-                    fontWeight:
-                        FontWeight.w800,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ],
           ),
 
-          const SizedBox(
-            height:
-                15,
-          ),
+          const SizedBox(height: 15),
 
           child,
         ],
@@ -2587,113 +1755,63 @@ class _RewardPanel
   }
 }
 
-class _VoucherHistoryRow
-    extends StatelessWidget {
+class _VoucherHistoryRow extends StatelessWidget {
   final VoucherHistoryData item;
 
-  const _VoucherHistoryRow({
-    required this.item,
-  });
+  const _VoucherHistoryRow({required this.item});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical:
-            12,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFEFE1D5))),
       ),
-      decoration:
-          const BoxDecoration(
-        border:
-            Border(
-          bottom:
-              BorderSide(
-            color:
-                Color(
-              0xFFEFE1D5,
-            ),
-          ),
-        ),
-      ),
-      child:
-          Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child:
-                    Text(
+                child: Text(
                   item.voucher,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.text,
-                    fontSize:
-                        11,
-                    fontWeight:
-                        FontWeight.w800,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
 
-              const SizedBox(
-                width:
-                    8,
-              ),
+              const SizedBox(width: 8),
 
               Text(
                 item.status,
-                style:
-                    const TextStyle(
-                  color:
-                      ShopColors.muted,
-                  fontSize:
-                      8.5,
-                  fontWeight:
-                      FontWeight.w600,
+                style: const TextStyle(
+                  color: ShopColors.muted,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(
-            height:
-                5,
-          ),
+          const SizedBox(height: 5),
 
           Text(
             item.benefit,
-            style:
-                const TextStyle(
-              color:
-                  ShopColors.secondaryText,
-              fontSize:
-                  9.5,
+            style: const TextStyle(
+              color: ShopColors.secondaryText,
+              fontSize: 9.5,
             ),
           ),
 
-          if (item.order
-              .trim()
-              .isNotEmpty) ...[
-            const SizedBox(
-              height:
-                  3,
-            ),
+          if (item.order.trim().isNotEmpty) ...[
+            const SizedBox(height: 3),
 
             Text(
               item.order,
-              style:
-                  const TextStyle(
-                color:
-                    ShopColors.faint,
-                fontSize:
-                    8.5,
-              ),
+              style: const TextStyle(color: ShopColors.faint, fontSize: 8.5),
             ),
           ],
         ],
@@ -2702,8 +1820,7 @@ class _VoucherHistoryRow
   }
 }
 
-class _EarnPointCard
-    extends StatelessWidget {
+class _EarnPointCard extends StatelessWidget {
   final String value;
   final String label;
 
@@ -2716,89 +1833,44 @@ class _EarnPointCard
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.all(
-        13,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: ShopColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ShopColors.border),
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            ShopColors.surface,
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
-        border:
-            Border.all(
-          color:
-              ShopColors.border,
-        ),
-      ),
-      child:
-          Row(
+      child: Row(
         children: [
           Container(
-            width:
-                39,
-            height:
-                39,
-            decoration:
-                const BoxDecoration(
-              color:
-                  ShopColors.accentSoft,
-              shape:
-                  BoxShape.circle,
+            width: 39,
+            height: 39,
+            decoration: const BoxDecoration(
+              color: ShopColors.accentSoft,
+              shape: BoxShape.circle,
             ),
-            alignment:
-                Alignment.center,
-            child:
-                Icon(
-              icon,
-              color:
-                  ShopColors.accent,
-              size:
-                  18,
-            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: ShopColors.accent, size: 18),
           ),
 
-          const SizedBox(
-            width:
-                11,
-          ),
+          const SizedBox(width: 11),
 
           Expanded(
-            child:
-                Text(
+            child: Text(
               label,
-              style:
-                  const TextStyle(
-                color:
-                    ShopColors.muted,
-                fontSize:
-                    10,
-              ),
+              style: const TextStyle(color: ShopColors.muted, fontSize: 10),
             ),
           ),
 
-          const SizedBox(
-            width:
-                8,
-          ),
+          const SizedBox(width: 8),
 
           Text(
             value,
-            style:
-                const TextStyle(
-              color:
-                  ShopColors.accent,
-              fontSize:
-                  18,
-              fontWeight:
-                  FontWeight.w800,
+            style: const TextStyle(
+              color: ShopColors.accent,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -2807,110 +1879,58 @@ class _EarnPointCard
   }
 }
 
-class _PointsActivityRow
-    extends StatelessWidget {
+class _PointsActivityRow extends StatelessWidget {
   final PointsActivityData activity;
 
-  const _PointsActivityRow({
-    required this.activity,
-  });
+  const _PointsActivityRow({required this.activity});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical:
-            12,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFEFE1D5))),
       ),
-      decoration:
-          const BoxDecoration(
-        border:
-            Border(
-          bottom:
-              BorderSide(
-            color:
-                Color(
-              0xFFEFE1D5,
-            ),
-          ),
-        ),
-      ),
-      child:
-          Row(
+      child: Row(
         children: [
           Container(
-            width:
-                38,
-            height:
-                38,
-            decoration:
-                const BoxDecoration(
-              color:
-                  ShopColors.soft,
-              shape:
-                  BoxShape.circle,
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: ShopColors.soft,
+              shape: BoxShape.circle,
             ),
-            alignment:
-                Alignment.center,
-            child:
-                Icon(
-              activity.negative
-                  ? Icons
-                      .remove_rounded
-                  : Icons
-                      .add_rounded,
-              color:
-                  activity.negative
-                      ? ShopColors.muted
-                      : ShopColors.accent,
-              size:
-                  17,
+            alignment: Alignment.center,
+            child: Icon(
+              activity.negative ? Icons.remove_rounded : Icons.add_rounded,
+              color: activity.negative ? ShopColors.muted : ShopColors.accent,
+              size: 17,
             ),
           ),
 
-          const SizedBox(
-            width:
-                10,
-          ),
+          const SizedBox(width: 10),
 
           Expanded(
-            child:
-                Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   activity.label,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.text,
-                    fontSize:
-                        10.5,
-                    fontWeight:
-                        FontWeight.w800,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
 
-                if (activity.date
-                    .trim()
-                    .isNotEmpty) ...[
-                  const SizedBox(
-                    height:
-                        3,
-                  ),
+                if (activity.date.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
 
                   Text(
                     activity.date,
-                    style:
-                        const TextStyle(
-                      color:
-                          ShopColors.faint,
-                      fontSize:
-                          8.5,
+                    style: const TextStyle(
+                      color: ShopColors.faint,
+                      fontSize: 8.5,
                     ),
                   ),
                 ],
@@ -2918,23 +1938,14 @@ class _PointsActivityRow
             ),
           ),
 
-          const SizedBox(
-            width:
-                10,
-          ),
+          const SizedBox(width: 10),
 
           Text(
             activity.amount,
-            style:
-                TextStyle(
-              color:
-                  activity.negative
-                      ? ShopColors.muted
-                      : ShopColors.accent,
-              fontSize:
-                  10.5,
-              fontWeight:
-                  FontWeight.w800,
+            style: TextStyle(
+              color: activity.negative ? ShopColors.muted : ShopColors.accent,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -2943,8 +1954,7 @@ class _PointsActivityRow
   }
 }
 
-class _CashbackBalanceRow
-    extends StatelessWidget {
+class _CashbackBalanceRow extends StatelessWidget {
   final String label;
   final String value;
 
@@ -2960,93 +1970,48 @@ class _CashbackBalanceRow
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.all(
-        12,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: emphasized ? ShopColors.soft : ShopColors.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: ShopColors.border),
       ),
-      decoration:
-          BoxDecoration(
-        color:
-            emphasized
-                ? ShopColors.soft
-                : ShopColors.surface,
-        borderRadius:
-            BorderRadius.circular(
-          13,
-        ),
-        border:
-            Border.all(
-          color:
-              ShopColors.border,
-        ),
-      ),
-      child:
-          Row(
+      child: Row(
         children: [
           Container(
-            width:
-                38,
-            height:
-                38,
-            decoration:
-                const BoxDecoration(
-              color:
-                  ShopColors.accentSoft,
-              shape:
-                  BoxShape.circle,
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: ShopColors.accentSoft,
+              shape: BoxShape.circle,
             ),
-            alignment:
-                Alignment.center,
-            child:
-                Icon(
-              icon,
-              color:
-                  ShopColors.accent,
-              size:
-                  18,
-            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: ShopColors.accent, size: 18),
           ),
 
-          const SizedBox(
-            width:
-                10,
-          ),
+          const SizedBox(width: 10),
 
           Expanded(
-            child:
-                Text(
+            child: Text(
               label,
-              style:
-                  const TextStyle(
-                color:
-                    ShopColors.muted,
-                fontSize:
-                    10,
-                fontWeight:
-                    FontWeight.w600,
+              style: const TextStyle(
+                color: ShopColors.muted,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
 
-          const SizedBox(
-            width:
-                8,
-          ),
+          const SizedBox(width: 8),
 
           Text(
             value,
-            style:
-                const TextStyle(
-              color:
-                  ShopColors.accent,
-              fontSize:
-                  12,
-              fontWeight:
-                  FontWeight.w800,
+            style: const TextStyle(
+              color: ShopColors.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -3055,116 +2020,66 @@ class _CashbackBalanceRow
   }
 }
 
-class _CashbackActivityRow
-    extends StatelessWidget {
+class _CashbackActivityRow extends StatelessWidget {
   final CashbackActivityData activity;
 
-  const _CashbackActivityRow({
-    required this.activity,
-  });
+  const _CashbackActivityRow({required this.activity});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical:
-            12,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFEFE1D5))),
       ),
-      decoration:
-          const BoxDecoration(
-        border:
-            Border(
-          bottom:
-              BorderSide(
-            color:
-                Color(
-              0xFFEFE1D5,
-            ),
-          ),
-        ),
-      ),
-      child:
-          Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child:
-                    Text(
+                child: Text(
                   activity.order,
-                  maxLines:
-                      1,
-                  overflow:
-                      TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.text,
-                    fontSize:
-                        10.5,
-                    fontWeight:
-                        FontWeight.w800,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
 
-              const SizedBox(
-                width:
-                    8,
-              ),
+              const SizedBox(width: 8),
 
               Text(
                 activity.amount,
-                style:
-                    const TextStyle(
-                  color:
-                      ShopColors.accent,
-                  fontSize:
-                      10.5,
-                  fontWeight:
-                      FontWeight.w800,
+                style: const TextStyle(
+                  color: ShopColors.accent,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(
-            height:
-                5,
-          ),
+          const SizedBox(height: 5),
 
           Row(
             children: [
               Expanded(
-                child:
-                    Text(
+                child: Text(
                   activity.type,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.muted,
-                    fontSize:
-                        9,
-                  ),
+                  style: const TextStyle(color: ShopColors.muted, fontSize: 9),
                 ),
               ),
 
-              if (activity.date
-                  .trim()
-                  .isNotEmpty)
+              if (activity.date.trim().isNotEmpty)
                 Text(
                   activity.date,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.faint,
-                    fontSize:
-                        8.5,
+                  style: const TextStyle(
+                    color: ShopColors.faint,
+                    fontSize: 8.5,
                   ),
                 ),
             ],
@@ -3175,118 +2090,74 @@ class _CashbackActivityRow
   }
 }
 
-class _SimpleEmptyRow
-    extends StatelessWidget {
+class _SimpleEmptyRow extends StatelessWidget {
   final String title;
   final String subtitle;
 
   final String? trailing;
 
-  const _SimpleEmptyRow({
-    required this.title,
-    required this.subtitle,
-  }) : trailing = null;
+  const _SimpleEmptyRow({required this.title, required this.subtitle})
+    : trailing = null;
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        vertical:
-            11,
-      ),
-      child:
-          Row(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
         children: [
           Container(
-            width:
-                42,
-            height:
-                42,
-            decoration:
-                const BoxDecoration(
-              color:
-                  ShopColors.soft,
-              shape:
-                  BoxShape.circle,
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(
+              color: ShopColors.soft,
+              shape: BoxShape.circle,
             ),
-            alignment:
-                Alignment.center,
-            child:
-                const Icon(
-              Icons
-                  .history_rounded,
-              color:
-                  ShopColors.muted,
-              size:
-                  19,
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.history_rounded,
+              color: ShopColors.muted,
+              size: 19,
             ),
           ),
 
-          const SizedBox(
-            width:
-                10,
-          ),
+          const SizedBox(width: 10),
 
           Expanded(
-            child:
-                Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.text,
-                    fontSize:
-                        10.5,
-                    fontWeight:
-                        FontWeight.w800,
+                  style: const TextStyle(
+                    color: ShopColors.text,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
 
-                const SizedBox(
-                  height:
-                      3,
-                ),
+                const SizedBox(height: 3),
 
                 Text(
                   subtitle,
-                  style:
-                      const TextStyle(
-                    color:
-                        ShopColors.muted,
-                    fontSize:
-                        8.5,
-                    height:
-                        1.4,
+                  style: const TextStyle(
+                    color: ShopColors.muted,
+                    fontSize: 8.5,
+                    height: 1.4,
                   ),
                 ),
               ],
             ),
           ),
 
-          if (trailing !=
-              null) ...[
-            const SizedBox(
-              width:
-                  8,
-            ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
 
             Text(
               trailing!,
-              style:
-                  const TextStyle(
-                color:
-                    ShopColors.accent,
-                fontSize:
-                    9.5,
-                fontWeight:
-                    FontWeight.w800,
+              style: const TextStyle(
+                color: ShopColors.accent,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
