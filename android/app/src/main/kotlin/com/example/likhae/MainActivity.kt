@@ -2,6 +2,7 @@ package com.example.likhae
 
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Handler
 import android.os.Looper
@@ -91,7 +92,7 @@ class MainActivity : FlutterFragmentActivity() {
             format,
             samples.size * 2,
             AudioTrack.MODE_STATIC,
-            AudioTrack.AUDIO_SESSION_ID_GENERATE,
+            AudioManager.AUDIO_SESSION_ID_GENERATE,
         )
         notificationTrack = track
         track.setVolume(0.7f)
