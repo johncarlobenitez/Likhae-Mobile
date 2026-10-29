@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/core/utils/api_value_parsers.dart';
+import 'package:likhae/services/buyer_mobile_service.dart';
 import 'package:likhae/services/wishlist_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 typedef ProductActionCallback =
     Future<void> Function(
@@ -20,6 +24,10 @@ typedef ProductWishlistCallback =
     Future<void> Function(ProductDetailData product);
 
 typedef ProductNavigationCallback = void Function(ProductDetailData product);
+typedef ProductFlashReminderCallback =
+    Future<void> Function(ProductDetailData product, bool enabled);
+typedef ProductRelatedProductsLoader =
+    Future<List<ProductDetailData>> Function(ProductDetailData product);
 
 class ProductVariationData {
   final int id;
@@ -102,7 +110,10 @@ class ProductVariationData {
   double? get discountPercentage {
     final double? original = originalPrice;
     final double? current = price;
-    if (original == null || current == null || original <= current || original <= 0) {
+    if (original == null ||
+        current == null ||
+        original <= current ||
+        original <= 0) {
       return null;
     }
     return ((original - current) / original) * 100;
@@ -116,6 +127,77 @@ class ProductOptionData {
   const ProductOptionData({required this.name, required this.values});
 }
 
+List<String> _parseReviewImageUrls(dynamic raw) {
+  final Set<String> urls = <String>{};
+
+  void collect(dynamic value) {
+    if (value is List) {
+      for (final dynamic item in value) {
+        collect(item);
+      }
+      return;
+    }
+
+    if (value is Map) {
+      const List<String> mediaKeys = <String>[
+        'url',
+        'image_url',
+        'photo_url',
+        'attachment_url',
+        'original_url',
+        'full_url',
+        'thumbnail_url',
+        'file_url',
+        'media_url',
+        'image_path',
+        'photo_path',
+        'path',
+        'src',
+        'image',
+        'photo',
+      ];
+      for (final String key in mediaKeys) {
+        final dynamic media = value[key];
+        if (media != null && media.toString().trim().isNotEmpty) {
+          collect(media);
+          return;
+        }
+      }
+
+      for (final String key in <String>[
+        'data',
+        'items',
+        'images',
+        'photos',
+        'attachments',
+        'media',
+      ]) {
+        if (value.containsKey(key)) collect(value[key]);
+      }
+      return;
+    }
+
+    if (value is! String) return;
+    final String normalized = value.trim();
+    if (normalized.isEmpty ||
+        const <String>{
+          'true',
+          'false',
+          '0',
+          '1',
+          '[photo]',
+          '[image]',
+        }.contains(normalized.toLowerCase())) {
+      return;
+    }
+
+    urls.add(AppConfig.resolveMediaUrl(normalized));
+  }
+
+  collect(raw);
+  return urls.toList(growable: false);
+}
+
 class ProductReviewData {
   final String id;
 
@@ -127,6 +209,7 @@ class ProductReviewData {
   final String body;
   final String date;
 
+  final List<String> imageUrls;
   final bool hasPhoto;
 
   const ProductReviewData({
@@ -136,6 +219,7 @@ class ProductReviewData {
     required this.body,
     this.buyerAvatarUrl,
     this.date = '',
+    this.imageUrls = const <String>[],
     this.hasPhoto = false,
   });
 
@@ -157,6 +241,7 @@ class ProductDetailData {
   final String? slug;
 
   final String? category;
+  final String? categorySlug;
 
   final String? imageUrl;
   final List<String> imageUrls;
@@ -193,6 +278,9 @@ class ProductDetailData {
   final bool isActive;
   final bool isDraft;
   final bool isDeleted;
+  final DateTime? flashSaleStartsAt;
+  final DateTime? flashSaleEndsAt;
+  final bool flashSaleReminderAvailable;
 
   const ProductDetailData({
     required this.id,
@@ -200,6 +288,7 @@ class ProductDetailData {
     required this.price,
     this.slug,
     this.category,
+    this.categorySlug,
     this.imageUrl,
     this.imageUrls = const [],
     this.originalPrice,
@@ -223,6 +312,9 @@ class ProductDetailData {
     this.isActive = true,
     this.isDraft = false,
     this.isDeleted = false,
+    this.flashSaleStartsAt,
+    this.flashSaleEndsAt,
+    this.flashSaleReminderAvailable = false,
   });
 
   List<String> get galleryImages {
@@ -255,6 +347,25 @@ class ProductDetailData {
     return ((original - price) / original) * 100;
   }
 
+  bool get isFlashSaleExpired {
+    final DateTime? endsAt = flashSaleEndsAt;
+    return endsAt != null && !endsAt.isAfter(DateTime.now());
+  }
+
+  bool get isFlashSaleUpcoming {
+    if (isFlashSaleExpired) return false;
+    final DateTime? startsAt = flashSaleStartsAt;
+    if (startsAt != null) return startsAt.isAfter(DateTime.now());
+    return flashSaleReminderAvailable && flashSaleEndsAt == null;
+  }
+
+  bool get isFlashSaleActive {
+    final DateTime? startsAt = flashSaleStartsAt;
+    return !isFlashSaleExpired &&
+        !isFlashSaleUpcoming &&
+        (startsAt != null || flashSaleEndsAt != null);
+  }
+
   String get sellerInitial {
     final String clean = sellerName?.trim() ?? '';
 
@@ -278,7 +389,8 @@ class ProductDetailData {
         primaryImage?['url'] ??
         primaryImage?['file_path'];
     final dynamic gallery = json['gallery'] ?? json['images'] ?? <dynamic>[];
-    final dynamic variations = json['variations'] ?? json['variants'] ?? <String, dynamic>{};
+    final dynamic variations =
+        json['variations'] ?? json['variants'] ?? <String, dynamic>{};
     final dynamic rawOptions = json['options'] ?? <dynamic>[];
     final dynamic specs =
         json['specs'] ?? json['specifications'] ?? <String, dynamic>{};
@@ -331,13 +443,16 @@ class ProductDetailData {
             if (rawOption is! Map) {
               continue;
             }
-            final String optionName = (rawOption['option'] ??
-                    rawOption['option_name'] ??
-                    rawOption['name'] ??
-                    '')
+            final String optionName =
+                (rawOption['option'] ??
+                        rawOption['option_name'] ??
+                        rawOption['name'] ??
+                        '')
+                    .toString()
+                    .trim();
+            final String optionValue = (rawOption['value'] ?? '')
                 .toString()
                 .trim();
-            final String optionValue = (rawOption['value'] ?? '').toString().trim();
             if (optionName.isNotEmpty && optionValue.isNotEmpty) {
               optionValues[optionName] = optionValue;
             }
@@ -410,7 +525,8 @@ class ProductDetailData {
               stock: int.tryParse(value['stock']?.toString() ?? ''),
               price: double.tryParse(value['price']?.toString() ?? ''),
               originalPrice: double.tryParse(
-                (value['old_price'] ?? value['original_price'])?.toString() ?? '',
+                (value['old_price'] ?? value['original_price'])?.toString() ??
+                    '',
               ),
               optionValues: <String, String>{
                 groupName: value['value']?.toString() ?? '',
@@ -433,9 +549,11 @@ class ProductDetailData {
         final dynamic rawValues = rawOption['values'];
         final List<String> values = rawValues is List
             ? rawValues
-                  .map((dynamic value) => value is Map
-                      ? (value['value'] ?? '').toString().trim()
-                      : value.toString().trim())
+                  .map(
+                    (dynamic value) => value is Map
+                        ? (value['value'] ?? '').toString().trim()
+                        : value.toString().trim(),
+                  )
                   .where((String value) => value.isNotEmpty)
                   .toSet()
                   .toList()
@@ -464,10 +582,8 @@ class ProductDetailData {
       }
       parsedOptions.addAll(
         derivedOptions.entries.map(
-          (MapEntry<String, List<String>> entry) => ProductOptionData(
-            name: entry.key,
-            values: entry.value,
-          ),
+          (MapEntry<String, List<String>> entry) =>
+              ProductOptionData(name: entry.key, values: entry.value),
         ),
       );
     }
@@ -502,39 +618,52 @@ class ProductDetailData {
         final Map<String, dynamic>? reviewer = rawReviewer is Map
             ? Map<String, dynamic>.from(rawReviewer)
             : null;
-        final String buyerName = (review['buyer_name'] ??
-                review['customer_name'] ??
-                reviewer?['name'] ??
-                reviewer?['full_name'] ??
-                (rawReviewer is String ? rawReviewer : null) ??
-                review['name'] ??
-                'Buyer')
-            .toString();
+        final String buyerName =
+            (review['buyer_name'] ??
+                    review['customer_name'] ??
+                    reviewer?['name'] ??
+                    reviewer?['full_name'] ??
+                    (rawReviewer is String ? rawReviewer : null) ??
+                    review['name'] ??
+                    'Buyer')
+                .toString();
 
         final String body =
             (review['body'] ?? review['review'] ?? review['comment'] ?? '')
                 .toString();
 
-        final String? rawAvatar = (review['buyer_avatar_url'] ??
-                review['avatar_url'] ??
-                reviewer?['avatar_url'] ??
-                reviewer?['profile_photo_url'] ??
-                reviewer?['avatar'] ??
-                review['avatar'])
-            ?.toString();
+        final String? rawAvatar =
+            (review['buyer_avatar_url'] ??
+                    review['avatar_url'] ??
+                    reviewer?['avatar_url'] ??
+                    reviewer?['profile_photo_url'] ??
+                    reviewer?['avatar'] ??
+                    review['avatar'])
+                ?.toString();
 
-        final dynamic photoValue =
-            review['photos'] ??
-            review['images'] ??
-            review['photo'] ??
-            review['attachments'] ??
-            review['image_url'];
-
-        final bool hasPhoto = photoValue is List
-            ? photoValue.isNotEmpty
-            : photoValue is Map
-            ? photoValue.isNotEmpty
-            : photoValue != null && photoValue.toString().trim().isNotEmpty;
+        final List<dynamic> photoValues = <dynamic>[
+          review['photos'],
+          review['images'],
+          review['photo'],
+          review['attachments'],
+          review['image_url'],
+          review['image_urls'],
+          review['photo_url'],
+          review['photo_urls'],
+          review['review_images'],
+          review['review_photos'],
+          review['media'],
+        ].where((dynamic value) => value != null).toList(growable: false);
+        final List<String> reviewImageUrls = <String>{
+          for (final dynamic photoValue in photoValues)
+            ..._parseReviewImageUrls(photoValue),
+        }.toList(growable: false);
+        final bool hasPhoto =
+            reviewImageUrls.isNotEmpty ||
+            photoValues.any((dynamic value) {
+              if (value is List || value is Map) return value.isNotEmpty;
+              return value.toString().trim().isNotEmpty;
+            });
         final dynamic rawReviewRating = review['rating'] ?? review['stars'];
         final int parsedRating = rawReviewRating is num
             ? rawReviewRating.round()
@@ -552,6 +681,7 @@ class ProductDetailData {
             rating: parsedRating.clamp(0, 5).toInt(),
             body: body,
             date: (review['date'] ?? review['created_at'] ?? '').toString(),
+            imageUrls: reviewImageUrls,
             hasPhoto: hasPhoto,
           ),
         );
@@ -562,7 +692,8 @@ class ProductDetailData {
         json['seller_avatar']?.toString() ??
         json['seller_avatar_url']?.toString();
 
-    final dynamic rawReviewCount = json['review_count'] ??
+    final dynamic rawReviewCount =
+        json['review_count'] ??
         json['reviews_count'] ??
         json['rating_count'] ??
         json['ratings_count'] ??
@@ -578,17 +709,18 @@ class ProductDetailData {
     final int reviewCount = parsedReviewCount < parsedReviews.length
         ? parsedReviews.length
         : parsedReviewCount;
-    final dynamic rawAverageRating = json['rating'] ??
+    final dynamic rawAverageRating =
+        json['rating'] ??
         json['average_rating'] ??
         json['rating_average'] ??
         json['avg_rating'] ??
         json['reviews_avg_rating'] ??
         json['review_avg_rating'];
-    double? averageRating = double.tryParse(
-      rawAverageRating?.toString() ?? '',
-    );
-    if ((averageRating == null || averageRating <= 0) && parsedReviews.isNotEmpty) {
-      averageRating = parsedReviews.fold<int>(
+    double? averageRating = double.tryParse(rawAverageRating?.toString() ?? '');
+    if ((averageRating == null || averageRating <= 0) &&
+        parsedReviews.isNotEmpty) {
+      averageRating =
+          parsedReviews.fold<int>(
             0,
             (int total, ProductReviewData review) => total + review.rating,
           ) /
@@ -612,6 +744,8 @@ class ProductDetailData {
           category?['name']?.toString() ??
           json['parent_category']?.toString() ??
           (json['category'] is String ? json['category'] as String : null),
+      categorySlug:
+          category?['slug']?.toString() ?? json['category_slug']?.toString(),
       imageUrl: rawImage == null || rawImage.toString().trim().isEmpty
           ? null
           : AppConfig.resolveMediaUrl(rawImage.toString().trim()),
@@ -654,19 +788,45 @@ class ProductDetailData {
       reviews: parsedReviews,
       wishlisted: json['wishlisted'] == true,
       sellerOnVacation: parseApiBool(
-        seller?['is_on_vacation'] ?? seller?['is_vacation_mode'] ?? seller?['vacation_mode'] ?? json['seller_on_vacation'],
+        seller?['is_on_vacation'] ??
+            seller?['is_vacation_mode'] ??
+            seller?['vacation_mode'] ??
+            json['seller_on_vacation'],
         defaultValue: false,
       ),
       isActive: parseApiBool(
-        json['is_active'] ?? json['is_available'] ?? json['active'] ?? json['is_published'],
-        defaultValue: !<String>{'inactive', 'unpublished', 'draft', 'deleted', 'disabled'}
-            .contains((json['status'] ?? '').toString().toLowerCase()),
+        json['is_active'] ??
+            json['is_available'] ??
+            json['active'] ??
+            json['is_published'],
+        defaultValue: !<String>{
+          'inactive',
+          'unpublished',
+          'draft',
+          'deleted',
+          'disabled',
+        }.contains((json['status'] ?? '').toString().toLowerCase()),
       ),
-      isDraft: parseApiBool(json['is_draft'], defaultValue: false) ||
+      isDraft:
+          parseApiBool(json['is_draft'], defaultValue: false) ||
           (json['status'] ?? '').toString().toLowerCase() == 'draft',
-      isDeleted: parseApiBool(json['is_deleted'] ?? json['deleted'], defaultValue: false) ||
+      isDeleted:
+          parseApiBool(
+            json['is_deleted'] ?? json['deleted'],
+            defaultValue: false,
+          ) ||
           json['deleted_at'] != null ||
           (json['status'] ?? '').toString().toLowerCase() == 'deleted',
+      flashSaleStartsAt: DateTime.tryParse(
+        (json['flash_sale_starts_at'] ?? '').toString(),
+      ),
+      flashSaleEndsAt: DateTime.tryParse(
+        (json['flash_sale_ends_at'] ?? '').toString(),
+      ),
+      flashSaleReminderAvailable: parseApiBool(
+        json['flash_sale_reminder_available'],
+        defaultValue: false,
+      ),
     );
   }
 
@@ -703,6 +863,7 @@ class ProductDetailData {
       price: price,
       slug: slug,
       category: category,
+      categorySlug: categorySlug,
       imageUrl: imageUrl,
       imageUrls: imageUrls,
       originalPrice: originalPrice,
@@ -726,6 +887,9 @@ class ProductDetailData {
       isActive: isActive,
       isDraft: isDraft,
       isDeleted: isDeleted,
+      flashSaleStartsAt: flashSaleStartsAt,
+      flashSaleEndsAt: flashSaleEndsAt,
+      flashSaleReminderAvailable: flashSaleReminderAvailable,
     );
   }
 }
@@ -799,6 +963,9 @@ class ProductDetailsScreen extends StatefulWidget {
   /// Alias supported for easier wiring.
   final ProductWishlistCallback? onWishlist;
 
+  final ProductFlashReminderCallback? onFlashSaleReminder;
+  final ProductRelatedProductsLoader? loadRelatedProducts;
+
   final ProductNavigationCallback? onViewStore;
 
   final ProductNavigationCallback? onMessageSeller;
@@ -824,6 +991,8 @@ class ProductDetailsScreen extends StatefulWidget {
     this.onBuyNowRequest,
     this.onWishlistToggle,
     this.onWishlist,
+    this.onFlashSaleReminder,
+    this.loadRelatedProducts,
     this.onViewStore,
     this.onMessageSeller,
     this.onRelatedProductSelected,
@@ -862,6 +1031,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   static const Color _danger = Color(0xFFB42318);
 
   final PageController _galleryController = PageController();
+  final GlobalKey _shareButtonKey = GlobalKey();
 
   late ProductDetailData _product;
 
@@ -878,6 +1048,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   bool _addingToCart = false;
   bool _buyingNow = false;
   bool _updatingWishlist = false;
+  bool _flashReminderRegistered = false;
+  bool _updatingFlashReminder = false;
+  List<ProductDetailData> _loadedRelatedProducts = <ProductDetailData>[];
 
   bool _descriptionExpanded = false;
 
@@ -889,7 +1062,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     _quantity = widget.initialQuantity.clamp(1, 999999).toInt();
 
-    _wishlisted = WishlistService.isWishlisted(_product.id) ||
+    _wishlisted =
+        WishlistService.isWishlisted(_product.id) ||
         (widget.initialWishlisted ?? _product.wishlisted);
     WishlistService.recordKnownProducts(<({int id, bool wishlisted})>[
       (id: _product.id, wishlisted: _product.wishlisted),
@@ -902,6 +1076,68 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         : _optionValuesForVariation(_selectedVariation!);
 
     _clampQuantity();
+    if (AppConfig.apiEnabled &&
+        _product.flashSaleReminderAvailable &&
+        _product.isFlashSaleUpcoming) {
+      unawaited(_loadFlashReminderStatus());
+    }
+    if (widget.loadRelatedProducts != null &&
+        _product.category?.isNotEmpty == true) {
+      unawaited(_loadRelatedProducts());
+    }
+  }
+
+  Future<void> _loadRelatedProducts() async {
+    final ProductRelatedProductsLoader? loader = widget.loadRelatedProducts;
+    if (loader == null) return;
+    try {
+      final List<ProductDetailData> rows = await loader(_product);
+      if (mounted)
+        setState(
+          () => _loadedRelatedProducts = rows
+              .where((ProductDetailData row) => row.id != _product.id)
+              .take(6)
+              .toList(),
+        );
+    } catch (_) {
+      // Product details remain usable if the optional related catalog request fails.
+    }
+  }
+
+  Future<void> _loadFlashReminderStatus() async {
+    try {
+      final Map<String, dynamic> status =
+          await BuyerMobileService.fetchFlashReminder(_product.id);
+      if (mounted)
+        setState(() => _flashReminderRegistered = status['registered'] == true);
+    } catch (_) {
+      // The registration action remains available if the optional status lookup fails.
+    }
+  }
+
+  Future<void> _toggleFlashReminder() async {
+    final ProductFlashReminderCallback? callback = widget.onFlashSaleReminder;
+    if (callback == null ||
+        _updatingFlashReminder ||
+        !_product.isFlashSaleUpcoming) {
+      return;
+    }
+    final bool enabled = !_flashReminderRegistered;
+    setState(() => _updatingFlashReminder = true);
+    try {
+      await callback(_product, enabled);
+      if (!mounted) return;
+      setState(() => _flashReminderRegistered = enabled);
+      _showMessage(
+        enabled
+            ? 'You will be reminded before this flash sale starts.'
+            : 'Flash sale reminder cancelled.',
+      );
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) setState(() => _updatingFlashReminder = false);
+    }
   }
 
   @override
@@ -912,7 +1148,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         oldWidget.product != widget.product) {
       _product = widget.product;
 
-      _wishlisted = WishlistService.isWishlisted(_product.id) ||
+      _wishlisted =
+          WishlistService.isWishlisted(_product.id) ||
           (widget.initialWishlisted ?? _product.wishlisted);
 
       _quantity = widget.initialQuantity.clamp(1, 999999).toInt();
@@ -924,8 +1161,17 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
       _currentImageIndex = 0;
       _descriptionExpanded = false;
+      _flashReminderRegistered = false;
+      _loadedRelatedProducts = <ProductDetailData>[];
 
       _clampQuantity();
+      if (AppConfig.apiEnabled && _product.flashSaleReminderAvailable) {
+        unawaited(_loadFlashReminderStatus());
+      }
+      if (widget.loadRelatedProducts != null &&
+          _product.category?.isNotEmpty == true) {
+        unawaited(_loadRelatedProducts());
+      }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_galleryController.hasClients) {
@@ -1009,13 +1255,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   bool get _outOfStock {
-    return _availableStock < 1 ||
-        !_product.isActive || _product.isDraft || _product.isDeleted ||
+    return _product.isFlashSaleExpired ||
+        _availableStock < 1 ||
+        !_product.isActive ||
+        _product.isDraft ||
+        _product.isDeleted ||
         _product.sellerOnVacation;
   }
 
   bool get _purchaseBlocked {
-    if (!_product.isActive || _product.isDraft || _product.isDeleted ||
+    if (_product.isFlashSaleExpired) return true;
+    if (!_product.isActive ||
+        _product.isDraft ||
+        _product.isDeleted ||
         _product.sellerOnVacation) {
       return true;
     }
@@ -1024,7 +1276,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   double get _displayPrice {
-    return _selectedVariation?.price ?? _product.price;
+    final ProductVariationData? variation = _selectedVariation;
+    if (_product.isFlashSaleExpired) {
+      return variation?.originalPrice ??
+          _product.originalPrice ??
+          variation?.price ??
+          _product.price;
+    }
+    return variation?.price ?? _product.price;
   }
 
   double? get _displayOriginalPrice {
@@ -1035,11 +1294,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   double? get _displayDiscountPercentage {
     final double? original = _displayOriginalPrice;
-    if (original == null || original <= _displayPrice || original <= 0) return null;
+    if (original == null || original <= _displayPrice || original <= 0)
+      return null;
     return ((original - _displayPrice) / original) * 100;
   }
 
   String get _availabilityLabel {
+    if (_product.isFlashSaleExpired) return 'Flash sale ended; refresh price';
     if (_product.sellerOnVacation) return 'Seller is on vacation';
     if (!_product.isActive || _product.isDraft || _product.isDeleted) {
       return 'Product unavailable';
@@ -1051,9 +1312,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   List<String> get _images {
-    final ProductVariationData? preview =
-        _findVariationForPreview(_selectedOptionValues);
-    final List<String> variantImages = preview?.galleryImages ?? const <String>[];
+    final ProductVariationData? preview = _findVariationForPreview(
+      _selectedOptionValues,
+    );
+    final List<String> variantImages =
+        preview?.galleryImages ?? const <String>[];
 
     if (variantImages.isEmpty) {
       return _product.galleryImages;
@@ -1105,10 +1368,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     return groups.entries
         .map(
-          (MapEntry<String, List<String>> entry) => ProductOptionData(
-            name: entry.key,
-            values: entry.value,
-          ),
+          (MapEntry<String, List<String>> entry) =>
+              ProductOptionData(name: entry.key, values: entry.value),
         )
         .toList(growable: false);
   }
@@ -1173,8 +1434,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     String value,
     Map<String, String> selections,
   ) {
-    final Map<String, String> previewSelections =
-        Map<String, String>.from(selections)..[group.name] = value;
+    final Map<String, String> previewSelections = Map<String, String>.from(
+      selections,
+    )..[group.name] = value;
     return _findVariationForPreview(previewSelections);
   }
 
@@ -1183,8 +1445,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     String value,
     Map<String, String> selections,
   ) {
-    final Map<String, String> candidateSelections =
-        Map<String, String>.from(selections)..[group.name] = value;
+    final Map<String, String> candidateSelections = Map<String, String>.from(
+      selections,
+    )..[group.name] = value;
     return _product.variations.any((ProductVariationData variation) {
       final Map<String, String> values = _optionValuesForVariation(variation);
       final bool matches = candidateSelections.entries.every(
@@ -1246,6 +1509,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   List<ProductDetailData> get _relatedProducts {
+    if (_loadedRelatedProducts.isNotEmpty) return _loadedRelatedProducts;
     final List<ProductDetailData> source = widget.relatedProducts.isNotEmpty
         ? widget.relatedProducts
         : widget.products;
@@ -1271,20 +1535,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     if (_quantity > stock) {
       _quantity = stock;
     }
-  }
-
-  void _selectVariation(ProductVariationData variation) {
-    if (_selectedVariation?.id == variation.id) {
-      return;
-    }
-
-    setState(() {
-      _selectedVariation = variation;
-      _selectedOptionValues = _optionValuesForVariation(variation);
-
-      _clampQuantity();
-      _resetGalleryToSelectedOption();
-    });
   }
 
   void _decreaseQuantity() {
@@ -1465,10 +1715,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
-  Future<bool?> _showVariationPicker({String actionLabel = 'Continue to checkout'}) {
+  Future<bool?> _showVariationPicker({
+    String actionLabel = 'Continue to checkout',
+  }) {
     final List<ProductOptionData> groups = _optionGroups;
-    final Map<String, String> pendingSelections =
-        Map<String, String>.from(_selectedOptionValues);
+    final Map<String, String> pendingSelections = Map<String, String>.from(
+      _selectedOptionValues,
+    );
 
     return showModalBottomSheet<bool>(
       context: context,
@@ -1489,8 +1742,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             final int previewStock = matchingVariation == null
                 ? _product.stock
                 : _variationStock(matchingVariation);
-            final bool canContinue = matchingVariation != null &&
-                previewStock > 0;
+            final bool canContinue =
+                matchingVariation != null && previewStock > 0;
 
             return SafeArea(
               child: Padding(
@@ -1632,7 +1885,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                         );
                                     final List<String> optionImages =
                                         optionPreview?.galleryImages ??
-                                            const <String>[];
+                                        const <String>[];
                                     return Material(
                                       color: !optionAvailable
                                           ? const Color(0xFFF1F1F1)
@@ -1644,7 +1897,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                         onTap: optionAvailable
                                             ? () {
                                                 setModalState(() {
-                                                  pendingSelections[group.name] =
+                                                  pendingSelections[group
+                                                          .name] =
                                                       value;
                                                 });
                                               }
@@ -1652,13 +1906,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                         borderRadius: BorderRadius.circular(9),
                                         child: Container(
                                           padding: EdgeInsets.symmetric(
-                                            horizontal: _isColorOption(group.name)
+                                            horizontal:
+                                                _isColorOption(group.name)
                                                 ? 7
                                                 : 13,
                                             vertical: 7,
                                           ),
                                           decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(9),
+                                            borderRadius: BorderRadius.circular(
+                                              9,
+                                            ),
                                             border: Border.all(
                                               color: !optionAvailable
                                                   ? const Color(0xFFE3E3E3)
@@ -1679,10 +1936,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                                   child: Container(
                                                     width: 30,
                                                     height: 30,
-                                                    clipBehavior: Clip.antiAlias,
+                                                    clipBehavior:
+                                                        Clip.antiAlias,
                                                     decoration: BoxDecoration(
                                                       shape: BoxShape.circle,
-                                                      color: _colorForOption(value),
+                                                      color: _colorForOption(
+                                                        value,
+                                                      ),
                                                       border: Border.all(
                                                         color: selected
                                                             ? _maroon
@@ -1784,11 +2044,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   ),
                                   _QuantityButton(
                                     icon: Icons.add_rounded,
-                                    enabled: previewStock > 0 &&
+                                    enabled:
+                                        previewStock > 0 &&
                                         _quantity < previewStock,
                                     onTap: () {
                                       setModalState(() {
-                                        if (_quantity < previewStock) _quantity++;
+                                        if (_quantity < previewStock)
+                                          _quantity++;
                                       });
                                     },
                                   ),
@@ -1820,8 +2082,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             elevation: 0,
                             backgroundColor: _maroon,
                             foregroundColor: Colors.white,
-                            disabledBackgroundColor:
-                                _maroon.withValues(alpha: 0.25),
+                            disabledBackgroundColor: _maroon.withValues(
+                              alpha: 0.25,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1844,8 +2107,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   bool _validatePurchase() {
+    if (_product.isFlashSaleExpired) {
+      _showMessage(
+        'This flash sale has ended. Refresh the product before purchasing.',
+        error: true,
+      );
+      return false;
+    }
+
     if (_product.sellerOnVacation) {
-      _showMessage('This seller is on vacation. Purchases are unavailable.', error: true);
+      _showMessage(
+        'This seller is on vacation. Purchases are unavailable.',
+        error: true,
+      );
       return false;
     }
 
@@ -1911,6 +2185,48 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return error.toString().replaceFirst('Exception: ', '');
   }
 
+  Uri _productShareUri() {
+    final Uri baseUri = Uri.parse(AppConfig.webBaseUrl);
+    final String slug = _product.slug?.trim() ?? '';
+    final List<String> basePathSegments = baseUri.pathSegments
+        .where((String segment) => segment.isNotEmpty)
+        .toList(growable: false);
+
+    return baseUri.replace(
+      pathSegments: <String>[
+        ...basePathSegments,
+        'products',
+        slug.isEmpty ? _product.id.toString() : slug,
+      ],
+      query: null,
+      fragment: null,
+    );
+  }
+
+  Future<void> _shareProduct() async {
+    final Uri productUri = _productShareUri();
+    final RenderBox? buttonBox =
+        _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final Rect? shareOrigin = buttonBox?.hasSize == true
+        ? buttonBox!.localToGlobal(Offset.zero) & buttonBox.size
+        : null;
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          uri: productUri,
+          title: _product.name,
+          subject: _product.name,
+          sharePositionOrigin: shareOrigin,
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        _showMessage('Could not share this product.', error: true);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool wide = MediaQuery.sizeOf(context).width >= 900;
@@ -1921,8 +2237,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         bottom: false,
         child: Column(
           children: [
-            _buildTopBar(),
-
             Expanded(
               child: RefreshIndicator(
                 color: _maroon,
@@ -1941,7 +2255,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               wide ? 22 : 14,
                               wide ? 18 : 12,
                               wide ? 22 : 14,
-                              wide ? 32 : 118,
+                              wide ? 32 : 24,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1955,7 +2269,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                 if (wide)
                                   _buildDesktopHero()
                                 else ...[
-                                  _buildGalleryCard(),
+                                  _buildGalleryCard(showFloatingControls: true),
 
                                   const SizedBox(height: 14),
 
@@ -1993,17 +2307,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
               ),
             ),
-
-            if (!wide) _buildPurchaseBar(),
           ],
         ),
       ),
+      bottomNavigationBar: wide ? null : _buildPurchaseBar(),
     );
   }
-
-  Widget _buildTopBar() => ShopPageHeader(
-    title: 'A closer look', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-  );
 
   Widget _buildBreadcrumb() {
     final String category = _product.category?.trim() ?? '';
@@ -2048,7 +2357,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(flex: 11, child: _buildGalleryCard()),
+        Expanded(
+          flex: 11,
+          child: _buildGalleryCard(showFloatingControls: true),
+        ),
 
         const SizedBox(width: 18),
 
@@ -2057,7 +2369,35 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildGalleryCard() {
+  Widget _buildGalleryAction({
+    Key? key,
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        key: key,
+        color: Colors.white.withValues(alpha: 0.9),
+        elevation: 2,
+        shadowColor: Colors.black.withValues(alpha: 0.18),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon, color: _maroon, size: 21),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGalleryCard({bool showFloatingControls = false}) {
     final List<String> images = _images;
     final double? discount = _displayDiscountPercentage;
 
@@ -2111,7 +2451,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   if (discount != null)
                     Positioned(
                       left: 12,
-                      top: 12,
+                      top: showFloatingControls ? 64 : 12,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 9,
@@ -2132,6 +2472,30 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                       ),
                     ),
+
+                  if (showFloatingControls) ...[
+                    Positioned(
+                      left: 12,
+                      top: 12,
+                      child: _buildGalleryAction(
+                        icon: Icons.arrow_back_rounded,
+                        label: 'Back',
+                        onPressed:
+                            widget.onBack ??
+                            () => Navigator.of(context).maybePop(),
+                      ),
+                    ),
+                    Positioned(
+                      right: 12,
+                      top: 12,
+                      child: _buildGalleryAction(
+                        key: _shareButtonKey,
+                        icon: Icons.share_outlined,
+                        label: 'Share product',
+                        onPressed: _shareProduct,
+                      ),
+                    ),
+                  ],
 
                   if (images.length > 1)
                     Positioned(
@@ -2299,6 +2663,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
           _buildPricePanel(),
 
+          if (_product.isFlashSaleExpired) ...[
+            const SizedBox(height: 10),
+            _buildFlashSaleEndedPanel(),
+          ] else if (_product.isFlashSaleUpcoming ||
+              _product.isFlashSaleActive) ...[
+            const SizedBox(height: 10),
+            _buildFlashSaleTimingPanel(
+              upcoming: _product.isFlashSaleUpcoming,
+              showReminder: _product.flashSaleReminderAvailable &&
+                  widget.onFlashSaleReminder != null,
+            ),
+          ],
+
           if (_product.variations.isNotEmpty) ...[
             const SizedBox(height: 16),
 
@@ -2344,16 +2721,28 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             runSpacing: 5,
             crossAxisAlignment: WrapCrossAlignment.end,
             children: [
-              Text(
-                _formatPrice(_displayPrice),
-                style: const TextStyle(
-                  color: _maroon,
-                  fontSize: 25,
-                  height: 1,
-                  letterSpacing: -0.6,
-                  fontWeight: FontWeight.w800,
+              if (_product.isFlashSaleExpired &&
+                  _displayOriginalPrice == null)
+                const Text(
+                  'Refresh for current price',
+                  style: TextStyle(
+                    color: _maroon,
+                    fontSize: 16,
+                    height: 1.2,
+                    fontWeight: FontWeight.w800,
+                  ),
+                )
+              else
+                Text(
+                  _formatPrice(_displayPrice),
+                  style: const TextStyle(
+                    color: _maroon,
+                    fontSize: 25,
+                    height: 1,
+                    letterSpacing: -0.6,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
 
               if (_displayOriginalPrice != null &&
                   _displayOriginalPrice! > _displayPrice)
@@ -2418,6 +2807,101 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlashSaleTimingPanel({
+    required bool upcoming,
+    required bool showReminder,
+  }) {
+    final DateTime? start = _product.flashSaleStartsAt?.toLocal();
+    final DateTime? end = _product.flashSaleEndsAt?.toLocal();
+    final String timingLabel = upcoming
+        ? (start == null
+              ? 'Starts soon'
+              : 'Starts ${start.month}/${start.day} at ${TimeOfDay.fromDateTime(start).format(context)}')
+        : (end == null
+              ? 'Sale is live'
+              : 'Ends ${end.month}/${end.day} at ${TimeOfDay.fromDateTime(end).format(context)}');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E8),
+        border: Border.all(color: const Color(0xFFEAD3B7)),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            upcoming ? Icons.notifications_active_outlined : Icons.bolt_rounded,
+            color: _maroon,
+            size: 19,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  upcoming ? 'Upcoming flash sale' : 'Flash sale is live',
+                  style: const TextStyle(
+                    color: _text,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  timingLabel,
+                  style: const TextStyle(color: _muted, fontSize: 10.5),
+                ),
+              ],
+            ),
+          ),
+          if (showReminder)
+            TextButton(
+              onPressed: _updatingFlashReminder ? null : _toggleFlashReminder,
+              child: _updatingFlashReminder
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_flashReminderRegistered ? 'Cancel' : 'Remind me'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlashSaleEndedPanel() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1EF),
+        border: Border.all(color: const Color(0xFFE7C6C1)),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.timer_off_outlined, color: _danger, size: 19),
+          const SizedBox(width: 9),
+          const Expanded(
+            child: Text(
+              'This flash sale has ended. Refresh to load the current price.',
+              style: TextStyle(
+                color: _text,
+                fontSize: 11,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (widget.onRefresh != null)
+            TextButton(onPressed: _refresh, child: const Text('Refresh')),
         ],
       ),
     );
@@ -2693,9 +3177,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
             Expanded(
               child: ElevatedButton(
-                  onPressed: busy || _purchaseBlocked
-                      ? null
-                      : _buyNow,
+                onPressed: busy || _purchaseBlocked ? null : _buyNow,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
                   backgroundColor: _maroon,
@@ -2716,9 +3198,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                       )
                     : Text(
-                        _purchaseBlocked
-                            ? _availabilityLabel
-                            : 'Buy Now',
+                        _purchaseBlocked ? _availabilityLabel : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
@@ -2783,79 +3263,93 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         builder: (BuildContext context, BoxConstraints constraints) {
           final bool compact = constraints.maxWidth < 560;
 
-          final Widget sellerInfo = Row(
-            children: [
-              _SellerAvatar(product: _product),
-
-              const SizedBox(width: 11),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          final Widget sellerInfo = Semantics(
+            button: widget.onViewStore != null,
+            label: 'View ${_product.sellerName} store',
+            child: InkWell(
+              onTap: widget.onViewStore == null
+                  ? null
+                  : () => widget.onViewStore!(_product),
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            _product.sellerVerified
-                                ? 'VERIFIED SELLER'
-                                : 'SELLER',
+                    _SellerAvatar(product: _product),
+
+                    const SizedBox(width: 11),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  _product.sellerVerified
+                                      ? 'VERIFIED SELLER'
+                                      : 'SELLER',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: _product.sellerVerified
+                                        ? _success
+                                        : _muted,
+                                    fontSize: 9.5,
+                                    letterSpacing: 0.8,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+
+                              if (_product.sellerVerified) ...[
+                                const SizedBox(width: 4),
+
+                                const Icon(
+                                  Icons.verified_rounded,
+                                  color: _success,
+                                  size: 13,
+                                ),
+                              ],
+                            ],
+                          ),
+
+                          const SizedBox(height: 3),
+
+                          Text(
+                            _product.sellerName!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: _product.sellerVerified
-                                  ? _success
-                                  : _muted,
-                              fontSize: 9.5,
-                              letterSpacing: 0.8,
+                            style: const TextStyle(
+                              color: _text,
+                              fontSize: 12.5,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                        ),
 
-                        if (_product.sellerVerified) ...[
-                          const SizedBox(width: 4),
+                          if (_product.sellerLocation?.trim().isNotEmpty ==
+                              true) ...[
+                            const SizedBox(height: 3),
 
-                          const Icon(
-                            Icons.verified_rounded,
-                            color: _success,
-                            size: 13,
-                          ),
+                            Text(
+                              _product.sellerLocation!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _muted,
+                                fontSize: 10,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-
-                    const SizedBox(height: 3),
-
-                    Text(
-                      _product.sellerName!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _text,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
                       ),
                     ),
-
-                    if (_product.sellerLocation?.trim().isNotEmpty == true) ...[
-                      const SizedBox(height: 3),
-
-                      Text(
-                        _product.sellerLocation!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _muted,
-                          fontSize: 10,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
-            ],
+            ),
           );
 
           final Widget buttons = Row(
@@ -3262,7 +3756,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           )
         else
           SizedBox(
-            height: 250,
+            height: 290,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
@@ -3377,9 +3871,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
             Expanded(
               child: ElevatedButton(
-                onPressed: busy || _purchaseBlocked
-                    ? null
-                    : _buyNow,
+                onPressed: busy || _purchaseBlocked ? null : _buyNow,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
                   backgroundColor: _maroon,
@@ -3400,9 +3892,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ),
                       )
                     : Text(
-                        _purchaseBlocked
-                            ? _availabilityLabel
-                            : 'Buy Now',
+                        _purchaseBlocked ? _availabilityLabel : 'Buy Now',
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
@@ -3635,30 +4125,19 @@ class _SellerAvatar extends StatelessWidget {
       ),
       child: url == null || url.trim().isEmpty
           ? _SellerInitial(value: product.sellerInitial)
-          : Image.network(
-              AppConfig.resolveMediaUrl(url),
+          : SizedNetworkImage(
+              url: AppConfig.resolveMediaUrl(url),
               fit: BoxFit.cover,
-              loadingBuilder:
-                  (
-                    BuildContext context,
-                    Widget child,
-                    ImageChunkEvent? progress,
-                  ) {
-                    if (progress == null) {
-                      return child;
-                    }
-
-                    return const Center(
-                      child: SizedBox(
-                        width: 17,
-                        height: 17,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      ),
-                    );
-                  },
+              placeholder: const Center(
+                child: SizedBox(
+                  width: 17,
+                  height: 17,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
                     return _SellerInitial(value: product.sellerInitial);
@@ -3769,9 +4248,69 @@ class _ReviewCard extends StatelessWidget {
                   ),
                 ],
 
-                if (review.hasPhoto) ...[
+                if (review.imageUrls.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 78,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: review.imageUrls.length,
+                      separatorBuilder: (BuildContext context, int index) =>
+                          const SizedBox(width: 8),
+                      itemBuilder: (BuildContext context, int index) {
+                        final String imageUrl = review.imageUrls[index];
+                        final String heroTag =
+                            'review-photo-${review.id}-$index';
+                        return InkWell(
+                          onTap: () => showDialog<void>(
+                            context: context,
+                            builder: (BuildContext dialogContext) => Dialog(
+                              backgroundColor: Colors.transparent,
+                              insetPadding: const EdgeInsets.all(16),
+                              child: SizedBox(
+                                width: MediaQuery.sizeOf(dialogContext).width,
+                                height:
+                                    MediaQuery.sizeOf(dialogContext).height *
+                                    0.7,
+                                child: InteractiveViewer(
+                                  child: Hero(
+                                    tag: heroTag,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: SizedNetworkImage(
+                                        url: AppConfig.resolveMediaUrl(
+                                          imageUrl,
+                                        ),
+                                        fit: BoxFit.contain,
+                                        iconSize: 36,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          borderRadius: BorderRadius.circular(9),
+                          child: Hero(
+                            tag: heroTag,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(9),
+                              child: SizedBox(
+                                width: 78,
+                                height: 78,
+                                child: SizedNetworkImage(
+                                  url: AppConfig.resolveMediaUrl(imageUrl),
+                                  iconSize: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ] else if (review.hasPhoto) ...[
                   const SizedBox(height: 6),
-
                   const Row(
                     children: [
                       Icon(
@@ -3779,9 +4318,7 @@ class _ReviewCard extends StatelessWidget {
                         color: ShopColors.muted,
                         size: 13,
                       ),
-
                       SizedBox(width: 4),
-
                       Text(
                         'Review includes a photo',
                         style: TextStyle(
@@ -3829,8 +4366,8 @@ class _ReviewAvatar extends StatelessWidget {
                 ),
               ),
             )
-          : Image.network(
-              AppConfig.resolveMediaUrl(url),
+          : SizedNetworkImage(
+              url: AppConfig.resolveMediaUrl(url),
               fit: BoxFit.cover,
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
@@ -3989,10 +4526,18 @@ class _ProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = url?.trim() ?? '';
     if (value.isEmpty) {
-      return const Center(child: Icon(Icons.inventory_2_outlined,
-        color: ShopColors.faint, size: 38));
+      return const Center(
+        child: Icon(
+          Icons.inventory_2_outlined,
+          color: ShopColors.faint,
+          size: 38,
+        ),
+      );
     }
-    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value),
-      fit: BoxFit.cover, iconSize: 38);
+    return SizedNetworkImage(
+      url: AppConfig.resolveMediaUrl(value),
+      fit: BoxFit.cover,
+      iconSize: 38,
+    );
   }
 }

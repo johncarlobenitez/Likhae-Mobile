@@ -9,6 +9,8 @@ class GlassSurface extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final bool elevated;
   final double? opacity;
+  final Color? tintColor;
+  final Color? borderColor;
 
   const GlassSurface({
     super.key,
@@ -17,13 +19,17 @@ class GlassSurface extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.elevated = true,
     this.opacity,
+    this.tintColor,
+    this.borderColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final highContrast = MediaQuery.highContrastOf(context);
-    final tint = dark ? const Color(0xFF211E20) : const Color(0xFFFFFCF9);
+    final surfaceOpacity = highContrast ? 1.0 : opacity ?? .97;
+    final tint = tintColor ??
+        (dark ? const Color(0xFF211E20) : const Color(0xFFFFFCF9));
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -35,15 +41,17 @@ class GlassSurface extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: BackdropFilter(
-          enabled: !highContrast,
+          enabled: !highContrast && surfaceOpacity < .9,
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: tint.withValues(
-                alpha: highContrast ? 1 : opacity ?? .97,
-              ),
+              color: tint.withValues(alpha: surfaceOpacity),
               borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: Theme.of(context).colorScheme.outlineVariant, width: 1),
+              border: Border.all(
+                color:
+                    borderColor ?? Theme.of(context).colorScheme.outlineVariant,
+                width: 1,
+              ),
               gradient: highContrast ? null : LinearGradient(
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
                 colors: [Colors.white.withValues(alpha: dark ? .09 : .38), Colors.white.withValues(alpha: 0)],

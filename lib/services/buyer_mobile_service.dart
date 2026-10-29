@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -6,6 +9,7 @@ import '../core/config/app_config.dart';
 import '../core/utils/api_value_parsers.dart';
 import '../features/buyer/cart/cart_screen.dart';
 import '../features/buyer/checkout/checkout_screen.dart';
+import '../features/buyer/messages/message_models.dart';
 import '../features/buyer/messages/messages_screen.dart';
 import '../features/buyer/notifications/notifications_screen.dart';
 import '../features/buyer/orders/orders_screen.dart';
@@ -14,6 +18,7 @@ import '../features/buyer/rewards/rewards_screen.dart';
 import '../features/buyer/wishlist/wishlist_screen.dart';
 import 'realtime_service.dart';
 import 'auth_service.dart';
+import '../shared/widgets/buyer_navigation_badges.dart';
 
 class _BuyerProductData {
   final int id;
@@ -56,9 +61,13 @@ class _BuyerProductData {
 }
 
 class BuyerMobileService {
+  static void _refreshNavigationBadges() =>
+      unawaited(BuyerNavigationBadges.instance.refresh(force: true));
+
   static Future<List<dynamic>> _getRows(
     String endpoint, {
     int? maxPages,
+    Map<String, dynamic> queryParameters = const <String, dynamic>{},
   }) async {
     final List<dynamic> allRows = <dynamic>[];
     int page = 1;
@@ -66,7 +75,11 @@ class BuyerMobileService {
     do {
       final Response<dynamic> response = await ApiClient.get(
         AppConfig.resolveApiUrl(endpoint),
-        queryParameters: <String, dynamic>{'page': page, 'per_page': 50},
+        queryParameters: <String, dynamic>{
+          'page': page,
+          'per_page': 50,
+          ...queryParameters,
+        },
       );
       final Map<String, dynamic> payload = _requirePayload(response);
       final dynamic rows = payload['data'];
@@ -141,6 +154,7 @@ class BuyerMobileService {
         'The server did not return the saved cart item.',
       );
     }
+    _refreshNavigationBadges();
     return _cartItem(Map<String, dynamic>.from(item));
   }
 
@@ -155,6 +169,7 @@ class BuyerMobileService {
       <String, dynamic>{'quantity': quantity},
     );
     _requirePayload(response);
+    _refreshNavigationBadges();
   }
 
   static Future<void> removeCartItem(CartItemData item) async {
@@ -165,6 +180,7 @@ class BuyerMobileService {
       <String, dynamic>{},
     );
     _requirePayload(response);
+    _refreshNavigationBadges();
   }
 
   static Future<void> setDefaultBuyerAddress(BuyerAddressData address) async {
@@ -352,6 +368,13 @@ class BuyerMobileService {
           sellerName: item['seller_name']?.toString(),
           canUse: item.containsKey('can_use') ? item['can_use'] == true : null,
           sellerId: int.tryParse((item['seller_id'] ?? '').toString()),
+          voucherId: int.tryParse(
+            (item['voucher_id'] ?? item['id'] ?? '').toString(),
+          ),
+          voucherType: (item['voucher_type'] ?? 'seller').toString(),
+          isCollected: item['collected'] == true,
+          canClaim: item['claimable'] == true,
+          unavailableReason: item['unavailable_reason']?.toString(),
           discountType: item['discount_type']?.toString(),
           discountAmount: _asDouble(item['discount_value']),
           minimumOrderAmount: _asDouble(item['minimum_order_amount']),
@@ -395,6 +418,11 @@ class BuyerMobileService {
           50,
       pointsPerReview:
           int.tryParse((row['points_per_review'] ?? 20).toString()) ?? 20,
+      minimumPointsRedemption:
+          int.tryParse((row['minimum_points_redemption'] ?? 100).toString()) ??
+          100,
+      pointsPerPeso:
+          int.tryParse((row['points_per_peso'] ?? 100).toString()) ?? 100,
       cashbackRate: _asDouble(row['cashback_rate']),
     );
   }
@@ -445,6 +473,11 @@ class BuyerMobileService {
       barangay: row['barangay_name']?.toString(),
       municipality: row['municipality_name']?.toString(),
       province: row['province_name']?.toString(),
+      region: row['region_name']?.toString(),
+      regionCode: row['region_code']?.toString(),
+      provinceCode: row['province_code']?.toString(),
+      municipalityCode: row['municipality_code']?.toString(),
+      barangayCode: row['barangay_code']?.toString(),
       postalCode: row['postal_code']?.toString(),
       landmark: row['landmark']?.toString(),
       latitude: _asDouble(row['latitude']),
@@ -466,35 +499,110 @@ class BuyerMobileService {
         .replaceAll(RegExp(r'^_|_$'), '');
   }
 
-  static Future<void> placeOrder({
+  static Future<Map<String, dynamic>> placeOrder({
     required List<int> cartItemIds,
     required int addressId,
     required String paymentMethod,
+    required String recipientName,
+    required String contactNumber,
     Map<int, String> voucherCodes = const <int, String>{},
+    String? platformVoucherCode,
+    String? shippingVoucherCode,
     Map<int, String> sellerNotes = const <int, String>{},
-    List<int> protectedProductIds = const <int>[],
+    List<int> protectionItemIds = const <int>[],
+    int? logisticsCenterId,
+    int rewardPoints = 0,
+    String? checkoutAttemptKey,
+    Map<String, dynamic>? priceSnapshot,
   }) async {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('buyer/checkout'),
       <String, dynamic>{
         'cart_item_ids': cartItemIds,
         'address_id': addressId,
+        'recipient_name': recipientName.trim(),
+        'contact_number': contactNumber.trim(),
         'payment_method': paymentMethod.toUpperCase(),
+        'checkout_attempt_key': checkoutAttemptKey,
+        if (logisticsCenterId != null) 'logistics_center_id': logisticsCenterId,
+        if (priceSnapshot != null) 'expected_price_snapshot': priceSnapshot,
+        if (rewardPoints > 0) 'reward_points': rewardPoints,
         if (sellerNotes.isNotEmpty)
           'seller_notes': sellerNotes.map(
             (int sellerId, String note) =>
                 MapEntry<String, String>(sellerId.toString(), note),
           ),
-        if (voucherCodes.isNotEmpty)
-          'voucher_codes': voucherCodes.map(
+        if (voucherCodes.isNotEmpty ||
+            platformVoucherCode?.trim().isNotEmpty == true ||
+            shippingVoucherCode?.trim().isNotEmpty == true)
+          'voucher_codes': <String, dynamic>{
+            'seller': voucherCodes.map(
+              (int sellerId, String code) =>
+                  MapEntry<String, String>(sellerId.toString(), code),
+            ),
+            'platform': platformVoucherCode?.trim() ?? '',
+            'shipping': shippingVoucherCode?.trim() ?? '',
+          },
+        if (protectionItemIds.isNotEmpty)
+          'protection_item_ids': protectionItemIds,
+      },
+    );
+    final dynamic order = _requirePayload(response)['data'];
+    if (order is! Map) {
+      throw const FormatException(
+        'The server did not return the placed order.',
+      );
+    }
+    _refreshNavigationBadges();
+    return Map<String, dynamic>.from(order);
+  }
+
+  static Future<Map<String, dynamic>> previewCheckout({
+    required List<int> cartItemIds,
+    required int addressId,
+    Map<int, String> voucherCodes = const <int, String>{},
+    String? platformVoucherCode,
+    String? shippingVoucherCode,
+    List<int> protectionItemIds = const <int>[],
+    int? logisticsCenterId,
+    int rewardPoints = 0,
+    bool cartPreview = false,
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        cartPreview ? 'buyer/cart/preview' : 'buyer/checkout/preview',
+      ),
+      <String, dynamic>{
+        'cart_item_ids': cartItemIds,
+        'address_id': addressId,
+        if (logisticsCenterId != null) 'logistics_center_id': logisticsCenterId,
+        'voucher_codes': <String, dynamic>{
+          'seller': voucherCodes.map(
             (int sellerId, String code) =>
                 MapEntry<String, String>(sellerId.toString(), code),
           ),
-        if (protectedProductIds.isNotEmpty)
-          'protected_product_ids': protectedProductIds,
+          'platform': platformVoucherCode?.trim() ?? '',
+          'shipping': shippingVoucherCode?.trim() ?? '',
+        },
+        'protection_item_ids': protectionItemIds,
+        'reward_points': rewardPoints,
       },
     );
-    _requirePayload(response);
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map) {
+      throw const FormatException(
+        'The server did not return a checkout quote.',
+      );
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<Map<String, dynamic>> fetchCheckoutOptions() async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('buyer/checkout/options'),
+      refresh: true,
+    );
+    return _requirePayload(response);
   }
 
   static Future<List<CheckoutAddressData>> fetchCheckoutAddresses() async {
@@ -542,19 +650,41 @@ class BuyerMobileService {
     return BuyerOrderData.fromApi(Map<String, dynamic>.from(orderData));
   }
 
-  static Future<BuyerOrderLocation?> fetchRiderLocation(String orderId) async {
+  static Future<BuyerOrderLocation?> fetchRiderLocation(
+    String orderId, {
+    String? shipmentId,
+  }) async {
+    return (await fetchRiderSnapshot(orderId, shipmentId: shipmentId)).location;
+  }
+
+  static Future<BuyerRiderSnapshot> fetchRiderSnapshot(
+    String orderId, {
+    String? shipmentId,
+  }) async {
     final Response<dynamic> response = await ApiClient.get(
       AppConfig.resolveApiUrl(
         'buyer/orders/${Uri.encodeComponent(orderId)}/live-location',
       ),
+      queryParameters: shipmentId == null || shipmentId.trim().isEmpty
+          ? null
+          : <String, dynamic>{'shipment_id': shipmentId},
     );
     final dynamic data = _requirePayload(response)['data'];
     if (data is! Map) {
       throw const FormatException('Invalid rider location response.');
     }
+    final dynamic rawRider = data['rider'] ?? data['rider_info'];
+    BuyerRiderInfo? rider;
+    if (rawRider is Map) {
+      final BuyerRiderInfo parsedRider = BuyerRiderInfo.fromApi(
+        Map<String, dynamic>.from(rawRider),
+      );
+      if (parsedRider.hasVisibleInfo) rider = parsedRider;
+    }
+
     final dynamic location = data['rider_location'];
     if (location == null) {
-      return null;
+      return BuyerRiderSnapshot(rider: rider);
     }
     if (location is! Map) {
       throw const FormatException(
@@ -567,14 +697,18 @@ class BuyerMobileService {
     final double? longitude = double.tryParse(
       (location['longitude'] ?? '').toString(),
     );
-    if (latitude == null || longitude == null) {
-      throw const FormatException('Invalid coordinates in rider location.');
+    final BuyerOrderLocation? riderLocation =
+        latitude == null || longitude == null
+        ? null
+        : BuyerOrderLocation(
+            latitude: latitude,
+            longitude: longitude,
+            label: 'Rider location',
+          );
+    if (riderLocation == null && rider == null) {
+      throw const FormatException('Invalid rider data in buyer API response.');
     }
-    return BuyerOrderLocation(
-      latitude: latitude,
-      longitude: longitude,
-      label: 'Rider location',
-    );
+    return BuyerRiderSnapshot(location: riderLocation, rider: rider);
   }
 
   static Future<void> cancelOrder(
@@ -630,34 +764,56 @@ class BuyerMobileService {
       AppConfig.resolveApiUrl(
         'buyer/orders/${Uri.encodeComponent(order.id)}/received',
       ),
-      <String, dynamic>{},
+      <String, dynamic>{'confirm_receipt': '1'},
     );
     _requirePayload(response);
   }
 
-  static Future<void> requestOrderReturn(
+  static Future<String?> requestOrderReturn(
     BuyerOrderReturnRequest request,
   ) async {
+    final FormData form = FormData();
+    form.fields
+      ..add(MapEntry<String, String>('issue_category', request.issueCategory))
+      ..add(MapEntry<String, String>('issue_reason', request.issueReason))
+      ..add(MapEntry<String, String>('description', request.description.trim()))
+      ..add(MapEntry<String, String>('refund_method', request.refundMethod))
+      ..add(MapEntry<String, String>('buyer_email', request.buyerEmail.trim()))
+      ..add(const MapEntry<String, String>('confirm_cash', '1'))
+      ..add(const MapEntry<String, String>('confirm_request', '1'));
+    for (final MapEntry<String, int> entry
+        in request.quantitiesByItem.entries) {
+      form.fields
+        ..add(MapEntry<String, String>('item_ids[]', entry.key))
+        ..add(
+          MapEntry<String, String>(
+            'quantities[${entry.key}]',
+            '${entry.value}',
+          ),
+        );
+    }
+    for (final XFile file in request.evidence) {
+      form.files.add(
+        MapEntry<String, MultipartFile>(
+          'images[]',
+          await MultipartFile.fromFile(file.path, filename: file.name),
+        ),
+      );
+    }
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl(
         'buyer/orders/${Uri.encodeComponent(request.order.id)}/return-refund',
       ),
-      <String, dynamic>{
-        'request_type': request.requestType,
-        'reason_category': request.reason,
-        'details': request.details.trim(),
-      },
+      form,
     );
-    _requirePayload(response);
+    return _requirePayload(response)['request_id']?.toString();
   }
 
   static Future<void> submitProductReview(
     BuyerOrderReviewRequest request,
   ) async {
-    if (request.photos.length > 1) {
-      throw Exception(
-        'The Laravel review API currently accepts one photo per product review.',
-      );
+    if (request.photos.length > 5) {
+      throw const FormatException('You can attach up to five product photos.');
     }
 
     final String endpoint =
@@ -692,14 +848,12 @@ class BuyerMobileService {
     // and photo changes for those reviews but still accepts a text-only edit.
     if (!request.isTextUpdate &&
         (response.statusCode ?? 0) >= 400 &&
-        _responseMessage(response)
-            .toLowerCase()
-            .contains('ratings and photos are locked')) {
-      response = await _postReview(
-        endpoint,
-        <String, dynamic>{'comment': request.review},
-        const <XFile>[],
-      );
+        _responseMessage(
+          response,
+        ).toLowerCase().contains('ratings and photos are locked')) {
+      response = await _postReview(endpoint, <String, dynamic>{
+        'comment': request.review,
+      }, const <XFile>[]);
     }
 
     _requirePayload(response);
@@ -714,9 +868,15 @@ class BuyerMobileService {
       return ApiClient.post(AppConfig.resolveApiUrl(endpoint), fields);
     }
 
+    final List<MultipartFile> images = <MultipartFile>[];
+    for (final XFile photo in photos) {
+      images.add(
+        await MultipartFile.fromFile(photo.path, filename: photo.name),
+      );
+    }
     final FormData formData = FormData.fromMap(<String, dynamic>{
       ...fields,
-      'image': await MultipartFile.fromFile(photos.first.path),
+      'images': images,
     });
     return ApiClient.post(AppConfig.resolveApiUrl(endpoint), formData);
   }
@@ -845,6 +1005,11 @@ class BuyerMobileService {
             barangay: row['barangay_name']?.toString(),
             municipality: row['municipality_name']?.toString(),
             province: row['province_name']?.toString(),
+            region: row['region_name']?.toString(),
+            regionCode: row['region_code']?.toString(),
+            provinceCode: row['province_code']?.toString(),
+            municipalityCode: row['municipality_code']?.toString(),
+            barangayCode: row['barangay_code']?.toString(),
             postalCode: row['postal_code']?.toString(),
             landmark: row['landmark']?.toString(),
             latitude: _asDouble(row['latitude']),
@@ -928,29 +1093,30 @@ class BuyerMobileService {
           final Map<String, dynamic> payload = rawData is Map
               ? Map<String, dynamic>.from(rawData)
               : const <String, dynamic>{};
-          final String? soundType = (row['type'] ?? payload['type'])?.toString();
+          final String? soundType = (row['type'] ?? payload['type'])
+              ?.toString();
           final DateTime? createdAt = DateTime.tryParse(
             (row['created_at'] ?? '').toString(),
           );
           return BuyerNotificationData(
             id: row['id'].toString(),
-            type: BuyerNotificationData.resolveType(
-              soundType,
-            ),
+            type: BuyerNotificationData.resolveType(soundType),
             soundType: soundType,
-            title: (row['title'] ?? payload['title'] ?? payload['subject'] ?? '')
-                .toString(),
+            title:
+                (row['title'] ?? payload['title'] ?? payload['subject'] ?? '')
+                    .toString(),
             message:
                 (row['message'] ?? payload['message'] ?? payload['body'] ?? '')
                     .toString(),
             time: createdAt == null ? '' : _relativeTime(createdAt),
             unread: row['read_at'] == null,
             createdAt: createdAt,
-            actionUrl: (row['action_url'] ??
-                    payload['action_url'] ??
-                    payload['actionUrl'] ??
-                    payload['url'])
-                ?.toString(),
+            actionUrl:
+                (row['action_url'] ??
+                        payload['action_url'] ??
+                        payload['actionUrl'] ??
+                        payload['url'])
+                    ?.toString(),
             relatedOrderId: BuyerNotificationData.resolveOrderReference(row),
           );
         })
@@ -963,6 +1129,7 @@ class BuyerMobileService {
       <String, dynamic>{},
     );
     _requirePayload(response);
+    _refreshNavigationBadges();
   }
 
   static Stream<BuyerNotificationData> watchNotifications() async* {
@@ -986,11 +1153,10 @@ class BuyerMobileService {
           (event.data['created_at'] ?? notificationData['created_at'] ?? '')
               .toString(),
         );
+        _refreshNavigationBadges();
         yield BuyerNotificationData(
           id: (event.data['id'] ?? notificationData['id'] ?? '').toString(),
-          type: BuyerNotificationData.resolveType(
-            soundType,
-          ),
+          type: BuyerNotificationData.resolveType(soundType),
           soundType: soundType,
           title:
               (notificationData['title'] ??
@@ -1014,9 +1180,9 @@ class BuyerMobileService {
                       notificationData['url'] ??
                       event.data['action_url'])
                   ?.toString(),
-          relatedOrderId: BuyerNotificationData.resolveOrderReference(
-            notificationData,
-          ) ?? BuyerNotificationData.resolveOrderReference(event.data),
+          relatedOrderId:
+              BuyerNotificationData.resolveOrderReference(notificationData) ??
+              BuyerNotificationData.resolveOrderReference(event.data),
         );
       }
     } finally {
@@ -1036,6 +1202,55 @@ class BuyerMobileService {
           final dynamic rawAvatar =
               row['seller_avatar_url'] ?? row['avatar_url'] ?? row['avatar'];
           final String? avatarUrl = rawAvatar?.toString().trim();
+          final dynamic rawOrderContext = row['order_context'];
+          final Map<String, dynamic> orderContextData = rawOrderContext is Map
+              ? Map<String, dynamic>.from(rawOrderContext)
+              : const <String, dynamic>{};
+          final dynamic rawOrderProducts =
+              orderContextData['products'] ?? orderContextData['items'];
+          final List<MessageOrderProduct> orderProducts =
+              rawOrderProducts is List
+              ? rawOrderProducts
+                    .whereType<Map>()
+                    .map((Map rawProduct) {
+                      final Map<String, dynamic> product =
+                          Map<String, dynamic>.from(rawProduct);
+                      final String rawImage = (product['image_url'] ?? '')
+                          .toString()
+                          .trim();
+                      return MessageOrderProduct(
+                        name: (product['name'] ?? 'Product').toString(),
+                        imageUrl: rawImage.isEmpty
+                            ? null
+                            : AppConfig.resolveMediaUrl(rawImage),
+                        variant: product['variant']?.toString(),
+                        quantity:
+                            int.tryParse(
+                              (product['quantity'] ?? 1).toString(),
+                            ) ??
+                            1,
+                      );
+                    })
+                    .toList(growable: false)
+              : const <MessageOrderProduct>[];
+          final MessageOrderContext? orderContext = orderContextData.isEmpty
+              ? null
+              : MessageOrderContext(
+                  orderReference:
+                      (orderContextData['order_reference'] ??
+                              orderContextData['seller_order_number'] ??
+                              '')
+                          .toString(),
+                  status:
+                      (orderContextData['status_label'] ??
+                              orderContextData['status'] ??
+                              '')
+                          .toString(),
+                  orderId: (orderContextData['order_id'] ?? '').toString(),
+                  sellerOrderId: (orderContextData['seller_order_id'] ?? '')
+                      .toString(),
+                  products: orderProducts,
+                );
           return BuyerConversationData(
             sellerId: (row['seller_id'] ?? '').toString(),
             conversationId: (row['conversation_id'] ?? row['id'] ?? '')
@@ -1049,6 +1264,7 @@ class BuyerMobileService {
             lastMessage: (row['last_message'] ?? '').toString(),
             time: _displayTime(row['time']),
             unread: int.tryParse((row['unread'] ?? 0).toString()) ?? 0,
+            orderContext: orderContext,
             isOnline:
                 _optionalApiBool(rawOnline) ?? _presenceFromLabel(rawStatus),
           );
@@ -1058,20 +1274,33 @@ class BuyerMobileService {
   }
 
   static Future<List<BuyerMessageData>> fetchMessages(
-    BuyerConversationData conversation,
-  ) async {
+    BuyerConversationData conversation, {
+    String? afterId,
+  }) async {
     final String id = conversation.conversationId;
     if (id.isEmpty) {
       throw const FormatException('Conversation identifier is missing.');
     }
-    return (await _getRows('buyer/messages/${Uri.encodeComponent(id)}'))
+    final List<dynamic> rawMessages = await _getRows(
+      'buyer/messages/${Uri.encodeComponent(id)}',
+      maxPages: afterId == null ? null : 1,
+      queryParameters: <String, dynamic>{
+        if (afterId != null) 'after_id': afterId,
+      },
+    );
+    if (afterId == null) _refreshNavigationBadges();
+    return rawMessages
         .whereType<Map>()
-        .map((Map item) {
+        .map<BuyerMessageData>((Map item) {
           final Map<String, dynamic> row = Map<String, dynamic>.from(item);
           return BuyerMessageData(
             id: (row['id'] ?? '').toString(),
+            conversationId: (row['conversation_id'] ?? '').toString(),
             body: (row['body'] ?? '').toString(),
             time: _displayTime(row['sent_at']),
+            sentAt: DateTime.tryParse(
+              (row['sent_at'] ?? '').toString(),
+            )?.toLocal(),
             fromBuyer: row['from_buyer'] == true,
             attachmentUrl: _messageAttachmentUrl(row),
             attachmentName: row['attachment_name']?.toString(),
@@ -1084,9 +1313,7 @@ class BuyerMobileService {
   static Stream<BuyerMessageData> watchMessages(
     BuyerConversationData conversation,
   ) async* {
-    final Set<String> knownIds = (await fetchMessages(
-      conversation,
-    )).map((BuyerMessageData message) => message.id).toSet();
+    final Set<String> knownIds = <String>{};
     RealtimeSubscription? subscription;
     try {
       subscription = await LikhaeRealtimeService.subscribe(
@@ -1100,6 +1327,9 @@ class BuyerMobileService {
           id: id,
           body: (event.data['body'] ?? '').toString(),
           time: _displayTime(event.data['sent_at']),
+          sentAt: DateTime.tryParse(
+            (event.data['sent_at'] ?? '').toString(),
+          )?.toLocal(),
           fromBuyer: false,
           attachmentUrl: event.data['attachment_url']?.toString(),
           attachmentName: event.data['attachment_name']?.toString(),
@@ -1107,11 +1337,18 @@ class BuyerMobileService {
         );
       }
     } catch (_) {
-      // Keep the existing lightweight polling fallback when Reverb is not
-      // configured, temporarily unavailable, or unreachable on this network.
+      // Seed the fallback once if Reverb is unavailable. The screen has
+      // already loaded its initial history, so realtime connections do not
+      // need a second full-history request here.
+      final List<BuyerMessageData> baseline = await fetchMessages(conversation);
+      knownIds.addAll(baseline.map((BuyerMessageData message) => message.id));
       while (true) {
-        await Future<void>.delayed(const Duration(seconds: 5));
-        final List<BuyerMessageData> latest = await fetchMessages(conversation);
+        await Future<void>.delayed(const Duration(seconds: 10));
+        final String? latestId = knownIds.isEmpty ? null : knownIds.lastOrNull;
+        final List<BuyerMessageData> latest = await fetchMessages(
+          conversation,
+          afterId: latestId,
+        );
         for (final BuyerMessageData message in latest) {
           if (knownIds.add(message.id)) yield message;
         }
@@ -1126,9 +1363,9 @@ class BuyerMobileService {
     String body,
   ) async {
     final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl('buyer/messages'),
+      AppConfig.resolveApiUrl(_messageSendEndpoint(conversation)),
       <String, dynamic>{
-        'recipient_id': int.tryParse(conversation.sellerId),
+        ..._messageSendFields(conversation),
         'body': body,
       },
     );
@@ -1138,8 +1375,46 @@ class BuyerMobileService {
         'The server did not return the sent message.',
       );
     }
+    _refreshNavigationBadges();
     final Map<String, dynamic> message = Map<String, dynamic>.from(rawMessage);
     return _buyerMessageFromApi(message);
+  }
+
+  static Future<void> touchMessagePresence() async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/messages/presence'),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<BuyerConversationPresenceData> refreshConversationPresence(
+    BuyerConversationData conversation,
+  ) async {
+    if (conversation.conversationId.isEmpty) {
+      throw const FormatException('Conversation identifier is missing.');
+    }
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(
+        'buyer/messages/${Uri.encodeComponent(conversation.conversationId)}/receipt',
+      ),
+    );
+    final Map<String, dynamic> payload = _requirePayload(response);
+    final dynamic data = payload['data'];
+    final Map<String, dynamic> row = data is Map
+        ? Map<String, dynamic>.from(data)
+        : payload;
+    final dynamic rawReadAt = row['recipient_read_at'] ?? row['last_read_at'];
+    return BuyerConversationPresenceData(
+      isOnline:
+          _optionalApiBool(
+            row['recipient_online'] ?? row['is_online'] ?? row['online'],
+          ) ??
+          false,
+      recipientReadAt: rawReadAt == null
+          ? null
+          : DateTime.tryParse(rawReadAt.toString())?.toLocal(),
+    );
   }
 
   static Future<BuyerMessageData> sendAttachment(
@@ -1148,12 +1423,12 @@ class BuyerMobileService {
     String attachmentPath,
   ) async {
     final FormData formData = FormData.fromMap(<String, dynamic>{
-      'recipient_id': int.tryParse(conversation.sellerId),
+      ..._messageSendFields(conversation),
       'body': body,
       'attachment': await MultipartFile.fromFile(attachmentPath),
     });
     final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl('buyer/messages'),
+      AppConfig.resolveApiUrl(_messageSendEndpoint(conversation)),
       formData,
     );
     final dynamic rawMessage = _requirePayload(response)['data'];
@@ -1162,14 +1437,51 @@ class BuyerMobileService {
         'The server did not return the saved message.',
       );
     }
+    _refreshNavigationBadges();
     return _buyerMessageFromApi(Map<String, dynamic>.from(rawMessage));
+  }
+
+  static String _messageSendEndpoint(BuyerConversationData conversation) {
+    final int? orderId = int.tryParse(
+      conversation.orderContext?.orderId.trim() ?? '',
+    );
+    final int? sellerOrderId = int.tryParse(
+      conversation.orderContext?.sellerOrderId.trim() ?? '',
+    );
+    if (orderId != null && sellerOrderId != null) {
+      return 'buyer/orders/${Uri.encodeComponent(orderId.toString())}/messages';
+    }
+    return 'buyer/messages';
+  }
+
+  static Map<String, dynamic> _messageSendFields(
+    BuyerConversationData conversation,
+  ) {
+    final int? orderId = int.tryParse(
+      conversation.orderContext?.orderId.trim() ?? '',
+    );
+    final int? sellerOrderId = int.tryParse(
+      conversation.orderContext?.sellerOrderId.trim() ?? '',
+    );
+    if (orderId != null && sellerOrderId != null) {
+      return <String, dynamic>{'seller_order_id': sellerOrderId};
+    }
+    return <String, dynamic>{
+      'recipient_id': int.tryParse(conversation.sellerId),
+      if (orderId != null) 'order_id': orderId,
+      if (sellerOrderId != null) 'seller_order_id': sellerOrderId,
+    };
   }
 
   static BuyerMessageData _buyerMessageFromApi(Map<String, dynamic> message) {
     return BuyerMessageData(
       id: (message['id'] ?? '').toString(),
+      conversationId: (message['conversation_id'] ?? '').toString(),
       body: (message['body'] ?? '').toString(),
       time: _displayTime(message['sent_at']),
+      sentAt: DateTime.tryParse(
+        (message['sent_at'] ?? '').toString(),
+      )?.toLocal(),
       fromBuyer: message['from_buyer'] == true,
       attachmentUrl: _messageAttachmentUrl(message),
       attachmentName: message['attachment_name']?.toString(),
@@ -1230,6 +1542,339 @@ class BuyerMobileService {
 
     final String value = raw.toString().trim();
     return value.isEmpty ? null : AppConfig.resolveMediaUrl(value);
+  }
+
+  static Future<BuyerAddressData> updateBuyerAddress({
+    required String addressId,
+    required CreateBuyerAddressRequest request,
+  }) async {
+    final Response<dynamic> response = await ApiClient.put(
+      AppConfig.resolveApiUrl(
+        'buyer/addresses/${Uri.encodeComponent(addressId)}',
+      ),
+      <String, dynamic>{
+        'label': request.label,
+        'recipient_name': request.recipientName,
+        'contact_number': request.contactNumber,
+        'region_code': request.regionCode ?? _locationCode(request.region),
+        'region_name': request.region,
+        'province_name': request.province,
+        'province_code':
+            request.provinceCode ?? _locationCode(request.province),
+        'municipality_name': request.municipality,
+        'municipality_code':
+            request.municipalityCode ?? _locationCode(request.municipality),
+        'barangay_name': request.barangay,
+        'barangay_code':
+            request.barangayCode ?? _locationCode(request.barangay),
+        'postal_code': request.postalCode,
+        'house_number': request.houseNumber,
+        'street_address': request.street,
+        'landmark': request.landmark,
+        if (request.latitude != null) 'latitude': request.latitude,
+        if (request.longitude != null) 'longitude': request.longitude,
+        'is_default': request.isDefault,
+      },
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map) {
+      throw const FormatException(
+        'The server did not return the updated address.',
+      );
+    }
+    final Map<String, dynamic> row = Map<String, dynamic>.from(data);
+    return BuyerAddressData(
+      id: (row['id'] ?? '').toString(),
+      label: (row['label'] ?? 'Address').toString(),
+      recipientName: (row['recipient_name'] ?? '').toString(),
+      contactNumber: (row['contact_number'] ?? '').toString(),
+      houseNumber: row['house_number']?.toString(),
+      street: row['street_address']?.toString(),
+      barangay: row['barangay_name']?.toString(),
+      municipality: row['municipality_name']?.toString(),
+      province: row['province_name']?.toString(),
+      region: row['region_name']?.toString(),
+      regionCode: row['region_code']?.toString(),
+      provinceCode: row['province_code']?.toString(),
+      municipalityCode: row['municipality_code']?.toString(),
+      barangayCode: row['barangay_code']?.toString(),
+      postalCode: row['postal_code']?.toString(),
+      landmark: row['landmark']?.toString(),
+      latitude: _asDouble(row['latitude']),
+      longitude: _asDouble(row['longitude']),
+      isDefault: row['is_default'] == true,
+      formattedAddress: row['formatted_address']?.toString(),
+    );
+  }
+
+  static Future<void> requestEmailChange(String email) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/profile/email-change'),
+      <String, dynamic>{'email': email.trim()},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<void> resendEmailChangeCode() async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/profile/email-change/resend'),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<BuyerProfileData> verifyEmailChange(String code) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/profile/email-change/verify'),
+      <String, dynamic>{'code': code.trim()},
+    );
+    final dynamic user = _requirePayload(response)['user'];
+    if (user is! Map) {
+      throw const FormatException(
+        'The server did not return the verified profile.',
+      );
+    }
+    return _profileData(Map<String, dynamic>.from(user));
+  }
+
+  static Future<Map<String, dynamic>> fetchBuyerSettings() async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('buyer/settings'),
+      refresh: true,
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map) {
+      throw const FormatException('Buyer settings were not returned.');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<Map<String, dynamic>> saveBuyerSettings(
+    Map<String, dynamic> settings,
+  ) async {
+    final Response<dynamic> response = await ApiClient.put(
+      AppConfig.resolveApiUrl('buyer/settings'),
+      settings,
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map) {
+      throw const FormatException('The server did not confirm the settings.');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<void> deleteBuyerAccount({
+    required String password,
+    required String confirmation,
+  }) async {
+    final Response<dynamic> response = await ApiClient.delete(
+      AppConfig.resolveApiUrl('buyer/account'),
+      <String, dynamic>{
+        'current_password': password,
+        'delete_confirmation': confirmation,
+      },
+    );
+    _requirePayload(response);
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchReviewHistory() async =>
+      (await _getRows('buyer/account/reviews'))
+          .whereType<Map>()
+          .map((Map row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+
+  static Future<void> markNotificationRead(String notificationId) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/notifications/${Uri.encodeComponent(notificationId)}/read',
+      ),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
+    _refreshNavigationBadges();
+  }
+
+  static Future<String?> openNotification(String notificationId) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/notifications/${Uri.encodeComponent(notificationId)}/open',
+      ),
+      <String, dynamic>{},
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    return data is Map ? data['action_url']?.toString() : null;
+  }
+
+  static Future<void> dismissAnnouncement(String notificationId) async {
+    final Response<dynamic> response = await ApiClient.delete(
+      AppConfig.resolveApiUrl(
+        'buyer/notifications/${Uri.encodeComponent(notificationId)}',
+      ),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
+    _refreshNavigationBadges();
+  }
+
+  static Future<void> setFlashReminder(int productId, bool enabled) async {
+    final String path = AppConfig.resolveApiUrl(
+      'buyer/products/$productId/flash-reminder',
+    );
+    final Response<dynamic> response = enabled
+        ? await ApiClient.post(path, <String, dynamic>{})
+        : await ApiClient.delete(path, <String, dynamic>{});
+    _requirePayload(response);
+  }
+
+  static Future<Map<String, dynamic>> fetchFlashReminder(int productId) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('buyer/products/$productId/flash-reminder'),
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    return data is Map
+        ? Map<String, dynamic>.from(data)
+        : const <String, dynamic>{};
+  }
+
+  static Future<void> claimVoucher(int voucherId) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/vouchers/$voucherId/claim'),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<Map<String, dynamic>> fetchPlatformEvent(int voucherId) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('buyer/events/$voucherId'),
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map)
+      throw const FormatException('Event details were not returned.');
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<Map<String, dynamic>> buyAgain(String orderId) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/orders/${Uri.encodeComponent(orderId)}/buy-again',
+      ),
+      <String, dynamic>{},
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    return data is Map
+        ? Map<String, dynamic>.from(data)
+        : const <String, dynamic>{};
+  }
+
+  static Future<void> confirmDeliveryPin({
+    required String orderId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/orders/${Uri.encodeComponent(orderId)}/delivery-pin',
+      ),
+      <String, dynamic>{'latitude': latitude, 'longitude': longitude},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<Map<String, dynamic>> fetchPublicTracking(
+    String trackingNumber,
+  ) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(
+        'tracking/${Uri.encodeComponent(trackingNumber)}',
+      ),
+      refresh: true,
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map)
+      throw const FormatException('Tracking details were not returned.');
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchReturnRequests() async =>
+      (await _getRows('buyer/returns'))
+          .whereType<Map>()
+          .map((Map row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+
+  static Future<Map<String, dynamic>> fetchReturnRequest(String id) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('buyer/returns/${Uri.encodeComponent(id)}'),
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map)
+      throw const FormatException('Return/refund case was not returned.');
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<Uint8List> fetchReturnEvidence(String evidenceId) =>
+      _fetchPrivateBuyerFile('buyer/returns/evidence/$evidenceId');
+
+  static Future<Uint8List> fetchReturnPayoutProof(String payoutId) =>
+      _fetchPrivateBuyerFile('buyer/returns/payout-proofs/$payoutId');
+
+  static Future<Uint8List> fetchDeliveryAttemptProof(String attemptId) =>
+      _fetchPrivateBuyerFile('buyer/delivery-attempts/$attemptId/proof');
+
+  static Future<Uint8List> _fetchPrivateBuyerFile(String endpoint) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(endpoint),
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: const <String, String>{'Accept': '*/*'},
+      ),
+    );
+    final int statusCode = response.statusCode ?? 500;
+    if (statusCode < 200 || statusCode >= 300) {
+      throw Exception('Unable to open this private file (HTTP $statusCode).');
+    }
+    final dynamic bytes = response.data;
+    if (bytes is Uint8List) return bytes;
+    if (bytes is List<int>) return Uint8List.fromList(bytes);
+    throw const FormatException('The private file could not be read.');
+  }
+
+  static Future<void> confirmReturnRefund(String sellerCaseId) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/returns/seller-cases/${Uri.encodeComponent(sellerCaseId)}/confirm',
+      ),
+      <String, dynamic>{'confirm_receipt': true},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<void> confirmReturnCashRefund(String obligationId) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/returns/cash-refunds/${Uri.encodeComponent(obligationId)}/confirm',
+      ),
+      <String, dynamic>{'confirm_receipt': true},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<void> escalateReturnRefund({
+    required String sellerCaseId,
+    required String reason,
+    required String explanation,
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/returns/seller-cases/${Uri.encodeComponent(sellerCaseId)}/escalate',
+      ),
+      <String, dynamic>{
+        'reason': reason,
+        'explanation': explanation,
+        'confirm_escalation': true,
+      },
+    );
+    _requirePayload(response);
   }
 
   static CartItemData _cartItem(Map<String, dynamic> row) {

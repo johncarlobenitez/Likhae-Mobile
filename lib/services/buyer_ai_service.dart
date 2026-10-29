@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
-import 'buyer_mobile_service.dart';
 
 class BuyerAiResponse {
   final String reply;
@@ -14,43 +13,8 @@ class BuyerAiResponse {
 class BuyerAiService {
   BuyerAiService._();
 
-  static Future<BuyerAiResponse> lookupOrder(String orderReference) async {
-    if (!AppConfig.apiEnabled) {
-      return const BuyerAiResponse(
-        reply: 'Order lookup needs the mobile API connection enabled.',
-      );
-    }
-
-    final String requested = orderReference.trim().toUpperCase();
-    final orders = await BuyerMobileService.fetchOrders();
-    for (final order in orders) {
-      final String reference = (order.orderNumber ?? '').trim().toUpperCase();
-      if (reference != requested) continue;
-
-      final String status = order.statusLabel.trim().isNotEmpty
-          ? order.statusLabel.trim()
-          : (order.backendStatus ?? order.status).trim();
-      final String displayReference =
-          order.orderNumber?.trim().isNotEmpty == true
-          ? order.orderNumber!.trim()
-          : orderReference.trim();
-      final List<String> details = <String>[
-        'Order $displayReference is currently $status.',
-      ];
-      final String? tracking = order.tracking?.trim();
-      if (tracking != null && tracking.isNotEmpty) {
-        details.add('Tracking number: $tracking.');
-      } else {
-        details.add('A tracking number is not available yet.');
-      }
-      return BuyerAiResponse(reply: details.join('\n'));
-    }
-
-    return BuyerAiResponse(
-      reply:
-          'I couldn’t find order $orderReference in your account. Refresh your orders and try selecting it again.',
-    );
-  }
+  static Future<BuyerAiResponse> lookupOrder(String orderReference) =>
+      chat(message: orderReference, page: 'orders');
 
   static Future<BuyerAiResponse> chat({
     required String message,
@@ -89,7 +53,7 @@ class BuyerAiService {
         ? rawOptions
             .map((dynamic option) => option.toString().trim())
             .where((String option) => option.isNotEmpty)
-            .take(4)
+            .take(6)
             .toList(growable: false)
         : const <String>[];
 

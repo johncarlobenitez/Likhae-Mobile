@@ -86,8 +86,8 @@ class CartItemData {
   String get unavailableMessage => sellerOnVacation
       ? 'Seller is on vacation and cannot accept orders.'
       : stock < 1
-          ? 'This item is currently out of stock.'
-          : 'This item is currently unavailable for purchase.';
+      ? 'This item is currently out of stock.'
+      : 'This item is currently unavailable for purchase.';
 
   CartItemData copyWith({int? quantity, int? stock}) {
     return CartItemData(
@@ -128,6 +128,7 @@ String _formatCartAmount(double value) {
 }
 
 class DeliveryAddressData {
+  final String? id;
   final String recipientName;
   final String contactNumber;
   final String formattedAddress;
@@ -138,6 +139,7 @@ class DeliveryAddressData {
     required this.recipientName,
     required this.contactNumber,
     required this.formattedAddress,
+    this.id,
     this.isDefault = true,
   });
 }
@@ -186,11 +188,15 @@ class CartCheckoutRequest {
 
   final List<CartCheckoutItem> items;
   final Map<int, String> voucherCodes;
+  final String? platformVoucherCode;
+  final String? shippingVoucherCode;
 
   const CartCheckoutRequest({
     required this.items,
     this.checkoutSource = 'cart',
     this.voucherCodes = const <int, String>{},
+    this.platformVoucherCode,
+    this.shippingVoucherCode,
   });
 
   List<Map<String, dynamic>> get itemPayload {
@@ -211,10 +217,17 @@ typedef CartCheckoutCallback =
 
 typedef CartRefreshCallback = Future<List<CartItemData>> Function();
 
-typedef CartSellerSelectedCallback = void Function(
-  String sellerName,
-  int? sellerId,
-);
+typedef CartQuoteCallback =
+    Future<Map<String, dynamic>> Function({
+      required List<CartItemData> items,
+      required int addressId,
+      required Map<int, String> voucherCodes,
+      String? platformVoucherCode,
+      String? shippingVoucherCode,
+    });
+
+typedef CartSellerSelectedCallback =
+    void Function(String sellerName, int? sellerId);
 
 class CartScreen extends StatefulWidget {
   final List<CartItemData> items;
@@ -244,8 +257,12 @@ class CartScreen extends StatefulWidget {
 
   final CartRefreshCallback? onRefresh;
 
+  final CartQuoteCallback? onLoadQuote;
+
   final Future<List<RewardVoucherData>> Function()? loadAvailableVouchers;
   final Map<int, String> initialVoucherCodes;
+  final String? initialPlatformVoucherCode;
+  final String? initialShippingVoucherCode;
 
   const CartScreen({
     super.key,
@@ -261,8 +278,11 @@ class CartScreen extends StatefulWidget {
     this.onRemoveSelected,
     this.onCheckout,
     this.onRefresh,
+    this.onLoadQuote,
     this.loadAvailableVouchers,
     this.initialVoucherCodes = const <int, String>{},
+    this.initialPlatformVoucherCode,
+    this.initialShippingVoucherCode,
   });
 
   @override
@@ -303,9 +323,16 @@ class _CartScreenState extends State<CartScreen> {
   bool _removingSelected = false;
   bool _openingCheckout = false;
   bool _openingVoucherPicker = false;
+  bool _loadingQuote = false;
+  Map<String, dynamic>? _serverQuote;
+  String? _quoteError;
+  Timer? _quoteDebounce;
+  int _quoteRequestVersion = 0;
   List<RewardVoucherData>? _availableVouchers;
   Future<List<RewardVoucherData>>? _voucherLoad;
   final Map<int, String> _selectedVoucherCodes = <int, String>{};
+  String? _selectedPlatformVoucherCode;
+  String? _selectedShippingVoucherCode;
 
   @override
   void initState() {
@@ -314,9 +341,12 @@ class _CartScreenState extends State<CartScreen> {
     _items = List<CartItemData>.from(widget.items);
 
     _selectedVoucherCodes.addAll(widget.initialVoucherCodes);
+    _selectedPlatformVoucherCode = widget.initialPlatformVoucherCode;
+    _selectedShippingVoucherCode = widget.initialShippingVoucherCode;
     if (widget.loadAvailableVouchers != null) {
       unawaited(_preloadVouchers());
     }
+    _scheduleCartQuote();
   }
 
   @override
@@ -329,9 +359,8 @@ class _CartScreenState extends State<CartScreen> {
       _items = List<CartItemData>.from(widget.items);
 
       _selectedVoucherCodes.removeWhere(
-        (int sellerId, String _) => !_items.any(
-          (CartItemData item) => item.sellerId == sellerId,
-        ),
+        (int sellerId, String _) =>
+            !_items.any((CartItemData item) => item.sellerId == sellerId),
       );
 
       final Set<String> currentAvailableIds = _availableItems
@@ -352,6 +381,10 @@ class _CartScreenState extends State<CartScreen> {
         _editMode = false;
         _deleteSelectedIds.clear();
       }
+      _scheduleCartQuote();
+    }
+    if (oldWidget.defaultAddress?.id != widget.defaultAddress?.id) {
+      _scheduleCartQuote();
     }
   }
 
@@ -383,8 +416,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   List<_CartSellerGroup> get _sellerGroups {
-    final Map<String, _CartSellerGroup> groups =
-        <String, _CartSellerGroup>{};
+    final Map<String, _CartSellerGroup> groups = <String, _CartSellerGroup>{};
 
     for (final CartItemData item in _items) {
       final String key = _sellerGroupKey(item);
@@ -431,6 +463,10 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   double get _shopVoucherDiscount {
+    final dynamic quotedDiscount = _serverQuote?['total_discount'];
+    if (quotedDiscount != null) {
+      return double.tryParse(quotedDiscount.toString()) ?? 0;
+    }
     if (_availableVouchers == null || _selectedVoucherCodes.isEmpty) return 0;
 
     double total = 0;
@@ -441,8 +477,10 @@ class _CartScreenState extends State<CartScreen> {
           .toList(growable: false);
       if (sellerItems.isEmpty) continue;
 
-      final RewardVoucherData? voucher =
-          _voucherForSeller(selection.key, selection.value);
+      final RewardVoucherData? voucher = _voucherForSeller(
+        selection.key,
+        selection.value,
+      );
       if (voucher == null) continue;
 
       final double sellerSubtotal = sellerItems.fold<double>(
@@ -475,8 +513,10 @@ class _CartScreenState extends State<CartScreen> {
           .toList(growable: false);
       if (sellerItems.isEmpty) continue;
 
-      final RewardVoucherData? voucher =
-          _voucherForSeller(selection.key, selection.value);
+      final RewardVoucherData? voucher = _voucherForSeller(
+        selection.key,
+        selection.value,
+      );
       if (_availableVouchers != null && voucher == null) continue;
       if (voucher != null) {
         final double sellerSubtotal = sellerItems.fold<double>(
@@ -492,6 +532,41 @@ class _CartScreenState extends State<CartScreen> {
       eligible[selection.key] = selection.value;
     }
     return eligible;
+  }
+
+  VoucherCodesSelection _eligibleVoucherSelection(
+    List<CartItemData> selectedItems,
+  ) {
+    final double selectedSubtotal = selectedItems.fold<double>(
+      0,
+      (double total, CartItemData item) => total + item.lineTotal,
+    );
+    String? eligibleGlobalCode(String? code, String type) {
+      if (code == null || code.trim().isEmpty || _availableVouchers == null) {
+        return code;
+      }
+      for (final RewardVoucherData voucher in _availableVouchers!) {
+        if (voucher.voucherType == type &&
+            voucher.code.trim().toUpperCase() == code.trim().toUpperCase() &&
+            voucher.canUse != false &&
+            selectedSubtotal >= (voucher.minimumOrderAmount ?? 0)) {
+          return code;
+        }
+      }
+      return null;
+    }
+
+    return VoucherCodesSelection(
+      sellerCodes: _eligibleVoucherCodes(selectedItems),
+      platformCode: eligibleGlobalCode(
+        _selectedPlatformVoucherCode,
+        'platform',
+      ),
+      shippingCode: eligibleGlobalCode(
+        _selectedShippingVoucherCode,
+        'shipping',
+      ),
+    );
   }
 
   int get _unavailableCount {
@@ -516,6 +591,7 @@ class _CartScreenState extends State<CartScreen> {
         _selectAllAvailable();
       }
     });
+    _scheduleCartQuote();
   }
 
   void _toggleItemSelection(CartItemData item) {
@@ -532,6 +608,7 @@ class _CartScreenState extends State<CartScreen> {
         _selectedIds.add(item.id);
       }
     });
+    _scheduleCartQuote();
   }
 
   bool _isSellerGroupSelected(_CartSellerGroup group) {
@@ -569,10 +646,12 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   void _toggleEditMode() {
+    final bool wasEditing = _editMode;
     setState(() {
       _editMode = !_editMode;
       _deleteSelectedIds.clear();
     });
+    if (wasEditing) _scheduleCartQuote();
   }
 
   void _toggleDeleteItemSelection(CartItemData item) {
@@ -625,6 +704,7 @@ class _CartScreenState extends State<CartScreen> {
         _selectedIds.addAll(availableIds);
       }
     });
+    _scheduleCartQuote();
   }
 
   Future<void> _changeQuantity(CartItemData item, int requestedQuantity) async {
@@ -673,6 +753,7 @@ class _CartScreenState extends State<CartScreen> {
         setState(() {
           _items[index] = _items[index].copyWith(quantity: quantity);
         });
+        _scheduleCartQuote();
       }
     } catch (error) {
       _showMessage(_errorText(error), error: true);
@@ -721,6 +802,7 @@ class _CartScreenState extends State<CartScreen> {
         _selectedIds.remove(item.id);
         _deleteSelectedIds.remove(item.id);
       });
+      _scheduleCartQuote();
 
       _showMessage('${item.name} removed from cart.');
     } catch (error) {
@@ -791,7 +873,9 @@ class _CartScreenState extends State<CartScreen> {
         }
       } else {
         await widget.onRemoveSelected!(selected);
-        successfullyRemoved.addAll(selected.map((CartItemData item) => item.id));
+        successfullyRemoved.addAll(
+          selected.map((CartItemData item) => item.id),
+        );
       }
 
       if (!mounted) return;
@@ -825,9 +909,8 @@ class _CartScreenState extends State<CartScreen> {
       _deleteSelectedIds.removeAll(ids);
       if (_items.isEmpty) _editMode = false;
       _selectedVoucherCodes.removeWhere(
-        (int sellerId, String _) => !_items.any(
-          (CartItemData item) => item.sellerId == sellerId,
-        ),
+        (int sellerId, String _) =>
+            !_items.any((CartItemData item) => item.sellerId == sellerId),
       );
     });
   }
@@ -899,14 +982,26 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
-    final Map<int, String> eligibleVoucherCodes =
-        _eligibleVoucherCodes(selected);
-    if (eligibleVoucherCodes.length != _selectedVoucherCodes.length) {
+    final VoucherCodesSelection eligibleVouchers = _eligibleVoucherSelection(
+      selected,
+    );
+    final bool voucherSelectionChanged =
+        eligibleVouchers.sellerCodes.length != _selectedVoucherCodes.length ||
+        eligibleVouchers.sellerCodes.entries.any(
+          (MapEntry<int, String> entry) =>
+              _selectedVoucherCodes[entry.key] != entry.value,
+        ) ||
+        eligibleVouchers.platformCode != _selectedPlatformVoucherCode ||
+        eligibleVouchers.shippingCode != _selectedShippingVoucherCode;
+    if (voucherSelectionChanged) {
       setState(() {
         _selectedVoucherCodes
           ..clear()
-          ..addAll(eligibleVoucherCodes);
+          ..addAll(eligibleVouchers.sellerCodes);
+        _selectedPlatformVoucherCode = eligibleVouchers.platformCode;
+        _selectedShippingVoucherCode = eligibleVouchers.shippingCode;
       });
+      _scheduleCartQuote();
       _showMessage(
         'A voucher was removed because the selected items no longer qualify.',
       );
@@ -924,7 +1019,9 @@ class _CartScreenState extends State<CartScreen> {
             ),
           )
           .toList(),
-      voucherCodes: eligibleVoucherCodes,
+      voucherCodes: eligibleVouchers.sellerCodes,
+      platformVoucherCode: eligibleVouchers.platformCode,
+      shippingVoucherCode: eligibleVouchers.shippingCode,
     );
 
     setState(() {
@@ -1010,18 +1107,14 @@ class _CartScreenState extends State<CartScreen> {
     return subtotals;
   }
 
-  Future<void> _openVoucherPicker({int? sellerId}) async {
+  Future<void> _openVoucherPicker() async {
     if (_openingVoucherPicker) return;
     if (widget.loadAvailableVouchers == null) {
       _showMessage('Connect the Laravel API to select available vouchers.');
       return;
     }
 
-    final List<CartItemData> eligibleItems = sellerId == null
-        ? _selectedItems
-        : _selectedItems
-              .where((CartItemData item) => item.sellerId == sellerId)
-              .toList(growable: false);
+    final List<CartItemData> eligibleItems = _selectedItems;
     final Map<int, String> sellerNames = _voucherSellerNames(eligibleItems);
     if (sellerNames.isEmpty) {
       _showMessage('Select an available item from a shop to use its voucher.');
@@ -1032,8 +1125,8 @@ class _CartScreenState extends State<CartScreen> {
     try {
       final List<RewardVoucherData> vouchers = await _loadAvailableVouchers();
       if (!mounted) return;
-      final Map<int, String>? result =
-          await showModalBottomSheet<Map<int, String>>(
+      final VoucherCodesSelection? result =
+          await showModalBottomSheet<VoucherCodesSelection>(
             context: context,
             isScrollControlled: true,
             useSafeArea: true,
@@ -1043,20 +1136,19 @@ class _CartScreenState extends State<CartScreen> {
               sellerNames: sellerNames,
               sellerSubtotals: _voucherSellerSubtotals(eligibleItems),
               initialCodes: _selectedVoucherCodes,
+              initialPlatformCode: _selectedPlatformVoucherCode,
+              initialShippingCode: _selectedShippingVoucherCode,
             ),
           );
       if (!mounted || result == null) return;
       setState(() {
-        if (sellerId == null) {
-          _selectedVoucherCodes
-            ..clear()
-            ..addAll(result);
-        } else {
-          _selectedVoucherCodes.remove(sellerId);
-          final String? code = result[sellerId];
-          if (code != null) _selectedVoucherCodes[sellerId] = code;
-        }
+        _selectedVoucherCodes
+          ..clear()
+          ..addAll(result.sellerCodes);
+        _selectedPlatformVoucherCode = result.platformCode;
+        _selectedShippingVoucherCode = result.shippingCode;
       });
+      _scheduleCartQuote();
     } catch (error) {
       if (mounted) _showMessage('Unable to load shop vouchers: $error');
     } finally {
@@ -1086,9 +1178,70 @@ class _CartScreenState extends State<CartScreen> {
         );
         if (items.isEmpty) _editMode = false;
       });
+      _scheduleCartQuote();
     } catch (error) {
       _showMessage(_errorText(error), error: true);
     }
+  }
+
+  void _scheduleCartQuote() {
+    _quoteDebounce?.cancel();
+    final int requestVersion = ++_quoteRequestVersion;
+    final CartQuoteCallback? callback = widget.onLoadQuote;
+    final int? addressId = int.tryParse(widget.defaultAddress?.id ?? '');
+    final List<CartItemData> selected = List<CartItemData>.unmodifiable(
+      _selectedItems,
+    );
+    if (callback == null ||
+        addressId == null ||
+        selected.isEmpty ||
+        _editMode) {
+      if (mounted) {
+        setState(() {
+          _serverQuote = null;
+          _quoteError = null;
+          _loadingQuote = false;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _loadingQuote = true;
+      _quoteError = null;
+      _serverQuote = null;
+    });
+    _quoteDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final VoucherCodesSelection voucherSelection =
+            _eligibleVoucherSelection(selected);
+        final Map<String, dynamic> quote = await callback(
+          items: selected,
+          addressId: addressId,
+          voucherCodes: voucherSelection.sellerCodes,
+          platformVoucherCode: voucherSelection.platformCode,
+          shippingVoucherCode: voucherSelection.shippingCode,
+        );
+        if (!mounted || requestVersion != _quoteRequestVersion) return;
+        setState(() {
+          _serverQuote = quote;
+          _loadingQuote = false;
+        });
+      } catch (error) {
+        if (!mounted || requestVersion != _quoteRequestVersion) return;
+        setState(() {
+          _serverQuote = null;
+          _quoteError = error.toString().replaceFirst('Exception: ', '');
+          _loadingQuote = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _quoteDebounce?.cancel();
+    _quoteRequestVersion++;
+    super.dispose();
   }
 
   void _showMessage(String message, {bool error = false}) {
@@ -1160,7 +1313,8 @@ class _CartScreenState extends State<CartScreen> {
             GlassIconButton(
               icon: Icons.arrow_back_rounded,
               label: 'Back',
-              onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+              onPressed:
+                  widget.onBack ?? () => Navigator.of(context).maybePop(),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1505,7 +1659,8 @@ class _CartScreenState extends State<CartScreen> {
       (CartItemData item) => item.isAvailable,
     );
 
-    final bool canViewShop = widget.onSellerSelected != null &&
+    final bool canViewShop =
+        widget.onSellerSelected != null &&
         (group.sellerId != null || group.name.trim().isNotEmpty);
 
     return Column(
@@ -1556,10 +1711,8 @@ class _CartScreenState extends State<CartScreen> {
               if (canViewShop) ...<Widget>[
                 const SizedBox(width: 12),
                 InkWell(
-                  onTap: () => widget.onSellerSelected!(
-                    group.name,
-                    group.sellerId,
-                  ),
+                  onTap: () =>
+                      widget.onSellerSelected!(group.name, group.sellerId),
                   child: const Text(
                     'View Shop',
                     style: TextStyle(
@@ -1588,12 +1741,13 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildShopVoucherRow(_CartSellerGroup group) {
     final int? sellerId = group.sellerId;
-    final String? selectedCode =
-        sellerId == null ? null : _selectedVoucherCodes[sellerId];
+    final String? selectedCode = sellerId == null
+        ? null
+        : _selectedVoucherCodes[sellerId];
     RewardVoucherData? availableVoucher;
     if (sellerId != null) {
-      for (final RewardVoucherData voucher in
-          _availableVouchers ?? const <RewardVoucherData>[]) {
+      for (final RewardVoucherData voucher
+          in _availableVouchers ?? const <RewardVoucherData>[]) {
         if (voucher.sellerId == sellerId && voucher.canUse != false) {
           availableVoucher = voucher;
           break;
@@ -1613,9 +1767,7 @@ class _CartScreenState extends State<CartScreen> {
     return Material(
       color: _surface,
       child: InkWell(
-        onTap: hasSelectedItems && sellerId != null
-            ? () => _openVoucherPicker(sellerId: sellerId)
-            : null,
+        onTap: hasSelectedItems && sellerId != null ? _openVoucherPicker : null,
         child: Container(
           constraints: const BoxConstraints(minHeight: 52),
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
@@ -1878,6 +2030,19 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildCartSummary() {
+    final Map<String, dynamic>? quote = _serverQuote;
+    final dynamic rawAvailability = quote?['delivery_availability'];
+    final Map<String, dynamic>? availability = rawAvailability is Map
+        ? Map<String, dynamic>.from(rawAvailability)
+        : null;
+    String amount(String key) {
+      final dynamic raw = quote?[key];
+      final double? value = raw is num
+          ? raw.toDouble()
+          : double.tryParse(raw?.toString() ?? '');
+      return value == null ? '—' : 'PHP ${value.toStringAsFixed(2)}';
+    }
+
     return _SectionCard(
       title: 'Cart Summary',
       subtitle: 'Only selected products will continue to checkout.',
@@ -1894,6 +2059,85 @@ class _CartScreenState extends State<CartScreen> {
 
           const SizedBox(height: 15),
 
+          if (quote != null) ...[
+            const Divider(height: 1),
+            const SizedBox(height: 13),
+            _SummaryRow(label: 'Items subtotal', value: amount('subtotal')),
+            const SizedBox(height: 9),
+            _SummaryRow(
+              label: 'Discounts',
+              value: '- ${amount('total_discount')}',
+            ),
+            const SizedBox(height: 9),
+            _SummaryRow(label: 'Delivery', value: amount('shipping_total')),
+            if ((double.tryParse(
+                      (quote['protection_total'] ?? '0').toString(),
+                    ) ??
+                    0) >
+                0) ...[
+              const SizedBox(height: 9),
+              _SummaryRow(
+                label: 'Additional Care',
+                value: amount('protection_total'),
+              ),
+            ],
+            const SizedBox(height: 11),
+            _SummaryRow(label: 'Estimated total', value: amount('grand_total')),
+            if (availability != null) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  availability['available'] == true
+                      ? (availability['message']?.toString() ??
+                            'Delivery is available for this address.')
+                      : (availability['message']?.toString() ??
+                            'Delivery availability needs attention.'),
+                  style: TextStyle(
+                    color: availability['available'] == true ? _muted : _danger,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+          ] else if (_loadingQuote) ...[
+            const Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 15,
+                  height: 15,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 9),
+                Text(
+                  'Getting an updated total…',
+                  style: TextStyle(color: _muted, fontSize: 12),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ] else if (_quoteError != null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _scheduleCartQuote,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text('Retry price preview: $_quoteError'),
+              ),
+            ),
+          ] else if (_selectedItems.isNotEmpty) ...[
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Choose or update a saved delivery address to see the delivery estimate and total.',
+                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(11),
@@ -1902,7 +2146,7 @@ class _CartScreenState extends State<CartScreen> {
               borderRadius: BorderRadius.circular(11),
             ),
             child: const Text(
-              'Choose shop vouchers here. Delivery, payment, and your final total are confirmed on Checkout.',
+              'This estimate comes from the server. Checkout refreshes stock, delivery, vouchers, and the final total before you place the order.',
               style: TextStyle(color: _muted, fontSize: 12, height: 1.55),
             ),
           ),
@@ -1935,7 +2179,11 @@ class _CartScreenState extends State<CartScreen> {
           children: [
             Checkbox(
               tristate: true,
-              value: allSelected ? true : someSelected ? null : false,
+              value: allSelected
+                  ? true
+                  : someSelected
+                  ? null
+                  : false,
               activeColor: _maroon,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4),
@@ -2130,9 +2378,13 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildMarketplaceVoucherRow() {
-    final String label = _selectedVoucherCodes.isEmpty
+    final int selectedVoucherCount =
+        _selectedVoucherCodes.length +
+        (_selectedPlatformVoucherCode?.isNotEmpty == true ? 1 : 0) +
+        (_selectedShippingVoucherCode?.isNotEmpty == true ? 1 : 0);
+    final String label = selectedVoucherCount == 0
         ? 'Select or enter a code'
-        : '${_selectedVoucherCodes.length} voucher${_selectedVoucherCodes.length == 1 ? '' : 's'} selected';
+        : '$selectedVoucherCount voucher${selectedVoucherCount == 1 ? '' : 's'} selected';
     return Material(
       color: Colors.white,
       child: InkWell(
@@ -2174,10 +2426,7 @@ class _CartScreenState extends State<CartScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 12.5,
-                    ),
+                    style: const TextStyle(color: _muted, fontSize: 12.5),
                   ),
                 ),
               const SizedBox(width: 4),
@@ -2192,7 +2441,6 @@ class _CartScreenState extends State<CartScreen> {
       ),
     );
   }
-
 }
 
 class _CartItemCard extends StatelessWidget {
@@ -2278,7 +2526,9 @@ class _CartItemCard extends StatelessWidget {
                             ),
                             alignment: Alignment.center,
                             child: Text(
-                              item.sellerOnVacation ? 'SELLER ON\nVACATION' : 'UNAVAILABLE',
+                              item.sellerOnVacation
+                                  ? 'SELLER ON\nVACATION'
+                                  : 'UNAVAILABLE',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,
@@ -2485,7 +2735,6 @@ class _CartItemCard extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _CartSellerGroup {
@@ -2704,8 +2953,13 @@ class _CartProductImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = imageUrl?.trim() ?? '';
-    if (value.isEmpty) return const Center(child: Icon(Icons.image_outlined,
-      color: ShopColors.faint, size: 31));
-    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 31);
+    if (value.isEmpty)
+      return const Center(
+        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 31),
+      );
+    return SizedNetworkImage(
+      url: AppConfig.resolveMediaUrl(value),
+      iconSize: 31,
+    );
   }
 }

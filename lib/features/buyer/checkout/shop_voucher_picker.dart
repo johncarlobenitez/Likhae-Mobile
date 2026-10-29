@@ -3,6 +3,38 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/shop_colors.dart';
 import '../rewards/rewards_screen.dart';
 
+class VoucherCodesSelection {
+  const VoucherCodesSelection({
+    this.sellerCodes = const <int, String>{},
+    this.platformCode,
+    this.shippingCode,
+  });
+
+  final Map<int, String> sellerCodes;
+  final String? platformCode;
+  final String? shippingCode;
+
+  bool get isEmpty =>
+      sellerCodes.isEmpty &&
+      (platformCode?.trim().isEmpty ?? true) &&
+      (shippingCode?.trim().isEmpty ?? true);
+
+  Map<String, dynamic> toApiPayload() => <String, dynamic>{
+    'seller': sellerCodes.map(
+      (int sellerId, String code) =>
+          MapEntry<String, String>(sellerId.toString(), code),
+    ),
+    'platform': platformCode?.trim() ?? '',
+    'shipping': shippingCode?.trim() ?? '',
+  };
+
+  List<String> get codes => <String>[
+    ...sellerCodes.values,
+    if (platformCode?.trim().isNotEmpty == true) platformCode!.trim(),
+    if (shippingCode?.trim().isNotEmpty == true) shippingCode!.trim(),
+  ];
+}
+
 class ShopVoucherPicker extends StatefulWidget {
   const ShopVoucherPicker({
     super.key,
@@ -10,12 +42,16 @@ class ShopVoucherPicker extends StatefulWidget {
     required this.sellerNames,
     required this.sellerSubtotals,
     required this.initialCodes,
+    this.initialPlatformCode,
+    this.initialShippingCode,
   });
 
   final List<RewardVoucherData> vouchers;
   final Map<int, String> sellerNames;
   final Map<int, double> sellerSubtotals;
   final Map<int, String> initialCodes;
+  final String? initialPlatformCode;
+  final String? initialShippingCode;
 
   @override
   State<ShopVoucherPicker> createState() => _ShopVoucherPickerState();
@@ -31,10 +67,13 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
 
   late final TextEditingController _codeController;
   late final Map<int, String> _selectedCodes;
+  String? _selectedPlatformCode;
+  String? _selectedShippingCode;
 
   List<RewardVoucherData> get _shopVouchers => widget.vouchers
       .where(
         (RewardVoucherData voucher) =>
+            voucher.voucherType == 'seller' &&
             voucher.sellerId != null &&
             widget.sellerNames.containsKey(voucher.sellerId) &&
             voucher.code.trim().isNotEmpty &&
@@ -42,17 +81,43 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
       )
       .toList(growable: false);
 
+  List<RewardVoucherData> get _platformVouchers => widget.vouchers
+      .where(
+        (RewardVoucherData voucher) =>
+            voucher.voucherType == 'platform' &&
+            voucher.sellerId == null &&
+            voucher.code.trim().isNotEmpty &&
+            voucher.canUse != false,
+      )
+      .toList(growable: false);
+
+  List<RewardVoucherData> get _shippingVouchers => widget.vouchers
+      .where(
+        (RewardVoucherData voucher) =>
+            voucher.voucherType == 'shipping' &&
+            voucher.sellerId == null &&
+            voucher.code.trim().isNotEmpty &&
+            voucher.canUse != false,
+      )
+      .toList(growable: false);
+
+  double get _cartSubtotal => widget.sellerSubtotals.values.fold<double>(
+    0,
+    (double total, double subtotal) => total + subtotal,
+  );
+
   @override
   void initState() {
     super.initState();
     _codeController = TextEditingController();
     _selectedCodes = Map<int, String>.fromEntries(
       widget.initialCodes.entries.where(
-        (MapEntry<int, String> entry) => widget.sellerNames.containsKey(
-          entry.key,
-        ),
+        (MapEntry<int, String> entry) =>
+            widget.sellerNames.containsKey(entry.key),
       ),
     );
+    _selectedPlatformCode = widget.initialPlatformCode;
+    _selectedShippingCode = widget.initialShippingCode;
   }
 
   @override
@@ -69,14 +134,24 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
 
   void _selectVoucher(RewardVoucherData voucher) {
     final int? sellerId = voucher.sellerId;
-    if (sellerId == null) return;
-
     setState(() {
-      if (_selectedCodes[sellerId]?.toUpperCase() ==
-          voucher.code.toUpperCase()) {
-        _selectedCodes.remove(sellerId);
-      } else {
-        _selectedCodes[sellerId] = voucher.code;
+      if (voucher.voucherType == 'platform') {
+        _selectedPlatformCode =
+            _selectedPlatformCode?.toUpperCase() == voucher.code.toUpperCase()
+            ? null
+            : voucher.code;
+      } else if (voucher.voucherType == 'shipping') {
+        _selectedShippingCode =
+            _selectedShippingCode?.toUpperCase() == voucher.code.toUpperCase()
+            ? null
+            : voucher.code;
+      } else if (sellerId != null) {
+        if (_selectedCodes[sellerId]?.toUpperCase() ==
+            voucher.code.toUpperCase()) {
+          _selectedCodes.remove(sellerId);
+        } else {
+          _selectedCodes[sellerId] = voucher.code;
+        }
       }
     });
   }
@@ -84,12 +159,16 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
   void _applyCode() {
     final String code = _codeController.text.trim().toUpperCase();
     if (code.isEmpty) {
-      _showMessage('Enter a shop voucher code.');
+      _showMessage('Enter a voucher code.');
       return;
     }
 
     RewardVoucherData? match;
-    for (final RewardVoucherData voucher in _shopVouchers) {
+    for (final RewardVoucherData voucher in <RewardVoucherData>[
+      ..._shopVouchers,
+      ..._platformVouchers,
+      ..._shippingVouchers,
+    ]) {
       if (voucher.code.trim().toUpperCase() == code) {
         match = voucher;
         break;
@@ -97,14 +176,15 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
     }
 
     final RewardVoucherData? selectedVoucher = match;
-    if (selectedVoucher == null || selectedVoucher.sellerId == null) {
-      _showMessage('That code is not an available voucher for these shops.');
+    if (selectedVoucher == null) {
+      _showMessage('That code is not an available voucher for this cart.');
       return;
     }
 
     final double minimum = selectedVoucher.minimumOrderAmount ?? 0;
-    final double subtotal =
-        widget.sellerSubtotals[selectedVoucher.sellerId!] ?? 0;
+    final double subtotal = selectedVoucher.sellerId == null
+        ? _cartSubtotal
+        : widget.sellerSubtotals[selectedVoucher.sellerId] ?? 0;
     if (subtotal < minimum) {
       final double remaining = minimum - subtotal;
       _showMessage(
@@ -114,11 +194,23 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
     }
 
     setState(() {
-      _selectedCodes[selectedVoucher.sellerId!] = selectedVoucher.code;
+      if (selectedVoucher.voucherType == 'platform') {
+        _selectedPlatformCode = selectedVoucher.code;
+      } else if (selectedVoucher.voucherType == 'shipping') {
+        _selectedShippingCode = selectedVoucher.code;
+      } else if (selectedVoucher.sellerId != null) {
+        _selectedCodes[selectedVoucher.sellerId!] = selectedVoucher.code;
+      }
       _codeController.clear();
     });
     FocusScope.of(context).unfocus();
   }
+
+  VoucherCodesSelection get _selection => VoucherCodesSelection(
+    sellerCodes: Map<int, String>.unmodifiable(_selectedCodes),
+    platformCode: _selectedPlatformCode,
+    shippingCode: _selectedShippingCode,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +232,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                 children: [
                   const Expanded(
                     child: Text(
-                      'Select LIKHAE Vouchers',
+                      'Select Vouchers',
                       style: TextStyle(
                         color: _ink,
                         fontSize: 18,
@@ -164,25 +256,15 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                   children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Shop vouchers',
-                            style: TextStyle(
-                              color: _ink,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${_shopVouchers.length} available',
-                          style: const TextStyle(color: _muted, fontSize: 12),
-                        ),
-                      ],
+                    _buildVoucherSection('Shop vouchers', _shopVouchers),
+                    const SizedBox(height: 16),
+                    _buildVoucherSection('LIKHAE vouchers', _platformVouchers),
+                    const SizedBox(height: 16),
+                    _buildVoucherSection(
+                      'Shipping vouchers',
+                      _shippingVouchers,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
@@ -192,7 +274,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                             autocorrect: false,
                             cursorColor: _primary,
                             decoration: InputDecoration(
-                              hintText: 'Enter shop voucher code',
+                              hintText: 'Enter voucher code',
                               isDense: true,
                               filled: true,
                               fillColor: _surface,
@@ -240,11 +322,10 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    if (_shopVouchers.isEmpty)
-                      _buildEmptyVouchers()
-                    else
-                      for (final RewardVoucherData voucher in _shopVouchers)
-                        _buildVoucherCard(voucher),
+                    if (_shopVouchers.isEmpty &&
+                        _platformVouchers.isEmpty &&
+                        _shippingVouchers.isEmpty)
+                      _buildEmptyVouchers(),
                   ],
                 ),
               ),
@@ -256,14 +337,14 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    '${_selectedCodes.length} shop voucher${_selectedCodes.length == 1 ? '' : 's'} selected',
+                    '${_selection.codes.length} voucher${_selection.codes.length == 1 ? '' : 's'} selected',
                     style: const TextStyle(color: _muted, fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
                     height: 50,
                     child: FilledButton(
-                      onPressed: () => Navigator.of(context).pop(_selectedCodes),
+                      onPressed: () => Navigator.of(context).pop(_selection),
                       style: FilledButton.styleFrom(
                         backgroundColor: _primary,
                         foregroundColor: Colors.white,
@@ -296,22 +377,71 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
         borderRadius: BorderRadius.circular(14),
       ),
       child: const Text(
-        'No active vouchers are available for the shops in this checkout.',
+        'No active vouchers are available for this checkout.',
         textAlign: TextAlign.center,
         style: TextStyle(color: _muted, fontSize: 13, height: 1.4),
       ),
     );
   }
 
+  Widget _buildVoucherSection(String title, List<RewardVoucherData> vouchers) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: _ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              '${vouchers.length} available',
+              style: const TextStyle(color: _muted, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (vouchers.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              'No ${title.toLowerCase()} available for this cart.',
+              style: const TextStyle(color: _muted, fontSize: 12),
+            ),
+          )
+        else
+          for (final RewardVoucherData voucher in vouchers)
+            _buildVoucherCard(voucher),
+      ],
+    );
+  }
+
   Widget _buildVoucherCard(RewardVoucherData voucher) {
-    final int sellerId = voucher.sellerId!;
-    final bool selected =
-        _selectedCodes[sellerId]?.toUpperCase() == voucher.code.toUpperCase();
+    final int? sellerId = voucher.sellerId;
+    final bool selected = switch (voucher.voucherType) {
+      'platform' =>
+        _selectedPlatformCode?.toUpperCase() == voucher.code.toUpperCase(),
+      'shipping' =>
+        _selectedShippingCode?.toUpperCase() == voucher.code.toUpperCase(),
+      _ =>
+        sellerId != null &&
+            _selectedCodes[sellerId]?.toUpperCase() ==
+                voucher.code.toUpperCase(),
+    };
     final double minimum = voucher.minimumOrderAmount ?? 0;
-    final double subtotal = widget.sellerSubtotals[sellerId] ?? 0;
+    final double subtotal = sellerId == null
+        ? _cartSubtotal
+        : widget.sellerSubtotals[sellerId] ?? 0;
     final bool meetsMinimum = subtotal >= minimum;
-    final double remaining =
-        (minimum - subtotal).clamp(0, double.infinity).toDouble();
+    final double remaining = (minimum - subtotal)
+        .clamp(0, double.infinity)
+        .toDouble();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -338,13 +468,17 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                     color: _primary,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Column(
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.local_offer_rounded, color: Colors.white),
                       SizedBox(height: 4),
                       Text(
-                        'SHOP',
+                        switch (voucher.voucherType) {
+                          'platform' => 'LIKHAE',
+                          'shipping' => 'SHIP',
+                          _ => 'SHOP',
+                        },
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 9,
@@ -370,9 +504,15 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        widget.sellerNames[sellerId] ??
+                        (sellerId == null
+                                ? null
+                                : widget.sellerNames[sellerId]) ??
                             voucher.sellerName ??
-                            'Shop',
+                            (voucher.voucherType == 'platform'
+                                ? 'LIKHAE Platform'
+                                : voucher.voucherType == 'shipping'
+                                ? 'Shipping benefit'
+                                : 'Shop'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -398,10 +538,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                         const SizedBox(height: 3),
                         Text(
                           'Valid until ${voucher.expires}',
-                          style: const TextStyle(
-                            color: _muted,
-                            fontSize: 10,
-                          ),
+                          style: const TextStyle(color: _muted, fontSize: 10),
                         ),
                       ],
                     ],

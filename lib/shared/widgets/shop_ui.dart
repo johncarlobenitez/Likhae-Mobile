@@ -146,6 +146,7 @@ class ShopProductCard extends StatelessWidget {
   final String? seller;
   final double price;
   final double? originalPrice;
+  final String? priceLabel;
   final double? rating;
   final int soldCount;
   final bool outOfStock;
@@ -153,6 +154,7 @@ class ShopProductCard extends StatelessWidget {
   final bool wishlisted;
   final bool wishlistLoading;
   final VoidCallback? onTap;
+  final VoidCallback? onSellerTap;
   final VoidCallback? onWishlist;
   final Widget? footer;
 
@@ -165,6 +167,7 @@ class ShopProductCard extends StatelessWidget {
     this.category,
     this.seller,
     this.originalPrice,
+    this.priceLabel,
     this.rating,
     this.soldCount = 0,
     this.outOfStock = false,
@@ -172,6 +175,7 @@ class ShopProductCard extends StatelessWidget {
     this.wishlisted = false,
     this.wishlistLoading = false,
     this.onTap,
+    this.onSellerTap,
     this.onWishlist,
     this.footer,
   });
@@ -244,13 +248,36 @@ class ShopProductCard extends StatelessWidget {
                       height: 1.4, fontWeight: FontWeight.w700)),
               if (seller?.isNotEmpty == true) ...[
                 const SizedBox(height: 5),
-                Text(seller!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+                Semantics(
+                  button: onSellerTap != null,
+                  label: onSellerTap == null ? seller : 'View $seller store',
+                  child: InkWell(
+                    onTap: onSellerTap,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        seller!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: onSellerTap == null
+                              ? colors.onSurfaceVariant
+                              : colors.primary,
+                          fontSize: 12,
+                          decoration: onSellerTap == null
+                              ? TextDecoration.none
+                              : TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
               const SizedBox(height: 10),
               Wrap(spacing: 7, runSpacing: 3,
                 crossAxisAlignment: WrapCrossAlignment.center, children: [
-                Text(formatPesoAmount(price), style: TextStyle(
+                Text(priceLabel ?? formatPesoAmount(price), style: TextStyle(
                     color: colors.primary, fontSize: 18, fontWeight: FontWeight.w800,
                     letterSpacing: -.3)),
                 if (discounted) Text(formatPesoAmount(originalPrice!),

@@ -5,6 +5,7 @@ import '../core/config/app_config.dart';
 import '../core/storage/token_storage.dart';
 import '../core/utils/api_value_parsers.dart';
 import '../features/buyer/store/store_screen.dart';
+import 'buyer_mobile_service.dart';
 import 'product_service.dart';
 
 class StorePageData {
@@ -44,9 +45,8 @@ class StoreService {
     return rawStores
         .whereType<Map>()
         .map(
-          (Map item) => StoreSellerData.fromApi(
-            Map<String, dynamic>.from(item),
-          ),
+          (Map item) =>
+              StoreSellerData.fromApi(Map<String, dynamic>.from(item)),
         )
         .where((StoreSellerData shop) => shop.slug.trim().isNotEmpty)
         .toList(growable: false);
@@ -99,9 +99,7 @@ class StoreService {
         final dynamic followData = followPayload is Map
             ? (followPayload['data'] ?? followPayload)
             : null;
-        if (followStatus >= 200 &&
-            followStatus < 300 &&
-            followData is Map) {
+        if (followStatus >= 200 && followStatus < 300 && followData is Map) {
           sellerData['is_following'] =
               followData['following'] ?? followData['is_following'];
           sellerData['followers'] =
@@ -111,25 +109,70 @@ class StoreService {
         // A missing/older follow endpoint must not prevent the public store
         // page from loading.
       }
+
+      try {
+        final int sellerProfileId =
+            int.tryParse(
+              (sellerData['id'] ??
+                          sellerData['seller_profile_id'] ??
+                          sellerData['seller_id'])
+                      ?.toString() ??
+                  '',
+            ) ??
+            0;
+        final rewards = await BuyerMobileService.fetchRewards();
+        sellerData['vouchers'] = rewards.activeVouchers
+            .where(
+              (voucher) =>
+                  voucher.voucherType.toLowerCase() == 'seller' &&
+                  voucher.sellerId == sellerProfileId &&
+                  (voucher.isCollected || voucher.canClaim),
+            )
+            .map(
+              (voucher) => <String, dynamic>{
+                'id': voucher.voucherId,
+                'code': voucher.code,
+                'name': voucher.campaignName ?? voucher.code,
+                'discount_type': voucher.discountType,
+                'discount_value': voucher.discountAmount,
+                'minimum_order_amount': voucher.minimumOrderAmount,
+                'maximum_discount_amount': voucher.maximumDiscountAmount,
+                'expires': voucher.expires,
+                'is_collected': voucher.isCollected,
+              },
+            )
+            .toList(growable: false);
+      } catch (_) {
+        // Store browsing remains available if account vouchers cannot load.
+      }
     }
 
-    final dynamic rawProducts = data['products'] ??
+    final dynamic rawProducts =
+        data['products'] ??
         data['items'] ??
         sellerData['products'] ??
         data['data'] ??
         const <dynamic>[];
 
-    final List<dynamic> allRows = rawProducts is List ? List<dynamic>.from(rawProducts) : <dynamic>[];
+    final List<dynamic> allRows = rawProducts is List
+        ? List<dynamic>.from(rawProducts)
+        : <dynamic>[];
     final dynamic rawMeta = payload is Map ? payload['meta'] : null;
-    final int lastPage = rawMeta is Map ? int.tryParse((rawMeta['last_page'] ?? 1).toString()) ?? 1 : 1;
+    final int lastPage = rawMeta is Map
+        ? int.tryParse((rawMeta['last_page'] ?? 1).toString()) ?? 1
+        : 1;
     for (int page = 2; page <= lastPage; page++) {
       final Response<dynamic> pageResponse = await ApiClient.get(
-        AppConfig.resolveApiUrl('stores/${Uri.encodeComponent(normalizedSlug)}'),
+        AppConfig.resolveApiUrl(
+          'stores/${Uri.encodeComponent(normalizedSlug)}',
+        ),
         queryParameters: <String, dynamic>{'per_page': 50, 'page': page},
       );
       final int pageStatus = pageResponse.statusCode ?? 500;
       if (pageStatus < 200 || pageStatus >= 300) {
-        throw Exception('Unable to load all store products (HTTP $pageStatus).');
+        throw Exception(
+          'Unable to load all store products (HTTP $pageStatus).',
+        );
       }
       final dynamic pagePayload = pageResponse.data;
       final dynamic pageData = pagePayload is Map ? pagePayload['data'] : null;
@@ -139,7 +182,10 @@ class StoreService {
 
     List<StoreProductData> products = allRows
         .whereType<Map>()
-        .map((Map item) => StoreProductData.fromApi(Map<String, dynamic>.from(item)))
+        .map(
+          (Map item) =>
+              StoreProductData.fromApi(Map<String, dynamic>.from(item)),
+        )
         .where((StoreProductData product) => product.id != 0)
         .toList(growable: false);
 
@@ -231,7 +277,9 @@ class StoreService {
     );
   }
 
-  static Future<List<StoreProductData>> fetchSellerProducts(String sellerSlug) async {
+  static Future<List<StoreProductData>> fetchSellerProducts(
+    String sellerSlug,
+  ) async {
     return (await fetchStore(sellerSlug)).products;
   }
 }

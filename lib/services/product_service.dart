@@ -5,6 +5,26 @@ import '../core/config/app_config.dart';
 import '../features/buyer/home/home_screen.dart';
 import '../features/buyer/products/product_details_screen.dart';
 
+class ProductSearchSuggestion {
+  final String type;
+  final String label;
+  final String query;
+
+  const ProductSearchSuggestion({
+    required this.type,
+    required this.label,
+    required this.query,
+  });
+
+  factory ProductSearchSuggestion.fromApi(Map<String, dynamic> row) {
+    return ProductSearchSuggestion(
+      type: (row['type'] ?? '').toString().trim(),
+      label: (row['label'] ?? row['query'] ?? '').toString().trim(),
+      query: (row['query'] ?? row['label'] ?? '').toString().trim(),
+    );
+  }
+}
+
 class ProductService {
   static List<BuyerHomeProduct> _demoProducts() {
     final List<BuyerHomeProduct> products = <BuyerHomeProduct>[
@@ -137,17 +157,29 @@ class ProductService {
     if (!AppConfig.apiEnabled) {
       final List<BuyerHomeProduct> products = _demoProducts();
       final List<BuyerHomeProduct> selected = dealsOnly
-          ? products.where((BuyerHomeProduct item) => item.discountPercentage != null).toList()
+          ? products
+                .where(
+                  (BuyerHomeProduct item) =>
+                      item.discountPercentage != null ||
+                      item.isFlashSaleUpcoming,
+                )
+                .toList()
           : products;
       if (sort == 'best-selling') {
-        selected.sort((BuyerHomeProduct a, BuyerHomeProduct b) => b.soldCount.compareTo(a.soldCount));
+        selected.sort(
+          (BuyerHomeProduct a, BuyerHomeProduct b) =>
+              b.soldCount.compareTo(a.soldCount),
+        );
       }
       return selected;
     }
 
     // Home renders a small selection; the catalog page owns full browsing.
     final List<Map<String, dynamic>> rows = await fetchProductRows(
-      perPage: perPage, dealsOnly: dealsOnly, sort: sort, maxPages: 1,
+      perPage: perPage,
+      dealsOnly: dealsOnly,
+      sort: sort,
+      maxPages: 1,
     );
 
     return rows
@@ -156,7 +188,9 @@ class ProductService {
         .toList(growable: false);
   }
 
-  static Future<List<BuyerHomeCategory>> fetchCategories({bool refresh = false}) async {
+  static Future<List<BuyerHomeCategory>> fetchCategories({
+    bool refresh = false,
+  }) async {
     if (!AppConfig.apiEnabled) return const <BuyerHomeCategory>[];
 
     final Response<dynamic> response = await ApiClient.get(
@@ -187,11 +221,12 @@ class ProductService {
     final Map<String, int> childCounts = <String, int>{};
     for (final Map<String, dynamic> row in rows) {
       final dynamic parent = row['parent'];
-      final dynamic parentId = row['parent_id'] ??
-          (parent is Map ? parent['id'] : null);
+      final dynamic parentId =
+          row['parent_id'] ?? (parent is Map ? parent['id'] : null);
       final String parentKey = parentId?.toString().trim() ?? '';
       if (parentKey.isEmpty) continue;
-      final int count = int.tryParse(
+      final int count =
+          int.tryParse(
             (row['products_count'] ?? row['product_count'] ?? 0).toString(),
           ) ??
           0;
@@ -202,26 +237,33 @@ class ProductService {
       );
     }
 
-    return rows.where((Map<String, dynamic> row) {
-      final dynamic parent = row['parent'];
-      final dynamic parentId = row['parent_id'] ??
-          (parent is Map ? parent['id'] : null);
-      return parentId == null || parentId.toString().trim().isEmpty;
-    }).map((Map<String, dynamic> row) {
-      final String name = (row['name'] ?? '').toString().trim();
-      final String slug = (row['slug'] ?? '').toString().trim();
-      final String id = (row['id'] ?? '').toString();
-      final int directCount = int.tryParse(
-            (row['products_count'] ?? row['product_count'] ?? 0).toString(),
-          ) ??
-          0;
-      return BuyerHomeCategory(
-        name: name,
-        slug: slug,
-        productCount: directCount + (childCounts[id] ?? 0),
-      );
-    }).where((BuyerHomeCategory category) =>
-        category.name.isNotEmpty && category.slug.isNotEmpty).toList(growable: false);
+    return rows
+        .where((Map<String, dynamic> row) {
+          final dynamic parent = row['parent'];
+          final dynamic parentId =
+              row['parent_id'] ?? (parent is Map ? parent['id'] : null);
+          return parentId == null || parentId.toString().trim().isEmpty;
+        })
+        .map((Map<String, dynamic> row) {
+          final String name = (row['name'] ?? '').toString().trim();
+          final String slug = (row['slug'] ?? '').toString().trim();
+          final String id = (row['id'] ?? '').toString();
+          final int directCount =
+              int.tryParse(
+                (row['products_count'] ?? row['product_count'] ?? 0).toString(),
+              ) ??
+              0;
+          return BuyerHomeCategory(
+            name: name,
+            slug: slug,
+            productCount: directCount + (childCounts[id] ?? 0),
+          );
+        })
+        .where(
+          (BuyerHomeCategory category) =>
+              category.name.isNotEmpty && category.slug.isNotEmpty,
+        )
+        .toList(growable: false);
   }
 
   static Future<List<Map<String, dynamic>>> fetchPlatformEvents() async {
@@ -241,9 +283,49 @@ class ProductService {
         .toList(growable: false);
   }
 
+  static Future<List<ProductSearchSuggestion>> fetchSearchSuggestions(
+    String query, {
+    int? sellerId,
+  }) async {
+    final String normalizedQuery = query.trim();
+    if (!AppConfig.apiEnabled || normalizedQuery.length < 2) {
+      return const <ProductSearchSuggestion>[];
+    }
+
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(
+        '${AppConfig.webBaseUrl.replaceFirst(RegExp(r'/$'), '')}/marketplace/search-suggestions',
+      ),
+      queryParameters: <String, dynamic>{
+        'q': normalizedQuery,
+        if (sellerId != null && sellerId > 0) 'seller_id': sellerId,
+      },
+    );
+    final int statusCode = response.statusCode ?? 500;
+    if (statusCode < 200 || statusCode >= 300) {
+      throw Exception('Unable to load search suggestions (HTTP $statusCode).');
+    }
+
+    final dynamic payload = response.data;
+    final dynamic rows = payload is Map ? payload['suggestions'] : null;
+    if (rows is! List) return const <ProductSearchSuggestion>[];
+    return rows
+        .whereType<Map>()
+        .map(
+          (Map row) =>
+              ProductSearchSuggestion.fromApi(Map<String, dynamic>.from(row)),
+        )
+        .where(
+          (ProductSearchSuggestion suggestion) =>
+              suggestion.label.isNotEmpty && suggestion.query.isNotEmpty,
+        )
+        .toList(growable: false);
+  }
+
   static Future<List<Map<String, dynamic>>> fetchProductRows({
     int perPage = 100,
     int? sellerProfileId,
+    String? categorySlug,
     bool dealsOnly = false,
     String? searchQuery,
     String? sort,
@@ -266,6 +348,9 @@ class ProductService {
               'is_featured': product.isFeatured,
               'is_recommended': product.isRecommended,
               'wishlisted': product.wishlisted,
+              'flash_sale_starts_at':
+                  product.flashSaleStartsAt?.toIso8601String(),
+              'flash_sale_ends_at': product.flashSaleEndsAt?.toIso8601String(),
             },
           )
           .toList(growable: false);
@@ -276,7 +361,8 @@ class ProductService {
     final Set<String> seenIds = <String>{};
     int page = 1;
     int? lastPage;
-    while (page <= (lastPage ?? 100) && (maxPages == null || page <= maxPages)) {
+    while (page <= (lastPage ?? 100) &&
+        (maxPages == null || page <= maxPages)) {
       final Response<dynamic> response = await ApiClient.get(
         AppConfig.resolveApiUrl('products'),
         queryParameters: <String, dynamic>{
@@ -287,6 +373,8 @@ class ProductService {
             'q': searchQuery.trim(),
           if (sort != null && sort.trim().isNotEmpty) 'sort': sort,
           if (sellerProfileId != null) 'seller_profile_id': sellerProfileId,
+          if (categorySlug != null && categorySlug.trim().isNotEmpty)
+            'category': categorySlug.trim(),
         },
       );
       final int statusCode = response.statusCode ?? 500;
@@ -310,14 +398,15 @@ class ProductService {
       int newCount = 0;
       for (final Map row in rows.whereType<Map>()) {
         final Map<String, dynamic> product = Map<String, dynamic>.from(row);
-        final String id = (product['id'] ?? product['product_id'] ?? '').toString();
+        final String id = (product['id'] ?? product['product_id'] ?? '')
+            .toString();
         if (id.isNotEmpty && !seenIds.add(id)) continue;
         products.add(product);
         newCount++;
       }
 
       lastPage ??= _extractLastPage(payload);
-      if (lastPage != null && page >= lastPage!) break;
+      if (lastPage != null && page >= lastPage) break;
       if (rows.length < pageSize || newCount == 0) break;
       page++;
     }
@@ -388,10 +477,12 @@ class ProductService {
     final dynamic meta = payload['meta'];
     final dynamic nestedData = payload['data'];
     final dynamic pagination = payload['pagination'];
-    final dynamic nestedPagination =
-        nestedData is Map ? nestedData['pagination'] : null;
+    final dynamic nestedPagination = nestedData is Map
+        ? nestedData['pagination']
+        : null;
     final dynamic nestedMeta = nestedData is Map ? nestedData['meta'] : null;
-    final dynamic raw = payload['last_page'] ??
+    final dynamic raw =
+        payload['last_page'] ??
         (meta is Map ? meta['last_page'] : null) ??
         (pagination is Map ? pagination['last_page'] : null) ??
         (nestedData is Map ? nestedData['last_page'] : null) ??

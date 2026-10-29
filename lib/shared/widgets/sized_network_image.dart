@@ -11,11 +11,19 @@ class SizedNetworkImage extends StatelessWidget {
     required this.url,
     this.fit = BoxFit.cover,
     this.iconSize = 36,
+    this.headers,
+    this.placeholder,
+    this.errorBuilder,
+    this.semanticLabel,
   });
 
   final String url;
   final BoxFit fit;
   final double iconSize;
+  final Map<String, String>? headers;
+  final Widget? placeholder;
+  final Widget Function(BuildContext, Object, StackTrace?)? errorBuilder;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -33,23 +41,26 @@ class SizedNetworkImage extends StatelessWidget {
           : null;
       return Image(
         image: ResizeImage(
-          CachedNetworkImageProvider(url),
+          CachedNetworkImageProvider(url, headers: headers),
           width: width,
           height: height,
           policy: ResizeImagePolicy.fit,
         ),
         fit: fit,
+        semanticLabel: semanticLabel,
         frameBuilder: (context, child, frame, synchronous) =>
             synchronous || frame != null
             ? child
-            : const Center(child: Icon(Icons.image_outlined,
-                size: 28, color: ShopColors.faint)),
-        errorBuilder: (context, error, stack) => Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: ShopColors.faint,
-            size: iconSize,
-          ),
+            : placeholder ?? const Center(
+                child: Icon(
+                  Icons.image_outlined,
+                  size: 28,
+                  color: ShopColors.faint,
+                ),
+              ),
+        errorBuilder: errorBuilder ?? (context, error, stack) => Center(
+          child: Icon(Icons.broken_image_outlined,
+              color: ShopColors.faint, size: iconSize),
         ),
       );
     },

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -16,8 +17,13 @@ class CheckoutScreen extends StatefulWidget {
     required this.addresses,
     required this.couriersBySeller,
     this.appliedVoucherCodes = const <int, String>{},
+    this.appliedPlatformVoucherCode,
+    this.appliedShippingVoucherCode,
     this.loadAvailableVouchers,
+    this.loadRewards,
     this.requireCourierSelection = true,
+    this.automaticRouting = false,
+    this.onLoadQuote,
     this.defaultAddressId,
     this.initialRecipientName = '',
     this.initialContactNumber = '',
@@ -30,8 +36,14 @@ class CheckoutScreen extends StatefulWidget {
   final List<CheckoutAddressData> addresses;
   final Map<int, List<CheckoutCourierOption>> couriersBySeller;
   final Map<int, String> appliedVoucherCodes;
+  final String? appliedPlatformVoucherCode;
+  final String? appliedShippingVoucherCode;
   final Future<List<RewardVoucherData>> Function()? loadAvailableVouchers;
+  final Future<RewardsData> Function()? loadRewards;
   final bool requireCourierSelection;
+  final bool automaticRouting;
+  final Future<Map<String, dynamic>> Function(CheckoutQuoteRequest request)?
+  onLoadQuote;
   final int? defaultAddressId;
   final String initialRecipientName;
   final String initialContactNumber;
@@ -62,28 +74,53 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final Map<int, TextEditingController> _shopNoteControllers = {};
   final Map<int, int?> _selectedCouriers = {};
   final Map<int, String> _selectedVoucherCodes = <int, String>{};
+  String? _selectedPlatformVoucherCode;
+  String? _selectedShippingVoucherCode;
   final Set<int> _protectedProductIds = <int>{};
+  late final TextEditingController _rewardPointsController;
 
   int? _selectedAddressId;
+  int _availableRewardPoints = 0;
+  int _minimumPointsRedemption = 100;
+  int _pointsPerPeso = 100;
+  int _selectedRewardPoints = 0;
+  bool _loadingRewardPoints = false;
+  String? _rewardPointsError;
   bool _submitting = false;
   bool _loadingVouchers = false;
+  bool _loadingQuote = false;
+  String? _quoteError;
+  Map<String, dynamic>? _serverQuote;
+  int _quoteRequestGeneration = 0;
+  late final String _checkoutAttemptKey;
 
   @override
   void initState() {
     super.initState();
+    _checkoutAttemptKey = _newCheckoutAttemptKey();
 
     _recipientController = TextEditingController(
       text: widget.initialRecipientName,
     );
+    _rewardPointsController = TextEditingController();
     _contactController = TextEditingController(
       text: widget.initialContactNumber,
     );
 
     _selectedAddressId = _resolveInitialAddressId();
     _selectedVoucherCodes.addAll(widget.appliedVoucherCodes);
+    _selectedPlatformVoucherCode = widget.appliedPlatformVoucherCode;
+    _selectedShippingVoucherCode = widget.appliedShippingVoucherCode;
     _syncSelectedAddressFields();
     _syncShopState();
-    if (_selectedVoucherCodes.isNotEmpty &&
+    if (widget.loadRewards != null) {
+      _loadingRewardPoints = true;
+      unawaited(_loadRewardPoints());
+    }
+    if (widget.onLoadQuote != null) unawaited(_refreshQuote());
+    if ((_selectedVoucherCodes.isNotEmpty ||
+            _selectedPlatformVoucherCode?.isNotEmpty == true ||
+            _selectedShippingVoucherCode?.isNotEmpty == true) &&
         widget.loadAvailableVouchers != null) {
       unawaited(_loadVoucherMetadata());
     }
@@ -106,6 +143,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ..clear()
         ..addAll(widget.appliedVoucherCodes);
     }
+    if (oldWidget.appliedPlatformVoucherCode !=
+        widget.appliedPlatformVoucherCode) {
+      _selectedPlatformVoucherCode = widget.appliedPlatformVoucherCode;
+    }
+    if (oldWidget.appliedShippingVoucherCode !=
+        widget.appliedShippingVoucherCode) {
+      _selectedShippingVoucherCode = widget.appliedShippingVoucherCode;
+    }
 
     final bool stillExists = _checkoutAddresses.any(
       (CheckoutAddressData address) => address.id == _selectedAddressId,
@@ -124,6 +169,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void dispose() {
     _recipientController.dispose();
     _contactController.dispose();
+    _rewardPointsController.dispose();
 
     for (final TextEditingController controller
         in _shopNoteControllers.values) {
@@ -245,9 +291,212 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _recipientController.text = address.recipient;
     _contactController.text = address.phone;
     setState(() => _selectedAddressId = address.id);
+    unawaited(_refreshQuote());
+  }
+
+  void _selectCourier(int sellerId, int? courierId) {
+    setState(() {
+      for (final int id in _selectedCouriers.keys.toList()) {
+        _selectedCouriers[id] = courierId;
+      }
+      _selectedCouriers[sellerId] = courierId;
+    });
+    unawaited(_refreshQuote());
+  }
+
+  List<int> get _protectionItemIds => widget.items
+      .where(
+        (CheckoutItemData item) =>
+            _protectedProductIds.contains(item.productId),
+      )
+      .map((CheckoutItemData item) => item.id)
+      .where((int id) => id > 0)
+      .toSet()
+      .toList(growable: false);
+
+  int? get _selectedLogisticsCenterId {
+    final Set<int> selected = _selectedCouriers.values.whereType<int>().toSet();
+    return selected.length == 1 ? selected.first : null;
+  }
+
+  Future<void> _loadRewardPoints() async {
+    final Future<RewardsData> Function()? loader = widget.loadRewards;
+    if (loader == null) return;
+    try {
+      final RewardsData data = await loader();
+      if (!mounted) return;
+      setState(() {
+        _availableRewardPoints = data.pointsBalance < 0
+            ? 0
+            : data.pointsBalance;
+        _minimumPointsRedemption = data.minimumPointsRedemption > 0
+            ? data.minimumPointsRedemption
+            : 100;
+        _pointsPerPeso = data.pointsPerPeso > 0 ? data.pointsPerPeso : 100;
+        _rewardPointsError = null;
+      });
+      if (widget.onLoadQuote != null) unawaited(_refreshQuote());
+    } catch (error) {
+      if (mounted) setState(() => _rewardPointsError = error.toString());
+    } finally {
+      if (mounted) setState(() => _loadingRewardPoints = false);
+    }
+  }
+
+  int get _maximumRedeemablePoints {
+    final dynamic quotedMaximum = _serverQuote?['maximum_redeemable_points'];
+    final int step = _pointsPerPeso > 0 ? _pointsPerPeso : 100;
+    if (quotedMaximum != null) {
+      final int points = _asInt(quotedMaximum);
+      return points < 0 ? 0 : (points ~/ step) * step;
+    }
+
+    final int quotedBalance = _serverQuote?['available_reward_points'] == null
+        ? _availableRewardPoints
+        : _asInt(_serverQuote!['available_reward_points']);
+    final int balanceLimit = (quotedBalance < 0 ? 0 : quotedBalance) ~/ step * step;
+    double eligibleSubtotal = _productTotal - _otherDiscounts;
+    if (eligibleSubtotal < 0) eligibleSubtotal = 0;
+    final int subtotalLimit = eligibleSubtotal.floor() * step;
+    return balanceLimit < subtotalLimit ? balanceLimit : subtotalLimit;
+  }
+
+  double get _rewardPointsDiscount {
+    final dynamic quoted = _serverQuote?['reward_points_discount'];
+    if (quoted != null) {
+      return double.tryParse(quoted.toString()) ?? 0;
+    }
+    return _pointsPerPeso <= 0
+        ? 0
+        : _selectedRewardPoints / _pointsPerPeso;
+  }
+
+  void _toggleRewardPoints(bool enabled) {
+    if (!enabled) {
+      setState(() {
+        _selectedRewardPoints = 0;
+        _rewardPointsController.clear();
+        _rewardPointsError = null;
+      });
+      unawaited(_refreshQuote());
+      return;
+    }
+
+    final int maximum = _maximumRedeemablePoints;
+    if (maximum < _minimumPointsRedemption) {
+      _showSnack('You need at least 100 points and ₱1 of eligible items.');
+      return;
+    }
+
+    setState(() {
+      _selectedRewardPoints = _minimumPointsRedemption;
+      _rewardPointsController.text = '$_minimumPointsRedemption';
+      _rewardPointsError = null;
+    });
+    unawaited(_refreshQuote());
+  }
+
+  void _applyRewardPointsInput() {
+    final String value = _rewardPointsController.text.trim();
+    final int? points = int.tryParse(value);
+    if (value.isEmpty || points == 0) {
+      _toggleRewardPoints(false);
+      return;
+    }
+    if (points == null) {
+      setState(() => _rewardPointsError = 'Enter a whole number of points.');
+      return;
+    }
+    final int maximum = _maximumRedeemablePoints;
+    if (points < _minimumPointsRedemption || points % _pointsPerPeso != 0) {
+      setState(() {
+        _rewardPointsError =
+            'Enter at least $_minimumPointsRedemption points in $_pointsPerPeso-point increments.';
+      });
+      return;
+    }
+    if (points > _availableRewardPoints || points > maximum) {
+      setState(() {
+        _rewardPointsError = 'You can use up to $maximum points on this order.';
+      });
+      return;
+    }
+    setState(() {
+      _selectedRewardPoints = points;
+      _rewardPointsError = null;
+    });
+    unawaited(_refreshQuote());
+  }
+
+  void _useMaximumRewardPoints() {
+    final int maximum = _maximumRedeemablePoints;
+    if (maximum < _minimumPointsRedemption) return;
+    _rewardPointsController.text = '$maximum';
+    _applyRewardPointsInput();
+  }
+
+  Future<void> _refreshQuote() async {
+    final int requestGeneration = ++_quoteRequestGeneration;
+    final Future<Map<String, dynamic>> Function(CheckoutQuoteRequest request)?
+    loader = widget.onLoadQuote;
+    if (loader == null || _selectedAddressId == null) {
+      if (!mounted) return;
+      setState(() {
+        _serverQuote = null;
+        _quoteError = null;
+        _loadingQuote = false;
+      });
+      return;
+    }
+    final int? logisticsCenterId = _selectedLogisticsCenterId;
+    if (!widget.automaticRouting && logisticsCenterId == null) {
+      setState(() {
+        _serverQuote = null;
+        _quoteError = null;
+        _loadingQuote = false;
+      });
+      return;
+    }
+    setState(() {
+      // Drop the previous quote immediately so totals reflect the latest
+      // protection selection while Laravel recalculates the order.
+      _serverQuote = null;
+      _loadingQuote = true;
+      _quoteError = null;
+    });
+    try {
+      final Map<String, dynamic> quote = await loader(
+        CheckoutQuoteRequest(
+          cartItemIds: widget.items
+              .map((CheckoutItemData item) => item.id)
+              .toList(),
+          addressId: _selectedAddressId!,
+          voucherCodes: Map<int, String>.from(_selectedVoucherCodes),
+          platformVoucherCode: _selectedPlatformVoucherCode,
+          shippingVoucherCode: _selectedShippingVoucherCode,
+          protectionItemIds: _protectionItemIds,
+          logisticsCenterId: logisticsCenterId,
+          rewardPoints: _selectedRewardPoints,
+        ),
+      );
+      if (!mounted || requestGeneration != _quoteRequestGeneration) return;
+      setState(() => _serverQuote = quote);
+    } catch (error) {
+      if (!mounted || requestGeneration != _quoteRequestGeneration) return;
+      setState(() {
+        _serverQuote = null;
+        _quoteError = error.toString();
+      });
+    } finally {
+      if (mounted && requestGeneration == _quoteRequestGeneration) {
+        setState(() => _loadingQuote = false);
+      }
+    }
   }
 
   double get _productTotal {
+    final dynamic quoted = _serverQuote?['subtotal'];
+    if (quoted != null) return double.tryParse(quoted.toString()) ?? 0;
     return widget.items.fold<double>(
       0,
       (double prev, CheckoutItemData item) => prev + item.lineTotal,
@@ -255,6 +504,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   double get _shippingTotal {
+    final dynamic quoted = _serverQuote?['shipping_total'];
+    if (quoted != null) return double.tryParse(quoted.toString()) ?? 0;
     double total = 0;
 
     for (final MapEntry<int, int?> entry in _selectedCouriers.entries) {
@@ -275,6 +526,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   double get _shopVoucherDiscount {
+    final dynamic quoted = _serverQuote?['total_discount'];
+    if (quoted != null) return double.tryParse(quoted.toString()) ?? 0;
     final Future<List<RewardVoucherData>> Function()? loader =
         widget.loadAvailableVouchers;
     if (loader == null || _selectedVoucherCodes.isEmpty) return 0;
@@ -307,9 +560,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return total;
   }
 
+  List<String> get _selectedVoucherLabels => <String>[
+    ..._selectedVoucherCodes.values,
+    if (_selectedPlatformVoucherCode?.trim().isNotEmpty == true)
+      _selectedPlatformVoucherCode!.trim(),
+    if (_selectedShippingVoucherCode?.trim().isNotEmpty == true)
+      _selectedShippingVoucherCode!.trim(),
+  ];
+
   List<RewardVoucherData> _loadedVouchers = const <RewardVoucherData>[];
 
   double get _electronicProtectionTotal {
+    final dynamic quoted = _serverQuote?['protection_total'];
+    if (quoted != null) return double.tryParse(quoted.toString()) ?? 0;
     double total = 0;
     for (final CheckoutItemData item in widget.items) {
       if (_protectedProductIds.contains(item.productId) &&
@@ -320,15 +583,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return total;
   }
 
+  double get _otherDiscounts {
+    final dynamic quoted = _serverQuote?['total_discount'];
+    if (quoted == null) return _shopVoucherDiscount;
+    final double total = double.tryParse(quoted.toString()) ?? 0;
+    final double discounts = total - _rewardPointsDiscount;
+    return discounts < 0 ? 0 : discounts;
+  }
+
   double _protectionFeeFor(CheckoutItemData item) {
+    final dynamic protectionFees = _serverQuote?['protection_fees'];
+    if (protectionFees is Map) {
+      final dynamic quotedFee = protectionFees[item.id.toString()];
+      if (quotedFee != null) {
+        return double.tryParse(quotedFee.toString()) ?? 0;
+      }
+    }
+
     // Six percent mirrors the protection amount shown in the checkout design.
     return (item.lineTotal * 0.06).roundToDouble();
   }
 
-  double get _estimatedTotal =>
-      (_productTotal - _shopVoucherDiscount) +
-      _shippingTotal +
-      _electronicProtectionTotal;
+  double get _estimatedTotal => _serverQuote == null
+      ? (_productTotal - _shopVoucherDiscount) +
+            _shippingTotal +
+            _electronicProtectionTotal -
+            _rewardPointsDiscount
+      : (double.tryParse((_serverQuote!['grand_total'] ?? '').toString()) ?? 0);
 
   bool get _hasMissingCourierAvailability {
     if (!widget.requireCourierSelection) {
@@ -363,11 +644,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool get _canPlaceOrder {
     if (_submitting) return false;
     if (widget.items.isEmpty) return false;
+    if (_selectedRewardPoints > _maximumRedeemablePoints) return false;
     if (_selectedAddressId == null) return false;
     if (_recipientController.text.trim().isEmpty) return false;
     if (_contactController.text.trim().isEmpty) return false;
     if (_hasMissingCourierAvailability) return false;
     if (_hasUnselectedCouriers) return false;
+    if (widget.onLoadQuote != null && _loadingQuote) {
+      return false;
+    }
+    final dynamic availability = _serverQuote?['delivery_availability'];
+    if (availability is Map && availability['available'] == false) return false;
     return true;
   }
 
@@ -393,6 +680,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    if (widget.onLoadQuote != null && _loadingQuote) {
+      _showSnack('Wait for the server quote to finish loading.');
+      return;
+    }
+
     if (widget.onPlaceOrder == null) {
       _showSnack('Place Order is not connected to the Laravel API yet.');
       return;
@@ -415,6 +707,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     final CheckoutPlaceOrderRequest request = CheckoutPlaceOrderRequest(
+      checkoutAttemptKey: _checkoutAttemptKey,
       checkoutToken: widget.checkoutToken,
       recipientName: _recipientController.text.trim(),
       contactNumber: _contactController.text.trim(),
@@ -422,8 +715,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       couriersBySeller: couriers,
       notesBySeller: notes,
       protectedProductIds: _protectedProductIds.toList(growable: false),
+      protectionItemIds: _protectionItemIds,
+      logisticsCenterId: _selectedLogisticsCenterId,
+      priceSnapshot: _serverQuote?['price_snapshot'] is Map
+          ? Map<String, dynamic>.from(_serverQuote!['price_snapshot'] as Map)
+          : null,
       voucherCodes: Map<int, String>.from(_selectedVoucherCodes),
+      platformVoucherCode: _selectedPlatformVoucherCode,
+      shippingVoucherCode: _selectedShippingVoucherCode,
       paymentMethod: 'cod',
+      rewardPoints: _selectedRewardPoints,
     );
 
     setState(() {
@@ -454,7 +755,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final Future<List<RewardVoucherData>> Function()? loader =
         widget.loadAvailableVouchers;
     if (loader == null) {
-      _showSnack('Shop vouchers are available when the Laravel API is enabled.');
+      _showSnack(
+        'Shop vouchers are available when the Laravel API is enabled.',
+      );
       return;
     }
     if (_loadingVouchers) return;
@@ -478,8 +781,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             (double total, CheckoutItemData item) => total + item.lineTotal,
           ),
       };
-      final Map<int, String>? result =
-          await showModalBottomSheet<Map<int, String>>(
+      final VoucherCodesSelection? result =
+          await showModalBottomSheet<VoucherCodesSelection>(
             context: context,
             isScrollControlled: true,
             useSafeArea: true,
@@ -489,14 +792,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               sellerNames: sellerNames,
               sellerSubtotals: sellerSubtotals,
               initialCodes: _selectedVoucherCodes,
+              initialPlatformCode: _selectedPlatformVoucherCode,
+              initialShippingCode: _selectedShippingVoucherCode,
             ),
           );
       if (!mounted || result == null) return;
       setState(() {
         _selectedVoucherCodes
           ..clear()
-          ..addAll(result);
+          ..addAll(result.sellerCodes);
+        _selectedPlatformVoucherCode = result.platformCode;
+        _selectedShippingVoucherCode = result.shippingCode;
       });
+      unawaited(_refreshQuote());
     } catch (error) {
       if (mounted) _showSnack('Unable to load shop vouchers: $error');
     } finally {
@@ -791,6 +1099,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             _protectedProductIds.remove(items[index].productId);
                           }
                         });
+                        unawaited(_refreshQuote());
                       },
                     ),
                   if (index < items.length - 1)
@@ -820,7 +1129,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   if (options.isEmpty)
                     const _InfoBanner(
                       icon: Icons.local_shipping_outlined,
-                      text: 'No approved courier currently serves this address.',
+                      text:
+                          'No approved courier currently serves this address.',
                       danger: true,
                     )
                   else
@@ -842,9 +1152,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         );
                       }).toList(),
                       onChanged: (int? value) {
-                        setState(() {
-                          _selectedCouriers[sellerId] = value;
-                        });
+                        _selectCourier(sellerId, value);
                       },
                       validator: (int? value) {
                         if (widget.requireCourierSelection && value == null) {
@@ -879,6 +1187,134 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return sections;
   }
 
+  Widget _buildRewardPointsSelector() {
+    final int maximum = _maximumRedeemablePoints;
+    final bool selected = _selectedRewardPoints > 0;
+    final bool canRedeem =
+        !_loadingRewardPoints && maximum >= _minimumPointsRedemption;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: ShopColors.accentSoft.withValues(alpha: 0.55),
+        border: Border.all(color: ShopColors.border),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.stars_rounded, color: _primary, size: 19),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Use LIKHAE reward points',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$_pointsPerPeso points = PHP 1 off',
+                      style: const TextStyle(color: _muted, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              if (_loadingRewardPoints)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Switch.adaptive(
+                  value: selected,
+                  onChanged: canRedeem || selected
+                      ? _toggleRewardPoints
+                      : null,
+                  activeTrackColor: _primary,
+                ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'Balance: $_availableRewardPoints points',
+            style: const TextStyle(
+              color: _muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (selected) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _rewardPointsController,
+                    keyboardType: TextInputType.number,
+                    onSubmitted: (_) => _applyRewardPointsInput(),
+                    decoration: _inputDecoration(
+                      label: 'Points to redeem',
+                      hint: '$_minimumPointsRedemption',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _applyRewardPointsInput,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _primary,
+                    side: const BorderSide(color: ShopColors.borderStrong),
+                    padding: const EdgeInsets.symmetric(horizontal: 13),
+                  ),
+                  child: const Text('Apply'),
+                ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: canRedeem ? _useMaximumRewardPoints : null,
+                child: Text('Use maximum ($maximum points)'),
+              ),
+            ),
+          ] else if (!_loadingRewardPoints && !canRedeem) ...[
+            const SizedBox(height: 5),
+            Text(
+              'At least $_minimumPointsRedemption points and PHP 1 of eligible products are required.',
+              style: TextStyle(color: _muted, fontSize: 9.5),
+            ),
+          ],
+          if (_rewardPointsError != null) ...[
+            const SizedBox(height: 5),
+            Text(
+              _rewardPointsError!.startsWith('Exception:')
+                  ? 'Unable to load or validate reward points.'
+                  : _rewardPointsError!,
+              style: const TextStyle(color: _danger, fontSize: 10),
+            ),
+          ],
+          if (selected && _selectedRewardPoints > maximum) ...[
+            const SizedBox(height: 5),
+            Text(
+              'The server allows up to $maximum points for this order. Update the amount to continue.',
+              style: const TextStyle(color: _danger, fontSize: 10),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildMobileActionCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -886,18 +1322,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         title: 'Order options',
         child: Column(
           children: [
+            if (widget.loadRewards != null) ...[
+              _buildRewardPointsSelector(),
+              const Divider(height: 22, color: _border),
+            ],
             Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => _showSnack(
-                  'Platform vouchers are not available yet.',
-                ),
+                onTap: _loadingVouchers ? null : _openShopVoucherPicker,
                 borderRadius: BorderRadius.circular(12),
-                child: const _CheckoutActionRow(
+                child: _CheckoutActionRow(
                   icon: Icons.confirmation_number_outlined,
                   label: 'Platform Voucher',
-                  value: 'Unavailable',
-                  trailing: Icon(Icons.info_outline_rounded, color: _muted),
+                  value: _loadingVouchers
+                      ? 'Loading…'
+                      : _selectedPlatformVoucherCode ?? 'Select or enter code',
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _muted,
+                  ),
+                ),
+              ),
+            ),
+            const Divider(height: 22, color: _border),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _loadingVouchers ? null : _openShopVoucherPicker,
+                borderRadius: BorderRadius.circular(12),
+                child: _CheckoutActionRow(
+                  icon: Icons.local_shipping_outlined,
+                  label: 'Shipping Voucher',
+                  value: _loadingVouchers
+                      ? 'Loading…'
+                      : _selectedShippingVoucherCode ?? 'Select or enter code',
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _muted,
+                  ),
                 ),
               ),
             ),
@@ -921,10 +1383,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(
-                          Icons.chevron_right_rounded,
-                          color: _muted,
-                        ),
+                      : const Icon(Icons.chevron_right_rounded, color: _muted),
                 ),
               ),
             ),
@@ -957,11 +1416,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               label: 'Merchandise Subtotal',
               value: _peso(_productTotal),
             ),
-            if (_shopVoucherDiscount > 0) ...[
+            if (_otherDiscounts > 0) ...[
               const SizedBox(height: 12),
               _CheckoutAmountRow(
-                label: 'Shop Voucher Discount',
-                value: '-${_peso(_shopVoucherDiscount)}',
+                label: _serverQuote == null
+                    ? 'Shop Voucher Discount'
+                    : 'Voucher and promotion discounts',
+                value: '-${_peso(_otherDiscounts)}',
+              ),
+            ],
+            if (_selectedRewardPoints > 0) ...[
+              const SizedBox(height: 12),
+              _CheckoutAmountRow(
+                label: 'Reward points ($_selectedRewardPoints)',
+                value: '-${_peso(_rewardPointsDiscount)}',
               ),
             ],
             const SizedBox(height: 12),
@@ -1276,9 +1744,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 onChanged: options.isEmpty
                     ? null
                     : (int? value) {
-                        setState(() {
-                          _selectedCouriers[sellerId] = value;
-                        });
+                        _selectCourier(sellerId, value);
                       },
                 validator: (int? value) {
                   if (options.isEmpty) {
@@ -1400,6 +1866,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       );
                     }
                   });
+                  unawaited(_refreshQuote());
                 },
               ),
             if (index < widget.items.length - 1)
@@ -1409,7 +1876,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
           ],
           const SizedBox(height: 16),
-          if (_selectedVoucherCodes.isNotEmpty) ...[
+          if (widget.loadRewards != null) ...[
+            _buildRewardPointsSelector(),
+            const SizedBox(height: 14),
+          ],
+          if (_selectedVoucherLabels.isNotEmpty) ...[
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
@@ -1418,7 +1889,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Voucher applied: ${_selectedVoucherCodes.values.join(', ')}',
+                'Voucher applied: ${_selectedVoucherLabels.join(', ')}',
                 style: const TextStyle(
                   color: _primary,
                   fontWeight: FontWeight.w700,
@@ -1429,10 +1900,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
           const Divider(height: 1, color: _border),
           const SizedBox(height: 14),
-          if (_shopVoucherDiscount > 0) ...[
+          if (_otherDiscounts > 0) ...[
             _CheckoutAmountRow(
-              label: 'Shop voucher discount',
-              value: '-${_peso(_shopVoucherDiscount)}',
+              label: _serverQuote == null
+                  ? 'Shop voucher discount'
+                  : 'Voucher and promotion discounts',
+              value: '-${_peso(_otherDiscounts)}',
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (_selectedRewardPoints > 0) ...[
+            _CheckoutAmountRow(
+              label: 'Reward points ($_selectedRewardPoints)',
+              value: '-${_peso(_rewardPointsDiscount)}',
             ),
             const SizedBox(height: 10),
           ],
@@ -1456,9 +1936,39 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Courier fees are recalculated securely when you place the order.',
+            'Delivery coverage and the final total are confirmed by LIKHAE before the order is placed.',
             style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
           ),
+          if (_loadingQuote) ...[
+            const SizedBox(height: 10),
+            const LinearProgressIndicator(minHeight: 2),
+          ],
+          if (_quoteError != null) ...[
+            const SizedBox(height: 10),
+            _InfoBanner(
+              icon: Icons.warning_amber_rounded,
+              text: 'Unable to confirm the server quote: $_quoteError',
+              danger: true,
+            ),
+            TextButton.icon(
+              onPressed: _loadingQuote ? null : _refreshQuote,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh total'),
+            ),
+          ],
+          if (_serverQuote?['delivery_availability'] is Map &&
+              (_serverQuote!['delivery_availability'] as Map)['available'] ==
+                  false) ...[
+            const SizedBox(height: 10),
+            _InfoBanner(
+              icon: Icons.location_off_outlined,
+              text:
+                  ((_serverQuote!['delivery_availability'] as Map)['message'] ??
+                          'Delivery is unavailable for this address.')
+                      .toString(),
+              danger: true,
+            ),
+          ],
           if (showButton) ...[
             const SizedBox(height: 18),
             SizedBox(
@@ -1850,7 +2360,7 @@ class _CheckoutActionRow extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-          color: ShopColors.accentSoft,
+            color: ShopColors.accentSoft,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 18, color: ShopColors.accent),
@@ -1877,11 +2387,7 @@ class _CheckoutActionRow extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         trailing ??
-            const Icon(
-              Icons.chevron_right,
-              color: ShopColors.faint,
-              size: 20,
-            ),
+            const Icon(Icons.chevron_right, color: ShopColors.faint, size: 20),
       ],
     );
   }
@@ -2243,10 +2749,7 @@ class _ProductImage extends StatelessWidget {
       errorBuilder:
           (BuildContext context, Object error, StackTrace? stackTrace) {
             return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                color: ShopColors.faint,
-              ),
+              child: Icon(Icons.broken_image_outlined, color: ShopColors.faint),
             );
           },
     );
@@ -2409,6 +2912,7 @@ class CheckoutCourierOption {
 
 class CheckoutPlaceOrderRequest {
   const CheckoutPlaceOrderRequest({
+    required this.checkoutAttemptKey,
     required this.checkoutToken,
     required this.recipientName,
     required this.contactNumber,
@@ -2416,26 +2920,41 @@ class CheckoutPlaceOrderRequest {
     required this.couriersBySeller,
     required this.notesBySeller,
     this.voucherCodes = const <int, String>{},
+    this.platformVoucherCode,
+    this.shippingVoucherCode,
     this.protectedProductIds = const <int>[],
+    this.protectionItemIds = const <int>[],
+    this.logisticsCenterId,
+    this.priceSnapshot,
     this.paymentMethod = 'cod',
+    this.rewardPoints = 0,
   });
 
   final String checkoutToken;
+  final String checkoutAttemptKey;
   final String recipientName;
   final String contactNumber;
   final int addressId;
   final Map<int, int> couriersBySeller;
   final Map<int, String> notesBySeller;
   final Map<int, String> voucherCodes;
+  final String? platformVoucherCode;
+  final String? shippingVoucherCode;
   final List<int> protectedProductIds;
+  final List<int> protectionItemIds;
+  final int? logisticsCenterId;
+  final Map<String, dynamic>? priceSnapshot;
   final String paymentMethod;
+  final int rewardPoints;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'checkout_token': checkoutToken,
+      'checkout_attempt_key': checkoutAttemptKey,
       'recipient_name': recipientName,
       'contact_number': contactNumber,
       'address_id': addressId,
+      if (logisticsCenterId != null) 'logistics_center_id': logisticsCenterId,
       'courier': couriersBySeller.map(
         (int sellerId, int courierId) =>
             MapEntry(sellerId.toString(), courierId),
@@ -2443,15 +2962,60 @@ class CheckoutPlaceOrderRequest {
       'seller_notes': notesBySeller.map(
         (int sellerId, String note) => MapEntry(sellerId.toString(), note),
       ),
-      if (voucherCodes.isNotEmpty)
-        'voucher_codes': voucherCodes.map(
-          (int sellerId, String code) => MapEntry(sellerId.toString(), code),
-        ),
+      if (voucherCodes.isNotEmpty ||
+          platformVoucherCode?.trim().isNotEmpty == true ||
+          shippingVoucherCode?.trim().isNotEmpty == true)
+        'voucher_codes': <String, dynamic>{
+          'seller': voucherCodes.map(
+            (int sellerId, String code) => MapEntry(sellerId.toString(), code),
+          ),
+          'platform': platformVoucherCode?.trim() ?? '',
+          'shipping': shippingVoucherCode?.trim() ?? '',
+        },
       if (protectedProductIds.isNotEmpty)
         'protected_product_ids': protectedProductIds,
+      if (protectionItemIds.isNotEmpty)
+        'protection_item_ids': protectionItemIds,
+      if (priceSnapshot != null) 'expected_price_snapshot': priceSnapshot,
       'payment_method': paymentMethod,
+      'reward_points': rewardPoints,
     };
   }
+}
+
+class CheckoutQuoteRequest {
+  const CheckoutQuoteRequest({
+    required this.cartItemIds,
+    required this.addressId,
+    required this.voucherCodes,
+    required this.protectionItemIds,
+    this.platformVoucherCode,
+    this.shippingVoucherCode,
+    this.logisticsCenterId,
+    this.rewardPoints = 0,
+  });
+
+  final List<int> cartItemIds;
+  final int addressId;
+  final Map<int, String> voucherCodes;
+  final String? platformVoucherCode;
+  final String? shippingVoucherCode;
+  final List<int> protectionItemIds;
+  final int? logisticsCenterId;
+  final int rewardPoints;
+}
+
+String _newCheckoutAttemptKey() {
+  final Random random = Random.secure();
+  final List<int> bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final String hex = bytes
+      .map((int value) => value.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+      '${hex.substring(20)}';
 }
 
 int _asInt(dynamic value, {int fallback = 0}) {

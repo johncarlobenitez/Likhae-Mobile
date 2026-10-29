@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/widgets/shop_ui.dart';
@@ -38,10 +39,6 @@ class _BuyerAiMessage {
 class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
   static const double _launcherSize = 57;
   static const double _edgeMargin = 12;
-  static final RegExp _orderReferencePattern = RegExp(
-    r'\bLK-[A-Z0-9]+(?:-[A-Z0-9]+)*\b',
-    caseSensitive: false,
-  );
 
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _messagesController = ScrollController();
@@ -57,7 +54,7 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
     _messages.add(
       const _BuyerAiMessage(
         text:
-            'Hi! I’m your LIKHAE Buyer AI Assistant. I can help with products, cart, orders, delivery updates, vouchers, and account features.',
+            "Hi! I'm your LIKHAE Buyer AI Assistant. I can help with products, cart, orders, delivery updates, vouchers, and account features.",
         fromBuyer: false,
         options: <String>[
           'How do I track my order?',
@@ -88,11 +85,10 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
     _scrollToBottom();
 
     try {
-      final String? orderReference =
-          _orderReferencePattern.firstMatch(text)?.group(0);
-      final BuyerAiResponse response = orderReference == null
-          ? await BuyerAiService.chat(message: text, page: widget.page)
-          : await BuyerAiService.lookupOrder(orderReference);
+      final BuyerAiResponse response = await BuyerAiService.chat(
+        message: text,
+        page: widget.page,
+      );
       if (!mounted) return;
       if (BuyerSystemSettingsController.instance.aiResponseSound) {
         unawaited(
@@ -124,6 +120,8 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
   }
 
   String _friendlyError(Object error) {
+    if (error is DioException) return ApiClient.formatError(error);
+
     if (error is Exception) {
       final String message = error.toString().replaceFirst('Exception: ', '');
       if (message.isNotEmpty) return message;
@@ -376,7 +374,7 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
                     maxLength: 1000,
                     textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
-                      hintText: 'Ask LIKHAE AI…',
+                      hintText: 'Ask LIKHAE AI...',
                       counterText: '',
                       filled: true,
                       fillColor: Theme.of(context)
