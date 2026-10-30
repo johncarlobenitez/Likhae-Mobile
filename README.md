@@ -12,17 +12,15 @@ Run with the API enabled:
 flutter run --dart-define=API_ENABLED=true
 ```
 
-Run with Mapbox and Laravel Reverb enabled in PowerShell. Set the environment
-variables in the same PowerShell window first, then run this command on one
-line:
+Run with Laravel Reverb enabled in PowerShell. Set the Reverb app key in the
+same PowerShell window first, then run the command:
 
 ```powershell
-$env:MAPBOX_ACCESS_TOKEN = 'your-mapbox-token'
 $env:REVERB_APP_KEY = 'your-reverb-key'
 ```
 
 ```powershell
-flutter run --dart-define="API_ENABLED=true" --dart-define="MAPBOX_ACCESS_TOKEN=$($env:MAPBOX_ACCESS_TOKEN)" --dart-define="REVERB_APP_KEY=$($env:REVERB_APP_KEY)" --dart-define="REVERB_HOST=likhae.online" --dart-define="REVERB_PORT=443" --dart-define="REVERB_SCHEME=https"
+flutter run --dart-define="API_ENABLED=true" --dart-define="REVERB_APP_KEY=$($env:REVERB_APP_KEY)" --dart-define="REVERB_HOST=likhae.online" --dart-define="REVERB_PORT=443" --dart-define="REVERB_SCHEME=https"
 ```
 
 Override the API and web origins for a local or staging backend:

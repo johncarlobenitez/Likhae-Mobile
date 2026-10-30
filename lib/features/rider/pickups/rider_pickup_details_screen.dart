@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../scanner/rider_parcel_scan_result.dart';
 
 import '../rider_stage_navigation_screen.dart';
 import 'rider_pickups_screen.dart';
@@ -71,6 +72,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
   final TextEditingController _trackingController = TextEditingController();
 
   bool _verifying = false;
+  String _scanMethod = 'MANUAL';
 
   bool _submitting = false;
 
@@ -112,20 +114,22 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
   }
 
   Future<void> _openScanner() async {
-    final String? scannedCode = await Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(
-        fullscreenDialog: true,
-        builder: (BuildContext context) {
-          return const RiderParcelScannerScreen();
-        },
-      ),
-    );
+    final RiderParcelScanResult? scan = await Navigator.of(context)
+        .push<RiderParcelScanResult>(
+          MaterialPageRoute<RiderParcelScanResult>(
+            fullscreenDialog: true,
+            builder: (BuildContext context) {
+              return const RiderParcelScannerScreen(returnScanDetails: true);
+            },
+          ),
+        );
 
-    if (!mounted || scannedCode == null || scannedCode.trim().isEmpty) {
+    if (!mounted || scan == null || scan.code.trim().isEmpty) {
       return;
     }
 
-    _trackingController.text = scannedCode.trim();
+    _trackingController.text = scan.code.trim();
+    _scanMethod = scan.method;
 
     setState(() {
       _verified = false;
@@ -137,7 +141,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
   }
 
   Future<void> _verifyParcel() async {
-    if (_verifying) {
+    if (_verifying || _submitting || !_pickup.isInProgress) {
       return;
     }
 
@@ -241,7 +245,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
     final double? longitude = toLogisticsCenter
         ? _pickup.logisticsCenterLongitude
         : _pickup.sellerLongitude;
-    final bool validCoordinates = latitude != null &&
+    final bool validCoordinates =
+        latitude != null &&
         longitude != null &&
         latitude.isFinite &&
         longitude.isFinite &&
@@ -300,7 +305,14 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
     try {
       await callback(
-        RiderPickupTransitionRequest(pickup: _pickup, status: status),
+        RiderPickupTransitionRequest(
+          pickup: _pickup,
+          status: status,
+          scannedCode: status == 'picked_up'
+              ? _trackingController.text.trim()
+              : null,
+          scanMethod: _scanMethod,
+        ),
       );
 
       if (!mounted) {
@@ -381,13 +393,16 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
             const SizedBox(height: 14),
 
-            _buildPickupActions(),
-
-            if (_pickup.isInProgress) ...<Widget>[
-              const SizedBox(height: 14),
-
+            if (_pickup.isPickupAssigned && !_pickup.isPickedUp) ...<Widget>[
+              if (!_pickup.isInProgress)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 10),
+                  child: Text('Start seller pickup to enable scanning.'),
+                ),
               _buildScannerSection(),
+              const SizedBox(height: 14),
             ],
+            _buildPickupActions(),
           ],
         ),
       ),
@@ -466,7 +481,10 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           const SizedBox(height: 12),
 
-          _PickupInfoRow(label: 'Seller Pickup Address', value: _pickup.address),
+          _PickupInfoRow(
+            label: 'Seller Pickup Address',
+            value: _pickup.address,
+          ),
 
           const SizedBox(height: 12),
 
@@ -518,10 +536,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
               label: 'Start Seller Pickup',
               icon: Icons.play_arrow_rounded,
               loading: _submitting,
-              onPressed: () => _changePickupStatus(
-                'in_progress',
-                'Pickup in progress',
-              ),
+              onPressed: () =>
+                  _changePickupStatus('in_progress', 'Pickup in progress'),
             ),
             const SizedBox(height: 10),
           ],
@@ -590,7 +606,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           if (_pickup.isInProgress && !_verified)
             const Text(
-              'Scan and verify the seller\'s waybill below before confirming collection.',
+              'Scan and verify the seller\'s waybill before confirming collection.',
               style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
             ),
 
@@ -724,7 +740,9 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
           SizedBox(
             height: 50,
             child: ElevatedButton.icon(
-              onPressed: _verifying ? null : _openScanner,
+              onPressed: _verifying || _submitting || !_pickup.isInProgress
+                  ? null
+                  : _openScanner,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
                 backgroundColor: _maroon,
@@ -768,7 +786,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           TextField(
             controller: _trackingController,
-            enabled: !_verifying,
+            enabled: !_verifying && !_submitting && _pickup.isInProgress,
             autocorrect: false,
             textCapitalization: TextCapitalization.characters,
             textInputAction: TextInputAction.done,
@@ -792,6 +810,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
               ),
             ),
             onChanged: (String value) {
+              _scanMethod = 'MANUAL';
               if (_verified || _verificationError != null) {
                 setState(() {
                   _verified = false;
@@ -807,7 +826,9 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
           SizedBox(
             height: 48,
             child: OutlinedButton.icon(
-              onPressed: _verifying ? null : _verifyParcel,
+              onPressed: _verifying || _submitting || !_pickup.isInProgress
+                  ? null
+                  : _verifyParcel,
               style: OutlinedButton.styleFrom(
                 foregroundColor: _maroon,
                 side: const BorderSide(color: _border),
@@ -941,7 +962,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 }
 
 class RiderParcelScannerScreen extends StatefulWidget {
-  const RiderParcelScannerScreen({super.key});
+  final bool returnScanDetails;
+  const RiderParcelScannerScreen({super.key, this.returnScanDetails = false});
 
   @override
   State<RiderParcelScannerScreen> createState() {
@@ -976,7 +998,16 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
 
       _handled = true;
 
-      Navigator.of(context).pop(value);
+      Navigator.of(context).pop(
+        widget.returnScanDetails
+            ? RiderParcelScanResult(
+                code: value,
+                method: barcode.format == BarcodeFormat.qrCode
+                    ? 'QR'
+                    : 'BARCODE',
+              )
+            : value,
+      );
 
       return;
     }
@@ -991,7 +1022,7 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Scan Parcel At Seller',
+          'Scan parcel',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
@@ -1042,7 +1073,7 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
                   SizedBox(height: 8),
 
                   Text(
-                    'Point the camera at the seller\'s waybill QR code or barcode.',
+                    'Point the camera at the parcel waybill QR code or barcode.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,

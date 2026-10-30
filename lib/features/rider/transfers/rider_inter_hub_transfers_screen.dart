@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../pickups/rider_pickup_details_screen.dart'
+    show RiderParcelScannerScreen;
+import '../scanner/rider_parcel_scan_result.dart';
 
 class RiderInterHubTransferItem {
   final int id;
@@ -50,8 +53,8 @@ class RiderInterHubTransferData {
 
   factory RiderInterHubTransferData.fromApi(Map<String, dynamic> json) {
     final String status = _firstValue(json, const <String>[
-      'status_label',
       'status',
+      'status_label',
     ]);
     final bool accepted = (json['driver_accepted_at'] ?? '')
         .toString()
@@ -186,7 +189,17 @@ typedef RiderTransferAccept = Future<void> Function(int manifestId);
 typedef RiderTransferDecline =
     Future<void> Function(int manifestId, String reason);
 typedef RiderTransferStart =
-    Future<void> Function(int manifestId, Map<int, String> scannedCodes);
+    Future<void> Function(
+      int manifestId,
+      Map<int, String> scannedCodes, {
+      String scanMethod,
+    });
+
+class _TransferParcelScans {
+  final Map<int, String> codes;
+  final String method;
+  const _TransferParcelScans(this.codes, this.method);
+}
 
 class RiderInterHubTransfersScreen extends StatefulWidget {
   final List<RiderInterHubTransferData> transfers;
@@ -195,6 +208,9 @@ class RiderInterHubTransfersScreen extends StatefulWidget {
   final RiderTransferAccept? onAccept;
   final RiderTransferDecline? onDecline;
   final RiderTransferStart? onStart;
+  final Future<RiderInterHubTransferData> Function(int manifestId)?
+  onLoadTransfer;
+  final Future<RiderParcelScanResult?> Function()? onScanParcel;
 
   const RiderInterHubTransfersScreen({
     super.key,
@@ -204,6 +220,8 @@ class RiderInterHubTransfersScreen extends StatefulWidget {
     this.onAccept,
     this.onDecline,
     this.onStart,
+    this.onLoadTransfer,
+    this.onScanParcel,
   });
 
   @override
@@ -401,7 +419,8 @@ class _RiderInterHubTransfersScreenState
               ),
             ],
           ),
-          if (transfer.driverAccepted) ...<Widget>[
+          if (transfer.driverAccepted &&
+              transfer.status.toUpperCase() == 'SEALED') ...<Widget>[
             const SizedBox(height: 10),
             const _TransferNote(
               icon: Icons.check_circle_outline_rounded,
@@ -483,14 +502,37 @@ class _RiderInterHubTransfersScreenState
 
   Future<void> _start(RiderInterHubTransferData transfer) async {
     final RiderTransferStart? action = widget.onStart;
-    if (action == null || transfer.id <= 0) return;
-    final Map<int, String>? scannedCodes = await _askForParcelScans(transfer);
-    if (scannedCodes == null || !mounted) return;
-    await _perform(
-      transfer,
-      () => action(transfer.id, scannedCodes),
-      'Transport started. The destination hub can now receive the parcels.',
-    );
+    if (action == null ||
+        transfer.id <= 0 ||
+        _busyManifestIds.contains(transfer.id)) {
+      return;
+    }
+    setState(() => _busyManifestIds.add(transfer.id));
+    try {
+      final latest = await widget.onLoadTransfer?.call(transfer.id) ?? transfer;
+      if (!mounted) return;
+      if (!latest.canStart) {
+        await widget.onRefresh?.call();
+        if (mounted) {
+          _showMessage(
+            'This manifest is not ready to start. Refresh for its latest status.',
+            isError: true,
+          );
+        }
+        return;
+      }
+      final scans = await _askForParcelScans(latest);
+      if (scans == null || !mounted) return;
+      await _perform(
+        latest,
+        () => action(latest.id, scans.codes, scanMethod: scans.method),
+        'Transport started. The destination hub can now receive the parcels.',
+      );
+    } catch (error) {
+      if (mounted) _showMessage(error.toString(), isError: true);
+    } finally {
+      if (mounted) setState(() => _busyManifestIds.remove(transfer.id));
+    }
   }
 
   Future<void> _perform(
@@ -511,7 +553,7 @@ class _RiderInterHubTransfersScreenState
   }
 
   Future<String?> _askDeclineReason() {
-    final TextEditingController controller = TextEditingController();
+    String enteredReason = '';
     String? formError;
     return showDialog<String>(
       context: context,
@@ -528,7 +570,7 @@ class _RiderInterHubTransfersScreenState
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: controller,
+                  onChanged: (value) => enteredReason = value,
                   minLines: 2,
                   maxLines: 4,
                   maxLength: 1000,
@@ -548,11 +590,11 @@ class _RiderInterHubTransfersScreenState
               ),
               FilledButton(
                 onPressed: () {
-                  if (controller.text.trim().isEmpty) {
+                  if (enteredReason.trim().isEmpty) {
                     setDialogState(() => formError = 'Enter a decline reason.');
                     return;
                   }
-                  Navigator.pop(dialogContext, controller.text.trim());
+                  Navigator.pop(dialogContext, enteredReason.trim());
                 },
                 child: const Text('Decline manifest'),
               ),
@@ -560,10 +602,10 @@ class _RiderInterHubTransfersScreenState
           );
         },
       ),
-    ).whenComplete(controller.dispose);
+    );
   }
 
-  Future<Map<int, String>?> _askForParcelScans(
+  Future<_TransferParcelScans?> _askForParcelScans(
     RiderInterHubTransferData transfer,
   ) async {
     final List<RiderInterHubTransferItem> items = transfer.items;
@@ -582,80 +624,138 @@ class _RiderInterHubTransfersScreenState
             item.id: TextEditingController(),
         };
     String? formError;
-    try {
-      return await showDialog<Map<int, String>>(
-        context: context,
-        builder: (BuildContext dialogContext) => StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            return AlertDialog(
-              title: const Text('Scan manifest parcels'),
-              content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Text(
-                        'Enter or scan the barcode from each parcel. Every code must match the sealed manifest.',
-                      ),
-                      const SizedBox(height: 12),
-                      for (
-                        int index = 0;
-                        index < items.length;
-                        index++
-                      ) ...<Widget>[
-                        TextField(
-                          controller: controllers[items[index].id],
-                          textCapitalization: TextCapitalization.characters,
-                          autocorrect: false,
-                          decoration: InputDecoration(
-                            labelText: _parcelLabel(index + 1),
-                            border: const OutlineInputBorder(),
+    final methods = <int, String>{};
+    bool scanning = false;
+    final route = DialogRoute<_TransferParcelScans>(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          return AlertDialog(
+            title: const Text('Scan manifest parcels'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'Enter or scan the barcode from each parcel. Every code must match the sealed manifest.',
+                    ),
+                    const SizedBox(height: 12),
+                    for (
+                      int index = 0;
+                      index < items.length;
+                      index++
+                    ) ...<Widget>[
+                      TextField(
+                        controller: controllers[items[index].id],
+                        onChanged: (_) => methods[items[index].id] = 'MANUAL',
+                        textCapitalization: TextCapitalization.characters,
+                        autocorrect: false,
+                        decoration: InputDecoration(
+                          labelText: _parcelLabel(index + 1),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            tooltip: 'Scan parcel ${index + 1}',
+                            icon: const Icon(Icons.qr_code_scanner_rounded),
+                            onPressed: scanning
+                                ? null
+                                : () async {
+                                    setDialogState(() => scanning = true);
+                                    try {
+                                      final scan = widget.onScanParcel != null
+                                          ? await widget.onScanParcel!()
+                                          : await Navigator.of(
+                                              dialogContext,
+                                            ).push<RiderParcelScanResult>(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const RiderParcelScannerScreen(
+                                                      returnScanDetails: true,
+                                                    ),
+                                              ),
+                                            );
+                                      if (!dialogContext.mounted ||
+                                          scan == null) {
+                                        return;
+                                      }
+                                      controllers[items[index].id]!.text = scan
+                                          .code
+                                          .trim();
+                                      methods[items[index].id] = scan.method;
+                                    } catch (error) {
+                                      if (dialogContext.mounted) {
+                                        setDialogState(
+                                          () => formError =
+                                              'Could not scan parcel: $error',
+                                        );
+                                      }
+                                    } finally {
+                                      if (dialogContext.mounted) {
+                                        setDialogState(() => scanning = false);
+                                      }
+                                    }
+                                  },
                           ),
                         ),
-                        const SizedBox(height: 10),
-                      ],
-                      if (formError != null)
-                        Text(
-                          formError!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
+                      ),
+                      const SizedBox(height: 10),
                     ],
-                  ),
+                    if (formError != null)
+                      Text(
+                        formError!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                  ],
                 ),
               ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    final bool hasMissingCode = controllers.values.any(
-                      (TextEditingController controller) =>
-                          controller.text.trim().isEmpty,
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final bool hasMissingCode = controllers.values.any(
+                    (TextEditingController controller) =>
+                        controller.text.trim().isEmpty,
+                  );
+                  if (hasMissingCode) {
+                    setDialogState(
+                      () => formError = 'Scan every parcel before starting.',
                     );
-                    if (hasMissingCode) {
-                      setDialogState(
-                        () => formError = 'Scan every parcel before starting.',
-                      );
-                      return;
-                    }
-                    Navigator.pop(dialogContext, <int, String>{
-                      for (final MapEntry<int, TextEditingController> entry
-                          in controllers.entries)
-                        entry.key: entry.value.text.trim(),
-                    });
-                  },
-                  child: const Text('Start transport'),
-                ),
-              ],
-            );
-          },
-        ),
-      );
+                    return;
+                  }
+                  final codes = <int, String>{
+                    for (final MapEntry<int, TextEditingController> entry
+                        in controllers.entries)
+                      entry.key: entry.value.text.trim(),
+                  };
+                  final usedMethods = codes.keys
+                      .map((id) => methods[id] ?? 'MANUAL')
+                      .toSet();
+                  // Laravel records one method for the whole manifest.
+                  final method = usedMethods.length == 1
+                      ? usedMethods.single
+                      : 'MANUAL';
+                  Navigator.pop(
+                    dialogContext,
+                    _TransferParcelScans(codes, method),
+                  );
+                },
+                child: const Text('Start transport'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    try {
+      return await Navigator.of(context).push(route);
     } finally {
+      await route.completed;
       for (final TextEditingController controller in controllers.values) {
         controller.dispose();
       }

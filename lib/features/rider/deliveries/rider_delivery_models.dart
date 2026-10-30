@@ -338,6 +338,9 @@ class RiderDeliveryTransitionRequest {
   final String? receiverName;
 
   final String? proofPath;
+  final String? collectedAmount;
+  final String? scannedCode;
+  final String scanMethod;
 
   const RiderDeliveryTransitionRequest({
     required this.delivery,
@@ -345,6 +348,9 @@ class RiderDeliveryTransitionRequest {
     this.note,
     this.receiverName,
     this.proofPath,
+    this.collectedAmount,
+    this.scannedCode,
+    this.scanMethod = 'MANUAL',
   });
 
   Map<String, dynamic> toFields() {
@@ -362,34 +368,38 @@ class RiderDeliveryTransitionRequest {
   }
 
   bool get requiresFailureNote {
-    return status.trim().toLowerCase() == 'failed';
+    return const {
+      'failed',
+      'delivery_failed',
+      'rejected',
+    }.contains(normalizedStatus);
   }
+
+  String get normalizedStatus =>
+      status.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
 
   bool get requiresDeliveryProof {
     return status.trim().toLowerCase() == 'delivered';
   }
 
   bool get isValid {
-    final String normalized = status
-        .trim()
-        .toLowerCase()
-        .replaceAll('-', '_')
-        .replaceAll(' ', '_');
+    final String normalized = normalizedStatus;
 
     const Set<String> allowed = <String>{
       'accepted',
-      'picked_up',
       'in_transit',
       'out_for_delivery',
       'delivered',
       'failed',
+      'delivery_failed',
+      'rejected',
     };
 
     if (!allowed.contains(normalized)) {
       return false;
     }
 
-    if (normalized == 'failed') {
+    if (requiresFailureNote) {
       return note != null && note!.trim().isNotEmpty;
     }
 
@@ -397,10 +407,21 @@ class RiderDeliveryTransitionRequest {
       return receiverName != null &&
           receiverName!.trim().isNotEmpty &&
           proofPath != null &&
-          proofPath!.trim().isNotEmpty;
+          proofPath!.trim().isNotEmpty &&
+          scannedCode != null &&
+          scannedCode!.trim().isNotEmpty &&
+          scannedCode!.trim() == delivery.trackingCode.trim() &&
+          const {'QR', 'BARCODE', 'MANUAL'}.contains(scanMethod) &&
+          isValidCollectedAmount(collectedAmount);
     }
 
     return true;
+  }
+
+  static bool isValidCollectedAmount(String? value) {
+    final text = value?.trim() ?? '';
+    return RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) &&
+        (double.tryParse(text)?.isFinite ?? false);
   }
 }
 

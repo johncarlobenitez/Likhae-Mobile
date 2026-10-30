@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../rider_product_image.dart';
+import '../rider_stage_navigation_screen.dart';
+import '../scanner/rider_parcel_scan_result.dart';
 
 import 'rider_pickup_details_screen.dart' show RiderParcelScannerScreen;
 import 'rider_pickups_screen.dart';
@@ -48,16 +51,86 @@ class _RiderPickupBatchDetailsScreenState
   late RiderPickupData _batch;
   bool _busy = false;
   bool _changed = false;
+  bool _needsRefresh = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _batch = widget.batch;
+    if (widget.onReload != null) unawaited(_refresh());
+  }
+
+  Future<void> _loadLatest() async {
+    final latest = await widget.onReload?.call(_batch.id);
+    if (latest == null) {
+      throw StateError(
+        'Could not load the current pickup. Refresh to try again.',
+      );
+    }
+    if (!mounted) return;
+    _batch = latest;
+    _needsRefresh = false;
+  }
+
+  Future<void> _refresh() async {
+    if (_busy || widget.onReload == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _loadLatest();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _needsRefresh = true;
+          _error = error.toString();
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openNavigation({required bool toLogisticsCenter}) async {
+    final double? latitude = toLogisticsCenter
+        ? _batch.logisticsCenterLatitude
+        : _batch.sellerLatitude;
+    final double? longitude = toLogisticsCenter
+        ? _batch.logisticsCenterLongitude
+        : _batch.sellerLongitude;
+    final bool hasCoordinates =
+        latitude != null &&
+        longitude != null &&
+        latitude.isFinite &&
+        longitude.isFinite &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180 &&
+        (latitude != 0 || longitude != 0);
+    if (!hasCoordinates) {
+      _showMessage(
+        toLogisticsCenter
+            ? 'The logistics center map pin is unavailable.'
+            : 'The seller pickup map pin is unavailable.',
+      );
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => RiderStageNavigationScreen(
+          pickup: _batch,
+          toLogisticsCenter: toLogisticsCenter,
+        ),
+      ),
+    );
   }
 
   Future<void> _run(Future<void> Function()? action, String success) async {
-    if (_busy) return;
+    if (_busy || _needsRefresh) return;
     if (action == null) {
       _showMessage('Pickup batch API is not connected.');
       return;
@@ -71,14 +144,12 @@ class _RiderPickupBatchDetailsScreenState
       _changed = true;
       String message = success;
       try {
-        final RiderPickupData? latest = await widget.onReload?.call(_batch.id);
-        if (latest != null) {
-          _batch = latest;
-        } else {
-          message = '$success The server did not return an updated batch status.';
-        }
+        await _loadLatest();
       } catch (error) {
         message = '$success Refresh failed: $error';
+        _needsRefresh = true;
+        _error =
+            'Your action was saved. Refresh the pickup before continuing. $error';
       }
       if (mounted) _showMessage(message);
     } catch (error) {
@@ -89,17 +160,19 @@ class _RiderPickupBatchDetailsScreenState
   }
 
   Future<void> _scanWithCamera() async {
-    final String? code = await Navigator.of(context).push<String>(
-      MaterialPageRoute<String>(
-        fullscreenDialog: true,
-        builder: (BuildContext context) => const RiderParcelScannerScreen(),
-      ),
-    );
-    if (code == null || code.trim().isEmpty || !mounted) return;
+    final RiderParcelScanResult? scan = await Navigator.of(context)
+        .push<RiderParcelScanResult>(
+          MaterialPageRoute<RiderParcelScanResult>(
+            fullscreenDialog: true,
+            builder: (BuildContext context) =>
+                const RiderParcelScannerScreen(returnScanDetails: true),
+          ),
+        );
+    if (scan == null || scan.code.trim().isEmpty || !mounted) return;
     await _run(
       widget.onScan == null
           ? null
-          : () => widget.onScan!(_batch.id, code.trim(), 'QR'),
+          : () => widget.onScan!(_batch.id, scan.code.trim(), scan.method),
       'Parcel scanned and pickup recorded.',
     );
   }
@@ -125,10 +198,7 @@ class _RiderPickupBatchDetailsScreenState
             onSubmitted: (String value) => closeDialog(value.trim()),
           ),
           actions: <Widget>[
-            TextButton(
-              onPressed: closeDialog,
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: closeDialog, child: const Text('Cancel')),
             FilledButton(
               onPressed: () => closeDialog(enteredCode.trim()),
               child: const Text('Verify'),
@@ -147,14 +217,14 @@ class _RiderPickupBatchDetailsScreenState
   }
 
   Future<void> _markNotCollected(RiderPickupBatchItemData parcel) async {
-    final TextEditingController controller = TextEditingController();
+    String enteredReason = '';
     final String? reason = await showDialog<String>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
         backgroundColor: _surface,
         title: const Text('Mark parcel not collected'),
         content: TextField(
-          controller: controller,
+          onChanged: (value) => enteredReason = value,
           autofocus: true,
           maxLines: 3,
           decoration: const InputDecoration(
@@ -168,7 +238,7 @@ class _RiderPickupBatchDetailsScreenState
           ),
           FilledButton(
             onPressed: () {
-              final String value = controller.text.trim();
+              final String value = enteredReason.trim();
               if (value.isNotEmpty) Navigator.pop(context, value);
             },
             child: const Text('Submit reason'),
@@ -176,7 +246,6 @@ class _RiderPickupBatchDetailsScreenState
         ],
       ),
     );
-    controller.dispose();
     if (reason == null || !mounted) return;
     await _run(
       widget.onNotCollected == null
@@ -203,6 +272,9 @@ class _RiderPickupBatchDetailsScreenState
     final bool allResolved =
         _batch.parcels.isNotEmpty && _batch.parcels.every((p) => p.isResolved);
     final int collected = _batch.parcels.where((p) => p.wasCollected).length;
+    final String progressStatusLabel = inProgress && allResolved
+        ? 'Ready for hub'
+        : _batch.statusLabel;
 
     return Scaffold(
       backgroundColor: _background,
@@ -217,20 +289,66 @@ class _RiderPickupBatchDetailsScreenState
           onPressed: () => Navigator.of(context).pop(_changed),
           icon: const Icon(Icons.arrow_back_rounded),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh pickup',
+            onPressed: _busy || widget.onReload == null ? null : _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
           children: <Widget>[
+            if (const {'LOADING', 'READY', 'IN_PROGRESS'}.contains(status)) ...[
+              if (!inProgress)
+                _notice('Accept and start seller pickup to enable scanning.'),
+              OutlinedButton.icon(
+                onPressed: inProgress && !_busy && !_needsRefresh
+                    ? _scanWithCamera
+                    : null,
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: const Text('Scan parcel barcode / QR'),
+              ),
+              TextButton.icon(
+                onPressed: inProgress && !_busy && !_needsRefresh
+                    ? _scanManually
+                    : null,
+                icon: const Icon(Icons.keyboard_alt_outlined),
+                label: const Text('Enter tracking code manually'),
+              ),
+              const SizedBox(height: 14),
+            ],
             _buildSellerCard(),
             const SizedBox(height: 14),
-            _buildProgressCard(collected),
+            _buildProgressCard(collected, progressStatusLabel),
             const SizedBox(height: 14),
+            if (status == 'READY' || (inProgress && !allResolved)) ...<Widget>[
+              OutlinedButton.icon(
+                onPressed: _busy || _needsRefresh
+                    ? null
+                    : () => _openNavigation(toLogisticsCenter: false),
+                icon: const Icon(Icons.navigation_outlined),
+                label: const Text('Navigate to seller'),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (status == 'EN_ROUTE_TO_HUB') ...<Widget>[
+              OutlinedButton.icon(
+                onPressed: _busy || _needsRefresh
+                    ? null
+                    : () => _openNavigation(toLogisticsCenter: true),
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: const Text('Navigate to logistics center'),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (_error != null) ...<Widget>[
               _buildError(_error!),
               const SizedBox(height: 12),
             ],
-            _buildParcelList(inProgress),
+            _buildParcelList(inProgress && !_needsRefresh),
             const SizedBox(height: 16),
             if (status == 'LOADING')
               _actionButton(
@@ -255,33 +373,12 @@ class _RiderPickupBatchDetailsScreenState
                 ),
               )
             else if (inProgress) ...<Widget>[
-              OutlinedButton.icon(
-                onPressed: _busy ? null : _scanWithCamera,
-                icon: const Icon(Icons.qr_code_scanner_rounded),
-                label: const Text('Scan parcel barcode / QR'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
-                  side: const BorderSide(color: _border),
-                  minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 9),
-              TextButton.icon(
-                onPressed: _busy ? null : _scanManually,
-                icon: const Icon(Icons.keyboard_alt_outlined),
-                label: const Text('Enter tracking code manually'),
-                style: TextButton.styleFrom(foregroundColor: _maroon),
-              ),
-              const SizedBox(height: 8),
               _actionButton(
                 label: allResolved
                     ? 'Finish pickup and go to hub'
                     : 'Finish after resolving every parcel',
                 icon: Icons.local_shipping_outlined,
-                onPressed: allResolved && !_busy
+                onPressed: allResolved && !_busy && !_needsRefresh
                     ? () => _run(
                         widget.onFinish == null
                             ? null
@@ -295,7 +392,11 @@ class _RiderPickupBatchDetailsScreenState
                 'Pickup is complete. Deliver $collected collected parcel(s) to ${_batch.logisticsCenter.isEmpty ? 'the logistics center' : _batch.logisticsCenter}.',
               )
             else if (status == 'COMPLETED')
-              _notice('This pickup batch is completed.'),
+              _notice('This pickup batch is completed.')
+            else
+              _notice(
+                'No pickup action is available for this status. Refresh for the latest update.',
+              ),
             if (_busy) ...<Widget>[
               const SizedBox(height: 14),
               const Center(child: CircularProgressIndicator(color: _maroon)),
@@ -364,7 +465,7 @@ class _RiderPickupBatchDetailsScreenState
     );
   }
 
-  Widget _buildProgressCard(int collected) {
+  Widget _buildProgressCard(int collected, String statusLabel) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -381,7 +482,7 @@ class _RiderPickupBatchDetailsScreenState
               style: const TextStyle(color: _text, fontWeight: FontWeight.w800),
             ),
           ),
-          _statusChip(_batch.statusLabel),
+          _statusChip(statusLabel),
         ],
       ),
     );
@@ -552,7 +653,7 @@ class _RiderPickupBatchDetailsScreenState
     required VoidCallback? onPressed,
   }) {
     return FilledButton.icon(
-      onPressed: _busy ? null : onPressed,
+      onPressed: _busy || _needsRefresh ? null : onPressed,
       icon: Icon(icon),
       label: Text(label, textAlign: TextAlign.center),
       style: FilledButton.styleFrom(
@@ -620,13 +721,12 @@ class _RiderPickupBatchDetailsScreenState
 
   String _itemStatusLabel(RiderPickupBatchItemData parcel) {
     if (parcel.wasCollected) {
-      final String shipmentStatus = parcel.shipmentStatus
-          .trim()
-          .toUpperCase();
+      final String shipmentStatus = parcel.shipmentStatus.trim().toUpperCase();
       return switch (shipmentStatus) {
         'PICKED_UP' => 'Picked up from seller',
         'AT_SORTING_CENTER' => 'Received at sorting center',
         'SORTED' => 'Received and sorted',
+        'DELIVERED' => 'Pickup complete · delivered',
         '' => 'Pickup complete · status unavailable',
         final status => 'Pickup complete · ${status.replaceAll('_', ' ')}',
       };

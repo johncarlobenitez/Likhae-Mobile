@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
-import 'package:mapbox_navigation_sdk/mapbox_navigation_sdk.dart' as navigation;
 
 import '../../core/api/api_client.dart';
 import '../../core/config/app_config.dart';
@@ -30,9 +29,6 @@ class RiderStageNavigationScreen extends StatefulWidget {
 
 class _RiderStageNavigationScreenState
     extends State<RiderStageNavigationScreen> {
-  static const String _mapboxNavigationToken = String.fromEnvironment(
-    'MAPBOX_ACCESS_TOKEN',
-  );
   static const Color _maroon = Color(0xFF7A2430);
   static const Color _riderBlue = Color(0xFF1976D2);
   static const Color _muted = Color(0xFF766C65);
@@ -45,15 +41,15 @@ class _RiderStageNavigationScreenState
   Position? _latestPosition;
   LatLng? _lastRouteOrigin;
   DateTime? _lastRouteRequestAt;
+  DateTime? _routeArrivalAt;
   DateTime? _lastLocationPostAt;
   LatLng? _lastPostedLocation;
   double? _routeMeters;
   double? _routeSeconds;
   bool _routeRequestInProgress = false;
   bool _cameraPositioned = false;
-  bool _startingNavigation = false;
-  bool _locationPermissionReady = false;
-  bool _locationErrorShown = false;
+  bool _gpsTracking = false;
+  bool _gpsStarting = false;
   bool _locationPostErrorShown = false;
   String _status = 'Waiting for rider GPS.';
 
@@ -61,8 +57,6 @@ class _RiderStageNavigationScreenState
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
           defaultTargetPlatform == TargetPlatform.iOS);
-
-  bool get _hasMapToken => _mapboxNavigationToken.trim().isNotEmpty;
 
   double? get _destinationLatitude => widget.toLogisticsCenter
       ? widget.pickup.logisticsCenterLatitude
@@ -105,28 +99,29 @@ class _RiderStageNavigationScreenState
       : widget.pickup.address;
 
   List<int> get _assignmentIds {
-    final List<int> batchAssignmentIds = widget.pickup.parcels
+    final Iterable<RiderPickupBatchItemData> parcels = widget.toLogisticsCenter
+        ? widget.pickup.parcels.where(
+            (RiderPickupBatchItemData parcel) => parcel.wasCollected,
+          )
+        : widget.pickup.parcels.where(
+            (RiderPickupBatchItemData parcel) => !parcel.isResolved,
+          );
+    final List<int> batchAssignmentIds = parcels
         .map((RiderPickupBatchItemData parcel) => parcel.assignmentId)
         .where((int id) => id > 0)
         .toSet()
         .toList(growable: false);
-    if (batchAssignmentIds.isNotEmpty) return batchAssignmentIds;
+    if (widget.pickup.isBatch) return batchAssignmentIds;
     return widget.pickup.id > 0 ? <int>[widget.pickup.id] : const <int>[];
   }
 
   @override
   void initState() {
     super.initState();
-    unawaited(
-      navigation.MapBoxNavigation.instance.registerRouteEventListener(
-        _onNavigationEvent,
-      ),
-    );
     if (_destination == null) {
       _status = widget.toLogisticsCenter
           ? 'Logistics center coordinates are unavailable.'
           : 'The seller has not saved an exact map pin.';
-      return;
     }
     if (_supportsMapLibre) unawaited(_startLocationTracking());
   }
@@ -137,21 +132,20 @@ class _RiderStageNavigationScreenState
     super.dispose();
   }
 
-  void _onNavigationEvent(navigation.RouteEvent event) {
-    if (event.eventType == navigation.MapBoxEvent.route_build_failed ||
-        event.eventType == navigation.MapBoxEvent.route_build_no_routes_found) {
-      if (mounted) {
-        setState(() => _status = 'The driving route service could not find a route.');
-      }
-    }
-  }
-
   Future<void> _startLocationTracking() async {
+    if (!_supportsMapLibre || _positionSubscription != null || _gpsStarting) {
+      return;
+    }
+    if (mounted) setState(() => _gpsStarting = true);
     try {
       final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted)
-          setState(() => _status = 'Turn on device location to share GPS.');
+        if (mounted) {
+          setState(() {
+            _gpsTracking = false;
+            _status = 'Turn on device location to share GPS.';
+          });
+        }
         return;
       }
 
@@ -161,15 +155,21 @@ class _RiderStageNavigationScreenState
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (mounted)
-          setState(
-            () => _status = 'Location permission is required for rider GPS.',
-          );
+        if (mounted) {
+          setState(() {
+            _gpsTracking = false;
+            _status = 'Location permission is required for rider GPS.';
+          });
+        }
         return;
       }
 
-      _locationPermissionReady = true;
-      if (mounted) setState(() => _status = 'Waiting for a precise GPS fix.');
+      if (mounted) {
+        setState(() {
+          _gpsTracking = true;
+          _status = 'Waiting for a precise GPS fix.';
+        });
+      }
       await _positionSubscription?.cancel();
       _positionSubscription =
           Geolocator.getPositionStream(
@@ -180,16 +180,41 @@ class _RiderStageNavigationScreenState
           ).listen(
             _onPosition,
             onError: (_) {
-              if (mounted)
-                setState(
-                  () => _status = 'Device GPS is temporarily unavailable.',
-                );
+              unawaited(_positionSubscription?.cancel());
+              _positionSubscription = null;
+              if (mounted) {
+                setState(() {
+                  _gpsTracking = false;
+                  _status = 'Device GPS is temporarily unavailable.';
+                });
+              }
             },
           );
     } catch (error) {
-      if (mounted)
-        setState(() => _status = 'Could not start rider GPS: $error');
+      if (mounted) {
+        setState(() {
+          _gpsTracking = false;
+          _status = 'Could not start rider GPS: $error';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _gpsStarting = false);
     }
+  }
+
+  Future<void> _toggleLocationTracking() async {
+    if (_positionSubscription != null) {
+      await _positionSubscription?.cancel();
+      _positionSubscription = null;
+      if (mounted) {
+        setState(() {
+          _gpsTracking = false;
+          _status = 'Live rider GPS paused. Resume GPS to update your route.';
+        });
+      }
+      return;
+    }
+    await _startLocationTracking();
   }
 
   void _onPosition(Position position) {
@@ -216,7 +241,7 @@ class _RiderStageNavigationScreenState
     final DateTime? lastPost = _lastLocationPostAt;
     final LatLng? lastLocation = _lastPostedLocation;
     if (lastPost != null &&
-        now.difference(lastPost) < const Duration(seconds: 15)) {
+        now.difference(lastPost) < const Duration(seconds: 10)) {
       if (lastLocation == null ||
           Geolocator.distanceBetween(
                 lastLocation.latitude,
@@ -334,18 +359,19 @@ class _RiderStageNavigationScreenState
     if (manager == null || _routeRequestInProgress) return;
     final LatLng? previousOrigin = _lastRouteOrigin;
     final DateTime? previousRequestAt = _lastRouteRequestAt;
-    if (previousOrigin != null &&
-        previousRequestAt != null &&
-        DateTime.now().difference(previousRequestAt) <
-            const Duration(seconds: 15) &&
-        Geolocator.distanceBetween(
-              previousOrigin.latitude,
-              previousOrigin.longitude,
-              origin.latitude,
-              origin.longitude,
-            ) <
-            50) {
-      return;
+    if (previousOrigin != null && previousRequestAt != null) {
+      final double movedMeters = Geolocator.distanceBetween(
+        previousOrigin.latitude,
+        previousOrigin.longitude,
+        origin.latitude,
+        origin.longitude,
+      );
+      final Duration routeAge = DateTime.now().difference(previousRequestAt);
+      final bool routeIsAvailable = _routeMeters != null;
+      if (movedMeters < 100 &&
+          routeAge < Duration(seconds: routeIsAvailable ? 90 : 30)) {
+        return;
+      }
     }
 
     _routeRequestInProgress = true;
@@ -395,9 +421,14 @@ class _RiderStageNavigationScreenState
         ),
       );
       if (mounted) {
+        final double? distance = (route['distance'] as num?)?.toDouble();
+        final double? duration = (route['duration'] as num?)?.toDouble();
         setState(() {
-          _routeMeters = (route['distance'] as num?)?.toDouble();
-          _routeSeconds = (route['duration'] as num?)?.toDouble();
+          _routeMeters = distance;
+          _routeSeconds = duration;
+          _routeArrivalAt = duration == null || !duration.isFinite
+              ? null
+              : DateTime.now().add(Duration(seconds: duration.round()));
           _status = 'Road route updated from rider GPS.';
         });
       }
@@ -408,86 +439,6 @@ class _RiderStageNavigationScreenState
         );
     } finally {
       _routeRequestInProgress = false;
-    }
-  }
-
-  Future<void> _startNavigation() async {
-    final LatLng? destination = _destination;
-    if (destination == null) {
-      _showMessage('The saved destination coordinates are unavailable.');
-      return;
-    }
-    if (!_supportsMapLibre) {
-      _showMessage('Mapbox navigation is available on Android and iOS.');
-      return;
-    }
-    if (!_hasMapToken) {
-      _showMessage('Add MAPBOX_ACCESS_TOKEN before starting navigation.');
-      return;
-    }
-    if (_startingNavigation) return;
-    setState(() => _startingNavigation = true);
-
-    try {
-      if (!_locationPermissionReady) await _startLocationTracking();
-      Position? position = _latestPosition;
-      position ??= await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-      final LatLng origin = LatLng(position.latitude, position.longitude);
-      if (Geolocator.distanceBetween(
-            origin.latitude,
-            origin.longitude,
-            destination.latitude,
-            destination.longitude,
-          ) <
-          10) {
-        throw StateError('You are already at this destination.');
-      }
-
-      final navigation.MapBoxOptions options = navigation.MapBoxOptions(
-        initialLatitude: origin.latitude,
-        initialLongitude: origin.longitude,
-        zoom: 12.5,
-        tilt: 0,
-        alternatives: false,
-        enableRefresh: true,
-        voiceInstructionsEnabled: true,
-        bannerInstructionsEnabled: true,
-        allowsUTurnAtWayPoints: false,
-        longPressDestinationEnabled: false,
-        enableOnMapTapCallback: false,
-        mode: navigation.MapBoxNavigationMode.drivingWithTraffic,
-        units: navigation.VoiceUnits.metric,
-        simulateRoute: false,
-        language: 'en',
-      );
-      final bool? started = await navigation.MapBoxNavigation.instance
-          .startNavigation(
-            wayPoints: <navigation.WayPoint>[
-              navigation.WayPoint(
-                name: 'Rider location',
-                latitude: origin.latitude,
-                longitude: origin.longitude,
-              ),
-              navigation.WayPoint(
-                name: _destinationName,
-                latitude: destination.latitude,
-                longitude: destination.longitude,
-              ),
-            ],
-            options: options,
-          )
-          .timeout(const Duration(seconds: 7));
-      if (started == false)
-        throw StateError('Mapbox could not start the route.');
-    } catch (error) {
-      if (mounted) _showMessage('Unable to start navigation: $error');
-    } finally {
-      if (mounted) setState(() => _startingNavigation = false);
     }
   }
 
@@ -508,6 +459,11 @@ class _RiderStageNavigationScreenState
     final int hours = minutes ~/ 60;
     final int remainder = minutes % 60;
     return remainder == 0 ? '${hours}h' : '${hours}h ${remainder}m';
+  }
+
+  String _formatArrivalTime(DateTime? arrival) {
+    if (arrival == null) return '—';
+    return TimeOfDay.fromDateTime(arrival.toLocal()).format(context);
   }
 
   void _showMessage(String message) {
@@ -602,6 +558,11 @@ class _RiderStageNavigationScreenState
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  _RouteMetric(
+                    label: 'Estimated arrival',
+                    value: _formatArrivalTime(_routeArrivalAt),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     _status,
@@ -611,9 +572,9 @@ class _RiderStageNavigationScreenState
                   SizedBox(
                     height: 50,
                     child: ElevatedButton.icon(
-                      onPressed: _startingNavigation || destination == null
+                      onPressed: _gpsStarting || !_supportsMapLibre
                           ? null
-                          : _startNavigation,
+                          : _toggleLocationTracking,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _maroon,
                         foregroundColor: Colors.white,
@@ -621,11 +582,17 @@ class _RiderStageNavigationScreenState
                           borderRadius: BorderRadius.circular(13),
                         ),
                       ),
-                      icon: const Icon(Icons.navigation_rounded),
+                      icon: Icon(
+                        _gpsTracking
+                            ? Icons.pause_circle_outline_rounded
+                            : Icons.my_location_rounded,
+                      ),
                       label: Text(
-                        _startingNavigation
-                            ? 'Starting navigation…'
-                            : 'Start turn-by-turn navigation',
+                        _gpsStarting
+                            ? 'Starting rider GPS'
+                            : _gpsTracking
+                            ? 'Pause live GPS'
+                            : 'Resume rider GPS',
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),

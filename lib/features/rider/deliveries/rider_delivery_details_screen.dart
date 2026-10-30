@@ -1,10 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'rider_collection_field.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../services/auth_service.dart';
 import 'rider_delivery_models.dart';
+import 'rider_delivery_scan_field.dart';
+import '../scanner/rider_parcel_scan_result.dart';
 import 'rider_proof_watermark.dart';
 
 class RiderDeliveryDetailsScreen extends StatefulWidget {
@@ -63,13 +66,16 @@ class _RiderDeliveryDetailsScreenState
 
   late RiderDeliveryData _delivery;
   final TextEditingController _receiverController = TextEditingController();
+  final TextEditingController _collectionController = TextEditingController();
   final TextEditingController _failureController = TextEditingController();
 
   String? _proofPath;
+  RiderParcelScanResult? _deliveryScan;
   bool _submitting = false;
   bool _takingProof = false;
 
-  bool get _usingPreview => widget.delivery == null && widget.showPreviewWhenNull;
+  bool get _usingPreview =>
+      widget.delivery == null && widget.showPreviewWhenNull;
 
   @override
   void initState() {
@@ -80,6 +86,12 @@ class _RiderDeliveryDetailsScreenState
   @override
   void didUpdateWidget(covariant RiderDeliveryDetailsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.delivery?.id != widget.delivery?.id) {
+      _deliveryScan = null;
+      _proofPath = null;
+      _receiverController.clear();
+      _collectionController.clear();
+    }
     if (oldWidget.delivery != widget.delivery && widget.delivery != null) {
       _delivery = widget.delivery!;
     }
@@ -88,6 +100,7 @@ class _RiderDeliveryDetailsScreenState
   @override
   void dispose() {
     _receiverController.dispose();
+    _collectionController.dispose();
     _failureController.dispose();
     super.dispose();
   }
@@ -162,10 +175,7 @@ class _RiderDeliveryDetailsScreenState
 
       _showMessage('Proof of delivery captured.');
     } catch (error) {
-      _showMessage(
-        'Unable to capture watermarked proof: $error',
-        error: true,
-      );
+      _showMessage('Unable to capture watermarked proof: $error', error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -188,7 +198,10 @@ class _RiderDeliveryDetailsScreenState
     final RiderDeliveryTransitionCallback? callback = widget.onTransition;
 
     if (callback == null && !_delivery.isPreview) {
-      _showMessage('Delivery transition is not connected to Laravel yet.', error: true);
+      _showMessage(
+        'Delivery transition is not connected to Laravel yet.',
+        error: true,
+      );
       return;
     }
 
@@ -205,6 +218,11 @@ class _RiderDeliveryDetailsScreenState
             note: note,
             receiverName: receiverName,
             proofPath: proofPath,
+            scannedCode: _deliveryScan?.code,
+            scanMethod: _deliveryScan?.method ?? 'MANUAL',
+            collectedAmount: status == 'delivered'
+                ? _collectionController.text.trim()
+                : null,
           ),
         );
       }
@@ -243,6 +261,22 @@ class _RiderDeliveryDetailsScreenState
   }
 
   Future<void> _submitDelivered() async {
+    if (_deliveryScan == null) {
+      _showMessage(
+        'Scan or enter the matching parcel tracking code.',
+        error: true,
+      );
+      return;
+    }
+    if (!RiderDeliveryTransitionRequest.isValidCollectedAmount(
+      _collectionController.text,
+    )) {
+      _showMessage(
+        'Enter the actual cash collected, using at most two decimal places.',
+        error: true,
+      );
+      return;
+    }
     final String receiver = _receiverController.text.trim();
 
     if (receiver.isEmpty) {
@@ -300,7 +334,9 @@ class _RiderDeliveryDetailsScreenState
         scrolledUnderElevation: 0,
         leading: IconButton(
           tooltip: 'Back',
-          onPressed: widget.onBackToDeliveries ?? () => Navigator.of(context).maybePop(),
+          onPressed:
+              widget.onBackToDeliveries ??
+              () => Navigator.of(context).maybePop(),
           icon: const Icon(Icons.arrow_back_rounded, color: _text),
         ),
         title: const Text(
@@ -318,17 +354,11 @@ class _RiderDeliveryDetailsScreenState
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
           children: <Widget>[
             if (widget.statusMessage?.trim().isNotEmpty == true) ...<Widget>[
-              _MessageBanner(
-                message: widget.statusMessage!,
-                error: false,
-              ),
+              _MessageBanner(message: widget.statusMessage!, error: false),
               const SizedBox(height: 12),
             ],
             if (widget.errorMessage?.trim().isNotEmpty == true) ...<Widget>[
-              _MessageBanner(
-                message: widget.errorMessage!,
-                error: true,
-              ),
+              _MessageBanner(message: widget.errorMessage!, error: true),
               const SizedBox(height: 12),
             ],
             if (_usingPreview) ...<Widget>[
@@ -380,11 +410,7 @@ class _RiderDeliveryDetailsScreenState
           const SizedBox(height: 8),
           Text(
             '${_delivery.statusLabel} · Buyer: ${_delivery.buyerName}',
-            style: const TextStyle(
-              color: _muted,
-              fontSize: 13.5,
-              height: 1.45,
-            ),
+            style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.45),
           ),
         ],
       ),
@@ -489,6 +515,13 @@ class _RiderDeliveryDetailsScreenState
               onPressed: () => _transition('out_for_delivery'),
             ),
           if (status == 'out_for_delivery') ...<Widget>[
+            RiderDeliveryScanField(
+              key: ValueKey(_delivery.id),
+              expectedTrackingCode: _delivery.trackingCode,
+              enabled: !_submitting,
+              onChanged: (scan) => _deliveryScan = scan,
+            ),
+            const SizedBox(height: 12),
             const Text(
               'CONFIRM DELIVERY',
               style: TextStyle(
@@ -506,12 +539,20 @@ class _RiderDeliveryDetailsScreenState
               decoration: _inputDecoration('Receiver name'),
             ),
             const SizedBox(height: 10),
+            RiderCollectionField(
+              controller: _collectionController,
+              enabled: !_submitting,
+            ),
+            const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: _submitting || _takingProof ? null : _chooseProof,
               style: OutlinedButton.styleFrom(
                 foregroundColor: _maroon,
                 side: const BorderSide(color: _border),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -538,16 +579,19 @@ class _RiderDeliveryDetailsScreenState
                     height: 180,
                     fit: BoxFit.contain,
                     errorBuilder:
-                        (BuildContext context, Object error, StackTrace? stackTrace) =>
-                            const SizedBox(
-                              height: 110,
-                              child: Center(
-                                child: Text(
-                                  'Watermarked proof preview is unavailable.',
-                                  style: TextStyle(color: _muted, fontSize: 12),
-                                ),
-                              ),
+                        (
+                          BuildContext context,
+                          Object error,
+                          StackTrace? stackTrace,
+                        ) => const SizedBox(
+                          height: 110,
+                          child: Center(
+                            child: Text(
+                              'Watermarked proof preview is unavailable.',
+                              style: TextStyle(color: _muted, fontSize: 12),
                             ),
+                          ),
+                        ),
                   ),
                 ),
               ),
@@ -632,8 +676,8 @@ class _RiderDeliveryDetailsScreenState
                 status == 'delivered'
                     ? 'This parcel has already been delivered.'
                     : status == 'failed' || status == 'delivery_failed'
-                        ? 'This delivery is recorded as failed.'
-                        : 'No delivery transition is available for the current status.',
+                    ? 'This delivery is recorded as failed.'
+                    : 'No delivery transition is available for the current status.',
                 style: const TextStyle(
                   color: _muted,
                   fontSize: 12.5,
@@ -662,7 +706,9 @@ class _RiderDeliveryDetailsScreenState
           ),
           const SizedBox(height: 9),
           OutlinedButton.icon(
-            onPressed: widget.onBackToDeliveries ?? () => Navigator.of(context).maybePop(),
+            onPressed:
+                widget.onBackToDeliveries ??
+                () => Navigator.of(context).maybePop(),
             style: OutlinedButton.styleFrom(
               foregroundColor: _text,
               side: const BorderSide(color: _border),
@@ -792,15 +838,9 @@ class _DetailRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: labelStyle,
-        ),
+        Text(label, style: labelStyle),
         const SizedBox(height: 4),
-        Text(
-          value.trim().isEmpty ? 'Not available' : value,
-          style: valueStyle,
-        ),
+        Text(value.trim().isEmpty ? 'Not available' : value, style: valueStyle),
       ],
     );
   }
@@ -834,10 +874,7 @@ class _PrimaryActionButton extends StatelessWidget {
           ),
         ),
         icon: Icon(icon),
-        label: Text(
-          text,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
+        label: Text(text, style: const TextStyle(fontWeight: FontWeight.w900)),
       ),
     );
   }
@@ -851,8 +888,12 @@ class _MessageBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color background = error ? const Color(0xFFFCEBE8) : const Color(0xFFEAF6EE);
-    final Color foreground = error ? const Color(0xFFB42318) : const Color(0xFF1B7A46);
+    final Color background = error
+        ? const Color(0xFFFCEBE8)
+        : const Color(0xFFEAF6EE);
+    final Color foreground = error
+        ? const Color(0xFFB42318)
+        : const Color(0xFF1B7A46);
 
     return Container(
       width: double.infinity,

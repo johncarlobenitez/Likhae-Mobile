@@ -5,17 +5,19 @@ import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'rider_collection_field.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
-import 'package:mapbox_navigation_sdk/mapbox_navigation_sdk.dart' as navigation;
 
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/rider_mobile_service.dart';
 import 'rider_delivery_models.dart';
+import 'rider_delivery_scan_field.dart';
+import '../scanner/rider_parcel_scan_result.dart';
 import 'rider_proof_watermark.dart';
 
 class RiderDeliveryTrackingScreen extends StatefulWidget {
@@ -60,10 +62,6 @@ class RiderDeliveryTrackingScreen extends StatefulWidget {
 
 class _RiderDeliveryTrackingScreenState
     extends State<RiderDeliveryTrackingScreen> {
-  static const String _mapboxNavigationToken = String.fromEnvironment(
-    'MAPBOX_ACCESS_TOKEN',
-  );
-
   static const Color _background = Color(0xFFFBF7F2);
   static const Color _surface = Color(0xFFFFFDF9);
   static const Color _soft = Color(0xFFF6EFE7);
@@ -104,6 +102,8 @@ class _RiderDeliveryTrackingScreenState
   final ImagePicker _imagePicker = ImagePicker();
 
   final TextEditingController _receiverController = TextEditingController();
+  RiderParcelScanResult? _deliveryScan;
+  final TextEditingController _collectionController = TextEditingController();
 
   final TextEditingController _failedReasonController = TextEditingController();
 
@@ -111,7 +111,7 @@ class _RiderDeliveryTrackingScreenState
 
   bool _takingPhoto = false;
   bool _submitting = false;
-  bool _startingNavigation = false;
+  bool _refreshingNavigation = false;
   bool _geocodingBuyerLocation = false;
   Completer<void>? _buyerLocationResolution;
 
@@ -250,56 +250,21 @@ class _RiderDeliveryTrackingScreenState
     _locationSyncEnabled =
         widget.delivery != null &&
         _isActiveDeliveryStatus(widget.delivery!.normalizedStatus);
-    unawaited(
-      navigation.MapBoxNavigation.instance.registerRouteEventListener(
-        _onMapboxNavigationEvent,
-      ),
-    );
     _resolveBuyerLocation();
     if (!_isPreviewDelivery) {
       _startRiderLocationTracking();
     }
   }
 
-  void _onMapboxNavigationEvent(navigation.RouteEvent event) {
-    switch (event.eventType) {
-      case navigation.MapBoxEvent.route_build_failed:
-        unawaited(
-          _closeFailedNavigation(
-            'Mapbox could not build the route. Check the rider and buyer locations.',
-          ),
-        );
-        break;
-      case navigation.MapBoxEvent.route_build_no_routes_found:
-        unawaited(
-          _closeFailedNavigation(
-            'No drivable route was found between the rider and buyer.',
-          ),
-        );
-        break;
-      default:
-        break;
-    }
-  }
-
-  Future<void> _closeFailedNavigation(String message) async {
-    try {
-      await navigation.MapBoxNavigation.instance.finishNavigation().timeout(
-        const Duration(seconds: 1),
-      );
-    } catch (_) {
-      // The Android plugin closes the native activity before completing the
-      // method-channel result.
-    }
-
-    if (mounted) {
-      _showMessage(message);
-    }
-  }
-
   @override
   void didUpdateWidget(covariant RiderDeliveryTrackingScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.delivery?.id != widget.delivery?.id) {
+      _deliveryScan = null;
+      _proofPhoto = null;
+      _receiverController.clear();
+      _collectionController.clear();
+    }
 
     if (oldWidget.delivery != widget.delivery) {
       _locationSyncEnabled =
@@ -877,107 +842,33 @@ class _RiderDeliveryTrackingScreenState
     }
   }
 
-  Future<void> _startMapboxNavigation(RiderDeliveryData delivery) async {
-    if (_startingNavigation) {
-      return;
-    }
-
-    if (!_supportsMapLibre) {
-      _showMessage('Mapbox navigation is available on Android and iOS.');
-      return;
-    }
-
-    if (_mapboxNavigationToken.isEmpty) {
-      _showMessage('Add your Mapbox access token before starting navigation.');
-      return;
-    }
-
-    setState(() {
-      _startingNavigation = true;
-    });
-
+  Future<void> _refreshNavigationRoute(RiderDeliveryData delivery) async {
+    if (_refreshingNavigation) return;
+    setState(() => _refreshingNavigation = true);
     try {
       await _resolveBuyerLocation();
-      final LatLng? destination = _displayDeliveryLocation;
-      if (destination == null) {
+      if (_displayDeliveryLocation == null) {
         throw StateError('The buyer delivery location could not be found.');
       }
 
-      final LatLng origin;
       if (delivery.isPreview) {
-        origin = _sampleRiderLocation;
-        if (mounted) {
-          final DateTime now = DateTime.now();
-          setState(() {
-            _liveRiderLocation = origin;
-            _liveRiderLocationUpdatedAt = now;
-            _lastUiLocationUpdateAt = now;
-          });
-        }
-      } else {
-        origin = await _getNavigationOrigin();
-      }
-      final double distanceToBuyer = Geolocator.distanceBetween(
-        origin.latitude,
-        origin.longitude,
-        destination.latitude,
-        destination.longitude,
-      );
-      if (distanceToBuyer < 10) {
-        throw StateError('You are already at the buyer delivery location.');
+        await _syncMapLibreMarkers();
+        _showMessage('Preview route refreshed.');
+        return;
       }
 
-      final navigation.MapBoxOptions options = navigation.MapBoxOptions(
-        initialLatitude: origin.latitude,
-        initialLongitude: origin.longitude,
-        zoom: 12.5,
-        tilt: 0,
-        alternatives: false,
-        enableRefresh: true,
-        voiceInstructionsEnabled: true,
-        bannerInstructionsEnabled: true,
-        allowsUTurnAtWayPoints: false,
-        longPressDestinationEnabled: false,
-        enableOnMapTapCallback: false,
-        mode: navigation.MapBoxNavigationMode.drivingWithTraffic,
-        units: navigation.VoiceUnits.metric,
-        simulateRoute: delivery.isPreview,
-        language: 'en',
-      );
-
-      final bool? navigationStarted = await navigation.MapBoxNavigation.instance
-          .startNavigation(
-            wayPoints: <navigation.WayPoint>[
-              navigation.WayPoint(
-                name: 'Rider location',
-                latitude: origin.latitude,
-                longitude: origin.longitude,
-              ),
-              navigation.WayPoint(
-                name: delivery.buyerName.trim().isEmpty
-                    ? 'Buyer delivery location'
-                    : delivery.buyerName.trim(),
-                latitude: destination.latitude,
-                longitude: destination.longitude,
-              ),
-            ],
-            options: options,
-          )
-          .timeout(const Duration(seconds: 5), onTimeout: () => true);
-      if (navigationStarted == false) {
-        throw StateError('Mapbox could not build a route to the buyer.');
-      }
+      await _startRiderLocationTracking();
+      await _getNavigationOrigin();
+      _lastRouteOrigin = null;
+      await _syncMapLibreMarkers();
+      _showMessage('Live rider GPS and road route updated.');
     } catch (error) {
       if (mounted) {
         final String message = error.toString().replaceFirst('Bad state: ', '');
-        _showMessage('Unable to start navigation: $message');
+        _showMessage('Unable to refresh navigation: $message');
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _startingNavigation = false;
-        });
-      }
+      if (mounted) setState(() => _refreshingNavigation = false);
     }
   }
 
@@ -985,6 +876,7 @@ class _RiderDeliveryTrackingScreenState
   void dispose() {
     _positionSubscription?.cancel();
     _receiverController.dispose();
+    _collectionController.dispose();
     _failedReasonController.dispose();
 
     super.dispose();
@@ -1087,6 +979,18 @@ class _RiderDeliveryTrackingScreenState
   }
 
   Future<void> _markDelivered(RiderDeliveryData delivery) async {
+    if (_deliveryScan == null) {
+      _showMessage('Scan or enter the matching parcel tracking code.');
+      return;
+    }
+    if (!RiderDeliveryTransitionRequest.isValidCollectedAmount(
+      _collectionController.text,
+    )) {
+      _showMessage(
+        'Enter the actual cash collected, using at most two decimal places.',
+      );
+      return;
+    }
     final String receiverName = _receiverController.text.trim();
 
     if (receiverName.isEmpty) {
@@ -1107,6 +1011,9 @@ class _RiderDeliveryTrackingScreenState
           status: 'delivered',
           receiverName: receiverName,
           proofPath: _proofPhoto!.path,
+          collectedAmount: _collectionController.text.trim(),
+          scannedCode: _deliveryScan?.code,
+          scanMethod: _deliveryScan?.method ?? 'MANUAL',
         );
 
     await _submitTransition(request);
@@ -1744,6 +1651,13 @@ class _RiderDeliveryTrackingScreenState
           ],
 
           if (status == 'out_for_delivery') ...<Widget>[
+            RiderDeliveryScanField(
+              key: ValueKey(parcel.id),
+              expectedTrackingCode: parcel.trackingCode,
+              enabled: !_submitting,
+              onChanged: (scan) => _deliveryScan = scan,
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _receiverController,
               enabled: !_submitting,
@@ -1756,6 +1670,11 @@ class _RiderDeliveryTrackingScreenState
 
             const SizedBox(height: 12),
 
+            RiderCollectionField(
+              controller: _collectionController,
+              enabled: !_submitting,
+            ),
+            const SizedBox(height: 12),
             _buildProofSection(),
 
             const SizedBox(height: 12),
@@ -2069,11 +1988,11 @@ class _RiderDeliveryTrackingScreenState
           ),
           const SizedBox(height: 9),
           _TrackingActionButton(
-            icon: Icons.navigation_outlined,
-            label: _startingNavigation
-                ? 'Starting Navigation...'
-                : 'Start Mapbox Navigation',
-            onPressed: _startingNavigation
+            icon: Icons.my_location_rounded,
+            label: _refreshingNavigation
+                ? 'Updating Rider GPS...'
+                : 'Resume Rider GPS / Refresh Route',
+            onPressed: _refreshingNavigation
                 ? null
                 : () async {
                     if (widget.onOpenNavigation != null) {
@@ -2081,7 +2000,7 @@ class _RiderDeliveryTrackingScreenState
                       return;
                     }
 
-                    await _startMapboxNavigation(parcel);
+                    await _refreshNavigationRoute(parcel);
                   },
           ),
           if (hasContact) ...<Widget>[

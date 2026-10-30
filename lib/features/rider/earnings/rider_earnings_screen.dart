@@ -102,6 +102,7 @@ class RiderEarningsScreen extends StatelessWidget {
   final String riderName;
   final String earningsNotice;
   final RiderEarningsRefreshCallback? onRefresh;
+  final VoidCallback? onOpenRemittances;
 
   const RiderEarningsScreen({
     super.key,
@@ -110,6 +111,7 @@ class RiderEarningsScreen extends StatelessWidget {
     this.riderName = '',
     this.earningsNotice = '',
     this.onRefresh,
+    this.onOpenRemittances,
   });
 
   static const _background = Color(0xFFFBF7F2);
@@ -145,6 +147,14 @@ class RiderEarningsScreen extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
             children: [
+              if (onOpenRemittances != null) ...[
+                OutlinedButton.icon(
+                  onPressed: onOpenRemittances,
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  label: const Text('Cash remittances'),
+                ),
+                const SizedBox(height: 12),
+              ],
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(

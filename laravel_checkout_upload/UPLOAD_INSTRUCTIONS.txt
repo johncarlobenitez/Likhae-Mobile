@@ -1,0 +1,96 @@
+Laravel mobile synchronization upload package (2026-10-30)
+
+Copy these files into the matching paths in the Laravel project and overwrite the existing files:
+- routes/api.php
+- app/Http/Controllers/Api/BuyerApiController.php
+- app/Http/Controllers/Auth/MobileGoogleAuthenticationController.php
+- app/Http/Controllers/Api/MobileAuthController.php
+- app/Services/Marketplace/CheckoutService.php
+- app/Http/Controllers/Api/LogisticsApiController.php
+- app/Http/Controllers/Api/MapProxyController.php
+- app/Http/Controllers/Api/RiderTransferApiController.php
+- app/Http/Controllers/Api/RiderPickupBatchApiController.php
+- app/Http/Controllers/Api/RiderAvailabilityApiController.php
+- app/Http/Controllers/Api/RiderVehicleProfileController.php
+- app/Http/Controllers/Api/RiderApiController.php
+- app/Http/Controllers/Communication/MessagePresenceController.php
+- config/geoapify.php
+
+Mobile email/password and Google sign-in now grant mobile access to `BUYER`, `RIDER`, and `LOGISTICS` accounts. A logistics user is linked to its center through the existing `logistics_centers.owner_user_id` relationship; this package does not add a `users.logistics_center_id` column.
+
+The logistics API adds `GET /api/v1/logistics/dashboard` and `POST /api/v1/logistics/scan-receive`. The scan endpoint accepts the scanned tracking code and method, resolves the shipment, checks that it belongs to the authenticated user's approved center, and calls the existing shipment workflow to persist the receive event and status. The mobile dashboard reloads center totals and recent shipment data after a successful receive.
+
+Pickup-to-hub reconciliation:
+- After logistics scans a parcel, the API explicitly synchronizes its seller pickup batch. If a batch was left `EN_ROUTE_TO_HUB` by an older server version, the rider batch-detail endpoint also reconciles it when the shipment has already reached sorting-center intake (including later statuses such as `DELIVERED`). The rider sees the batch as completed once all collected parcels are received and every other parcel is resolved.
+
+This package also syncs the mobile proof-of-delivery contract:
+- Rider completion submits `scanned_code`, `scan_method`, `receiver_name`, `collected_amount`, and the `proof_file` upload to the rider assignment API. Install the updated mobile build together with this package.
+- Buyer order responses include `parcels[].delivery_attempts[]` with each proof attempt ID and `proof_available` flag.
+- The buyer opens an image from `GET /api/v1/buyer/delivery-attempts/{attempt}/proof`. The route requires a bearer token and serves the file only to the buyer who owns the order.
+
+The map proxy adds `GET /api/v1/maps/geocode` and `GET /api/v1/maps/route`. Both routes are rate limited and keep the Geoapify API key on the server. Set `GEOAPIFY_API_KEY` in the Laravel server environment before deploying; do not add it to Flutter build defines or source. The proxy limits address search to the Philippines and validates route coordinates and waypoint counts.
+
+The Laravel project must have its existing `delivery_attempts` table/model and rider delivery workflow installed. The mobile app calls the same endpoint and reads the same parcel metadata fields.
+
+After upload, from the Laravel project directory run:
+php artisan route:clear
+
+Then redeploy/restart the API service. Verify that these API routes are registered:
+- PATCH /api/v1/rider/availability
+- POST /api/v1/rider/availability/location
+- POST /api/v1/buyer/orders/{order}/messages (order-scoped Contact seller messages)
+- GET /api/v1/buyer/addresses
+- GET /api/v1/buyer/rewards (voucher categories for the checkout picker)
+- GET /api/v1/buyer/checkout/options
+- POST /api/v1/buyer/checkout/preview
+- POST /api/v1/buyer/cart/preview
+- POST /api/v1/buyer/checkout
+- GET /api/v1/buyer/delivery-attempts/{attempt}/proof
+- GET /api/v1/logistics/dashboard
+- POST /api/v1/logistics/scan-receive
+- GET /api/v1/maps/geocode
+- GET /api/v1/maps/route
+- POST /api/v1/buyer/notifications/{notification}/read
+- POST /api/v1/buyer/notifications/{notification}/open
+- DELETE /api/v1/buyer/notifications/{notification}
+
+Rider vehicle workflow updates:
+- Motorcycle and tricycle rider profiles use the LOCAL_BARANGAY workflow for local pickups, trips, and deliveries.
+- Car, van, closed van, and truck profiles use the INTER_LOGISTICS workflow for hub-to-hub transfers.
+- The mobile profile API must return rider.vehicle_type. The mobile app uses it to select its home screen and navigation.
+- The transfer API routes in routes/api.php require the existing rider.operational:INTER_LOGISTICS middleware alias. Keep the existing RiderVehicleType helper, EnsureRiderOperationalType middleware, and bootstrap alias from the full Laravel project.
+- Transfer actions call the existing TransferManifestService. Logistics seals and releases manifests in the existing Logistics workflow; the assigned driver accepts, scans every parcel, then starts transport. The destination hub records receipt through Logistics.
+- Approved vehicle parcel, weight, and volume capacity checks remain enforced by the existing service.
+
+Pickup batch detail refresh:
+- GET /api/v1/rider/pickups/batches/{trip} returns the assigned local rider's pickup batch and parcel details after actions such as finishing a batch. It checks that the authenticated rider owns the batch and uses a local vehicle type.
+- Pickup list and detail payloads include seller pickup-pin and logistics-center coordinates so the mobile MapLibre rider navigation can draw the Laravel route and sync live GPS. Upload the updated RiderApiController.php and RiderPickupBatchApiController.php together.
+
+Added mobile API routes:
+- PATCH /api/v1/rider/availability (local motorcycle/tricycle riders only; saves online state and optional initial GPS coordinates)
+- POST /api/v1/rider/availability/location (local riders only; saves GPS while online)
+- GET /api/v1/rider/pickups/batches/{trip}
+- GET /api/v1/rider/transfers
+- GET /api/v1/rider/transfers/{manifest}
+- POST /api/v1/rider/transfers/{manifest}/accept
+- POST /api/v1/rider/transfers/{manifest}/decline
+- POST /api/v1/rider/transfers/{manifest}/start
+The full Laravel project must already include TransferManifestService, LogisticsSchemaReadiness, transfer manifest models/schema, RiderVehicleType, and the rider.operational middleware alias. After copying the package, clear the route cache, redeploy/restart the API service, and verify the routes above are registered.
+
+Rider synchronization fixes (based on the supplied Likhae-working (13).zip):
+- GET /api/v1/rider/pickups/{assignment}/batch resolves an owned pickup assignment to its seller batch. Mobile single-parcel entry points now open that batch and use its accept/start/scan/finish endpoints. Delivery transitions continue to reject pickup assignments.
+- POST /api/v1/messages/presence and POST /api/v1/buyer/messages/presence use the existing web MessagePresenceController and database cache. They require API authentication, respect show_online_status, expire after 120 seconds, and are rate limited. Rider and buyer conversation responses now include the other participant's online state.
+- GET/POST /api/v1/rider/remittances connect the mobile Earnings > Cash remittances screen to the existing RemittanceService. One COD collection is submitted at a time. Logistics still acknowledges and reconciles cash through the existing website. An unverified amount remains null until logistics confirms it.
+- Earnings preserve null shares awaiting allocation instead of converting them into zero-valued earnings. COD remittance and rider income remain separate records governed by the existing finance services.
+- No new migration is required by these changes. Keep the existing schema from the full Laravel project, including finance and seller pickup batch migrations.
+- The full project's WorkflowApiController and ShipmentWorkflowService already validate and persist scanned delivery completion. They do not need replacing for this fix.
+
+Optional regression test file included:
+- tests/Feature/MobileRiderSyncTest.php
+Run tests only against a dedicated test database. The development verification used a separate extracted copy of the supplied project and SQLite :memory:, never the deployed database.
+
+Deployment:
+1. Copy the package app/, config/, and routes/ files to the matching Laravel paths. The package supplements the full project; it is not a standalone Laravel application.
+2. Run php artisan route:clear in the Laravel project, then restart/redeploy the API as appropriate for your host.
+3. Rebuild/reinstall Flutter with API_ENABLED=true and API_BASE_URL pointing to this same Laravel installation's /api/v1 base URL.
+4. Use a staging rider and parcels to check camera/manual scan, pickup, delivery proof, remittance and logistics acknowledgment on the actual device. Local checks do not prove the deployed server or camera/GPS configuration.

@@ -628,6 +628,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                     _textField(
                       controller: _firstName,
                       label: 'First name',
+                      readOnly: true,
                       validator: (String? value) =>
                           _required(value, 'your first name'),
                       textCapitalization: TextCapitalization.words,
@@ -635,6 +636,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                     _textField(
                       controller: _lastName,
                       label: 'Last name',
+                      readOnly: true,
                       validator: (String? value) =>
                           _required(value, 'your last name'),
                       textCapitalization: TextCapitalization.words,
@@ -642,8 +644,13 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                     _textField(
                       controller: _email,
                       label: 'Email',
+                      readOnly: true,
                       keyboardType: TextInputType.emailAddress,
                       validator: _validateEmail,
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: Text('Registered name and email changes require account review.'),
                     ),
                     _textField(
                       controller: _contact,
@@ -1029,6 +1036,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     TextInputType? keyboardType,
     TextCapitalization textCapitalization = TextCapitalization.none,
     bool obscureText = false,
+    bool readOnly = false,
     String? Function(String?)? validator,
     ValueChanged<String>? onChanged,
   }) {
@@ -1051,6 +1059,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
             keyboardType: keyboardType,
             textCapitalization: textCapitalization,
             obscureText: obscureText,
+            readOnly: readOnly,
             validator: validator,
             onChanged: onChanged,
             decoration: _inputDecoration(hintText: label),

@@ -80,9 +80,8 @@ class LogisticsMobileService {
     final List<LogisticsScanActivity> scans = activityRows
         .whereType<Map>()
         .map(
-          (Map row) => LogisticsScanActivity.fromApi(
-            Map<String, dynamic>.from(row),
-          ),
+          (Map row) =>
+              LogisticsScanActivity.fromApi(Map<String, dynamic>.from(row)),
         )
         .where((LogisticsScanActivity row) => row.trackingNumber.isNotEmpty)
         .toList(growable: false);
@@ -113,12 +112,21 @@ class LogisticsMobileService {
       },
     );
     final Map<String, dynamic> receivePayload = _requirePayload(receive);
+    final String savedTracking = (receivePayload['tracking_number'] ?? '')
+        .toString()
+        .trim();
+    final String savedStatus = (receivePayload['current_status'] ?? '')
+        .toString()
+        .trim();
+    if (savedTracking.isEmpty || savedStatus.isEmpty) {
+      throw const FormatException(
+        'The server did not confirm receipt of the parcel. Refresh logistics before scanning again.',
+      );
+    }
 
     return LogisticsReceivedParcel(
-      trackingNumber: (receivePayload['tracking_number'] ?? trackingNumber)
-          .toString(),
-      status: (receivePayload['current_status'] ?? 'AT_SORTING_CENTER')
-          .toString(),
+      trackingNumber: savedTracking,
+      status: savedStatus,
     );
   }
 
@@ -133,6 +141,11 @@ class LogisticsMobileService {
     }
     if (body is! Map) {
       throw const FormatException('Invalid response from the logistics API.');
+    }
+    if (body['success'] == false) {
+      throw Exception(
+        body['message'] ?? 'The logistics request was not completed.',
+      );
     }
     return Map<String, dynamic>.from(body);
   }

@@ -144,10 +144,12 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
       ...?_dashboard?.recentScans,
     ];
     final Set<String> seen = <String>{};
-    return scans.where((LogisticsScanActivity scan) {
-      final String key = '${scan.trackingNumber}:${scan.scannedAt}';
-      return seen.add(key);
-    }).toList(growable: false);
+    return scans
+        .where((LogisticsScanActivity scan) {
+          final String key = '${scan.trackingNumber}:${scan.scannedAt}';
+          return seen.add(key);
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -168,7 +170,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
           IconButton(
             tooltip: 'Refresh dashboard',
             onPressed: _loadingDashboard ? null : () => _loadDashboard(),
-            icon: _loadingDashboard
+            icon: _loadingDashboard && _dashboard != null
                 ? const SizedBox.square(
                     dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
@@ -198,7 +200,9 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
             children: <Widget>[
               Text(
-                greetingName.isEmpty ? 'Parcel operations' : 'Hello, $greetingName',
+                greetingName.isEmpty
+                    ? 'Parcel operations'
+                    : 'Hello, $greetingName',
                 style: const TextStyle(
                   color: _ink,
                   fontSize: 24,
@@ -234,7 +238,9 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                     ),
                   ),
                   Text(
-                    '${scans.length}',
+                    _dashboard == null && _loadingDashboard
+                        ? 'Loading'
+                        : '${scans.length}',
                     style: const TextStyle(
                       color: _green,
                       fontWeight: FontWeight.w900,
@@ -244,10 +250,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               ),
               const SizedBox(height: 10),
               if (_loadingDashboard && _dashboard == null)
-                const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+                _loadingActivity()
               else if (scans.isEmpty)
                 _emptyActivity()
               else
@@ -283,6 +286,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
 
   Widget _summaryCard() {
     final LogisticsDashboardSnapshot? dashboard = _dashboard;
+    final bool loading = dashboard == null && _loadingDashboard;
+    final bool unavailable = dashboard == null && _dashboardError != null;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -307,7 +312,11 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  '${dashboard?.shipmentsInCenter ?? 0} parcels in center',
+                  loading
+                      ? 'Loading hub totals'
+                      : unavailable
+                      ? 'Hub totals unavailable'
+                      : '${dashboard!.shipmentsInCenter} parcels in center',
                   style: const TextStyle(
                     color: _ink,
                     fontSize: 16,
@@ -316,8 +325,15 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${dashboard?.scansToday ?? 0} parcel updates recorded today',
-                  style: const TextStyle(color: Color(0xFF64736F), height: 1.35),
+                  loading
+                      ? 'Syncing your logistics center'
+                      : unavailable
+                      ? 'Pull down or tap refresh to try again.'
+                      : '${dashboard!.scansToday} parcel updates recorded today',
+                  style: const TextStyle(
+                    color: Color(0xFF64736F),
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),
@@ -337,7 +353,11 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 30),
+          const Icon(
+            Icons.qr_code_scanner_rounded,
+            color: Colors.white,
+            size: 30,
+          ),
           const SizedBox(height: 15),
           const Text(
             'Phone parcel scanner',
@@ -381,25 +401,86 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
   }
 
   Widget _emptyActivity() {
+    final bool unavailable = _dashboardError != null;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFDCE6E1)),
       ),
-      child: Text(
-        _dashboardError == null
-            ? 'Parcel updates recorded by your account will appear here.'
-            : 'Connect to the logistics API to load center activity.',
-        style: const TextStyle(color: Color(0xFF64736F), height: 1.4),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE7F3EF),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(
+              unavailable ? Icons.cloud_off_rounded : Icons.history_rounded,
+              color: unavailable ? const Color(0xFF9C261D) : _green,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  unavailable ? 'Activity unavailable' : 'No activity yet',
+                  style: const TextStyle(
+                    color: _ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  unavailable
+                      ? 'Refresh the dashboard when your connection is available.'
+                      : 'Parcel updates from your account will appear here.',
+                  style: const TextStyle(color: Color(0xFF64736F), height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _loadingActivity() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDCE6E1)),
+      ),
+      child: Row(
+        children: <Widget>[
+          const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Loading recent parcel activity…',
+              style: TextStyle(color: Color(0xFF64736F), height: 1.35),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _activityRow(LogisticsScanActivity activity) {
-    final DateTime? scannedAt = DateTime.tryParse(activity.scannedAt)?.toLocal();
+    final DateTime? scannedAt = DateTime.tryParse(
+      activity.scannedAt,
+    )?.toLocal();
     final String time = scannedAt == null
         ? ''
         : '${scannedAt.year}-${scannedAt.month.toString().padLeft(2, '0')}-${scannedAt.day.toString().padLeft(2, '0')}  ${scannedAt.hour.toString().padLeft(2, '0')}:${scannedAt.minute.toString().padLeft(2, '0')}';
@@ -421,7 +502,10 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               children: <Widget>[
                 Text(
                   activity.trackingNumber,
-                  style: const TextStyle(color: _ink, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    color: _ink,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -432,7 +516,10 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                   const SizedBox(height: 3),
                   Text(
                     time,
-                    style: const TextStyle(color: Color(0xFF87958F), fontSize: 12),
+                    style: const TextStyle(
+                      color: Color(0xFF87958F),
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ],

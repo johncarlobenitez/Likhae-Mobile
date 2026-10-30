@@ -51,6 +51,7 @@ import '../features/rider/deliveries/rider_delivery_details_screen.dart';
 import '../features/rider/deliveries/rider_delivery_models.dart';
 import '../features/rider/deliveries/rider_delivery_tracking_screen.dart';
 import '../features/rider/earnings/rider_earnings_screen.dart';
+import '../features/rider/earnings/rider_remittances_screen.dart';
 import '../features/rider/history/rider_history_screen.dart';
 import '../features/rider/messages/rider_messages_screen.dart';
 import '../features/rider/pickups/rider_pickup_batch_details_screen.dart';
@@ -686,6 +687,7 @@ Widget _riderTransferListPage() {
           onAccept: RiderMobileService.acceptInterHubTransfer,
           onDecline: RiderMobileService.declineInterHubTransfer,
           onStart: RiderMobileService.startInterHubTransfer,
+          onLoadTransfer: RiderMobileService.fetchInterHubTransfer,
         ),
   );
 }
@@ -3252,32 +3254,42 @@ final GoRouter appRouter = GoRouter(
           );
         }
 
+        Widget batchDetails(RiderPickupData batch) =>
+            RiderPickupBatchDetailsScreen(
+              batch: batch,
+              onAccept: AppConfig.apiEnabled
+                  ? RiderMobileService.acceptPickupBatch
+                  : null,
+              onStart: AppConfig.apiEnabled
+                  ? RiderMobileService.startPickupBatch
+                  : null,
+              onScan: AppConfig.apiEnabled
+                  ? (int batchId, String code, String method) =>
+                        RiderMobileService.scanPickupBatch(
+                          batchId,
+                          code,
+                          scanMethod: method,
+                        )
+                  : null,
+              onNotCollected: AppConfig.apiEnabled
+                  ? RiderMobileService.markPickupNotCollected
+                  : null,
+              onFinish: AppConfig.apiEnabled
+                  ? RiderMobileService.finishPickupBatch
+                  : null,
+              onReload: AppConfig.apiEnabled
+                  ? RiderMobileService.fetchPickupBatch
+                  : null,
+            );
         final Widget details = extra.isBatch
-            ? RiderPickupBatchDetailsScreen(
-                batch: extra,
-                onAccept: AppConfig.apiEnabled
-                    ? RiderMobileService.acceptPickupBatch
-                    : null,
-                onStart: AppConfig.apiEnabled
-                    ? RiderMobileService.startPickupBatch
-                    : null,
-                onScan: AppConfig.apiEnabled
-                    ? (int batchId, String code, String method) =>
-                          RiderMobileService.scanPickupBatch(
-                            batchId,
-                            code,
-                            scanMethod: method,
-                          )
-                    : null,
-                onNotCollected: AppConfig.apiEnabled
-                    ? RiderMobileService.markPickupNotCollected
-                    : null,
-                onFinish: AppConfig.apiEnabled
-                    ? RiderMobileService.finishPickupBatch
-                    : null,
-                onReload: AppConfig.apiEnabled
-                    ? RiderMobileService.fetchPickupBatch
-                    : null,
+            ? batchDetails(extra)
+            : AppConfig.apiEnabled
+            ? RiderApiLoader<RiderPickupData>(
+                load: () =>
+                    RiderMobileService.fetchPickupBatchForAssignment(extra.id),
+                refreshInterval: null,
+                builder: (context, batch, error, refresh) =>
+                    batchDetails(batch!),
               )
             : RiderPickupDetailsScreen(
                 pickup: extra,
@@ -3382,6 +3394,10 @@ final GoRouter appRouter = GoRouter(
                       ) => RiderEarningsScreen(
                         earningsRows:
                             data?.rows ?? const <RiderEarningRowData>[],
+                        onOpenRemittances: () async {
+                          await context.push('/rider/remittances');
+                          await refresh();
+                        },
                         summary: data?.summary,
                         riderName: data?.riderName ?? '',
                         earningsNotice:
@@ -3394,6 +3410,16 @@ final GoRouter appRouter = GoRouter(
               : const RiderEarningsScreen(),
         );
       },
+    ),
+
+    GoRoute(
+      path: '/rider/remittances',
+      name: 'rider-remittances',
+      builder: (context, state) => _riderNavigationFrame(
+        context,
+        currentIndex: 4,
+        child: const RiderRemittancesScreen(),
+      ),
     ),
 
     GoRoute(
@@ -3564,6 +3590,41 @@ final GoRouter appRouter = GoRouter(
           context,
           requiredRole: _RiderOperationalRole.localBarangay,
           child: RiderScannerScreen(
+            onScanned: (code) async {
+              if (!AppConfig.apiEnabled) {
+                throw const RiderApiException(
+                  'Connect to the service to look up your assigned parcels.',
+                );
+              }
+              final assignments = await RiderMobileService.fetchAssignments();
+              if (!context.mounted) return;
+              for (final delivery in assignments.deliveries) {
+                if (delivery.trackingCode.trim() == code.trim()) {
+                  context.pushReplacement(
+                    '/rider/delivery-details',
+                    extra: delivery,
+                  );
+                  return;
+                }
+              }
+              final pickups = await RiderMobileService.fetchPickups();
+              if (!context.mounted) return;
+              for (final pickup in pickups.pickups) {
+                if (pickup.trackingCode.trim() == code.trim() ||
+                    pickup.parcels.any(
+                      (parcel) => parcel.trackingCode.trim() == code.trim(),
+                    )) {
+                  context.pushReplacement(
+                    '/rider/pickup-details',
+                    extra: pickup,
+                  );
+                  return;
+                }
+              }
+              throw const RiderApiException(
+                'This parcel is not in your current delivery or pickup assignments.',
+              );
+            },
             onSignOut: () async {
               await AuthService.logout();
               if (context.mounted) {

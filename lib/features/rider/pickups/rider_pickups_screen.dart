@@ -131,7 +131,8 @@ class RiderPickupData {
       buyerName: (json['buyer_name'] ?? json['buyer'] ?? centerName).toString(),
       address: (json['pickup_address'] ?? json['address'] ?? '').toString(),
       itemCount: _toInt(
-        json['parcel_count'] ?? json['item_count'] ??
+        json['parcel_count'] ??
+            json['item_count'] ??
             (json['items'] is num ? json['items'] : null),
       ),
       amount: _amountLabel(json['amount']),
@@ -140,11 +141,12 @@ class RiderPickupData {
       imageUrl: riderProductImageUrl(json),
       batchNumber: (json['batch_number'] ?? trackingCode).toString(),
       logisticsCenter: centerName,
-      destinationAddress: (json['logistics_center_address'] ??
-              json['destination_address'] ??
-              centerAddress?['formatted_address'] ??
-              _formatCoordinatesAddress(centerAddress))
-          .toString(),
+      destinationAddress:
+          (json['logistics_center_address'] ??
+                  json['destination_address'] ??
+                  centerAddress?['formatted_address'] ??
+                  _formatCoordinatesAddress(centerAddress))
+              .toString(),
       shipmentStatus: (json['shipment_status'] ?? json['current_status'] ?? '')
           .toString(),
       sellerLatitude: _toDouble(rawSellerLatitude),
@@ -249,12 +251,13 @@ class RiderPickupData {
   static String _formatCoordinatesAddress(Map<String, dynamic>? address) {
     if (address == null) return '';
     return <String>[
-      address['house_number'],
-      address['street_address'] ?? address['street'],
-      address['barangay_name'] ?? address['barangay'],
-      address['municipality_name'] ?? address['municipality'],
-      address['province_name'] ?? address['province'],
-    ].where((dynamic value) => value?.toString().trim().isNotEmpty == true)
+          address['house_number'],
+          address['street_address'] ?? address['street'],
+          address['barangay_name'] ?? address['barangay'],
+          address['municipality_name'] ?? address['municipality'],
+          address['province_name'] ?? address['province'],
+        ]
+        .where((dynamic value) => value?.toString().trim().isNotEmpty == true)
         .join(', ');
   }
 
@@ -367,10 +370,14 @@ class RiderPickupTransitionRequest {
   final RiderPickupData pickup;
 
   final String status;
+  final String? scannedCode;
+  final String scanMethod;
 
   const RiderPickupTransitionRequest({
     required this.pickup,
     required this.status,
+    this.scannedCode,
+    this.scanMethod = 'MANUAL',
   });
 }
 

@@ -9,6 +9,7 @@ import '../core/config/app_config.dart';
 import '../features/rider/dashboard/dashboard_screen.dart';
 import '../features/rider/deliveries/rider_delivery_models.dart';
 import '../features/rider/earnings/rider_earnings_screen.dart';
+import '../features/rider/earnings/rider_remittance_models.dart';
 import '../features/rider/history/rider_history_screen.dart';
 import '../features/rider/messages/rider_messages_screen.dart';
 import '../features/buyer/notifications/notifications_screen.dart';
@@ -123,6 +124,12 @@ class RiderMobileService {
     if (response.data is! Map) {
       throw const FormatException('Invalid response from the rider API.');
     }
+    if (response.data['success'] == false) {
+      throw RiderApiException(
+        (response.data['message'] ?? 'The rider request was not completed.')
+            .toString(),
+      );
+    }
     return Map<String, dynamic>.from(response.data as Map);
   }
 
@@ -215,6 +222,13 @@ class RiderMobileService {
     return RiderPickupData.fromApi(_map(rawData, 'pickup batch'));
   }
 
+  static Future<RiderPickupData> fetchPickupBatchForAssignment(
+    int assignmentId,
+  ) async {
+    final payload = await _getPayload('rider/pickups/$assignmentId/batch');
+    return RiderPickupData.fromApi(_map(payload['data'], 'pickup batch'));
+  }
+
   static Future<List<RiderHistoryData>> fetchHistory() async {
     return (await _getRows('rider/history'))
         .whereType<Map>()
@@ -254,6 +268,15 @@ class RiderMobileService {
     _requirePayload(response);
   }
 
+  static Future<RiderInterHubTransferData> fetchInterHubTransfer(
+    int manifestId,
+  ) async {
+    final payload = await _getPayload('rider/transfers/$manifestId');
+    return RiderInterHubTransferData.fromApi(
+      _map(payload['data'], 'transfer manifest'),
+    );
+  }
+
   static Future<void> acceptInterHubTransfer(int manifestId) {
     return _postTransferAction(
       'rider/transfers/$manifestId/accept',
@@ -270,8 +293,9 @@ class RiderMobileService {
 
   static Future<void> startInterHubTransfer(
     int manifestId,
-    Map<int, String> scannedCodes,
-  ) {
+    Map<int, String> scannedCodes, {
+    String scanMethod = 'MANUAL',
+  }) {
     return _postTransferAction(
       'rider/transfers/$manifestId/start',
       <String, dynamic>{
@@ -279,7 +303,7 @@ class RiderMobileService {
           for (final MapEntry<int, String> scan in scannedCodes.entries)
             scan.key.toString(): scan.value.trim(),
         },
-        'scan_method': 'MANUAL',
+        'scan_method': scanMethod,
       },
     );
   }
@@ -315,6 +339,62 @@ class RiderMobileService {
     final Map<String, dynamic> payload = await _getPayload('rider/profile');
     final dynamic rawData = payload['data'] ?? payload['user'] ?? payload;
     return RiderProfileData.fromApi(_map(rawData, 'profile'));
+  }
+
+  static Future<RiderRemittanceSnapshot> fetchRemittances() async {
+    const endpoint = 'rider/remittances';
+    final data = _map((await _getPayload(endpoint))['data'], 'remittances');
+    final collections = _maps(data['collections'], 'COD collections')
+        .map((row) => RiderCodCollection.fromApi(_map(row, 'COD collection')))
+        .toList();
+    final rows = List<dynamic>.from(
+      _maps(data['remittances'], 'remittance history'),
+    );
+    final meta = data['meta'];
+    final lastPage = meta is Map
+        ? int.tryParse('${meta['last_page']}') ?? 1
+        : 1;
+    for (var page = 2; page <= lastPage; page++) {
+      final next = _map(
+        (await _getPayload(endpoint, page: page))['data'],
+        'remittances',
+      );
+      rows.addAll(_maps(next['remittances'], 'remittance history'));
+    }
+    final history = <int, RiderRemittance>{};
+    for (final row in rows) {
+      final receipt = RiderRemittance.fromApi(_map(row, 'remittance'));
+      history[receipt.id] = receipt;
+    }
+    return RiderRemittanceSnapshot(
+      available: data['schema_ready'] == true,
+      collections: collections,
+      history: history.values.toList(),
+    );
+  }
+
+  static Future<RiderRemittance> submitRemittance({
+    required int collectionId,
+    required String amount,
+    String notes = '',
+  }) async {
+    if (collectionId <= 0 ||
+        !RiderDeliveryTransitionRequest.isValidCollectedAmount(amount)) {
+      throw const FormatException(
+        'Select a parcel and enter the amount handed over, using at most two decimal places.',
+      );
+    }
+    final response = await ApiClient.post(
+      AppConfig.resolveApiUrl('rider/remittances'),
+      {
+        'collection_ids': [collectionId],
+        'submitted_amount': amount.trim(),
+        'notes': notes.trim(),
+      },
+    );
+    return RiderRemittance.fromApi(
+      _map(_requirePayload(response)['data'], 'remittance receipt'),
+    );
   }
 
   static Future<bool> updateAvailability(
@@ -454,8 +534,17 @@ class RiderMobileService {
       address,
     );
     final Map<String, dynamic> payload = _requirePayload(response);
-    final dynamic rawData = payload['data'] ?? payload;
-    return RiderProfileData.fromApi(_map(rawData, 'profile'));
+    final data = _map(payload['data'] ?? payload, 'address update');
+    if (data['user'] is Map && data['rider'] is Map) {
+      return RiderProfileData.fromApi(data);
+    }
+    // Laravel returns only the saved address here, not a replacement profile.
+    final profilePayload = await _getPayload('rider/profile');
+    final profile = _map(profilePayload['data'], 'profile');
+    return RiderProfileData.fromApi({
+      ...profile,
+      if (data['address'] is Map) 'residential_address': data['address'],
+    });
   }
 
   static Future<void> updatePassword({
@@ -649,7 +738,7 @@ class RiderMobileService {
     }
     final String endpoint =
         'rider/assignments/${request.delivery.id.toString()}';
-    final String status = request.status.trim().toLowerCase();
+    final String status = request.normalizedStatus;
     final String action = switch (status) {
       'accepted' => 'accept',
       'out_for_delivery' || 'in_transit' => 'start',
@@ -669,6 +758,11 @@ class RiderMobileService {
     }
     if (action == 'delivery_failed') {
       fields['attempt_status'] = 'FAILED';
+    }
+    if (action == 'delivery_success') {
+      fields['collected_amount'] = request.collectedAmount!.trim();
+      fields['scanned_code'] = request.scannedCode!.trim();
+      fields['scan_method'] = request.scanMethod;
     }
     final String? proofPath = request.proofPath;
     if (proofPath == null || proofPath.trim().isEmpty) {
@@ -733,16 +827,34 @@ class RiderMobileService {
     );
     final Map<String, dynamic> payload = _requirePayload(response);
     final dynamic rawData = payload['data'];
-    final String shipmentStatus = rawData is Map
-        ? (rawData['shipment_status'] ?? '').toString().trim().toUpperCase()
-        : '';
-    if (shipmentStatus != 'PICKED_UP') {
-      throw FormatException(
-        shipmentStatus.isEmpty
-            ? 'The server did not confirm the parcel pickup status.'
-            : 'The server returned an unexpected shipment status: $shipmentStatus.',
-      );
+    final Map<String, dynamic> scanResult = rawData is Map
+        ? Map<String, dynamic>.from(rawData)
+        : payload;
+    final String shipmentStatus = (scanResult['shipment_status'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
+    if (shipmentStatus == 'PICKED_UP') return;
+
+    // Laravel may report the shipment's current later-stage status after a
+    // successful batch scan. These states prove the parcel has moved beyond
+    // seller pickup; requiring only PICKED_UP incorrectly rejects DELIVERED.
+    const Set<String> laterShipmentStatuses = <String>{
+      'AT_SORTING_CENTER',
+      'SORTED',
+      'OUT_FOR_DELIVERY',
+      'DELIVERED',
+    };
+    if (laterShipmentStatuses.contains(shipmentStatus) &&
+        scanResult['assignment_id'] != null) {
+      return;
     }
+
+    throw FormatException(
+      shipmentStatus.isEmpty
+          ? 'The server did not confirm the parcel pickup status.'
+          : 'The server returned an unexpected shipment status: $shipmentStatus.',
+    );
   }
 
   static Future<void> markPickupNotCollected({
@@ -776,47 +888,43 @@ class RiderMobileService {
     RiderPickupTransitionRequest request,
   ) async {
     final RiderPickupData pickup = request.pickup;
-    final String endpoint = 'rider/assignments/${pickup.id.toString()}';
-    var currentStatus = pickup.status.trim().toUpperCase();
-
-    Future<void> sendAction(
-      String action, [
-      Map<String, dynamic>? fields,
-    ]) async {
-      final Response<dynamic> response = await ApiClient.patch(
-        AppConfig.resolveApiUrl(endpoint),
-        <String, dynamic>{'action': action, ...?fields},
-      );
-      _requirePayload(response);
-    }
-
-    if (currentStatus == 'ASSIGNED') {
-      await sendAction('accept');
-      currentStatus = 'ACCEPTED';
-    }
-
     final String targetStatus = request.status.trim().toLowerCase();
-    if (targetStatus == 'accepted' && currentStatus == 'ACCEPTED') return;
-
-    if (currentStatus == 'ACCEPTED') {
-      if (targetStatus == 'accepted') return;
-      await sendAction('start');
-      currentStatus = 'IN_PROGRESS';
+    if (!const {
+      'accepted',
+      'in_progress',
+      'picked_up',
+    }.contains(targetStatus)) {
+      throw FormatException('Unsupported pickup status: ${request.status}.');
     }
-
-    if (targetStatus == 'in_progress' && currentStatus == 'IN_PROGRESS') {
-      return;
-    }
-
-    if (targetStatus != 'picked_up' || currentStatus != 'IN_PROGRESS') {
-      throw FormatException(
-        'Pickup cannot transition from $currentStatus to ${request.status}.',
+    if (targetStatus == 'picked_up' &&
+        (request.scannedCode?.trim().isEmpty ?? true)) {
+      throw const FormatException(
+        'Scan or enter the parcel tracking code before completing pickup.',
       );
     }
-    await sendAction('pickup_complete', <String, dynamic>{
-      'scanned_code': pickup.trackingCode,
-      'scan_method': 'MANUAL',
-    });
+
+    final batch = await fetchPickupBatchForAssignment(pickup.id);
+    var status = batch.normalizedStatus;
+    if (status == 'LOADING') {
+      await acceptPickupBatch(batch.id);
+      status = 'READY';
+    }
+    if (targetStatus == 'accepted' && status == 'READY') return;
+    if (status == 'READY' && targetStatus != 'accepted') {
+      await startPickupBatch(batch.id);
+      status = 'IN_PROGRESS';
+    }
+    if (targetStatus == 'in_progress' && status == 'IN_PROGRESS') return;
+    if (targetStatus != 'picked_up' || status != 'IN_PROGRESS') {
+      throw FormatException(
+        'This pickup batch cannot perform the requested action. Refresh pickups.',
+      );
+    }
+    await scanPickupBatch(
+      batch.id,
+      request.scannedCode!.trim(),
+      scanMethod: request.scanMethod,
+    );
   }
 
   static Future<bool> verifyPickup(

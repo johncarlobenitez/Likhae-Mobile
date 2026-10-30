@@ -9,10 +9,6 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
-    buildFeatures {
-        resValues = true
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -28,11 +24,6 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        val mapboxAccessToken =
-            providers.gradleProperty("MAPBOX_ACCESS_TOKEN")
-                .orElse(providers.environmentVariable("MAPBOX_ACCESS_TOKEN"))
-                .orElse("")
-        resValue("string", "mapbox_access_token", mapboxAccessToken.get())
     }
 
     buildTypes {
@@ -42,11 +33,6 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-}
-
-dependencies {
-    // Required by mapbox_navigation_sdk to keep its Kotlin runtime aligned.
-    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.9.24"))
 }
 
 kotlin {
