@@ -1,7 +1,10 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/shop_colors.dart';
 import 'glass_surface.dart';
+import 'app_motion.dart';
 
 export '../../core/theme/shop_colors.dart';
 export 'glass_surface.dart';
@@ -201,7 +204,7 @@ class ShopProductCard extends StatelessWidget {
                 ColoredBox(color: colors.surfaceContainerHighest, child: image),
                 if (discounted) Positioned(left: 8, top: 8, child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                  decoration: BoxDecoration(color: ShopColors.accent,
+                  decoration: BoxDecoration(color: AppTheme.resolve(context, ShopColors.accent, fill: true),
                       borderRadius: BorderRadius.circular(8)),
                   child: Text('-${((originalPrice! - price) / originalPrice! * 100).round()}%',
                       style: const TextStyle(color: Colors.white,
@@ -215,18 +218,15 @@ class ShopProductCard extends StatelessWidget {
                       onPressed: wishlistLoading ? null : onWishlist,
                       constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                       iconSize: 23,
-                      icon: wishlistLoading
-                          ? const SizedBox.square(dimension: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : Icon(wishlisted ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded, color: colors.primary),
+                      icon: AppFavoriteIcon(selected: wishlisted,
+                          loading: wishlistLoading),
                     ),
                   )),
                 ),
                 if (outOfStock || availabilityLabel != null)
                   Positioned(bottom: 8, left: 8, right: 8, child: Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: ShopColors.accentDark,
+                    decoration: BoxDecoration(color: AppTheme.resolve(context, ShopColors.accentDark, fill: true),
                         borderRadius: BorderRadius.circular(8)),
                     child: Text(availabilityLabel ?? 'Out of stock',
                         textAlign: TextAlign.center, style: const TextStyle(
@@ -288,7 +288,7 @@ class ShopProductCard extends StatelessWidget {
               Wrap(spacing: 5, runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center, children: [
                 if (rating != null) ...[
-                  const Icon(Icons.star_rounded, color: Color(0xFF956313), size: 16),
+                   Icon(Icons.star_rounded, color: AppTheme.resolve(context, Color(0xFF956313)), size: 16),
                   Text(rating!.toStringAsFixed(1), style: TextStyle(
                       color: colors.onSurface, fontSize: 12, fontWeight: FontWeight.w600)),
                   Text('·', style: TextStyle(color: colors.onSurfaceVariant)),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/app_motion.dart';
 
 import '../pickups/rider_pickup_details_screen.dart';
 import '../scanner/rider_parcel_scan_result.dart';
@@ -78,6 +79,17 @@ class _RiderDeliveryScanFieldState extends State<RiderDeliveryScanField> {
           helperMaxLines: 2,
           errorText: _error,
           errorMaxLines: 2,
+          suffixIcon:
+              _controller.text.trim().isNotEmpty &&
+                  _controller.text.trim() == widget.expectedTrackingCode.trim()
+              ? AppReveal(
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    semanticLabel: 'Tracking code matches',
+                  ),
+                )
+              : null,
           border: const OutlineInputBorder(),
         ),
       ),
@@ -87,6 +99,21 @@ class _RiderDeliveryScanFieldState extends State<RiderDeliveryScanField> {
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Scan parcel'),
       ),
+      if (_controller.text.trim().isNotEmpty &&
+          _controller.text.trim() == widget.expectedTrackingCode.trim())
+        AppReveal(child: Container(
+          margin: const EdgeInsets.only(top: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF173A29) : const Color(0xFFEAF6EE),
+            borderRadius: BorderRadius.circular(12)),
+          child: Row(children: [
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF48A578), size: 22),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Parcel matched\nReady to confirm delivery',
+              style: TextStyle(color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF6FD19A) : const Color(0xFF1B7A46), fontSize: 12))),
+          ]))),
     ],
   );
 }

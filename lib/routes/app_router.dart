@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../core/config/app_config.dart';
 import '../core/storage/remembered_login_storage.dart';
 import '../core/storage/token_storage.dart';
-import '../core/theme/app_theme.dart';
+
 import '../features/auth/login_screen.dart';
 import '../features/auth/policy_review_screen.dart';
 import '../models/auth_user_model.dart';
@@ -40,12 +40,15 @@ import '../features/buyer/messages/messages_screen.dart';
 import '../features/buyer/profile/account_screen.dart';
 import '../features/buyer/profile/review_history_screen.dart';
 import '../features/buyer/rewards/rewards_screen.dart';
+import '../features/buyer/rewards/seller_offers_screen.dart';
+import '../features/buyer/ai/buyer_ai_assistant.dart';
 import '../features/buyer/store/following_shops_screen.dart';
 import '../features/buyer/store/store_screen.dart';
 import '../features/buyer/settings/buyer_system_settings_screen.dart';
 import '../features/buyer/settings/buyer_system_settings_controller.dart';
 import '../features/buyer/wishlist/wishlist_screen.dart';
 import '../features/rider/dashboard/dashboard_screen.dart';
+import '../features/rider/mobile_workflows_screen.dart';
 import '../features/rider/deliveries/rider_deliveries_screen.dart';
 import '../features/rider/deliveries/rider_delivery_details_screen.dart';
 import '../features/rider/deliveries/rider_delivery_models.dart';
@@ -69,6 +72,7 @@ import '../services/rider_mobile_service.dart';
 import '../shared/widgets/buyer_navigation.dart';
 import '../shared/widgets/buyer_navigation_badges.dart';
 import '../shared/widgets/async_route_builder.dart';
+import '../shared/widgets/opening_animation_screen.dart';
 
 void safeBack(BuildContext context, {String fallback = '/login'}) {
   if (context.canPop()) {
@@ -84,10 +88,6 @@ class _PolicyReviewRouteData {
   final List<PlatformPolicy> policies;
 
   const _PolicyReviewRouteData({required this.user, required this.policies});
-}
-
-Widget _authTheme(Widget child) {
-  return Theme(data: AppTheme.lightTheme, child: child);
 }
 
 Future<void> _toggleApiWishlist(int productId) async {
@@ -616,7 +616,22 @@ Widget _riderNavigationFrame(
       onEarnings: () => context.go('/rider/earnings'),
       onMessages: () => context.go('/rider/messages'),
       onProfile: () => context.go('/rider/profile'),
-      child: page,
+      child: AnimatedBuilder(
+        animation: BuyerSystemSettingsController.instance,
+        builder: (BuildContext context, Widget? child) => Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Positioned.fill(child: page),
+            if (BuyerSystemSettingsController.instance.showAiAssistant &&
+                MediaQuery.viewInsetsOf(context).bottom == 0)
+              const BuyerAiAssistant(
+                workspace: 'rider',
+                page: 'dashboard',
+                pageTitle: 'Rider Assistant',
+              ),
+          ],
+        ),
+      ),
     );
     if (isLocalBarangay) {
       frame = RiderAvailabilityTracker(child: frame);
@@ -1019,6 +1034,12 @@ class _SessionRestoreScreen extends StatefulWidget {
 }
 
 class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
+  final Completer<void> _openingDone = Completer<void>();
+
+  void _finishOpening() {
+    if (!_openingDone.isCompleted) _openingDone.complete();
+  }
+
   bool _loading = true;
   String? _error;
 
@@ -1039,12 +1060,14 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
     try {
       final String? token = await TokenStorage.readToken();
       if (token == null || token.trim().isEmpty) {
+        await _openingDone.future;
         if (mounted) context.go('/login');
         return;
       }
 
       final AuthenticatedUserSession session =
           await AuthService.getCurrentSession();
+      await _openingDone.future;
       if (!mounted) return;
       if (session.pendingPolicies.isNotEmpty) {
         context.go(
@@ -1058,9 +1081,11 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
         _routeAuthenticatedUser(context, session.user);
       }
     } on AuthSessionExpiredException {
+      await _openingDone.future;
       if (mounted) context.go('/login');
     } catch (error) {
       if (!mounted) return;
+      _finishOpening();
       setState(() {
         _loading = false;
         _error = error.toString().replaceFirst('Exception: ', '');
@@ -1069,22 +1094,20 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
   }
 
   @override
+  void dispose() {
+    _finishOpening();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_loading) return OpeningAnimationScreen(onFinished: _finishOpening);
     return Scaffold(
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: _loading
-                ? const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Restoring your session...'),
-                    ],
-                  )
-                : Column(
+            child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       const Icon(Icons.cloud_off_outlined, size: 42),
@@ -1407,6 +1430,14 @@ final GoRouter appRouter = GoRouter(
                                 : null,
                             onReceiveOrder: AppConfig.apiEnabled
                                 ? BuyerMobileService.confirmOrderReceived
+                                : null,
+                            onConfirmShipmentReceived: AppConfig.apiEnabled
+                                ? (BuyerOrderData order,
+                                        BuyerOrderParcelData shipment) =>
+                                      BuyerMobileService.confirmShipmentReceived(
+                                        orderId: order.id,
+                                        shipmentId: shipment.id,
+                                      )
                                 : null,
                             onConfirmDeliveryPin: AppConfig.apiEnabled
                                 ? (
@@ -1798,32 +1829,7 @@ final GoRouter appRouter = GoRouter(
       path: '/login',
       name: 'login',
       builder: (BuildContext context, GoRouterState state) {
-        return _authTheme(
-          LoginScreen(
-            onRegister: () => context.push('/register'),
-            onForgotPassword: () => context.push('/forgot-password'),
-            onSignIn: (String email, String password, bool rememberMe) async {
-              await _handleLogin(
-                context,
-                email: email,
-                password: password,
-                rememberMe: rememberMe,
-                onError: () {},
-              );
-            },
-            onGoogleSignIn: () async {
-              try {
-                final Map<String, dynamic> payload =
-                    await AuthService.signInWithGoogle();
-                _routeAuthenticatedMobileUser(context, payload);
-              } on GoogleRegistrationRequiredException catch (error) {
-                if (context.mounted) {
-                  context.push('/register', extra: error.profile);
-                }
-              }
-            },
-          ),
-        );
+        return LoginScreen(onRegister: () => context.push('/register'), onForgotPassword: () => context.push('/forgot-password'), onSignIn: (String email, String password, bool rememberMe) async {await _handleLogin(context, email: email, password: password, rememberMe: rememberMe, onError: () {});}, onGoogleSignIn: () async {try {final Map<String, dynamic> payload = await AuthService.signInWithGoogle(); _routeAuthenticatedMobileUser(context, payload);} on GoogleRegistrationRequiredException catch (error) {if (context.mounted) {context.push('/register', extra: error.profile);}}});
       },
     ),
 
@@ -1834,37 +1840,7 @@ final GoRouter appRouter = GoRouter(
         final Map<String, dynamic>? googleProfile = state.extra is Map
             ? Map<String, dynamic>.from(state.extra as Map)
             : null;
-        return _authTheme(
-          RegisterScreen(
-            googleProfile: googleProfile,
-            onSendEmailVerificationCode:
-                AuthService.sendRegistrationEmailVerificationCode,
-            onVerifyEmailVerificationCode:
-                AuthService.verifyRegistrationEmailVerificationCode,
-            onSubmit: (RegisterFormData data) async {
-              final Map<String, dynamic> payload = await AuthService.register(
-                data,
-              );
-              if (!context.mounted) return;
-              final dynamic message = payload['message'];
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    message?.toString() ?? 'Registration submitted.',
-                  ),
-                ),
-              );
-              context.go('/login');
-            },
-            onPickDocument: _pickRegistrationDocument,
-            loadRegions: PhilippineAddressService.fetchRegions,
-            loadProvinces: PhilippineAddressService.fetchProvinces,
-            loadMunicipalities: PhilippineAddressService.fetchMunicipalities,
-            loadBarangays: PhilippineAddressService.fetchBarangays,
-            loadPostalCode: PhilippineAddressService.fetchPostalCode,
-            loadLogisticsCenters: AuthService.fetchLogisticsCenters,
-          ),
-        );
+        return RegisterScreen(googleProfile: googleProfile, onSendEmailVerificationCode: AuthService.sendRegistrationEmailVerificationCode, onVerifyEmailVerificationCode: AuthService.verifyRegistrationEmailVerificationCode, onSubmit: (RegisterFormData data) async {final Map<String, dynamic> payload = await AuthService.register(data); if (!context.mounted) return; final dynamic message = payload['message']; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message?.toString() ?? 'Registration submitted.'))); context.go('/login');}, onPickDocument: _pickRegistrationDocument, loadRegions: PhilippineAddressService.fetchRegions, loadProvinces: PhilippineAddressService.fetchProvinces, loadMunicipalities: PhilippineAddressService.fetchMunicipalities, loadBarangays: PhilippineAddressService.fetchBarangays, loadPostalCode: PhilippineAddressService.fetchPostalCode, loadLogisticsCenters: AuthService.fetchLogisticsCenters);
       },
     ),
 
@@ -1872,7 +1848,7 @@ final GoRouter appRouter = GoRouter(
       path: '/forgot-password',
       name: 'forgot-password',
       builder: (BuildContext context, GoRouterState state) {
-        return _authTheme(const ForgotPasswordScreen());
+        return const ForgotPasswordScreen();
       },
     ),
 
@@ -1903,7 +1879,8 @@ final GoRouter appRouter = GoRouter(
               ) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const RouteLoadingPage(title: 'Product details');
+                  return const RouteLoadingPage(title: 'Product details',
+                      layout: LoadingLayout.productDetails);
                 }
                 if (snapshot.hasError || !snapshot.hasData) {
                   return Scaffold(
@@ -2055,7 +2032,8 @@ final GoRouter appRouter = GoRouter(
           builder: (BuildContext context, AsyncSnapshot<StorePageData> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
-              return const RouteLoadingPage(title: 'Store');
+              return const RouteLoadingPage(title: 'Store',
+                  layout: LoadingLayout.products);
             }
 
             if (snapshot.hasError || !snapshot.hasData) {
@@ -2213,7 +2191,8 @@ final GoRouter appRouter = GoRouter(
               ) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const RouteLoadingPage(title: 'Wishlist');
+                  return const RouteLoadingPage(title: 'Wishlist',
+                      layout: LoadingLayout.products);
                 }
                 if (snapshot.hasError) {
                   return Scaffold(
@@ -2817,6 +2796,9 @@ final GoRouter appRouter = GoRouter(
           cashbackRate: data.cashbackRate,
           onBack: () => safeBack(context, fallback: '/buyer/home'),
           onBrowseProducts: () => context.push('/buyer/products'),
+          onViewSellerOffers: AppConfig.apiEnabled
+              ? () => context.push('/buyer/seller-offers')
+              : null,
           onGoToCheckout: () => context.push('/buyer/cart'),
           onRefresh: AppConfig.apiEnabled
               ? BuyerMobileService.fetchRewards
@@ -2861,6 +2843,9 @@ final GoRouter appRouter = GoRouter(
           return RewardsScreen(
             onBack: () => safeBack(context, fallback: '/buyer/home'),
             onBrowseProducts: () => context.push('/buyer/products'),
+            onViewSellerOffers: AppConfig.apiEnabled
+                ? () => context.push('/buyer/seller-offers')
+                : null,
           );
         }
         return AsyncRouteBuilder<RewardsData>(
@@ -2919,6 +2904,17 @@ final GoRouter appRouter = GoRouter(
             child: BuyerReturnsScreen(
               onBack: () => safeBack(context, fallback: '/buyer/orders'),
             ),
+          ),
+    ),
+
+    GoRoute(
+      path: '/buyer/seller-offers',
+      name: 'buyer-seller-offers',
+      builder: (BuildContext context, GoRouterState state) =>
+          _buyerNavigationFrame(
+            context,
+            currentIndex: 0,
+            child: const SellerOffersScreen(),
           ),
     ),
 
@@ -2990,6 +2986,11 @@ final GoRouter appRouter = GoRouter(
       path: '/rider/settings',
       name: 'rider-settings',
       builder: (BuildContext context, GoRouterState state) {
+        unawaited(
+          BuyerSystemSettingsController.instance.refreshServerSettings(
+            riderMode: true,
+          ),
+        );
         return _riderNavigationFrame(
           context,
           currentIndex: 5,
@@ -2999,6 +3000,65 @@ final GoRouter appRouter = GoRouter(
           ),
         );
       },
+    ),
+
+    GoRoute(
+      path: '/rider/returns',
+      name: 'rider-returns',
+      builder: (BuildContext context, GoRouterState state) =>
+          _riderNavigationFrame(
+            context,
+            currentIndex: 2,
+            requiredRole: _RiderOperationalRole.localBarangay,
+            child: const RiderReturnsScreen(),
+          ),
+    ),
+
+    GoRoute(
+      path: '/rider/trips',
+      name: 'rider-trips',
+      builder: (BuildContext context, GoRouterState state) =>
+          _riderNavigationFrame(
+            context,
+            currentIndex: 2,
+            requiredRole: _RiderOperationalRole.localBarangay,
+            child: const RiderTripsScreen(),
+          ),
+    ),
+
+    GoRoute(
+      path: '/rider/payouts',
+      name: 'rider-payouts',
+      builder: (BuildContext context, GoRouterState state) =>
+          _riderNavigationFrame(
+            context,
+            currentIndex: 4,
+            requiredRole: _RiderOperationalRole.localBarangay,
+            child: const RiderPayoutsScreen(),
+          ),
+    ),
+
+    GoRoute(
+      path: '/rider/attendance',
+      name: 'rider-attendance',
+      builder: (BuildContext context, GoRouterState state) =>
+          _riderNavigationFrame(
+            context,
+            currentIndex: 6,
+            requiredRole: _RiderOperationalRole.interLogistics,
+            child: const RiderAttendanceScreen(),
+          ),
+    ),
+
+    GoRoute(
+      path: '/rider/profile/updates',
+      name: 'rider-profile-updates',
+      builder: (BuildContext context, GoRouterState state) =>
+          _riderNavigationFrame(
+            context,
+            currentIndex: 5,
+            child: const RiderProfileUpdatesScreen(),
+          ),
     ),
 
     GoRoute(
@@ -3363,6 +3423,8 @@ final GoRouter appRouter = GoRouter(
                         messageStreamBuilder: RiderMobileService.watchMessages,
                         onPresenceHeartbeat:
                             RiderMobileService.touchMessagePresence,
+                        onRefreshConversationPresence:
+                            RiderMobileService.refreshConversationPresence,
                         statusMessage: error?.toString(),
                         onBack: () =>
                             safeBack(context, fallback: '/rider/dashboard'),
@@ -3398,6 +3460,7 @@ final GoRouter appRouter = GoRouter(
                           await context.push('/rider/remittances');
                           await refresh();
                         },
+                        onOpenPayouts: () => context.push('/rider/payouts'),
                         summary: data?.summary,
                         riderName: data?.riderName ?? '',
                         earningsNotice:
@@ -3443,6 +3506,11 @@ final GoRouter appRouter = GoRouter(
                         statusMessage: error?.toString(),
                         onRefresh: refresh,
                         onSystemSettings: () => context.push('/rider/settings'),
+                        onReturns: () => context.push('/rider/returns'),
+                        onTrips: () => context.push('/rider/trips'),
+                        onAttendance: () => context.push('/rider/attendance'),
+                        onProfileUpdates: () =>
+                            context.push('/rider/profile/updates'),
                         onEditProfile: () async {
                           await context.push<bool>(
                             '/rider/profile/edit',

@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -140,7 +142,7 @@ class _RiderRemittancesScreenState extends State<RiderRemittancesScreen>
     final canEdit =
         data?.available == true && !_submitting && !_loading && _error == null;
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF7F2),
+      backgroundColor: AppTheme.resolve(context, const Color(0xFFFBF7F2), fill: true),
       appBar: AppBar(title: const Text('Cash remittances')),
       body: RefreshIndicator(
         onRefresh: _submitting ? () async {} : _refresh,

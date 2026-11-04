@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -70,6 +72,7 @@ class _RiderDeliveryDetailsScreenState
   final TextEditingController _failureController = TextEditingController();
 
   String? _proofPath;
+  DateTime? _nextAttemptAt;
   RiderParcelScanResult? _deliveryScan;
   bool _submitting = false;
   bool _takingProof = false;
@@ -115,7 +118,7 @@ class _RiderDeliveryDetailsScreenState
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : const Color(0xFF3E130F),
+          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, const Color(0xFF3E130F), fill: true),
           content: Text(message),
         ),
       );
@@ -190,6 +193,8 @@ class _RiderDeliveryDetailsScreenState
     String? note,
     String? receiverName,
     String? proofPath,
+    String? attemptStatus,
+    DateTime? nextAttemptAt,
   }) async {
     if (_submitting) {
       return;
@@ -223,6 +228,8 @@ class _RiderDeliveryDetailsScreenState
             collectedAmount: status == 'delivered'
                 ? _collectionController.text.trim()
                 : null,
+            attemptStatus: attemptStatus,
+            nextAttemptAt: nextAttemptAt,
           ),
         );
       }
@@ -244,6 +251,8 @@ class _RiderDeliveryDetailsScreenState
       _showMessage(
         _delivery.isPreview
             ? 'Preview moved to $label. Nothing was saved.'
+            : attemptStatus == 'RESCHEDULED'
+            ? 'Delivery rescheduled for ${_formatSchedule(nextAttemptAt!)}.'
             : 'Parcel moved to $label.',
       );
     } catch (error) {
@@ -304,7 +313,60 @@ class _RiderDeliveryDetailsScreenState
       return;
     }
 
-    await _transition('failed', note: note);
+    await _transition('failed', note: note, attemptStatus: 'FAILED');
+  }
+
+  Future<void> _chooseRescheduleTime() async {
+    final DateTime now = DateTime.now();
+    final DateTime initial = _nextAttemptAt ?? now.add(const Duration(hours: 2));
+    final DateTime? day = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(now) ? now : initial,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+    );
+    if (!mounted || day == null) return;
+    final TimeOfDay? time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (!mounted || time == null) return;
+    final DateTime selected = DateTime(
+      day.year,
+      day.month,
+      day.day,
+      time.hour,
+      time.minute,
+    );
+    if (!selected.isAfter(DateTime.now())) {
+      _showMessage('Choose a time in the future.', error: true);
+      return;
+    }
+    setState(() => _nextAttemptAt = selected);
+  }
+
+  Future<void> _submitRescheduled() async {
+    final String note = _failureController.text.trim();
+    if (note.isEmpty) {
+      _showMessage('Enter a reason for the delivery reschedule.', error: true);
+      return;
+    }
+    if (_nextAttemptAt == null || !_nextAttemptAt!.isAfter(DateTime.now())) {
+      _showMessage('Choose a future delivery time.', error: true);
+      return;
+    }
+    await _transition(
+      'failed',
+      note: note,
+      attemptStatus: 'RESCHEDULED',
+      nextAttemptAt: _nextAttemptAt,
+    );
+  }
+
+  String _formatSchedule(DateTime value) {
+    final String date =
+        '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+    return '$date ${TimeOfDay.fromDateTime(value).format(context)}';
   }
 
   String _labelForStatus(String status) {
@@ -327,9 +389,9 @@ class _RiderDeliveryDetailsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -337,12 +399,12 @@ class _RiderDeliveryDetailsScreenState
           onPressed:
               widget.onBackToDeliveries ??
               () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back_rounded, color: _text),
+          icon:  Icon(Icons.arrow_back_rounded, color: AppTheme.resolve(context, _text)),
         ),
-        title: const Text(
+        title:  Text(
           'Delivery Details',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 19,
             fontWeight: FontWeight.w900,
           ),
@@ -381,17 +443,17 @@ class _RiderDeliveryDetailsScreenState
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'DELIVERY DETAILS',
             style: TextStyle(
-              color: _maroon,
+              color: AppTheme.resolve(context, _maroon),
               fontSize: 11.5,
               letterSpacing: 1.6,
               fontWeight: FontWeight.w900,
@@ -400,8 +462,8 @@ class _RiderDeliveryDetailsScreenState
           const SizedBox(height: 7),
           Text(
             _delivery.trackingCode,
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 25,
               height: 1.1,
               fontWeight: FontWeight.w900,
@@ -410,7 +472,7 @@ class _RiderDeliveryDetailsScreenState
           const SizedBox(height: 8),
           Text(
             '${_delivery.statusLabel} · Buyer: ${_delivery.buyerName}',
-            style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.45),
+            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13.5, height: 1.45),
           ),
         ],
       ),
@@ -421,9 +483,9 @@ class _RiderDeliveryDetailsScreenState
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F0E8),
+        color: AppTheme.resolve(context, const Color(0xFFF7F0E8), fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE4D3BF)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFE4D3BF))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,20 +496,20 @@ class _RiderDeliveryDetailsScreenState
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE9D9C8),
+                  color: AppTheme.resolve(context, const Color(0xFFE9D9C8), fill: true),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
+                child:  Icon(
                   Icons.location_on_rounded,
-                  color: _maroon,
+                  color: AppTheme.resolve(context, _maroon),
                   size: 18,
                 ),
               ),
               const SizedBox(width: 12),
-              const Text(
+               Text(
                 'Recipient',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                 ),
@@ -468,7 +530,7 @@ class _RiderDeliveryDetailsScreenState
           _DetailRow(
             label: 'Order Amount',
             value: formatRiderMoney(_delivery.amount),
-            valueColor: _maroon,
+            valueColor: AppTheme.resolve(context, _maroon),
             compact: true,
             valueWeight: FontWeight.w700,
           ),
@@ -522,10 +584,10 @@ class _RiderDeliveryDetailsScreenState
               onChanged: (scan) => _deliveryScan = scan,
             ),
             const SizedBox(height: 12),
-            const Text(
+             Text(
               'CONFIRM DELIVERY',
               style: TextStyle(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 fontSize: 11,
                 letterSpacing: 1.4,
                 fontWeight: FontWeight.w900,
@@ -547,8 +609,8 @@ class _RiderDeliveryDetailsScreenState
             OutlinedButton.icon(
               onPressed: _submitting || _takingProof ? null : _chooseProof,
               style: OutlinedButton.styleFrom(
-                foregroundColor: _maroon,
-                side: const BorderSide(color: _border),
+                foregroundColor: AppTheme.resolve(context, _maroon),
+                side:  BorderSide(color: AppTheme.resolve(context, _border)),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 14,
@@ -572,7 +634,7 @@ class _RiderDeliveryDetailsScreenState
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: ColoredBox(
-                  color: _soft,
+                  color: AppTheme.resolve(context, _soft, fill: true),
                   child: Image.file(
                     File(_proofPath!),
                     width: double.infinity,
@@ -583,12 +645,12 @@ class _RiderDeliveryDetailsScreenState
                           BuildContext context,
                           Object error,
                           StackTrace? stackTrace,
-                        ) => const SizedBox(
+                        ) =>  SizedBox(
                           height: 110,
                           child: Center(
                             child: Text(
                               'Watermarked proof preview is unavailable.',
-                              style: TextStyle(color: _muted, fontSize: 12),
+                              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                             ),
                           ),
                         ),
@@ -603,7 +665,7 @@ class _RiderDeliveryDetailsScreenState
                 onPressed: _submitting ? null : _submitDelivered,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _success,
+                  backgroundColor: AppTheme.resolve(context, _success, fill: true),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -617,12 +679,12 @@ class _RiderDeliveryDetailsScreenState
               ),
             ),
             const SizedBox(height: 20),
-            const Divider(height: 1, color: _border),
+             Divider(height: 1, color: AppTheme.resolve(context, _border)),
             const SizedBox(height: 18),
-            const Text(
+             Text(
               'FAILED DELIVERY',
               style: TextStyle(
-                color: _danger,
+                color: AppTheme.resolve(context, _danger),
                 fontSize: 11,
                 letterSpacing: 1.4,
                 fontWeight: FontWeight.w900,
@@ -644,9 +706,9 @@ class _RiderDeliveryDetailsScreenState
               child: OutlinedButton.icon(
                 onPressed: _submitting ? null : _submitFailed,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _danger,
-                  backgroundColor: const Color(0xFFFCEBE8),
-                  side: const BorderSide(color: Color(0xFFE5B4A9)),
+                  foregroundColor: AppTheme.resolve(context, _danger),
+                  backgroundColor: AppTheme.resolve(context, const Color(0xFFFCEBE8), fill: true),
+                  side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFE5B4A9))),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -656,6 +718,25 @@ class _RiderDeliveryDetailsScreenState
                   'Record Delivery Failed',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _submitting ? null : _chooseRescheduleTime,
+              icon: const Icon(Icons.event_available_outlined),
+              label: Text(
+                _nextAttemptAt == null
+                    ? 'Choose a new delivery time'
+                    : 'Scheduled: ${_formatSchedule(_nextAttemptAt!)}',
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 48,
+              child: FilledButton.tonalIcon(
+                onPressed: _submitting ? null : _submitRescheduled,
+                icon: const Icon(Icons.schedule_send_outlined),
+                label: const Text('Record Failed & Reschedule'),
               ),
             ),
           ],
@@ -669,7 +750,7 @@ class _RiderDeliveryDetailsScreenState
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: _soft,
+                color: AppTheme.resolve(context, _soft, fill: true),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -678,8 +759,8 @@ class _RiderDeliveryDetailsScreenState
                     : status == 'failed' || status == 'delivery_failed'
                     ? 'This delivery is recorded as failed.'
                     : 'No delivery transition is available for the current status.',
-                style: const TextStyle(
-                  color: _muted,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _muted),
                   fontSize: 12.5,
                   height: 1.45,
                 ),
@@ -691,8 +772,8 @@ class _RiderDeliveryDetailsScreenState
                 ? null
                 : () => widget.onViewTracking!(_delivery),
             style: OutlinedButton.styleFrom(
-              foregroundColor: _text,
-              side: const BorderSide(color: _border),
+              foregroundColor: AppTheme.resolve(context, _text),
+              side:  BorderSide(color: AppTheme.resolve(context, _border)),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -710,8 +791,8 @@ class _RiderDeliveryDetailsScreenState
                 widget.onBackToDeliveries ??
                 () => Navigator.of(context).maybePop(),
             style: OutlinedButton.styleFrom(
-              foregroundColor: _text,
-              side: const BorderSide(color: _border),
+              foregroundColor: AppTheme.resolve(context, _text),
+              side:  BorderSide(color: AppTheme.resolve(context, _border)),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -731,21 +812,21 @@ class _RiderDeliveryDetailsScreenState
   InputDecoration _inputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFFA99386), fontSize: 13),
+      hintStyle:  TextStyle(color: AppTheme.resolve(context, Color(0xFFA99386)), fontSize: 13),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppTheme.resolve(context, Colors.white, fill: true),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _maroon, width: 1.3),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.3),
       ),
     );
   }
@@ -767,9 +848,9 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
+        color: AppTheme.resolve(context, const Color(0xFFFFFDF9), fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -781,16 +862,16 @@ class _SectionCard extends StatelessWidget {
                 height: 38,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1E4D7),
+                  color: AppTheme.resolve(context, const Color(0xFFF1E4D7), fill: true),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(icon, color: const Color(0xFF561C17), size: 19),
+                child: Icon(icon, color: AppTheme.resolve(context, const Color(0xFF561C17)), size: 19),
               ),
               const SizedBox(width: 10),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Color(0xFF3B211B),
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, Color(0xFF3B211B)),
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                 ),
@@ -823,13 +904,13 @@ class _DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextStyle labelStyle = TextStyle(
-      color: const Color(0xFF987865),
+      color: AppTheme.resolve(context, const Color(0xFF987865)),
       fontSize: compact ? 12 : 12,
       fontWeight: FontWeight.w600,
     );
 
     final TextStyle valueStyle = TextStyle(
-      color: valueColor ?? const Color(0xFF3B211B),
+      color: valueColor ?? AppTheme.resolve(context, const Color(0xFF3B211B)),
       fontSize: compact ? 15 : 14,
       height: 1.45,
       fontWeight: valueWeight ?? FontWeight.w700,
@@ -867,7 +948,7 @@ class _PrimaryActionButton extends StatelessWidget {
         onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: const Color(0xFF561C17),
+          backgroundColor: AppTheme.resolve(context, const Color(0xFF561C17), fill: true),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -889,11 +970,11 @@ class _MessageBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color background = error
-        ? const Color(0xFFFCEBE8)
-        : const Color(0xFFEAF6EE);
+        ? AppTheme.resolve(context, const Color(0xFFFCEBE8))
+        : AppTheme.resolve(context, const Color(0xFFEAF6EE));
     final Color foreground = error
-        ? const Color(0xFFB42318)
-        : const Color(0xFF1B7A46);
+        ? AppTheme.resolve(context, const Color(0xFFB42318))
+        : AppTheme.resolve(context, const Color(0xFF1B7A46));
 
     return Container(
       width: double.infinity,
@@ -923,14 +1004,14 @@ class _PreviewDetailsNotice extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6EFE7),
+        color: AppTheme.resolve(context, const Color(0xFFF6EFE7), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
       ),
-      child: const Text(
+      child:  Text(
         'Sample delivery details only. Preview actions update this screen locally and are not saved to Laravel.',
         style: TextStyle(
-          color: Color(0xFF987865),
+          color: AppTheme.resolve(context, Color(0xFF987865)),
           fontSize: 12.5,
           height: 1.5,
           fontWeight: FontWeight.w600,

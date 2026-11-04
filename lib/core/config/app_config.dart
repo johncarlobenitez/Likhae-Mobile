@@ -65,6 +65,7 @@ class AppConfig {
   }
 
   static String resolveMediaUrl(String? value) {
+    if (value?.startsWith('assets/opening/') == true) return value!;
     if (value == null || value.trim().isEmpty) {
       return '';
     }

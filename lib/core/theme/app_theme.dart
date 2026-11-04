@@ -1122,8 +1122,80 @@ class AppTheme {
 
   static Color adaptive(Color lightColor) {
     if (!ThemeController.instance.usesDarkPalette) return lightColor;
+    return _darkColor(lightColor);
+  }
+
+  /// Resolves legacy screen colors against the local theme and registers an
+  /// inherited dependency, so retained routes update when the theme changes.
+  /// Saturated brand/status fills keep their white foregrounds; pale surfaces
+  /// and dark labels use the shared warm dark palette.
+  static final Map<int, Color> _resolvedDarkColors = <int, Color>{};
+
+  static Color resolve(BuildContext context, Color lightColor, {bool fill = false}) {
+    lightColor = _sharedLightColor(lightColor);
+    if (!isDark(context)) return lightColor;
+    final key = lightColor.toARGB32() * 2 + (fill ? 1 : 0);
+    final cached = _resolvedDarkColors[key];
+    if (cached != null) return cached;
+    final resolved = _resolveDarkColor(lightColor, fill: fill);
+    // Only a small fixed palette is used by screens. Bound the cache for any
+    // future caller that supplies continuously changing colors.
+    if (_resolvedDarkColors.length < 256) _resolvedDarkColors[key] = resolved;
+    return resolved;
+  }
+
+  static Color _sharedLightColor(Color color) => switch (color.toARGB32()) {
+    0xFFFBF7F2 || 0xFFF7F2E9 || 0xFFF5F8F6 => lightBackground,
+    0xFFFFFDF9 || 0xFFFFFCF8 => lightSurface,
+    0xFFF6EFE7 || 0xFFF3ECE4 || 0xFFFFFAF5 => lightSurfaceSoft,
+    0xFFF1E4D7 || 0xFFEFE7DE => lightSurfaceStrong,
+    0xFFEADCCC || 0xFFE5D5C3 => lightBorder,
+    0xFF3B211B || 0xFF3B261F => lightText,
+    0xFF987865 || 0xFF8B7669 => lightMuted,
+    0xFFA99386 => lightMutedSoft,
+    0xFF561C17 || 0xFF9E171B => lightMaroon,
+    0xFF3E130F || 0xFF741015 => lightMaroonDark,
+    0xFF7A2A22 => lightMaroonSoft,
+    0xFF6C4936 => lightBrown,
+    _ => color,
+  };
+
+  static Color _resolveDarkColor(Color lightColor, {required bool fill}) {
+    if (lightColor.a < 1) return lightColor; // Shadows and camera overlays.
+    if (fill && lightColor == Colors.black) return lightColor;
+    final hsl = HSLColor.fromColor(lightColor);
+    if (fill && hsl.saturation > .2 && hsl.lightness < .55) {
+      return lightColor;
+    }
+    final mapped = _darkColor(lightColor);
+    if (mapped != lightColor) return mapped;
+    if (fill) {
+      if (hsl.lightness > .8) {
+        if (hsl.saturation > .3) {
+          return hsl.withLightness(.18).withSaturation(.3).toColor();
+        }
+        return darkSurfaceSoft;
+      }
+    } else if (hsl.lightness < .55) {
+      return hsl.saturation < .2
+          ? darkText
+          : hsl.withLightness(.72).toColor();
+    }
+    return lightColor;
+  }
+
+  static Color _darkColor(Color lightColor) {
 
     switch (lightColor.toARGB32()) {
+      case 0xFFFFFFFF: return darkSurface;
+      case 0xFF000000: return darkText;
+      case 0xFF1B7A46:
+      case 0xFF168548:
+      case 0xFF237A44:
+      case 0xFF19734A: return darkSuccess;
+      case 0xFFF3E4DC:
+      case 0xFFEDE4DC: return darkSurfaceStrong;
+      case 0xFFD9CFC3: return darkBorder;
       case 0xFFF6F4F1: return darkBackground;
       case 0xFFFFFEFC: return darkSurface;
       case 0xFFF0ECE8: return darkSurfaceSoft;

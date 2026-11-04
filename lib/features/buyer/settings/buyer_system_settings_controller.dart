@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../services/buyer_mobile_service.dart';
+import '../../../services/workspace_mobile_service.dart';
 
 class BuyerSystemSettingsController extends ChangeNotifier {
   BuyerSystemSettingsController._();
@@ -39,11 +40,69 @@ class BuyerSystemSettingsController extends ChangeNotifier {
 
   Future<void> load() => _loadFuture ??= _load();
 
-  Future<bool> refreshServerSettings() async {
+  Future<bool> refreshServerSettings({bool riderMode = false}) async {
     if (!AppConfig.apiEnabled) return false;
     try {
-      final Map<String, dynamic> remote =
-          await BuyerMobileService.fetchBuyerSettings();
+      final Map<String, dynamic> remote = riderMode
+          ? Map<String, dynamic>.from(
+              (await WorkspaceMobileService.get('rider/settings'))['data']
+                  as Map,
+            )
+          : await BuyerMobileService.fetchBuyerSettings();
+      if (riderMode) {
+        riderAssignmentUpdates = _readApiBool(
+          remote,
+          'rider_assignment_updates',
+          riderAssignmentUpdates,
+        );
+        riderRouteUpdates = _readApiBool(
+          remote,
+          'rider_route_updates',
+          riderRouteUpdates,
+        );
+        riderChatUpdates = _readApiBool(
+          remote,
+          'rider_chat_updates',
+          riderChatUpdates,
+        );
+        riderEarningsUpdates = _readApiBool(
+          remote,
+          'rider_earnings_updates',
+          riderEarningsUpdates,
+        );
+        riderSafetyUpdates = _readApiBool(
+          remote,
+          'rider_safety_updates',
+          riderSafetyUpdates,
+        );
+        riderNotificationSounds = _readApiBool(
+          remote,
+          'rider_notification_sounds',
+          riderNotificationSounds,
+        );
+        showOnlineStatus = _readApiBool(
+          remote,
+          'show_online_status',
+          showOnlineStatus,
+        );
+        showAiAssistant = _readApiBool(
+          remote,
+          'rider_ai_assistant_enabled',
+          showAiAssistant,
+        );
+        aiResponseSound = _readApiBool(
+          remote,
+          'rider_ai_response_sound',
+          aiResponseSound,
+        );
+        final String riderTheme = (remote['theme'] ?? '').toString();
+        for (final ThemeMode mode in ThemeMode.values) {
+          if (mode.name == riderTheme) ThemeController.instance.value = mode;
+        }
+        await _enqueueWrite(_encode());
+        notifyListeners();
+        return true;
+      }
       orderUpdates = _readApiBool(remote, 'order_updates', orderUpdates);
       deliveryUpdates = _readApiBool(
         remote,
@@ -255,11 +314,25 @@ class BuyerSystemSettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> save({bool syncServer = true}) async {
+  Future<bool> save({bool syncServer = true, bool riderMode = false}) async {
     await _enqueueWrite(_encode());
     if (!syncServer || !AppConfig.apiEnabled) return true;
     try {
-      await BuyerMobileService.saveBuyerSettings(<String, dynamic>{
+      final Map<String, dynamic> values = riderMode
+          ? <String, dynamic>{
+              'rider_assignment_updates': riderAssignmentUpdates,
+              'rider_route_updates': riderRouteUpdates,
+              'rider_chat_updates': riderChatUpdates,
+              'rider_earnings_updates': riderEarningsUpdates,
+              'rider_safety_updates': riderSafetyUpdates,
+              'rider_notification_sounds': riderNotificationSounds,
+              'show_online_status': showOnlineStatus,
+              'rider_ai_assistant_enabled': showAiAssistant,
+              'rider_ai_response_sound': aiResponseSound,
+              'theme': themeMode.name,
+              'language': 'en',
+            }
+          : <String, dynamic>{
         'order_updates': orderUpdates,
         'delivery_updates': deliveryUpdates,
         'chat_updates': chatNotifications,
@@ -270,7 +343,16 @@ class BuyerSystemSettingsController extends ChangeNotifier {
         'notification_sounds': notificationSounds,
         'theme': themeMode.name,
         'language': 'en',
-      });
+            };
+      if (riderMode) {
+        await WorkspaceMobileService.send(
+          'rider/settings',
+          values,
+          method: 'PUT',
+        );
+      } else {
+        await BuyerMobileService.saveBuyerSettings(values);
+      }
       return true;
     } catch (_) {
       return false;

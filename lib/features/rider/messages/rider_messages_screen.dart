@@ -1,6 +1,9 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/smart_messaging_help.dart';
 
 class RiderConversationData {
   final String id;
@@ -12,6 +15,7 @@ class RiderConversationData {
   final DateTime? lastMessageAt;
   final int unreadCount;
   final bool buyerIsOnline;
+  final DateTime? buyerReadAt;
 
   const RiderConversationData({
     required this.id,
@@ -23,7 +27,22 @@ class RiderConversationData {
     this.lastMessageAt,
     this.unreadCount = 0,
     this.buyerIsOnline = false,
+    this.buyerReadAt,
   });
+
+  RiderConversationData copyWith({bool? buyerIsOnline, DateTime? buyerReadAt}) =>
+      RiderConversationData(
+        id: id,
+        buyerId: buyerId,
+        buyerName: buyerName,
+        orderId: orderId,
+        trackingCode: trackingCode,
+        lastMessage: lastMessage,
+        lastMessageAt: lastMessageAt,
+        unreadCount: unreadCount,
+        buyerIsOnline: buyerIsOnline ?? this.buyerIsOnline,
+        buyerReadAt: buyerReadAt ?? this.buyerReadAt,
+      );
 }
 
 class RiderMessageData {
@@ -54,6 +73,8 @@ typedef RiderMessageSend =
 typedef RiderConversationMessageStream =
     Stream<RiderMessageData> Function(RiderConversationData conversation);
 typedef RiderMessagePresenceHeartbeat = Future<void> Function();
+typedef RiderConversationPresenceRefresh =
+    Future<Map<String, dynamic>> Function(RiderConversationData conversation);
 
 class RiderMessagesScreen extends StatefulWidget {
   final List<RiderConversationData> conversations;
@@ -62,6 +83,7 @@ class RiderMessagesScreen extends StatefulWidget {
   final RiderMessageSend? onSendMessage;
   final RiderConversationMessageStream? messageStreamBuilder;
   final RiderMessagePresenceHeartbeat? onPresenceHeartbeat;
+  final RiderConversationPresenceRefresh? onRefreshConversationPresence;
   final VoidCallback? onBack;
   final String? statusMessage;
 
@@ -73,6 +95,7 @@ class RiderMessagesScreen extends StatefulWidget {
     this.onSendMessage,
     this.messageStreamBuilder,
     this.onPresenceHeartbeat,
+    this.onRefreshConversationPresence,
     this.onBack,
     this.statusMessage,
   });
@@ -181,6 +204,12 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
             .where((RiderConversationData item) => item.id == activeId)
             .firstOrNull;
       });
+      final RiderConversationData? active = _activeConversation;
+      final RiderConversationPresenceRefresh? receiptRefresh =
+          widget.onRefreshConversationPresence;
+      if (active != null && receiptRefresh != null) {
+        await _refreshActiveReceipt(active, receiptRefresh);
+      }
     } catch (_) {
       // Keep the last reported status during a temporary network failure.
     } finally {
@@ -230,6 +259,11 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
       _error = null;
       _loadingMessages = widget.onLoadMessages != null;
     });
+    final RiderConversationPresenceRefresh? receiptRefresh =
+        widget.onRefreshConversationPresence;
+    if (receiptRefresh != null) {
+      unawaited(_refreshActiveReceipt(conversation, receiptRefresh));
+    }
 
     final RiderConversationLoad? loader = widget.onLoadMessages;
     if (loader != null) {
@@ -284,6 +318,37 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
     }
   }
 
+  Future<void> _refreshActiveReceipt(
+    RiderConversationData conversation,
+    RiderConversationPresenceRefresh callback,
+  ) async {
+    try {
+      final Map<String, dynamic> receipt = await callback(conversation);
+      if (!mounted || _activeConversation?.id != conversation.id) return;
+      final dynamic rawReadAt =
+          receipt['recipient_read_at'] ?? receipt['last_read_at'];
+      final DateTime? readAt = rawReadAt == null
+          ? null
+          : DateTime.tryParse(rawReadAt.toString())?.toLocal();
+      final bool online = receipt['recipient_online'] == true ||
+          receipt['is_online'] == true ||
+          receipt['online'] == true;
+      setState(() {
+        final RiderConversationData updated = _activeConversation!.copyWith(
+          buyerIsOnline: online,
+          buyerReadAt: readAt,
+        );
+        _activeConversation = updated;
+        final int index = _conversations.indexWhere(
+          (RiderConversationData item) => item.id == conversation.id,
+        );
+        if (index >= 0) _conversations[index] = updated;
+      });
+    } catch (_) {
+      // Keep the last known receipt and presence during a temporary outage.
+    }
+  }
+
   Future<void> _sendMessage() async {
     final RiderConversationData? conversation = _activeConversation;
     final RiderMessageSend? sender = widget.onSendMessage;
@@ -332,7 +397,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: _maroon,
+          backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
           content: Text(message),
         ),
       );
@@ -354,12 +419,12 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
   Widget build(BuildContext context) {
     final RiderConversationData? conversation = _activeConversation;
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: conversation == null
           ? null
           : AppBar(
-              backgroundColor: _background,
-              foregroundColor: _text,
+              backgroundColor: AppTheme.resolve(context, _background, fill: true),
+              foregroundColor: AppTheme.resolve(context, _text),
               elevation: 0,
               toolbarHeight: 60,
               leading: IconButton(
@@ -379,9 +444,9 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                 children: [
                   PhysicalShape(
                     clipper: _OctagonClipper(),
-                    color: _maroon,
+                    color: AppTheme.resolve(context, _maroon),
                     elevation: 2,
-                    shadowColor: _maroon.withValues(alpha: 0.18),
+                    shadowColor: AppTheme.resolve(context, _maroon).withValues(alpha: 0.18),
                     child: SizedBox(
                       width: 36,
                       height: 36,
@@ -407,8 +472,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                           conversation.buyerName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _text,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, _text),
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                           ),
@@ -420,14 +485,14 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                               Icons.circle,
                               size: 7,
                               color: conversation.buyerIsOnline
-                                  ? const Color(0xFF27866A)
-                                  : _muted.withValues(alpha: 0.65),
+                                  ? AppTheme.resolve(context, const Color(0xFF27866A))
+                                  : AppTheme.resolve(context, _muted).withValues(alpha: 0.65),
                             ),
                             const SizedBox(width: 5),
                             Text(
                               conversation.buyerIsOnline ? 'Online' : 'Offline',
-                              style: const TextStyle(
-                                color: _muted,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, _muted),
                                 fontSize: 10,
                               ),
                             ),
@@ -438,6 +503,17 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                   ),
                 ],
               ),
+              actions: <Widget>[
+                IconButton(
+                  tooltip: 'Smart messaging help',
+                  onPressed: () => showSmartMessagingHelp(
+                    context,
+                    workspace: 'rider',
+                    conversationId: conversation.id,
+                  ),
+                  icon: const Icon(Icons.support_agent_outlined),
+                ),
+              ],
             ),
       body: conversation == null
           ? _buildConversationList()
@@ -448,7 +524,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
   Widget _buildMessagesHeader() {
     return Container(
       width: double.infinity,
-      color: _background,
+      color: AppTheme.resolve(context, _background, fill: true),
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 15),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,18 +532,18 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(
-              color: _selectedRow,
+              color: AppTheme.resolve(context, _selectedRow, fill: true),
               borderRadius: BorderRadius.circular(30),
             ),
-            child: const Row(
+            child:  Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.circle, color: _maroon, size: 5),
+                Icon(Icons.circle, color: AppTheme.resolve(context, _maroon), size: 5),
                 SizedBox(width: 5),
                 Text(
                   'COMMUNICATION',
                   style: TextStyle(
-                    color: _text,
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 8,
                     letterSpacing: 1,
                     fontWeight: FontWeight.w800,
@@ -477,10 +553,10 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
             ),
           ),
           const SizedBox(height: 7),
-          const Text(
+           Text(
             'Messages',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontFamily: 'serif',
               fontSize: 35,
               height: 1,
@@ -489,9 +565,9 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
             ),
           ),
           const SizedBox(height: 3),
-          const Text(
+           Text(
             'Keep conversations with buyers in one polished LIKHAE inbox',
-            style: TextStyle(color: _muted, fontSize: 9.5, height: 1.4),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 9.5, height: 1.4),
           ),
         ],
       ),
@@ -500,11 +576,11 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
 
   Widget _buildConversationList() {
     return RefreshIndicator(
-      color: _maroon,
+      color: AppTheme.resolve(context, _maroon),
       onRefresh: _refresh,
       child: SafeArea(
         child: ColoredBox(
-          color: _surface,
+          color: AppTheme.resolve(context, _surface, fill: true),
           child: ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(0, 0, 0, 110),
@@ -522,7 +598,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 7),
                 child: Material(
-                  color: highlighted ? _selectedRow : Colors.transparent,
+                  color: highlighted ? AppTheme.resolve(context, _selectedRow, fill: true) : Colors.transparent,
                   borderRadius: BorderRadius.circular(15),
                   child: InkWell(
                     onTap: () => _openConversation(conversation),
@@ -545,9 +621,9 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                                   top: 0,
                                   child: PhysicalShape(
                                     clipper: _OctagonClipper(),
-                                    color: _maroon,
+                                    color: AppTheme.resolve(context, _maroon),
                                     elevation: 3,
-                                    shadowColor: _maroon.withValues(
+                                    shadowColor: AppTheme.resolve(context, _maroon).withValues(
                                       alpha: 0.22,
                                     ),
                                     child: SizedBox(
@@ -574,11 +650,11 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                                     height: 12,
                                     decoration: BoxDecoration(
                                       color: conversation.buyerIsOnline
-                                          ? const Color(0xFF27866A)
-                                          : const Color(0xFFB9ACA7),
+                                          ? AppTheme.resolve(context, const Color(0xFF27866A), fill: true)
+                                          : AppTheme.resolve(context, const Color(0xFFB9ACA7), fill: true),
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: _surface,
+                                        color: AppTheme.resolve(context, _surface),
                                         width: 2,
                                       ),
                                     ),
@@ -599,8 +675,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                                         conversation.buyerName,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: _text,
+                                        style:  TextStyle(
+                                          color: AppTheme.resolve(context, _text),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -612,8 +688,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                                         conversation.lastMessageAt,
                                       ),
                                       maxLines: 1,
-                                      style: const TextStyle(
-                                        color: _muted,
+                                      style:  TextStyle(
+                                        color: AppTheme.resolve(context, _muted),
                                         fontSize: 9,
                                       ),
                                     ),
@@ -626,8 +702,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                                       : conversation.lastMessage,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: _muted,
+                                  style:  TextStyle(
+                                    color: AppTheme.resolve(context, _muted),
                                     fontSize: 10.5,
                                   ),
                                 ),
@@ -637,7 +713,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                           if (conversation.unreadCount > 0)
                             CircleAvatar(
                               radius: 12,
-                              backgroundColor: _maroon,
+                              backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                               child: Text(
                                 conversation.unreadCount > 99
                                     ? '99+'
@@ -670,14 +746,14 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
           Icon(
             Icons.forum_outlined,
             size: 54,
-            color: _maroon.withValues(alpha: 0.7),
+            color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.7),
           ),
           const SizedBox(height: 18),
-          const Text(
+           Text(
             'No conversations yet',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 21,
               fontWeight: FontWeight.w900,
             ),
@@ -688,7 +764,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                 ? 'Buyer and rider messaging will appear here when Laravel messaging is connected.'
                 : 'Messages from buyers about your deliveries will appear here.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _muted, fontSize: 13, height: 1.5),
+            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.5),
           ),
         ],
       ),
@@ -704,7 +780,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
             margin: const EdgeInsets.fromLTRB(14, 4, 14, 8),
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
-              color: _soft,
+              color: AppTheme.resolve(context, _soft, fill: true),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -714,8 +790,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                 if (conversation.trackingCode != null)
                   conversation.trackingCode!,
               ].join(' · '),
-              style: const TextStyle(
-                color: _maroon,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _maroon),
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -723,15 +799,15 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
           ),
         Expanded(
           child: _loadingMessages
-              ? const Center(
-                  child: CircularProgressIndicator(color: _maroon),
+              ?  Center(
+                  child: CircularProgressIndicator(color: AppTheme.resolve(context, _maroon)),
                 )
               : _messages.isEmpty
               ? Center(
                   child: Text(
                     _error ?? 'No messages in this conversation yet.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: _muted),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted)),
                   ),
                 )
               : ListView.builder(
@@ -754,7 +830,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: message.fromRider ? _maroon : _surface,
+                          color: message.fromRider ? AppTheme.resolve(context, _maroon, fill: true) : AppTheme.resolve(context, _surface, fill: true),
                           borderRadius: BorderRadius.circular(15),
                         ),
                         child: Column(
@@ -765,7 +841,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                               style: TextStyle(
                                 color: message.fromRider
                                     ? Colors.white
-                                    : _text,
+                                    : AppTheme.resolve(context, _text),
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -774,10 +850,23 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                               style: TextStyle(
                                 color: message.fromRider
                                     ? Colors.white70
-                                    : _muted,
+                                    : AppTheme.resolve(context, _muted),
                                 fontSize: 10,
                               ),
                             ),
+                            if (message.fromRider &&
+                                conversation.buyerReadAt != null &&
+                                !conversation.buyerReadAt!.isBefore(message.sentAt)) ...<Widget>[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Seen',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -810,7 +899,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                     decoration: InputDecoration(
                       hintText: 'Message ${conversation.buyerName}...',
                       filled: true,
-                      fillColor: _surface,
+                      fillColor: AppTheme.resolve(context, _surface, fill: true),
                       counterText: '',
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -818,11 +907,11 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(color: _border),
+                        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(color: _border),
+                        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
                       ),
                     ),
                   ),
@@ -831,7 +920,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                 IconButton.filled(
                   tooltip: 'Send message',
                   onPressed: _sendingMessage ? null : _sendMessage,
-                  style: IconButton.styleFrom(backgroundColor: _maroon),
+                  style: IconButton.styleFrom(backgroundColor: AppTheme.resolve(context, _maroon, fill: true)),
                   icon: _sendingMessage
                       ? const SizedBox(
                           width: 18,

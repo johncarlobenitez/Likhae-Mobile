@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../services/logistics_mobile_service.dart';
@@ -110,7 +112,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                   ? '${parcel.trackingNumber} marked as received.'
                   : '${parcel.trackingNumber} was saved. Dashboard refresh failed.',
             ),
-            backgroundColor: _green,
+            backgroundColor: AppTheme.resolve(context, _green, fill: true),
           ),
         );
     } catch (error) {
@@ -120,7 +122,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
         ..showSnackBar(
           SnackBar(
             content: Text('Could not receive parcel: $error'),
-            backgroundColor: const Color(0xFFB42318),
+            backgroundColor: AppTheme.resolve(context, const Color(0xFFB42318), fill: true),
           ),
         );
     } finally {
@@ -157,10 +159,10 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
     final String greetingName = widget.staffName.trim();
     final List<LogisticsScanActivity> scans = _visibleScans;
     return Scaffold(
-      backgroundColor: _canvas,
+      backgroundColor: AppTheme.resolve(context, _canvas, fill: true),
       appBar: AppBar(
-        backgroundColor: _canvas,
-        foregroundColor: _ink,
+        backgroundColor: AppTheme.resolve(context, _canvas, fill: true),
+        foregroundColor: AppTheme.resolve(context, _ink),
         elevation: 0,
         title: const Text(
           'Logistics Dashboard',
@@ -191,7 +193,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          color: _green,
+          color: AppTheme.resolve(context, _green),
           onRefresh: () async {
             await _loadDashboard();
           },
@@ -203,8 +205,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                 greetingName.isEmpty
                     ? 'Parcel operations'
                     : 'Hello, $greetingName',
-                style: const TextStyle(
-                  color: _ink,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _ink),
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                 ),
@@ -214,7 +216,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                 _dashboard?.centerName.isNotEmpty == true
                     ? _dashboard!.centerName
                     : 'Receive parcels at your logistics center using the phone camera or manual entry.',
-                style: const TextStyle(color: Color(0xFF64736F), height: 1.5),
+                style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF64736F)), height: 1.5),
               ),
               if (_dashboardError != null) ...<Widget>[
                 const SizedBox(height: 14),
@@ -227,11 +229,11 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               const SizedBox(height: 24),
               Row(
                 children: <Widget>[
-                  const Expanded(
+                   Expanded(
                     child: Text(
                       'Recent parcel activity',
                       style: TextStyle(
-                        color: _ink,
+                        color: AppTheme.resolve(context, _ink),
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
@@ -241,8 +243,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                     _dashboard == null && _loadingDashboard
                         ? 'Loading'
                         : '${scans.length}',
-                    style: const TextStyle(
-                      color: _green,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _green),
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -266,17 +268,17 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F0),
+        color: AppTheme.resolve(context, const Color(0xFFFFF1F0), fill: true),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.cloud_off_rounded, color: Color(0xFFB42318)),
+           Icon(Icons.cloud_off_rounded, color: AppTheme.resolve(context, Color(0xFFB42318))),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: Color(0xFF9C261D), height: 1.4),
+              style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF9C261D)), height: 1.4),
             ),
           ),
         ],
@@ -291,9 +293,9 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.resolve(context, Colors.white, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFDCE6E1)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFDCE6E1))),
       ),
       child: Row(
         children: <Widget>[
@@ -301,10 +303,10 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFFE7F3EF),
+              color: AppTheme.resolve(context, const Color(0xFFE7F3EF), fill: true),
               borderRadius: BorderRadius.circular(15),
             ),
-            child: const Icon(Icons.inventory_2_outlined, color: _green),
+            child:  Icon(Icons.inventory_2_outlined, color: AppTheme.resolve(context, _green)),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -317,8 +319,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                       : unavailable
                       ? 'Hub totals unavailable'
                       : '${dashboard!.shipmentsInCenter} parcels in center',
-                  style: const TextStyle(
-                    color: _ink,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _ink),
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
@@ -330,8 +332,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                       : unavailable
                       ? 'Pull down or tap refresh to try again.'
                       : '${dashboard!.scansToday} parcel updates recorded today',
-                  style: const TextStyle(
-                    color: Color(0xFF64736F),
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, Color(0xFF64736F)),
                     height: 1.35,
                   ),
                 ),
@@ -347,7 +349,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _green,
+        color: AppTheme.resolve(context, _green, fill: true),
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
@@ -368,9 +370,9 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+           Text(
             'Use the camera when a handheld barcode scanner is unavailable. You can also enter the tracking number manually.',
-            style: TextStyle(color: Color(0xFFE2F1EC), height: 1.45),
+            style: TextStyle(color: AppTheme.resolve(context, Color(0xFFE2F1EC)), height: 1.45),
           ),
           const SizedBox(height: 18),
           SizedBox(
@@ -378,18 +380,18 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
             child: FilledButton.icon(
               onPressed: _working ? null : _scanAndReceive,
               icon: _working
-                  ? const SizedBox.square(
+                  ?  SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: _green,
+                        color: AppTheme.resolve(context, _green),
                       ),
                     )
                   : const Icon(Icons.center_focus_strong_rounded),
               label: Text(_working ? 'Receiving parcel...' : 'Scan parcel'),
               style: FilledButton.styleFrom(
-                foregroundColor: _green,
-                backgroundColor: Colors.white,
+                foregroundColor: AppTheme.resolve(context, _green),
+                backgroundColor: AppTheme.resolve(context, Colors.white, fill: true),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 textStyle: const TextStyle(fontWeight: FontWeight.w800),
               ),
@@ -406,9 +408,9 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.resolve(context, Colors.white, fill: true),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFDCE6E1)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFDCE6E1))),
       ),
       child: Row(
         children: <Widget>[
@@ -416,12 +418,12 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFE7F3EF),
+              color: AppTheme.resolve(context, const Color(0xFFE7F3EF), fill: true),
               borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(
               unavailable ? Icons.cloud_off_rounded : Icons.history_rounded,
-              color: unavailable ? const Color(0xFF9C261D) : _green,
+              color: unavailable ? AppTheme.resolve(context, const Color(0xFF9C261D)) : AppTheme.resolve(context, _green),
             ),
           ),
           const SizedBox(width: 12),
@@ -431,8 +433,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               children: <Widget>[
                 Text(
                   unavailable ? 'Activity unavailable' : 'No activity yet',
-                  style: const TextStyle(
-                    color: _ink,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _ink),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -441,7 +443,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                   unavailable
                       ? 'Refresh the dashboard when your connection is available.'
                       : 'Parcel updates from your account will appear here.',
-                  style: const TextStyle(color: Color(0xFF64736F), height: 1.4),
+                  style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF64736F)), height: 1.4),
                 ),
               ],
             ),
@@ -455,9 +457,9 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.resolve(context, Colors.white, fill: true),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFDCE6E1)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFDCE6E1))),
       ),
       child: Row(
         children: <Widget>[
@@ -466,10 +468,10 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+           Expanded(
             child: Text(
               'Loading recent parcel activity…',
-              style: TextStyle(color: Color(0xFF64736F), height: 1.35),
+              style: TextStyle(color: AppTheme.resolve(context, Color(0xFF64736F)), height: 1.35),
             ),
           ),
         ],
@@ -488,13 +490,13 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
       margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.resolve(context, Colors.white, fill: true),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFDCE6E1)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFDCE6E1))),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.check_circle_rounded, color: _green),
+           Icon(Icons.check_circle_rounded, color: AppTheme.resolve(context, _green)),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
@@ -502,22 +504,22 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               children: <Widget>[
                 Text(
                   activity.trackingNumber,
-                  style: const TextStyle(
-                    color: _ink,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _ink),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   activity.status.replaceAll('_', ' ').toLowerCase(),
-                  style: const TextStyle(color: Color(0xFF64736F)),
+                  style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF64736F))),
                 ),
                 if (time.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 3),
                   Text(
                     time,
-                    style: const TextStyle(
-                      color: Color(0xFF87958F),
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, Color(0xFF87958F)),
                       fontSize: 12,
                     ),
                   ),
@@ -525,7 +527,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: Color(0xFF87958F)),
+           Icon(Icons.chevron_right_rounded, color: AppTheme.resolve(context, Color(0xFF87958F))),
         ],
       ),
     );

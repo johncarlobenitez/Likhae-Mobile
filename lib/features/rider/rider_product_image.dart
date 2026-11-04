@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/config/app_config.dart';
@@ -92,28 +94,28 @@ class RiderProductImage extends StatelessWidget {
       height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFFF3ECE4),
+        color: AppTheme.resolve(context, const Color(0xFFF3ECE4), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
       ),
       child: url.isEmpty
-          ? const Icon(Icons.inventory_2_outlined, color: Color(0xFFA99386))
+          ?  Icon(Icons.inventory_2_outlined, color: AppTheme.resolve(context, Color(0xFFA99386)))
           : SizedNetworkImage(
               url: url,
               fit: BoxFit.cover,
               semanticLabel: semanticLabel,
-              placeholder: const Center(
+              placeholder:  Center(
                 child: SizedBox.square(
                   dimension: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF561C17),
+                    color: AppTheme.resolve(context, Color(0xFF561C17)),
                   ),
                 ),
               ),
-              errorBuilder: (context, error, stackTrace) => const Icon(
+              errorBuilder: (context, error, stackTrace) =>  Icon(
                 Icons.broken_image_outlined,
-                color: Color(0xFFA99386),
+                color: AppTheme.resolve(context, Color(0xFFA99386)),
               ),
             ),
     );

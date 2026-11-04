@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
@@ -214,6 +216,7 @@ class RewardsScreen extends StatefulWidget {
 
   final VoidCallback? onBack;
   final VoidCallback? onBrowseProducts;
+  final VoidCallback? onViewSellerOffers;
 
   /// Opens the cart so buyers can redeem points during Checkout.
   final VoidCallback? onGoToCheckout;
@@ -250,6 +253,7 @@ class RewardsScreen extends StatefulWidget {
     this.cashbackRate = 0.02,
     this.onBack,
     this.onBrowseProducts,
+    this.onViewSellerOffers,
     this.onGoToCheckout,
     this.onUseVoucher,
     this.onClaimVoucher,
@@ -437,7 +441,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : _maroonDark,
+          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -460,7 +464,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -469,7 +473,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
             Expanded(
               child: RefreshIndicator(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refresh,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -516,15 +520,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
-        gradient: const LinearGradient(
+        border: Border.all(color: AppTheme.resolve(context, _border)),
+        gradient:  LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[_surface, _backgroundSoft, _backgroundAlt],
+          colors: <Color>[AppTheme.resolve(context, _surface, fill: true), AppTheme.resolve(context, _backgroundSoft, fill: true), AppTheme.resolve(context, _backgroundAlt, fill: true)],
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: _maroon.withValues(alpha: 0.055),
+            color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.055),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -540,7 +544,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
               height: 150,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _tan.withValues(alpha: 0.14),
+                color: AppTheme.resolve(context, _tan, fill: true).withValues(alpha: 0.14),
               ),
             ),
           ),
@@ -548,10 +552,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+               Text(
                 'BUYER BENEFITS',
                 style: TextStyle(
-                  color: _maroon,
+                  color: AppTheme.resolve(context, _maroon),
                   fontSize: 8.5,
                   letterSpacing: 1.7,
                   fontWeight: FontWeight.w800,
@@ -560,10 +564,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
               const SizedBox(height: 7),
 
-              const Text(
+               Text(
                 'Rewards &\nVouchers',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 30,
                   height: 1,
                   letterSpacing: -0.8,
@@ -573,35 +577,65 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
               const SizedBox(height: 9),
 
-              const Text(
+               Text(
                 'Review your current benefits and reward activity from LIKHAE.',
-                style: TextStyle(color: _muted, fontSize: 11, height: 1.5),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11, height: 1.5),
               ),
 
               const SizedBox(height: 16),
 
-              SizedBox(
-                height: 43,
-                child: ElevatedButton.icon(
-                  onPressed: widget.onBrowseProducts,
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: _maroon,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    minimumSize: const Size(148, 46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  if (widget.onBrowseProducts != null)
+                    SizedBox(
+                      height: 43,
+                      child: ElevatedButton.icon(
+                        onPressed: widget.onBrowseProducts,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          minimumSize: const Size(148, 46),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.shopping_bag_outlined, size: 17),
+                        label: const Text(
+                          'Browse Products',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  icon: const Icon(Icons.shopping_bag_outlined, size: 17),
-                  label: const Text(
-                    'Browse Products',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800,
+                  if (widget.onViewSellerOffers != null)
+                    SizedBox(
+                      height: 43,
+                      child: OutlinedButton.icon(
+                        onPressed: widget.onViewSellerOffers,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0x99FFFFFF)),
+                          minimumSize: const Size(140, 46),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.local_offer_outlined, size: 17),
+                        label: const Text(
+                          'Seller Offers',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                ],
               ),
             ],
           ),
@@ -668,9 +702,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
           height: 64,
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
-            color: _surface,
+            color: AppTheme.resolve(context, _surface, fill: true),
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: _border),
+            border: Border.all(color: AppTheme.resolve(context, _border)),
           ),
           child: Row(
             children: List<Widget>.generate(RewardsTab.values.length, (
@@ -683,7 +717,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: Material(
-                    color: selected ? _maroon : Colors.transparent,
+                    color: selected ? AppTheme.resolve(context, _maroon, fill: true) : Colors.transparent,
                     borderRadius: BorderRadius.circular(11),
                     child: InkWell(
                       onTap: () => _changeTab(tab),
@@ -694,7 +728,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(11),
                           border: Border.all(
-                            color: selected ? _maroon : _border,
+                            color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border),
                           ),
                         ),
                         child: Row(
@@ -703,7 +737,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                             Icon(
                               tab.icon,
                               size: 16,
-                              color: selected ? Colors.white : _brown,
+                              color: selected ? Colors.white : AppTheme.resolve(context, _brown),
                             ),
                             const SizedBox(width: 5),
                             Flexible(
@@ -713,7 +747,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: selected ? Colors.white : _brown,
+                                  color: selected ? Colors.white : AppTheme.resolve(context, _brown),
                                   fontSize: labelSize,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -810,8 +844,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border.all(color: _border),
+        color: AppTheme.resolve(context, _surface, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -823,14 +857,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 width: 54,
                 height: 54,
                 decoration: BoxDecoration(
-                  color: ShopColors.accentSoft,
+                  color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 alignment: Alignment.center,
-                child: const Text(
+                child:  Text(
                   '%',
                   style: TextStyle(
-                    color: _maroon,
+                    color: AppTheme.resolve(context, _maroon),
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                   ),
@@ -839,14 +873,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
               const SizedBox(width: 12),
 
-              const Expanded(
+               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'NO ACTIVE VOUCHERS',
                       style: TextStyle(
-                        color: _maroon,
+                        color: AppTheme.resolve(context, _maroon),
                         fontSize: 7.5,
                         letterSpacing: 1,
                         fontWeight: FontWeight.w800,
@@ -858,7 +892,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     Text(
                       'No seller vouchers yet',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
@@ -869,7 +903,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     Text(
                       'Available seller voucher campaigns will appear here.',
                       style: TextStyle(
-                        color: _muted,
+                        color: AppTheme.resolve(context, _muted),
                         fontSize: 9.5,
                         height: 1.4,
                       ),
@@ -889,7 +923,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
               child: ElevatedButton.icon(
                 onPressed: widget.onBrowseProducts,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -925,14 +959,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(21),
-            gradient: const LinearGradient(
+            gradient:  LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: <Color>[_maroon, _maroon2, _maroonDark],
+              colors: <Color>[AppTheme.resolve(context, _maroon, fill: true), AppTheme.resolve(context, _maroon2, fill: true), AppTheme.resolve(context, _maroonDark, fill: true)],
             ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: _maroon.withValues(alpha: 0.18),
+                color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.18),
                 blurRadius: 28,
                 offset: const Offset(0, 13),
               ),
@@ -941,16 +975,16 @@ class _RewardsScreenState extends State<RewardsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+               Row(
                 children: [
-                  Icon(Icons.stars_rounded, color: Color(0xFFE8C8B2), size: 19),
+                  Icon(Icons.stars_rounded, color: AppTheme.resolve(context, Color(0xFFE8C8B2)), size: 19),
 
                   SizedBox(width: 7),
 
                   Text(
                     'Current points',
                     style: TextStyle(
-                      color: Color(0xFFE8C8B2),
+                      color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -973,10 +1007,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
               const SizedBox(height: 5),
 
-              const Text(
+               Text(
                 'LIKHAE Reward Points',
                 style: TextStyle(
-                  color: Color(0xFFF4DED4),
+                  color: AppTheme.resolve(context, Color(0xFFF4DED4)),
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
@@ -995,7 +1029,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   children: [
                     Icon(
                       Icons.info_outline_rounded,
-                      color: Color(0xFFE8C8B2),
+                      color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
                       size: 16,
                     ),
 
@@ -1004,8 +1038,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     Expanded(
                       child: Text(
                         '${_formatInteger(_data.pointsPerPeso)} points = PHP 1 checkout discount; minimum ${_formatInteger(_data.minimumPointsRedemption)} points.',
-                        style: const TextStyle(
-                          color: Color(0xFFF4DED4),
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, Color(0xFFF4DED4)),
                           fontSize: 9.5,
                           height: 1.4,
                         ),
@@ -1050,8 +1084,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
             child: OutlinedButton.icon(
               onPressed: widget.onGoToCheckout,
               style: OutlinedButton.styleFrom(
-                foregroundColor: _maroon,
-                side: const BorderSide(color: _tan),
+                foregroundColor: AppTheme.resolve(context, _maroon),
+                side:  BorderSide(color: AppTheme.resolve(context, _tan)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -1114,18 +1148,18 @@ class _RewardsScreenState extends State<RewardsScreen> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: _surface,
+            color: AppTheme.resolve(context, _surface, fill: true),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: _border),
+            border: Border.all(color: AppTheme.resolve(context, _border)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+               Row(
                 children: [
                   Icon(
                     Icons.account_balance_wallet_outlined,
-                    color: _maroon,
+                    color: AppTheme.resolve(context, _maroon),
                     size: 19,
                   ),
 
@@ -1134,7 +1168,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   Text(
                     'Earned cashback',
                     style: TextStyle(
-                      color: _muted,
+                      color: AppTheme.resolve(context, _muted),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1146,8 +1180,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
               Text(
                 _formatMoney(safeAvailable),
-                style: const TextStyle(
-                  color: _maroon,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _maroon),
                   fontSize: 32,
                   height: 1,
                   letterSpacing: -0.8,
@@ -1161,8 +1195,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 safeRate > 0
                     ? 'Current cashback rate: ${_formatPercentage(safeRate)}'
                     : 'Cashback rate is not currently available.',
-                style: const TextStyle(
-                  color: _muted,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _muted),
                   fontSize: 9.5,
                   height: 1.4,
                 ),
@@ -1177,8 +1211,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   child: OutlinedButton.icon(
                     onPressed: widget.onBrowseProducts,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: _maroon,
-                      side: const BorderSide(color: _tan),
+                      foregroundColor: AppTheme.resolve(context, _maroon),
+                      side:  BorderSide(color: AppTheme.resolve(context, _tan)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -1226,14 +1260,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF6DE),
+                  color: AppTheme.resolve(context, const Color(0xFFFFF6DE), fill: true),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFEAD39A)),
+                  border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEAD39A))),
                 ),
-                child: const Row(
+                child:  Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded, color: _warning, size: 18),
+                    Icon(Icons.info_outline_rounded, color: AppTheme.resolve(context, _warning), size: 18),
 
                     SizedBox(width: 8),
 
@@ -1241,7 +1275,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       child: Text(
                         'This page only displays cashback recorded by the rewards system. Checkout redemption should only be enabled when the backend explicitly supports it.',
                         style: TextStyle(
-                          color: _warning,
+                          color: AppTheme.resolve(context, _warning),
                           fontSize: 9,
                           height: 1.45,
                           fontWeight: FontWeight.w700,
@@ -1332,15 +1366,15 @@ class _RewardStatCard extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 92),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: ShopColors.surface,
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: ShopColors.accent, size: 19),
+          Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 19),
 
           const SizedBox(height: 8),
 
@@ -1348,8 +1382,8 @@ class _RewardStatCard extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: ShopColors.text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.text),
               fontSize: 15,
               fontWeight: FontWeight.w800,
             ),
@@ -1361,7 +1395,7 @@ class _RewardStatCard extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: ShopColors.muted, fontSize: 8.5),
+            style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 8.5),
           ),
         ],
       ),
@@ -1387,8 +1421,8 @@ class _SectionHeading extends StatelessWidget {
       children: [
         Text(
           kicker,
-          style: const TextStyle(
-            color: ShopColors.accent,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, ShopColors.accent),
             fontSize: 8.5,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w800,
@@ -1399,8 +1433,8 @@ class _SectionHeading extends StatelessWidget {
 
         Text(
           title,
-          style: const TextStyle(
-            color: ShopColors.text,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, ShopColors.text),
             fontSize: 24,
             height: 1.05,
             letterSpacing: -0.6,
@@ -1412,8 +1446,8 @@ class _SectionHeading extends StatelessWidget {
 
         Text(
           description,
-          style: const TextStyle(
-            color: ShopColors.muted,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, ShopColors.muted),
             fontSize: 10.5,
             height: 1.45,
           ),
@@ -1451,12 +1485,12 @@ class _VoucherCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: ShopColors.surface,
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: ShopColors.accent.withValues(alpha: 0.045),
+            color: AppTheme.resolve(context, ShopColors.accent).withValues(alpha: 0.045),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1473,7 +1507,7 @@ class _VoucherCard extends StatelessWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
-                    color: ShopColors.accentSoft,
+                    color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                     borderRadius: BorderRadius.circular(15),
                   ),
                   alignment: Alignment.center,
@@ -1481,8 +1515,8 @@ class _VoucherCard extends StatelessWidget {
                     voucher.icon,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: ShopColors.accent,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.accent),
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1499,8 +1533,8 @@ class _VoucherCard extends StatelessWidget {
                         voucher.status.toUpperCase(),
                         style: TextStyle(
                           color: explicitlyUnavailable
-                              ? ShopColors.muted
-                              : ShopColors.accent,
+                              ? AppTheme.resolve(context, ShopColors.muted)
+                              : AppTheme.resolve(context, ShopColors.accent),
                           fontSize: 7.5,
                           letterSpacing: 1.1,
                           fontWeight: FontWeight.w800,
@@ -1511,8 +1545,8 @@ class _VoucherCard extends StatelessWidget {
 
                       Text(
                         voucher.value,
-                        style: const TextStyle(
-                          color: ShopColors.text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 18,
                           height: 1.1,
                           fontWeight: FontWeight.w800,
@@ -1526,8 +1560,8 @@ class _VoucherCard extends StatelessWidget {
                           voucher.campaignName!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.secondaryText,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.secondaryText),
                             fontSize: 9.5,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1541,8 +1575,8 @@ class _VoucherCard extends StatelessWidget {
                           'From ${voucher.sellerName}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.muted,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.muted),
                             fontSize: 8.5,
                           ),
                         ),
@@ -1552,8 +1586,8 @@ class _VoucherCard extends StatelessWidget {
 
                       Text(
                         voucher.condition,
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 9.5,
                           height: 1.45,
                         ),
@@ -1565,7 +1599,7 @@ class _VoucherCard extends StatelessWidget {
             ),
           ),
 
-          const Divider(height: 1, color: ShopColors.border),
+           Divider(height: 1, color: AppTheme.resolve(context, ShopColors.border)),
 
           Padding(
             padding: const EdgeInsets.all(15),
@@ -1578,15 +1612,15 @@ class _VoucherCard extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: ShopColors.soft,
+                    color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                     borderRadius: BorderRadius.circular(9),
-                    border: Border.all(color: ShopColors.border),
+                    border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                       Icon(
                         Icons.local_offer_outlined,
-                        color: ShopColors.accent,
+                        color: AppTheme.resolve(context, ShopColors.accent),
                         size: 16,
                       ),
 
@@ -1597,8 +1631,8 @@ class _VoucherCard extends StatelessWidget {
                           voucher.code,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.accent,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.accent),
                             fontSize: 10,
                             letterSpacing: 0.7,
                             fontWeight: FontWeight.w800,
@@ -1614,8 +1648,8 @@ class _VoucherCard extends StatelessWidget {
 
                   Text(
                     'Expires ${voucher.expires}',
-                    style: const TextStyle(
-                      color: ShopColors.faint,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.faint),
                       fontSize: 8.5,
                     ),
                   ),
@@ -1625,8 +1659,8 @@ class _VoucherCard extends StatelessWidget {
                   const SizedBox(height: 7),
                   Text(
                     'Unavailable: ${voucher.unavailableReason}',
-                    style: const TextStyle(
-                      color: Color(0xFFB42318),
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, Color(0xFFB42318)),
                       fontSize: 8.5,
                     ),
                   ),
@@ -1644,7 +1678,7 @@ class _VoucherCard extends StatelessWidget {
                           ? onClaim
                           : onUse,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: ShopColors.accent,
+                        backgroundColor: AppTheme.resolve(context, ShopColors.accent, fill: true),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -1673,11 +1707,11 @@ class _VoucherCard extends StatelessWidget {
 
                   if (canOpen) ...[
                     const SizedBox(height: 7),
-                    const Text(
+                     Text(
                       'The voucher is still validated by the server during Checkout.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: ShopColors.faint,
+                        color: AppTheme.resolve(context, ShopColors.faint),
                         fontSize: 8,
                         height: 1.35,
                       ),
@@ -1711,9 +1745,9 @@ class _RewardPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: ShopColors.surface,
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1724,11 +1758,11 @@ class _RewardPanel extends StatelessWidget {
                 width: 37,
                 height: 37,
                 decoration: BoxDecoration(
-                  color: ShopColors.accentSoft,
+                  color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, color: ShopColors.accent, size: 18),
+                child: Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 18),
               ),
 
               const SizedBox(width: 9),
@@ -1736,8 +1770,8 @@ class _RewardPanel extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
@@ -1764,8 +1798,8 @@ class _VoucherHistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEFE1D5))),
+      decoration:  BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.resolve(context, Color(0xFFEFE1D5)))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1775,8 +1809,8 @@ class _VoucherHistoryRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.voucher,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                   ),
@@ -1787,8 +1821,8 @@ class _VoucherHistoryRow extends StatelessWidget {
 
               Text(
                 item.status,
-                style: const TextStyle(
-                  color: ShopColors.muted,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.muted),
                   fontSize: 8.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1800,8 +1834,8 @@ class _VoucherHistoryRow extends StatelessWidget {
 
           Text(
             item.benefit,
-            style: const TextStyle(
-              color: ShopColors.secondaryText,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.secondaryText),
               fontSize: 9.5,
             ),
           ),
@@ -1811,7 +1845,7 @@ class _VoucherHistoryRow extends StatelessWidget {
 
             Text(
               item.order,
-              style: const TextStyle(color: ShopColors.faint, fontSize: 8.5),
+              style:  TextStyle(color: AppTheme.resolve(context, ShopColors.faint), fontSize: 8.5),
             ),
           ],
         ],
@@ -1837,21 +1871,21 @@ class _EarnPointCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: ShopColors.surface,
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Row(
         children: [
           Container(
             width: 39,
             height: 39,
-            decoration: const BoxDecoration(
-              color: ShopColors.accentSoft,
+            decoration:  BoxDecoration(
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Icon(icon, color: ShopColors.accent, size: 18),
+            child: Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 18),
           ),
 
           const SizedBox(width: 11),
@@ -1859,7 +1893,7 @@ class _EarnPointCard extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(color: ShopColors.muted, fontSize: 10),
+              style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 10),
             ),
           ),
 
@@ -1867,8 +1901,8 @@ class _EarnPointCard extends StatelessWidget {
 
           Text(
             value,
-            style: const TextStyle(
-              color: ShopColors.accent,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.accent),
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
@@ -1888,22 +1922,22 @@ class _PointsActivityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEFE1D5))),
+      decoration:  BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.resolve(context, Color(0xFFEFE1D5)))),
       ),
       child: Row(
         children: [
           Container(
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: ShopColors.soft,
+            decoration:  BoxDecoration(
+              color: AppTheme.resolve(context, ShopColors.soft, fill: true),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
             child: Icon(
               activity.negative ? Icons.remove_rounded : Icons.add_rounded,
-              color: activity.negative ? ShopColors.muted : ShopColors.accent,
+              color: activity.negative ? AppTheme.resolve(context, ShopColors.muted) : AppTheme.resolve(context, ShopColors.accent),
               size: 17,
             ),
           ),
@@ -1916,8 +1950,8 @@ class _PointsActivityRow extends StatelessWidget {
               children: [
                 Text(
                   activity.label,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -1928,8 +1962,8 @@ class _PointsActivityRow extends StatelessWidget {
 
                   Text(
                     activity.date,
-                    style: const TextStyle(
-                      color: ShopColors.faint,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.faint),
                       fontSize: 8.5,
                     ),
                   ),
@@ -1943,7 +1977,7 @@ class _PointsActivityRow extends StatelessWidget {
           Text(
             activity.amount,
             style: TextStyle(
-              color: activity.negative ? ShopColors.muted : ShopColors.accent,
+              color: activity.negative ? AppTheme.resolve(context, ShopColors.muted) : AppTheme.resolve(context, ShopColors.accent),
               fontSize: 10.5,
               fontWeight: FontWeight.w800,
             ),
@@ -1974,21 +2008,21 @@ class _CashbackBalanceRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: emphasized ? ShopColors.soft : ShopColors.surface,
+        color: emphasized ? AppTheme.resolve(context, ShopColors.soft, fill: true) : AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Row(
         children: [
           Container(
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: ShopColors.accentSoft,
+            decoration:  BoxDecoration(
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: Icon(icon, color: ShopColors.accent, size: 18),
+            child: Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 18),
           ),
 
           const SizedBox(width: 10),
@@ -1996,8 +2030,8 @@ class _CashbackBalanceRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
-                color: ShopColors.muted,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, ShopColors.muted),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
               ),
@@ -2008,8 +2042,8 @@ class _CashbackBalanceRow extends StatelessWidget {
 
           Text(
             value,
-            style: const TextStyle(
-              color: ShopColors.accent,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.accent),
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -2029,8 +2063,8 @@ class _CashbackActivityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFEFE1D5))),
+      decoration:  BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.resolve(context, Color(0xFFEFE1D5)))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2042,8 +2076,8 @@ class _CashbackActivityRow extends StatelessWidget {
                   activity.order,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2054,8 +2088,8 @@ class _CashbackActivityRow extends StatelessWidget {
 
               Text(
                 activity.amount,
-                style: const TextStyle(
-                  color: ShopColors.accent,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.accent),
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                 ),
@@ -2070,15 +2104,15 @@ class _CashbackActivityRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   activity.type,
-                  style: const TextStyle(color: ShopColors.muted, fontSize: 9),
+                  style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 9),
                 ),
               ),
 
               if (activity.date.trim().isNotEmpty)
                 Text(
                   activity.date,
-                  style: const TextStyle(
-                    color: ShopColors.faint,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.faint),
                     fontSize: 8.5,
                   ),
                 ),
@@ -2108,14 +2142,14 @@ class _SimpleEmptyRow extends StatelessWidget {
           Container(
             width: 42,
             height: 42,
-            decoration: const BoxDecoration(
-              color: ShopColors.soft,
+            decoration:  BoxDecoration(
+              color: AppTheme.resolve(context, ShopColors.soft, fill: true),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child:  Icon(
               Icons.history_rounded,
-              color: ShopColors.muted,
+              color: AppTheme.resolve(context, ShopColors.muted),
               size: 19,
             ),
           ),
@@ -2128,8 +2162,8 @@ class _SimpleEmptyRow extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2139,8 +2173,8 @@ class _SimpleEmptyRow extends StatelessWidget {
 
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: ShopColors.muted,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.muted),
                     fontSize: 8.5,
                     height: 1.4,
                   ),
@@ -2154,8 +2188,8 @@ class _SimpleEmptyRow extends StatelessWidget {
 
             Text(
               trailing!,
-              style: const TextStyle(
-                color: ShopColors.accent,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, ShopColors.accent),
                 fontSize: 9.5,
                 fontWeight: FontWeight.w800,
               ),

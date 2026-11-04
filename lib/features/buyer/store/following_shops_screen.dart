@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';
@@ -59,7 +61,7 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: ShopColors.canvas,
+      backgroundColor: AppTheme.resolve(context, ShopColors.canvas, fill: true),
       appBar: AppBar(
         leading: widget.onBack == null
             ? null
@@ -117,7 +119,7 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
               itemBuilder: (BuildContext context, int index) {
                 final StoreSellerData shop = shops[index];
                 return Material(
-                  color: ShopColors.surface,
+                  color: AppTheme.resolve(context, ShopColors.surface, fill: true),
                   borderRadius: BorderRadius.circular(16),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(16),
@@ -138,11 +140,11 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
                                       ),
                                       iconSize: 24,
                                     )
-                                  : const ColoredBox(
-                                      color: ShopColors.accentSoft,
+                                  :  ColoredBox(
+                                      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                                       child: Icon(
                                         Icons.storefront_outlined,
-                                        color: ShopColors.accent,
+                                        color: AppTheme.resolve(context, ShopColors.accent),
                                       ),
                                     ),
                             ),
@@ -156,8 +158,8 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
                                   shop.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: ShopColors.text,
+                                  style:  TextStyle(
+                                    color: AppTheme.resolve(context, ShopColors.text),
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -168,8 +170,8 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
                                     shop.location!,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: ShopColors.muted,
+                                    style:  TextStyle(
+                                      color: AppTheme.resolve(context, ShopColors.muted),
                                       fontSize: 11,
                                     ),
                                   ),
@@ -177,9 +179,9 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
                               ],
                             ),
                           ),
-                          const Icon(
+                           Icon(
                             Icons.chevron_right_rounded,
-                            color: ShopColors.muted,
+                            color: AppTheme.resolve(context, ShopColors.muted),
                           ),
                         ],
                       ),
@@ -218,13 +220,13 @@ class _FollowingShopsMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 46, color: ShopColors.accentLight),
+            Icon(icon, size: 46, color: AppTheme.resolve(context, ShopColors.accentLight)),
             const SizedBox(height: 14),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: ShopColors.text,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, ShopColors.text),
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
@@ -233,8 +235,8 @@ class _FollowingShopsMessage extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: ShopColors.muted,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, ShopColors.muted),
                 fontSize: 13,
                 height: 1.4,
               ),

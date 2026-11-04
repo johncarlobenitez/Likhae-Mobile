@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -889,7 +891,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : _maroonDark,
+          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -915,7 +917,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         _visibleNotifications;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -924,7 +926,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
             Expanded(
               child: RefreshIndicator(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refresh,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -953,7 +955,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildTopBar() => ColoredBox(
-    color: _surface,
+    color: AppTheme.resolve(context, _surface, fill: true),
     child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       child: Row(
@@ -965,7 +967,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -973,7 +975,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 Text(
                   'Updates',
                   style: TextStyle(
-                    color: _text,
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 22,
                     height: 1.15,
                     letterSpacing: -.4,
@@ -983,7 +985,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 SizedBox(height: 4),
                 Text(
                   'Everything you need to know.',
-                  style: TextStyle(color: _muted, fontSize: 12, height: 1.35),
+                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.35),
                 ),
               ],
             ),
@@ -1006,9 +1008,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(21),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1019,7 +1021,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: ShopColors.accentSoft,
+                  color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 alignment: Alignment.center,
@@ -1027,7 +1029,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   _unreadCount == 0
                       ? Icons.done_all_rounded
                       : Icons.notifications_active_outlined,
-                  color: _maroon,
+                  color: AppTheme.resolve(context, _maroon),
                   size: 22,
                 ),
               ),
@@ -1037,8 +1039,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   _unreadCount == 0
                       ? 'You’re all caught up'
                       : '$_unreadCount unread updates',
-                  style: const TextStyle(
-                    color: _text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 17,
                     letterSpacing: -.35,
                     fontWeight: FontWeight.w700,
@@ -1048,9 +1050,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          const Text(
+           Text(
             'Your orders, conversations, and rewards, all in one place.',
-            style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5, height: 1.5),
           ),
           if (_unreadCount > 0) ...[
             const SizedBox(height: 7),
@@ -1096,7 +1098,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final int unreadCount = _filterUnreadCount(filter);
 
           return Material(
-            color: selected ? _maroon : _surface,
+            color: selected ? AppTheme.resolve(context, _maroon, fill: true) : AppTheme.resolve(context, _surface, fill: true),
             borderRadius: BorderRadius.circular(11),
             child: InkWell(
               onTap: () {
@@ -1107,7 +1109,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 13),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: selected ? _maroon : _border),
+                  border: Border.all(color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border)),
                 ),
                 alignment: Alignment.center,
                 child: Row(
@@ -1115,7 +1117,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     Text(
                       filter.label,
                       style: TextStyle(
-                        color: selected ? Colors.white : _brown,
+                        color: selected ? Colors.white : AppTheme.resolve(context, _brown),
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                       ),
@@ -1128,7 +1130,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       style: TextStyle(
                         color: selected
                             ? Colors.white.withValues(alpha: 0.72)
-                            : _muted2,
+                            : AppTheme.resolve(context, _muted2),
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1141,7 +1143,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         width: 6,
                         height: 6,
                         decoration: BoxDecoration(
-                          color: selected ? Colors.white : _maroon,
+                          color: selected ? AppTheme.resolve(context, Colors.white, fill: true) : AppTheme.resolve(context, _maroon, fill: true),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -1160,12 +1162,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         boxShadow: [
           BoxShadow(
-            color: _maroon.withValues(alpha: 0.04),
+            color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1205,34 +1207,34 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 55, 24, 55),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         children: [
           Container(
             width: 68,
             height: 68,
-            decoration: const BoxDecoration(
-              color: ShopColors.accentSoft,
+            decoration:  BoxDecoration(
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child:  Icon(
               Icons.notifications_none_rounded,
-              color: _maroon,
+              color: AppTheme.resolve(context, _maroon),
               size: 30,
             ),
           ),
 
           const SizedBox(height: 17),
 
-          const Text(
+           Text(
             'No notifications',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 20,
               fontWeight: FontWeight.w800,
             ),
@@ -1245,7 +1247,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ? 'There are no account updates yet.'
                 : 'There are no $categoryName updates in this section.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.55),
+            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13.5, height: 1.55),
           ),
         ],
       ),
@@ -1279,14 +1281,14 @@ class _NotificationTile extends StatelessWidget {
     final bool canOpen = enabled && !opening;
 
     return Material(
-      color: unread ? const Color(0xFFFFF4F0) : ShopColors.surface,
+      color: unread ? AppTheme.resolve(context, const Color(0xFFFFF4F0), fill: true) : AppTheme.resolve(context, ShopColors.surface, fill: true),
       child: InkWell(
         onTap: canOpen ? onTap : null,
         child: Container(
           padding: const EdgeInsets.fromLTRB(13, 14, 13, 14),
           decoration: BoxDecoration(
             border: showDivider
-                ? const Border(bottom: BorderSide(color: ShopColors.border))
+                ?  Border(bottom: BorderSide(color: AppTheme.resolve(context, ShopColors.border)))
                 : null,
           ),
           child: Row(
@@ -1320,7 +1322,7 @@ class _NotificationTile extends StatelessWidget {
                           child: Text(
                             notification.title,
                             style: TextStyle(
-                              color: ShopColors.text,
+                              color: AppTheme.resolve(context, ShopColors.text),
                               fontSize: 14,
                               height: 1.25,
                               fontWeight: unread
@@ -1335,8 +1337,8 @@ class _NotificationTile extends StatelessWidget {
 
                           Text(
                             notification.time,
-                            style: const TextStyle(
-                              color: ShopColors.faint,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.faint),
                               fontSize: 11.5,
                             ),
                           ),
@@ -1349,8 +1351,8 @@ class _NotificationTile extends StatelessWidget {
 
                       Text(
                         notification.message,
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 13,
                           height: 1.55,
                         ),
@@ -1367,13 +1369,13 @@ class _NotificationTile extends StatelessWidget {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: ShopColors.soft,
+                            color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                             borderRadius: BorderRadius.circular(100),
                           ),
                           child: Text(
                             notification.type.label,
-                            style: const TextStyle(
-                              color: ShopColors.secondaryText,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.secondaryText),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w800,
                             ),
@@ -1389,13 +1391,13 @@ class _NotificationTile extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFCE9E5),
+                              color: AppTheme.resolve(context, const Color(0xFFFCE9E5), fill: true),
                               borderRadius: BorderRadius.circular(100),
                             ),
-                            child: const Text(
+                            child:  Text(
                               'UNREAD',
                               style: TextStyle(
-                                color: ShopColors.accent,
+                                color: AppTheme.resolve(context, ShopColors.accent),
                                 fontSize: 11,
                                 letterSpacing: 0.4,
                                 fontWeight: FontWeight.w800,
@@ -1407,18 +1409,18 @@ class _NotificationTile extends StatelessWidget {
                         const Spacer(),
 
                         if (opening)
-                          const SizedBox(
+                           SizedBox(
                             width: 15,
                             height: 15,
                             child: CircularProgressIndicator(
                               strokeWidth: 1.8,
-                              color: ShopColors.accent,
+                              color: AppTheme.resolve(context, ShopColors.accent),
                             ),
                           )
                         else if (enabled)
-                          const Icon(
+                           Icon(
                             Icons.chevron_right_rounded,
-                            color: ShopColors.faint,
+                            color: AppTheme.resolve(context, ShopColors.faint),
                             size: 18,
                           ),
                       ],
@@ -1434,8 +1436,8 @@ class _NotificationTile extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 7),
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
-                    color: ShopColors.accent,
+                  decoration:  BoxDecoration(
+                    color: AppTheme.resolve(context, ShopColors.accent, fill: true),
                     shape: BoxShape.circle,
                   ),
                 ),

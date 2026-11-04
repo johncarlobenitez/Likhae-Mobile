@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -304,7 +306,7 @@ class _RiderStageNavigationScreenState
     await markerManager.createMulti(<maplibre.CircleAnnotationOptions>[
       maplibre.CircleAnnotationOptions(
         geometry: _toMapLibrePoint(destination),
-        circleColor: _maroon.toARGB32(),
+        circleColor: AppTheme.resolve(context, _maroon).toARGB32(),
         circleRadius: 11,
         circleStrokeColor: Colors.white.toARGB32(),
         circleStrokeWidth: 3,
@@ -312,7 +314,7 @@ class _RiderStageNavigationScreenState
       if (origin != null)
         maplibre.CircleAnnotationOptions(
           geometry: _toMapLibrePoint(origin),
-          circleColor: _riderBlue.toARGB32(),
+          circleColor: AppTheme.resolve(context, _riderBlue).toARGB32(),
           circleRadius: 9,
           circleStrokeColor: Colors.white.toARGB32(),
           circleStrokeWidth: 3,
@@ -413,7 +415,7 @@ class _RiderStageNavigationScreenState
       await manager.create(
         maplibre.PolylineAnnotationOptions(
           geometry: maplibre.LineString(coordinates: positions),
-          lineColor: _routeColor.toARGB32(),
+          lineColor: AppTheme.resolve(context, _routeColor).toARGB32(),
           lineWidth: 5,
           lineOpacity: 0.85,
           lineBorderColor: Colors.white.toARGB32(),
@@ -477,10 +479,10 @@ class _RiderStageNavigationScreenState
   Widget build(BuildContext context) {
     final LatLng? destination = _destination;
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF7F2),
+      backgroundColor: AppTheme.resolve(context, const Color(0xFFFBF7F2), fill: true),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFBF7F2),
-        foregroundColor: const Color(0xFF3B211B),
+        backgroundColor: AppTheme.resolve(context, const Color(0xFFFBF7F2), fill: true),
+        foregroundColor: AppTheme.resolve(context, const Color(0xFF3B211B)),
         title: Text(
           widget.toLogisticsCenter
               ? 'Navigate to Logistics'
@@ -500,7 +502,7 @@ class _RiderStageNavigationScreenState
                       onMapCreated: _onMapCreated,
                     )
                   : ColoredBox(
-                      color: const Color(0xFFF1E9E2),
+                      color: AppTheme.resolve(context, const Color(0xFFF1E9E2), fill: true),
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
@@ -509,7 +511,7 @@ class _RiderStageNavigationScreenState
                                 ? 'The interactive map is available on Android and iOS.'
                                 : 'The saved destination coordinates are unavailable.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: _muted, height: 1.5),
+                            style:  TextStyle(color: AppTheme.resolve(context, _muted), height: 1.5),
                           ),
                         ),
                       ),
@@ -518,8 +520,8 @@ class _RiderStageNavigationScreenState
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration:  BoxDecoration(
+                color: AppTheme.resolve(context, Colors.white, fill: true),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
               ),
               child: Column(
@@ -527,8 +529,8 @@ class _RiderStageNavigationScreenState
                 children: <Widget>[
                   Text(
                     _destinationName,
-                    style: const TextStyle(
-                      color: Color(0xFF3B211B),
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, Color(0xFF3B211B)),
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
                     ),
@@ -537,7 +539,7 @@ class _RiderStageNavigationScreenState
                     const SizedBox(height: 5),
                     Text(
                       _destinationAddress,
-                      style: const TextStyle(color: _muted, height: 1.4),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), height: 1.4),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -566,7 +568,7 @@ class _RiderStageNavigationScreenState
                   const SizedBox(height: 12),
                   Text(
                     _status,
-                    style: const TextStyle(color: _muted, fontSize: 12),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -576,7 +578,7 @@ class _RiderStageNavigationScreenState
                           ? null
                           : _toggleLocationTracking,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _maroon,
+                        backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(13),
@@ -618,7 +620,7 @@ class _RouteMetric extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBF7F2),
+        color: AppTheme.resolve(context, const Color(0xFFFBF7F2), fill: true),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -626,16 +628,16 @@ class _RouteMetric extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: const TextStyle(
-              color: _RiderStageNavigationScreenState._muted,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _RiderStageNavigationScreenState._muted),
               fontSize: 10,
             ),
           ),
           const SizedBox(height: 3),
           Text(
             value,
-            style: const TextStyle(
-              color: _RiderStageNavigationScreenState._maroon,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _RiderStageNavigationScreenState._maroon),
               fontWeight: FontWeight.w900,
             ),
           ),

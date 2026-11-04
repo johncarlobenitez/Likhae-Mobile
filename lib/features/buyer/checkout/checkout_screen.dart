@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 import 'dart:math';
 
@@ -856,9 +858,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final bool isEmpty = widget.items.isEmpty;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppTheme.resolve(context, _bg, fill: true),
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: AppTheme.resolve(context, _bg, fill: true),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
@@ -867,12 +869,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         titleSpacing: 0,
         leading: IconButton(
           onPressed: _handleBack,
-          icon: const Icon(Icons.arrow_back_rounded, color: _primary),
+          icon:  Icon(Icons.arrow_back_rounded, color: AppTheme.resolve(context, _primary)),
         ),
-        title: const Text(
+        title:  Text(
           'Checkout',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 19,
             fontWeight: FontWeight.w700,
           ),
@@ -949,10 +951,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Material(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: _border),
+          side:  BorderSide(color: AppTheme.resolve(context, _border)),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -962,7 +964,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.location_on, color: _primary, size: 25),
+                 Icon(Icons.location_on, color: AppTheme.resolve(context, _primary), size: 25),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -977,8 +979,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   : address.recipient,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: _text,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, _text),
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -992,8 +994,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   address.phone,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: _muted,
+                                  style:  TextStyle(
+                                    color: AppTheme.resolve(context, _muted),
                                     fontSize: 11.5,
                                   ),
                                 ),
@@ -1006,8 +1008,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         address.fullAddress,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _muted),
                           fontSize: 12.5,
                           height: 1.35,
                         ),
@@ -1015,7 +1017,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: _muted),
+                 Icon(Icons.chevron_right, color: AppTheme.resolve(context, _muted)),
               ],
             ),
           ),
@@ -1030,7 +1032,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     final int? selected = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: _surface,
+      backgroundColor: AppTheme.resolve(context, _surface, fill: true),
       showDragHandle: true,
       builder: (BuildContext context) {
         return SafeArea(
@@ -1043,7 +1045,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   address.id == _selectedAddressId
                       ? Icons.radio_button_checked
                       : Icons.radio_button_off,
-                  color: address.id == _selectedAddressId ? _primary : _muted,
+                  color: address.id == _selectedAddressId ? AppTheme.resolve(context, _primary) : AppTheme.resolve(context, _muted),
                 ),
                 title: Text(
                   address.label,
@@ -1103,17 +1105,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       },
                     ),
                   if (index < items.length - 1)
-                    const Divider(height: 22, color: _border),
+                     Divider(height: 22, color: AppTheme.resolve(context, _border)),
                 ],
                 const SizedBox(height: 16),
                 if (widget.requireCourierSelection) ...[
                   Row(
                     children: [
-                      const Expanded(
+                       Expanded(
                         child: Text(
                           'Shipping Option',
                           style: TextStyle(
-                            color: _text,
+                            color: AppTheme.resolve(context, _text),
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                           ),
@@ -1121,7 +1123,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                       Text(
                         options.isEmpty ? 'Unavailable' : 'Choose one',
-                        style: const TextStyle(color: _muted, fontSize: 12),
+                        style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                       ),
                     ],
                   ),
@@ -1197,8 +1199,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: ShopColors.accentSoft.withValues(alpha: 0.55),
-        border: Border.all(color: ShopColors.border),
+        color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true).withValues(alpha: 0.55),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         borderRadius: BorderRadius.circular(13),
       ),
       child: Column(
@@ -1206,16 +1208,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.stars_rounded, color: _primary, size: 19),
+               Icon(Icons.stars_rounded, color: AppTheme.resolve(context, _primary), size: 19),
               const SizedBox(width: 9),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                     Text(
                       'Use LIKHAE reward points',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
@@ -1223,7 +1225,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const SizedBox(height: 3),
                     Text(
                       '$_pointsPerPeso points = PHP 1 off',
-                      style: const TextStyle(color: _muted, fontSize: 10),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10),
                     ),
                   ],
                 ),
@@ -1240,15 +1242,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   onChanged: canRedeem || selected
                       ? _toggleRewardPoints
                       : null,
-                  activeTrackColor: _primary,
+                  activeTrackColor: AppTheme.resolve(context, _primary),
                 ),
             ],
           ),
           const SizedBox(height: 7),
           Text(
             'Balance: $_availableRewardPoints points',
-            style: const TextStyle(
-              color: _muted,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _muted),
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
@@ -1272,8 +1274,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 OutlinedButton(
                   onPressed: _applyRewardPointsInput,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _primary,
-                    side: const BorderSide(color: ShopColors.borderStrong),
+                    foregroundColor: AppTheme.resolve(context, _primary),
+                    side:  BorderSide(color: AppTheme.resolve(context, ShopColors.borderStrong)),
                     padding: const EdgeInsets.symmetric(horizontal: 13),
                   ),
                   child: const Text('Apply'),
@@ -1291,7 +1293,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             const SizedBox(height: 5),
             Text(
               'At least $_minimumPointsRedemption points and PHP 1 of eligible products are required.',
-              style: TextStyle(color: _muted, fontSize: 9.5),
+              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 9.5),
             ),
           ],
           if (_rewardPointsError != null) ...[
@@ -1300,14 +1302,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               _rewardPointsError!.startsWith('Exception:')
                   ? 'Unable to load or validate reward points.'
                   : _rewardPointsError!,
-              style: const TextStyle(color: _danger, fontSize: 10),
+              style:  TextStyle(color: AppTheme.resolve(context, _danger), fontSize: 10),
             ),
           ],
           if (selected && _selectedRewardPoints > maximum) ...[
             const SizedBox(height: 5),
             Text(
               'The server allows up to $maximum points for this order. Update the amount to continue.',
-              style: const TextStyle(color: _danger, fontSize: 10),
+              style:  TextStyle(color: AppTheme.resolve(context, _danger), fontSize: 10),
             ),
           ],
         ],
@@ -1324,7 +1326,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           children: [
             if (widget.loadRewards != null) ...[
               _buildRewardPointsSelector(),
-              const Divider(height: 22, color: _border),
+               Divider(height: 22, color: AppTheme.resolve(context, _border)),
             ],
             Material(
               color: Colors.transparent,
@@ -1337,14 +1339,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   value: _loadingVouchers
                       ? 'Loading…'
                       : _selectedPlatformVoucherCode ?? 'Select or enter code',
-                  trailing: const Icon(
+                  trailing:  Icon(
                     Icons.chevron_right_rounded,
-                    color: _muted,
+                    color: AppTheme.resolve(context, _muted),
                   ),
                 ),
               ),
             ),
-            const Divider(height: 22, color: _border),
+             Divider(height: 22, color: AppTheme.resolve(context, _border)),
             Material(
               color: Colors.transparent,
               child: InkWell(
@@ -1356,14 +1358,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   value: _loadingVouchers
                       ? 'Loading…'
                       : _selectedShippingVoucherCode ?? 'Select or enter code',
-                  trailing: const Icon(
+                  trailing:  Icon(
                     Icons.chevron_right_rounded,
-                    color: _muted,
+                    color: AppTheme.resolve(context, _muted),
                   ),
                 ),
               ),
             ),
-            const Divider(height: 22, color: _border),
+             Divider(height: 22, color: AppTheme.resolve(context, _border)),
             Material(
               color: Colors.transparent,
               child: InkWell(
@@ -1383,17 +1385,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.chevron_right_rounded, color: _muted),
+                      :  Icon(Icons.chevron_right_rounded, color: AppTheme.resolve(context, _muted)),
                 ),
               ),
             ),
-            const Divider(height: 22, color: _border),
+             Divider(height: 22, color: AppTheme.resolve(context, _border)),
             const _CheckoutActionRow(
               icon: Icons.receipt_long_outlined,
               label: 'E-receipt',
               value: 'Request later',
             ),
-            const Divider(height: 22, color: _border),
+             Divider(height: 22, color: AppTheme.resolve(context, _border)),
             const _CheckoutActionRow(
               icon: Icons.payments_outlined,
               label: 'Payment method',
@@ -1444,9 +1446,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 value: _peso(_electronicProtectionTotal),
               ),
             ],
-            const Padding(
+             Padding(
               padding: EdgeInsets.symmetric(vertical: 14),
-              child: Divider(height: 1, color: _border),
+              child: Divider(height: 1, color: AppTheme.resolve(context, _border)),
             ),
             _CheckoutAmountRow(
               label: 'Total Payment',
@@ -1515,13 +1517,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: ShopColors.accentSoft,
+                  color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
+                child:  Text(
                   'SECURE CHECKOUT',
                   style: TextStyle(
-                    color: _primary,
+                    color: AppTheme.resolve(context, _primary),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.2,
@@ -1532,16 +1534,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               Text(
                 'Review and place your order',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: mobile ? 25 : 34,
                   height: 1.06,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+               Text(
                 'Confirm recipient details, delivery address, and payment method.',
-                style: TextStyle(color: _muted, fontSize: 14, height: 1.45),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 14, height: 1.45),
               ),
             ],
           ),
@@ -1551,8 +1553,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           OutlinedButton(
             onPressed: _handleBack,
             style: OutlinedButton.styleFrom(
-              foregroundColor: _primary,
-              side: const BorderSide(color: ShopColors.borderStrong),
+              foregroundColor: AppTheme.resolve(context, _primary),
+              side:  BorderSide(color: AppTheme.resolve(context, ShopColors.borderStrong)),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -1693,8 +1695,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             if (selectedAddress != null)
               Text(
                 selectedAddress.fullAddress,
-                style: const TextStyle(
-                  color: _muted,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _muted),
                   fontSize: 12,
                   height: 1.45,
                 ),
@@ -1870,9 +1872,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 },
               ),
             if (index < widget.items.length - 1)
-              const Padding(
+               Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
-                child: Divider(height: 1, color: _border),
+                child: Divider(height: 1, color: AppTheme.resolve(context, _border)),
               ),
           ],
           const SizedBox(height: 16),
@@ -1885,20 +1887,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: ShopColors.accentSoft,
+                color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 'Voucher applied: ${_selectedVoucherLabels.join(', ')}',
-                style: const TextStyle(
-                  color: _primary,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _primary),
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
             const SizedBox(height: 12),
           ],
-          const Divider(height: 1, color: _border),
+           Divider(height: 1, color: AppTheme.resolve(context, _border)),
           const SizedBox(height: 14),
           if (_otherDiscounts > 0) ...[
             _CheckoutAmountRow(
@@ -1918,16 +1920,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ],
           Row(
             children: [
-              const Expanded(
+               Expanded(
                 child: Text(
                   'Total payment',
-                  style: TextStyle(color: _muted, fontSize: 13),
+                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
                 ),
               ),
               Text(
                 _peso(_estimatedTotal),
-                style: const TextStyle(
-                  color: _text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1935,9 +1937,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          const Text(
+           Text(
             'Delivery coverage and the final total are confirmed by LIKHAE before the order is placed.',
-            style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.45),
           ),
           if (_loadingQuote) ...[
             const SizedBox(height: 10),
@@ -1977,8 +1979,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: FilledButton(
                 onPressed: _canPlaceOrder ? _handlePlaceOrder : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _primary,
-                  disabledBackgroundColor: _disabled,
+                  backgroundColor: AppTheme.resolve(context, _primary, fill: true),
+                  disabledBackgroundColor: AppTheme.resolve(context, _disabled, fill: true),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -2011,8 +2013,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: BoxDecoration(
-          color: _surface,
-          border: const Border(top: BorderSide(color: _border)),
+          color: AppTheme.resolve(context, _surface, fill: true),
+          border:  Border(top: BorderSide(color: AppTheme.resolve(context, _border))),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
@@ -2028,15 +2030,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                   Text(
                     'Total',
-                    style: TextStyle(color: _muted, fontSize: 11),
+                    style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     _peso(_estimatedTotal),
-                    style: const TextStyle(
-                      color: _primaryDark,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _primaryDark),
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
                     ),
@@ -2050,8 +2052,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: FilledButton(
                 onPressed: _canPlaceOrder ? _handlePlaceOrder : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _primary,
-                  disabledBackgroundColor: _disabled,
+                  backgroundColor: AppTheme.resolve(context, _primary, fill: true),
+                  disabledBackgroundColor: AppTheme.resolve(context, _disabled, fill: true),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -2087,9 +2089,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           constraints: const BoxConstraints(maxWidth: 420),
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
-            color: _surface,
+            color: AppTheme.resolve(context, _surface, fill: true),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: _border),
+            border: Border.all(color: AppTheme.resolve(context, _border)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2097,31 +2099,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               Container(
                 width: 76,
                 height: 76,
-                decoration: const BoxDecoration(
-                  color: _surfaceSoft,
+                decoration:  BoxDecoration(
+                  color: AppTheme.resolve(context, _surfaceSoft, fill: true),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child:  Icon(
                   Icons.shopping_bag_outlined,
-                  color: _primary,
+                  color: AppTheme.resolve(context, _primary),
                   size: 34,
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+               Text(
                 'Your cart is empty',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+               Text(
                 'Add a product before checking out.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _muted, fontSize: 13),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
               ),
               const SizedBox(height: 18),
               OutlinedButton.icon(
@@ -2129,8 +2131,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 icon: const Icon(Icons.arrow_back_rounded),
                 label: const Text('Back to Cart'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _primary,
-                  side: const BorderSide(color: _border),
+                  foregroundColor: AppTheme.resolve(context, _primary),
+                  side:  BorderSide(color: AppTheme.resolve(context, _border)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -2153,34 +2155,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       hintText: hint,
       alignLabelWithHint: alignLabelWithHint,
       filled: true,
-      fillColor: _surface,
+      fillColor: AppTheme.resolve(context, _surface, fill: true),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      labelStyle: const TextStyle(
-        color: _muted,
+      labelStyle:  TextStyle(
+        color: AppTheme.resolve(context, _muted),
         fontSize: 12,
         fontWeight: FontWeight.w600,
       ),
-      hintStyle: const TextStyle(color: ShopColors.faint, fontSize: 13),
+      hintStyle:  TextStyle(color: AppTheme.resolve(context, ShopColors.faint), fontSize: 13),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: ShopColors.accentLight, width: 1.3),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, ShopColors.accentLight), width: 1.3),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _danger),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _danger)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _danger, width: 1.3),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _danger), width: 1.3),
       ),
     );
   }
@@ -2202,7 +2204,7 @@ class _MobileCheckoutItem extends StatelessWidget {
           child: Container(
             width: 78,
             height: 78,
-            color: ShopColors.soft,
+            color: AppTheme.resolve(context, ShopColors.soft, fill: true),
             child: _ProductImage(imageUrl: item.imageUrl),
           ),
         ),
@@ -2215,8 +2217,8 @@ class _MobileCheckoutItem extends StatelessWidget {
                 item.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: ShopColors.text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.text),
                   fontSize: 13.5,
                   height: 1.25,
                   fontWeight: FontWeight.w700,
@@ -2227,15 +2229,15 @@ class _MobileCheckoutItem extends StatelessWidget {
                 item.variant.isEmpty ? 'Standard' : item.variant,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: ShopColors.muted, fontSize: 12),
+                style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12),
               ),
               const SizedBox(height: 8),
               Row(
                 children: [
                   Text(
                     peso(item.lineTotal),
-                    style: const TextStyle(
-                      color: ShopColors.accentDark,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.accentDark),
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                     ),
@@ -2243,8 +2245,8 @@ class _MobileCheckoutItem extends StatelessWidget {
                   const Spacer(),
                   Text(
                     'x${item.safeQuantity}',
-                    style: const TextStyle(
-                      color: ShopColors.muted,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.muted),
                       fontSize: 12,
                     ),
                   ),
@@ -2274,7 +2276,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Material(
-        color: selected ? ShopColors.accentSoft : ShopColors.soft,
+        color: selected ? AppTheme.resolve(context, ShopColors.accentSoft, fill: true) : AppTheme.resolve(context, ShopColors.soft, fill: true),
         borderRadius: BorderRadius.circular(13),
         child: InkWell(
           onTap: () => onChanged(!selected),
@@ -2286,23 +2288,23 @@ class _ElectronicProtectionTile extends StatelessWidget {
                 Checkbox(
                   value: selected,
                   onChanged: (bool? value) => onChanged(value ?? false),
-                  activeColor: ShopColors.accent,
+                  activeColor: AppTheme.resolve(context, ShopColors.accent),
                   visualDensity: VisualDensity.compact,
                 ),
-                const Icon(
+                 Icon(
                   Icons.verified_user_outlined,
                   size: 19,
-                  color: ShopColors.accent,
+                  color: AppTheme.resolve(context, ShopColors.accent),
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Electronic Protection',
                         style: TextStyle(
-                          color: ShopColors.text,
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2313,7 +2315,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: ShopColors.muted,
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 11,
                           height: 1.25,
                         ),
@@ -2324,8 +2326,8 @@ class _ElectronicProtectionTile extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '+₱${fee.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: ShopColors.accentDark,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.accentDark),
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2360,17 +2362,17 @@ class _CheckoutActionRow extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: ShopColors.accentSoft,
+            color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, size: 18, color: ShopColors.accent),
+          child: Icon(icon, size: 18, color: AppTheme.resolve(context, ShopColors.accent)),
         ),
         const SizedBox(width: 11),
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              color: ShopColors.text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.text),
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -2382,12 +2384,12 @@ class _CheckoutActionRow extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.end,
-            style: const TextStyle(color: ShopColors.muted, fontSize: 12),
+            style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12),
           ),
         ),
         const SizedBox(width: 4),
         trailing ??
-            const Icon(Icons.chevron_right, color: ShopColors.faint, size: 20),
+             Icon(Icons.chevron_right, color: AppTheme.resolve(context, ShopColors.faint), size: 20),
       ],
     );
   }
@@ -2412,7 +2414,7 @@ class _CheckoutAmountRow extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: strong ? ShopColors.text : ShopColors.muted,
+              color: strong ? AppTheme.resolve(context, ShopColors.text) : AppTheme.resolve(context, ShopColors.muted),
               fontSize: strong ? 16 : 13,
               fontWeight: strong ? FontWeight.w800 : FontWeight.w500,
             ),
@@ -2421,7 +2423,7 @@ class _CheckoutAmountRow extends StatelessWidget {
         Text(
           value,
           style: TextStyle(
-            color: strong ? ShopColors.text : ShopColors.muted,
+            color: strong ? AppTheme.resolve(context, ShopColors.text) : AppTheme.resolve(context, ShopColors.muted),
             fontSize: strong ? 17 : 13,
             fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
           ),
@@ -2457,9 +2459,9 @@ class _CheckoutCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.035),
@@ -2480,10 +2482,10 @@ class _CheckoutCard extends StatelessWidget {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _surfaceSoft,
+                      color: AppTheme.resolve(context, _surfaceSoft, fill: true),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Icon(leadingIcon, size: 19, color: _primary),
+                    child: Icon(leadingIcon, size: 19, color: AppTheme.resolve(context, _primary)),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -2493,8 +2495,8 @@ class _CheckoutCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: _text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _text),
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2503,8 +2505,8 @@ class _CheckoutCard extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           subtitle!,
-                          style: const TextStyle(
-                            color: _muted,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, _muted),
                             fontSize: 11.5,
                             height: 1.4,
                           ),
@@ -2518,8 +2520,8 @@ class _CheckoutCard extends StatelessWidget {
           else
             Text(
               title,
-              style: const TextStyle(
-                color: _text,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _text),
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
@@ -2545,8 +2547,8 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = danger ? const Color(0xFFB42318) : ShopColors.accentDark;
-    final Color bg = danger ? const Color(0xFFFFEFEA) : ShopColors.accentSoft;
+    final Color fg = danger ? AppTheme.resolve(context, const Color(0xFFB42318)) : AppTheme.resolve(context, ShopColors.accentDark);
+    final Color bg = danger ? AppTheme.resolve(context, const Color(0xFFFFEFEA)) : AppTheme.resolve(context, ShopColors.accentSoft);
 
     return Container(
       width: double.infinity,
@@ -2601,10 +2603,10 @@ class _PaymentOptionTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: selected ? _primaryBg : _disabledBg,
+        color: selected ? AppTheme.resolve(context, _primaryBg, fill: true) : AppTheme.resolve(context, _disabledBg, fill: true),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: selected ? _primary.withValues(alpha: 0.65) : _border,
+          color: selected ? AppTheme.resolve(context, _primary).withValues(alpha: 0.65) : AppTheme.resolve(context, _border),
         ),
       ),
       child: Row(
@@ -2614,7 +2616,7 @@ class _PaymentOptionTile extends StatelessWidget {
             selected
                 ? Icons.radio_button_checked_rounded
                 : Icons.radio_button_off_rounded,
-            color: selected ? _primary : _disabledText,
+            color: selected ? AppTheme.resolve(context, _primary) : AppTheme.resolve(context, _disabledText),
             size: 22,
           ),
           const SizedBox(width: 10),
@@ -2626,8 +2628,8 @@ class _PaymentOptionTile extends StatelessWidget {
                   title,
                   style: TextStyle(
                     color: enabled
-                        ? (selected ? _primary : ShopColors.text)
-                        : _disabledText,
+                        ? (selected ? AppTheme.resolve(context, _primary) : AppTheme.resolve(context, ShopColors.text))
+                        : AppTheme.resolve(context, _disabledText),
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2636,7 +2638,7 @@ class _PaymentOptionTile extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: enabled ? ShopColors.secondaryText : _disabledText,
+                    color: enabled ? AppTheme.resolve(context, ShopColors.secondaryText) : AppTheme.resolve(context, _disabledText),
                     fontSize: 11,
                   ),
                 ),
@@ -2665,7 +2667,7 @@ class _SummaryItem extends StatelessWidget {
           child: Container(
             width: 56,
             height: 56,
-            color: ShopColors.soft,
+            color: AppTheme.resolve(context, ShopColors.soft, fill: true),
             child: _ProductImage(imageUrl: item.imageUrl),
           ),
         ),
@@ -2678,8 +2680,8 @@ class _SummaryItem extends StatelessWidget {
                 item.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: ShopColors.text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.text),
                   fontSize: 13.5,
                   height: 1.28,
                   fontWeight: FontWeight.w700,
@@ -2688,8 +2690,8 @@ class _SummaryItem extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 '${item.variant.isEmpty ? 'Standard' : item.variant} · Qty ${item.safeQuantity}',
-                style: const TextStyle(
-                  color: ShopColors.secondaryText,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.secondaryText),
                   fontSize: 11.5,
                 ),
               ),
@@ -2699,8 +2701,8 @@ class _SummaryItem extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           pesoFormatter(item.lineTotal),
-          style: const TextStyle(
-            color: ShopColors.text,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, ShopColors.text),
             fontSize: 13,
             fontWeight: FontWeight.w800,
           ),
@@ -2720,8 +2722,8 @@ class _ProductImage extends StatelessWidget {
     final String url = (imageUrl ?? '').trim();
 
     if (url.isEmpty) {
-      return const Center(
-        child: Icon(Icons.image_outlined, color: ShopColors.faint),
+      return  Center(
+        child: Icon(Icons.image_outlined, color: AppTheme.resolve(context, ShopColors.faint)),
       );
     }
 
@@ -2748,8 +2750,8 @@ class _ProductImage extends StatelessWidget {
           },
       errorBuilder:
           (BuildContext context, Object error, StackTrace? stackTrace) {
-            return const Center(
-              child: Icon(Icons.broken_image_outlined, color: ShopColors.faint),
+            return  Center(
+              child: Icon(Icons.broken_image_outlined, color: AppTheme.resolve(context, ShopColors.faint)),
             );
           },
     );

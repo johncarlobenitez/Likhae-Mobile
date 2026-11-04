@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -526,19 +528,19 @@ class _WishlistScreenState
       ) {
         return AlertDialog(
           backgroundColor:
-              _card,
+              AppTheme.resolve(context, _card, fill: true),
           shape:
               RoundedRectangleBorder(
             borderRadius:
                 BorderRadius.circular(24),
           ),
           title:
-              const Text(
+               Text(
             'Clear wishlist?',
             style:
                 TextStyle(
               color:
-                  _text,
+                  AppTheme.resolve(context, _text),
               fontWeight:
                   FontWeight.w800,
             ),
@@ -546,9 +548,9 @@ class _WishlistScreenState
           content: Text(
             'This will remove all ${_wishlist.length} saved ${_wishlist.length == 1 ? 'product' : 'products'} from your wishlist.',
             style:
-                const TextStyle(
+                 TextStyle(
               color:
-                  _muted,
+                  AppTheme.resolve(context, _muted),
               fontSize:
                   13,
               height:
@@ -565,12 +567,12 @@ class _WishlistScreenState
                 );
               },
               child:
-                  const Text(
+                   Text(
                 'Cancel',
                 style:
                     TextStyle(
                   color:
-                      _brown,
+                      AppTheme.resolve(context, _brown),
                 ),
               ),
             ),
@@ -586,7 +588,7 @@ class _WishlistScreenState
                   ElevatedButton.styleFrom(
                 elevation: 0,
                 backgroundColor:
-                    _danger,
+                    AppTheme.resolve(context, _danger, fill: true),
                 foregroundColor:
                     Colors.white,
               ),
@@ -694,8 +696,8 @@ class _WishlistScreenState
               24,
             ),
             decoration:
-                const BoxDecoration(
-              color: _card,
+                 BoxDecoration(
+              color: AppTheme.resolve(context, _card, fill: true),
               borderRadius:
                   BorderRadius.vertical(
                 top:
@@ -714,7 +716,7 @@ class _WishlistScreenState
                   decoration:
                       BoxDecoration(
                     color:
-                        _borderStrong,
+                        AppTheme.resolve(context, _borderStrong, fill: true),
                     borderRadius:
                         BorderRadius.circular(
                       100,
@@ -726,14 +728,14 @@ class _WishlistScreenState
                   height: 18,
                 ),
 
-                const Row(
+                 Row(
                   children: [
                     Text(
                       'Sort wishlist',
                       style:
                           TextStyle(
                         color:
-                            _text,
+                            AppTheme.resolve(context, _text),
                         fontSize:
                             19,
                         fontWeight:
@@ -765,7 +767,7 @@ class _WishlistScreenState
                       style:
                           TextStyle(
                         color:
-                            _text,
+                            AppTheme.resolve(context, _text),
                         fontSize:
                             13,
                         fontWeight:
@@ -778,11 +780,11 @@ class _WishlistScreenState
                     trailing:
                         sort ==
                                 _activeSort
-                            ? const Icon(
+                            ?  Icon(
                                 Icons
                                     .check_circle_rounded,
                                 color:
-                                    _maroon,
+                                    AppTheme.resolve(context, _maroon),
                               )
                             : null,
                   ),
@@ -822,8 +824,8 @@ class _WishlistScreenState
               SnackBarBehavior.floating,
           backgroundColor:
               error
-                  ? _danger
-                  : _maroonDark,
+                  ? AppTheme.resolve(context, _danger, fill: true)
+                  : AppTheme.resolve(context, _maroonDark, fill: true),
           margin:
               const EdgeInsets.all(
             16,
@@ -870,7 +872,7 @@ class _WishlistScreenState
 
     return Scaffold(
       backgroundColor:
-          _background,
+          AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -881,7 +883,7 @@ class _WishlistScreenState
               child:
                   RefreshIndicator(
                 color:
-                    _maroon,
+                    AppTheme.resolve(context, _maroon),
                 onRefresh:
                     _refresh,
                 child:
@@ -1009,25 +1011,25 @@ class _WishlistScreenState
         border:
             Border.all(
           color:
-              _border,
+              AppTheme.resolve(context, _border),
         ),
         gradient:
-            const LinearGradient(
+             LinearGradient(
           begin:
               Alignment.topLeft,
           end:
               Alignment.bottomRight,
           colors: <Color>[
-            ShopColors.surface,
-            ShopColors.soft,
-            ShopColors.soft,
+            AppTheme.resolve(context, ShopColors.surface, fill: true),
+            AppTheme.resolve(context, ShopColors.soft, fill: true),
+            AppTheme.resolve(context, ShopColors.soft, fill: true),
           ],
         ),
         boxShadow:
             <BoxShadow>[
           BoxShadow(
             color:
-                _maroon.withValues(
+                AppTheme.resolve(context, _maroon).withValues(
               alpha: 0.055,
             ),
             blurRadius:
@@ -1056,7 +1058,7 @@ class _WishlistScreenState
                 shape:
                     BoxShape.circle,
                 color:
-                    _tan.withValues(
+                    AppTheme.resolve(context, _tan, fill: true).withValues(
                   alpha: 0.15,
                 ),
               ),
@@ -1067,12 +1069,12 @@ class _WishlistScreenState
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              const Text(
+               Text(
                 'SAVED PRODUCTS',
                 style:
                     TextStyle(
                   color:
-                      _maroon,
+                      AppTheme.resolve(context, _maroon),
                   fontSize:
                       8.5,
                   letterSpacing:
@@ -1087,7 +1089,7 @@ class _WishlistScreenState
                     7,
               ),
 
-              const Text.rich(
+               Text.rich(
                 TextSpan(
                   children:
                       <InlineSpan>[
@@ -1101,7 +1103,7 @@ class _WishlistScreenState
                       style:
                           TextStyle(
                         color:
-                            _maroon,
+                            AppTheme.resolve(context, _maroon),
                         fontStyle:
                             FontStyle.italic,
                       ),
@@ -1111,7 +1113,7 @@ class _WishlistScreenState
                 style:
                     TextStyle(
                   color:
-                      _text,
+                      AppTheme.resolve(context, _text),
                   fontSize:
                       31,
                   height:
@@ -1128,12 +1130,12 @@ class _WishlistScreenState
                     10,
               ),
 
-              const Text(
+               Text(
                 'Keep your favorite LIKHAE products in one place and revisit them anytime. Price and stock can change while a product remains saved.',
                 style:
                     TextStyle(
                   color:
-                      _muted,
+                      AppTheme.resolve(context, _muted),
                   fontSize:
                       11,
                   height:
@@ -1157,11 +1159,11 @@ class _WishlistScreenState
                   style:
                       OutlinedButton.styleFrom(
                     foregroundColor:
-                        _maroon,
+                        AppTheme.resolve(context, _maroon),
                     side:
-                        const BorderSide(
+                         BorderSide(
                       color:
-                          _tan,
+                          AppTheme.resolve(context, _tan),
                     ),
                     padding:
                         const EdgeInsets.symmetric(
@@ -1227,13 +1229,13 @@ class _WishlistScreenState
       decoration:
           BoxDecoration(
         color:
-            _card,
+            AppTheme.resolve(context, _card, fill: true),
         borderRadius:
             BorderRadius.circular(20),
         border:
             Border.all(
           color:
-              _border,
+              AppTheme.resolve(context, _border),
         ),
       ),
       child: Column(
@@ -1248,7 +1250,7 @@ class _WishlistScreenState
                 decoration:
                     BoxDecoration(
                   color:
-                      ShopColors.accentSoft,
+                      AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                   borderRadius:
                       BorderRadius.circular(
                     15,
@@ -1257,11 +1259,11 @@ class _WishlistScreenState
                 alignment:
                     Alignment.center,
                 child:
-                    const Icon(
+                     Icon(
                   Icons
                       .favorite_rounded,
                   color:
-                      _maroon,
+                      AppTheme.resolve(context, _maroon),
                   size:
                       22,
                 ),
@@ -1280,9 +1282,9 @@ class _WishlistScreenState
                     Text(
                       '$count ${count == 1 ? 'saved product' : 'saved products'}',
                       style:
-                          const TextStyle(
+                           TextStyle(
                         color:
-                            _text,
+                            AppTheme.resolve(context, _text),
                         fontSize:
                             13,
                         fontWeight:
@@ -1301,9 +1303,9 @@ class _WishlistScreenState
                           ? '$unavailableCount ${unavailableCount == 1 ? 'saved product is' : 'saved products are'} currently out of stock.'
                           : 'Revisit any saved product whenever you are ready.',
                       style:
-                          const TextStyle(
+                           TextStyle(
                         color:
-                            _muted,
+                            AppTheme.resolve(context, _muted),
                         fontSize:
                             9.5,
                         height:
@@ -1337,13 +1339,11 @@ class _WishlistScreenState
                 style:
                     OutlinedButton.styleFrom(
                   foregroundColor:
-                      _danger,
+                      AppTheme.resolve(context, _danger),
                   side:
-                      const BorderSide(
+                       BorderSide(
                     color:
-                        Color(
-                      0xFFE6B8AD,
-                    ),
+                        AppTheme.resolve(context, Color(0xFFE6B8AD)),
                   ),
                   shape:
                       RoundedRectangleBorder(
@@ -1355,7 +1355,7 @@ class _WishlistScreenState
                 ),
                 icon:
                     _clearingWishlist
-                        ? const SizedBox(
+                        ?  SizedBox(
                             width:
                                 16,
                             height:
@@ -1365,7 +1365,7 @@ class _WishlistScreenState
                               strokeWidth:
                                   2,
                               color:
-                                  _danger,
+                                  AppTheme.resolve(context, _danger),
                             ),
                           )
                         : const Icon(
@@ -1404,13 +1404,13 @@ class _WishlistScreenState
       decoration:
           BoxDecoration(
         color:
-            _card,
+            AppTheme.resolve(context, _card, fill: true),
         borderRadius:
             BorderRadius.circular(20),
         border:
             Border.all(
           color:
-              _border,
+              AppTheme.resolve(context, _border),
         ),
       ),
       child: Column(
@@ -1436,18 +1436,18 @@ class _WishlistScreenState
               hintText:
                   'Search saved products...',
               hintStyle:
-                  const TextStyle(
+                   TextStyle(
                 color:
-                    _muted2,
+                    AppTheme.resolve(context, _muted2),
                 fontSize:
                     11.5,
               ),
               prefixIcon:
-                  const Icon(
+                   Icon(
                 Icons
                     .search_rounded,
                 color:
-                    _muted2,
+                    AppTheme.resolve(context, _muted2),
                 size:
                     19,
               ),
@@ -1461,20 +1461,20 @@ class _WishlistScreenState
                           onPressed:
                               _clearSearch,
                           icon:
-                              const Icon(
+                               Icon(
                             Icons
                                 .close_rounded,
                             size:
                                 17,
                             color:
-                                _muted,
+                                AppTheme.resolve(context, _muted),
                           ),
                         )
                       : null,
               filled:
                   true,
               fillColor:
-                  _backgroundSoft,
+                  AppTheme.resolve(context, _backgroundSoft, fill: true),
               contentPadding:
                   const EdgeInsets.symmetric(
                 vertical:
@@ -1487,9 +1487,9 @@ class _WishlistScreenState
                   13,
                 ),
                 borderSide:
-                    const BorderSide(
+                     BorderSide(
                   color:
-                      _border,
+                      AppTheme.resolve(context, _border),
                 ),
               ),
               enabledBorder:
@@ -1499,9 +1499,9 @@ class _WishlistScreenState
                   13,
                 ),
                 borderSide:
-                    const BorderSide(
+                     BorderSide(
                   color:
-                      _border,
+                      AppTheme.resolve(context, _border),
                 ),
               ),
               focusedBorder:
@@ -1511,9 +1511,9 @@ class _WishlistScreenState
                   13,
                 ),
                 borderSide:
-                    const BorderSide(
+                     BorderSide(
                   color:
-                      _tan,
+                      AppTheme.resolve(context, _tan),
                   width:
                       1.3,
                 ),
@@ -1528,7 +1528,7 @@ class _WishlistScreenState
 
           Material(
             color:
-                _backgroundSoft,
+                AppTheme.resolve(context, _backgroundSoft, fill: true),
             borderRadius:
                 BorderRadius.circular(
               13,
@@ -1555,7 +1555,7 @@ class _WishlistScreenState
                   border:
                       Border.all(
                     color:
-                        _border,
+                        AppTheme.resolve(context, _border),
                   ),
                   borderRadius:
                       BorderRadius.circular(
@@ -1565,11 +1565,11 @@ class _WishlistScreenState
                 child:
                     Row(
                   children: [
-                    const Icon(
+                     Icon(
                       Icons
                           .sort_rounded,
                       color:
-                          _maroon,
+                          AppTheme.resolve(context, _maroon),
                       size:
                           19,
                     ),
@@ -1579,12 +1579,12 @@ class _WishlistScreenState
                           8,
                     ),
 
-                    const Text(
+                     Text(
                       'Sort by',
                       style:
                           TextStyle(
                         color:
-                            _muted,
+                            AppTheme.resolve(context, _muted),
                         fontSize:
                             10.5,
                         fontWeight:
@@ -1603,9 +1603,9 @@ class _WishlistScreenState
                         overflow:
                             TextOverflow.ellipsis,
                         style:
-                            const TextStyle(
+                             TextStyle(
                           color:
-                              _text,
+                              AppTheme.resolve(context, _text),
                           fontSize:
                               10.5,
                           fontWeight:
@@ -1619,11 +1619,11 @@ class _WishlistScreenState
                           5,
                     ),
 
-                    const Icon(
+                     Icon(
                       Icons
                           .keyboard_arrow_down_rounded,
                       color:
-                          _brown,
+                          AppTheme.resolve(context, _brown),
                       size:
                           19,
                     ),
@@ -1658,9 +1658,9 @@ class _WishlistScreenState
                   text:
                       '$visibleCount',
                   style:
-                      const TextStyle(
+                       TextStyle(
                     color:
-                        _maroon,
+                        AppTheme.resolve(context, _maroon),
                     fontWeight:
                         FontWeight.w800,
                   ),
@@ -1673,9 +1673,9 @@ class _WishlistScreenState
                   text:
                       '${_wishlist.length}',
                   style:
-                      const TextStyle(
+                       TextStyle(
                     color:
-                        _maroon,
+                        AppTheme.resolve(context, _maroon),
                     fontWeight:
                         FontWeight.w800,
                   ),
@@ -1687,9 +1687,9 @@ class _WishlistScreenState
               ],
             ),
             style:
-                const TextStyle(
+                 TextStyle(
               color:
-                  _muted,
+                  AppTheme.resolve(context, _muted),
               fontSize:
                   10.5,
               fontWeight:
@@ -1717,9 +1717,9 @@ class _WishlistScreenState
               textAlign:
                   TextAlign.right,
               style:
-                  const TextStyle(
+                   TextStyle(
                 color:
-                    _brown,
+                    AppTheme.resolve(context, _brown),
                 fontSize:
                     10.5,
                 fontWeight:
@@ -1833,18 +1833,18 @@ class _WishlistScreenState
               decoration:
                   BoxDecoration(
                 color:
-                    ShopColors.accentSoft,
+                    AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                 borderRadius:
                     BorderRadius.circular(24),
               ),
               alignment:
                   Alignment.center,
               child:
-                  const Icon(
+                   Icon(
                 Icons
                     .favorite_border_rounded,
                 color:
-                    _maroon,
+                    AppTheme.resolve(context, _maroon),
                 size:
                     30,
               ),
@@ -1855,14 +1855,14 @@ class _WishlistScreenState
                   18,
             ),
 
-            const Text(
+             Text(
               'Your wishlist is empty',
               textAlign:
                   TextAlign.center,
               style:
                   TextStyle(
                 color:
-                    _text,
+                    AppTheme.resolve(context, _text),
                 fontSize:
                     19,
                 fontWeight:
@@ -1877,14 +1877,14 @@ class _WishlistScreenState
                   7,
             ),
 
-            const Text(
+             Text(
               'Save products you love by tapping the heart icon on a marketplace product.',
               textAlign:
                   TextAlign.center,
               style:
                   TextStyle(
                 color:
-                    _muted,
+                    AppTheme.resolve(context, _muted),
                 fontSize:
                     11,
                 height:
@@ -1910,7 +1910,7 @@ class _WishlistScreenState
                   elevation:
                       0,
                   backgroundColor:
-                      _maroon,
+                      AppTheme.resolve(context, _maroon, fill: true),
                   foregroundColor:
                       Colors.white,
                   padding:
@@ -1971,18 +1971,18 @@ class _WishlistScreenState
               decoration:
                   BoxDecoration(
                 color:
-                    ShopColors.accentSoft,
+                    AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                 borderRadius:
                     BorderRadius.circular(24),
               ),
               alignment:
                   Alignment.center,
               child:
-                  const Icon(
+                   Icon(
                 Icons
                     .search_off_rounded,
                 color:
-                    _maroon,
+                    AppTheme.resolve(context, _maroon),
                 size:
                     31,
               ),
@@ -1993,14 +1993,14 @@ class _WishlistScreenState
                   18,
             ),
 
-            const Text(
+             Text(
               'No matching saved products',
               textAlign:
                   TextAlign.center,
               style:
                   TextStyle(
                 color:
-                    _text,
+                    AppTheme.resolve(context, _text),
                 fontSize:
                     18,
                 fontWeight:
@@ -2018,9 +2018,9 @@ class _WishlistScreenState
               textAlign:
                   TextAlign.center,
               style:
-                  const TextStyle(
+                   TextStyle(
                 color:
-                    _muted,
+                    AppTheme.resolve(context, _muted),
                 fontSize:
                     11,
                 height:
@@ -2039,11 +2039,11 @@ class _WishlistScreenState
               style:
                   OutlinedButton.styleFrom(
                 foregroundColor:
-                    _maroon,
+                    AppTheme.resolve(context, _maroon),
                 side:
-                    const BorderSide(
+                     BorderSide(
                   color:
-                      _tan,
+                      AppTheme.resolve(context, _tan),
                 ),
                 shape:
                     RoundedRectangleBorder(
@@ -2105,7 +2105,7 @@ class _WishlistProductCard
 
     return Material(
       color:
-          ShopColors.surface,
+          AppTheme.resolve(context, ShopColors.surface, fill: true),
       borderRadius:
           BorderRadius.circular(20),
       child: InkWell(
@@ -2121,13 +2121,13 @@ class _WishlistProductCard
           decoration:
               BoxDecoration(
             color:
-                ShopColors.surface,
+                AppTheme.resolve(context, ShopColors.surface, fill: true),
             borderRadius:
                 BorderRadius.circular(20),
             border:
                 Border.all(
               color:
-                  ShopColors.border,
+                  AppTheme.resolve(context, ShopColors.border),
             ),
           ),
           child: Column(
@@ -2141,7 +2141,7 @@ class _WishlistProductCard
                   children: [
                     Container(
                       color:
-                          ShopColors.soft,
+                          AppTheme.resolve(context, ShopColors.soft, fill: true),
                       child:
                           _WishlistProductImage(
                         imageUrl:
@@ -2168,7 +2168,7 @@ class _WishlistProductCard
                           decoration:
                               BoxDecoration(
                             color:
-                                ShopColors.accent,
+                                AppTheme.resolve(context, ShopColors.accent, fill: true),
                             borderRadius:
                                 BorderRadius.circular(
                               7,
@@ -2219,7 +2219,7 @@ class _WishlistProductCard
                                 35,
                             child:
                                 removing
-                                    ? const Padding(
+                                    ?  Padding(
                                         padding:
                                             EdgeInsets.all(
                                           9,
@@ -2229,14 +2229,14 @@ class _WishlistProductCard
                                           strokeWidth:
                                               2,
                                           color:
-                                              ShopColors.accent,
+                                              AppTheme.resolve(context, ShopColors.accent),
                                         ),
                                       )
-                                    : const Icon(
+                                    :  Icon(
                                         Icons
                                             .favorite_rounded,
                                         color:
-                                            ShopColors.accent,
+                                            AppTheme.resolve(context, ShopColors.accent),
                                         size:
                                             19,
                                       ),
@@ -2321,9 +2321,9 @@ class _WishlistProductCard
                         overflow:
                             TextOverflow.ellipsis,
                         style:
-                            const TextStyle(
+                             TextStyle(
                           color:
-                              ShopColors.secondaryText,
+                              AppTheme.resolve(context, ShopColors.secondaryText),
                           fontSize:
                               9,
                           letterSpacing:
@@ -2346,9 +2346,9 @@ class _WishlistProductCard
                       overflow:
                           TextOverflow.ellipsis,
                       style:
-                          const TextStyle(
+                           TextStyle(
                         color:
-                            ShopColors.text,
+                            AppTheme.resolve(context, ShopColors.text),
                         fontSize:
                             13,
                         height:
@@ -2374,9 +2374,9 @@ class _WishlistProductCard
                         overflow:
                             TextOverflow.ellipsis,
                         style:
-                            const TextStyle(
+                             TextStyle(
                           color:
-                              ShopColors.muted,
+                              AppTheme.resolve(context, ShopColors.muted),
                           fontSize:
                               10,
                         ),
@@ -2401,9 +2401,9 @@ class _WishlistProductCard
                             product.price,
                           ),
                           style:
-                              const TextStyle(
+                               TextStyle(
                             color:
-                                ShopColors.accent,
+                                AppTheme.resolve(context, ShopColors.accent),
                             fontSize:
                                 15,
                             fontWeight:
@@ -2420,9 +2420,9 @@ class _WishlistProductCard
                               product.originalPrice!,
                             ),
                             style:
-                                const TextStyle(
+                                 TextStyle(
                               color:
-                                  ShopColors.faint,
+                                  AppTheme.resolve(context, ShopColors.faint),
                               fontSize:
                                   9.5,
                               decoration:
@@ -2441,12 +2441,10 @@ class _WishlistProductCard
                       children: [
                         if (product.rating !=
                             null) ...[
-                          const Icon(
+                           Icon(
                             Icons.star_rounded,
                             color:
-                                Color(
-                              0xFFC88418,
-                            ),
+                                AppTheme.resolve(context, Color(0xFFC88418)),
                             size:
                                 13,
                           ),
@@ -2462,9 +2460,9 @@ class _WishlistProductCard
                               1,
                             ),
                             style:
-                                const TextStyle(
+                                 TextStyle(
                               color:
-                                  ShopColors.text,
+                                  AppTheme.resolve(context, ShopColors.text),
                               fontSize:
                                   9.5,
                               fontWeight:
@@ -2482,9 +2480,9 @@ class _WishlistProductCard
                             Text(
                               '(${product.reviewCount})',
                               style:
-                                  const TextStyle(
+                                   TextStyle(
                                 color:
-                                    ShopColors.muted,
+                                    AppTheme.resolve(context, ShopColors.muted),
                                 fontSize:
                                     9,
                               ),
@@ -2506,9 +2504,9 @@ class _WishlistProductCard
                             overflow:
                                 TextOverflow.ellipsis,
                             style:
-                                const TextStyle(
+                                 TextStyle(
                               color:
-                                  ShopColors.muted,
+                                  AppTheme.resolve(context, ShopColors.muted),
                               fontSize:
                                   9.5,
                             ),
@@ -2522,9 +2520,9 @@ class _WishlistProductCard
                           Text(
                             '${product.stock} left',
                             style:
-                                const TextStyle(
+                                 TextStyle(
                               color:
-                                  ShopColors.muted,
+                                  AppTheme.resolve(context, ShopColors.muted),
                               fontSize:
                                   9,
                             ),
@@ -2554,8 +2552,8 @@ class _WishlistProductImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = imageUrl?.trim() ?? '';
-    if (value.isEmpty) return const Center(child: Icon(Icons.inventory_2_outlined,
-      color: ShopColors.faint, size: 36));
+    if (value.isEmpty) return  Center(child: Icon(Icons.inventory_2_outlined,
+      color: AppTheme.resolve(context, ShopColors.faint), size: 36));
     return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 36);
   }
 }
@@ -2591,7 +2589,7 @@ class _TopIconButton
           child:
               Material(
             color:
-                ShopColors.surface,
+                AppTheme.resolve(context, ShopColors.surface, fill: true),
             borderRadius:
                 BorderRadius.circular(
               12,
@@ -2621,14 +2619,14 @@ class _TopIconButton
                   border:
                       Border.all(
                     color:
-                        ShopColors.border,
+                        AppTheme.resolve(context, ShopColors.border),
                   ),
                 ),
                 child:
                     Icon(
                   icon,
                   color:
-                      ShopColors.accent,
+                      AppTheme.resolve(context, ShopColors.accent),
                   size:
                       19,
                 ),
@@ -2663,7 +2661,7 @@ class _TopIconButton
               decoration:
                   BoxDecoration(
                 color:
-                    ShopColors.accent,
+                    AppTheme.resolve(context, ShopColors.accent, fill: true),
                 borderRadius:
                     BorderRadius.circular(
                   100,
@@ -2671,7 +2669,7 @@ class _TopIconButton
                 border:
                     Border.all(
                   color:
-                      ShopColors.canvas,
+                      AppTheme.resolve(context, ShopColors.canvas),
                   width:
                       2,
                 ),

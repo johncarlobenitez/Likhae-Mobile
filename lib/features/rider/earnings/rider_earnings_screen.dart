@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 class RiderEarningRowData {
@@ -103,6 +105,7 @@ class RiderEarningsScreen extends StatelessWidget {
   final String earningsNotice;
   final RiderEarningsRefreshCallback? onRefresh;
   final VoidCallback? onOpenRemittances;
+  final VoidCallback? onOpenPayouts;
 
   const RiderEarningsScreen({
     super.key,
@@ -112,6 +115,7 @@ class RiderEarningsScreen extends StatelessWidget {
     this.earningsNotice = '',
     this.onRefresh,
     this.onOpenRemittances,
+    this.onOpenPayouts,
   });
 
   static const _background = Color(0xFFFBF7F2);
@@ -125,10 +129,10 @@ class RiderEarningsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final totals = summary ?? RiderEarningsSummary.fromRows(earningsRows);
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
         title: const Text(
@@ -139,7 +143,7 @@ class RiderEarningsScreen extends StatelessWidget {
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
-          color: _maroon,
+          color: AppTheme.resolve(context, _maroon),
           onRefresh: () async {
             await onRefresh?.call();
           },
@@ -155,11 +159,19 @@ class RiderEarningsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
+              if (onOpenPayouts != null) ...[
+                OutlinedButton.icon(
+                  onPressed: onOpenPayouts,
+                  icon: const Icon(Icons.account_balance_outlined),
+                  label: const Text('Payout requests & receipts'),
+                ),
+                const SizedBox(height: 12),
+              ],
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [_maroon, Color(0xFF793D2F)],
+                  gradient:  LinearGradient(
+                    colors: [AppTheme.resolve(context, _maroon, fill: true), AppTheme.resolve(context, Color(0xFF793D2F), fill: true)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -170,9 +182,9 @@ class RiderEarningsScreen extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const Icon(
+                         Icon(
                           Icons.account_balance_wallet_outlined,
-                          color: Color(0xFFEBD5BF),
+                          color: AppTheme.resolve(context, Color(0xFFEBD5BF)),
                           size: 21,
                         ),
                         const SizedBox(width: 9),
@@ -181,8 +193,8 @@ class RiderEarningsScreen extends StatelessWidget {
                             riderName.trim().isEmpty
                                 ? 'YOUR EARNINGS'
                                 : riderName,
-                            style: const TextStyle(
-                              color: Color(0xFFEBD5BF),
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, Color(0xFFEBD5BF)),
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
@@ -191,9 +203,9 @@ class RiderEarningsScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    const Text(
+                     Text(
                       'Total earned',
-                      style: TextStyle(color: Color(0xFFEBD5BF), fontSize: 13),
+                      style: TextStyle(color: AppTheme.resolve(context, Color(0xFFEBD5BF)), fontSize: 13),
                     ),
                     const SizedBox(height: 5),
                     FittedBox(
@@ -210,10 +222,10 @@ class RiderEarningsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    const Text(
+                     Text(
                       'Your recorded pickup & delivery income',
                       style: TextStyle(
-                        color: Color(0xFFEBD5BF),
+                        color: AppTheme.resolve(context, Color(0xFFEBD5BF)),
                         fontSize: 12,
                         height: 1.5,
                       ),
@@ -235,20 +247,20 @@ class RiderEarningsScreen extends StatelessWidget {
                     children: [
                       SizedBox(
                         width: width,
-                        child: _summaryCard(
+                        child: _summaryCard(context,
                           'Paid out',
                           totals.paid,
                           Icons.check_circle_outline_rounded,
-                          const Color(0xFF28724D),
+                          AppTheme.resolve(context, const Color(0xFF28724D)),
                         ),
                       ),
                       SizedBox(
                         width: width,
-                        child: _summaryCard(
+                        child: _summaryCard(context,
                           'Awaiting payout',
                           totals.pending,
                           Icons.schedule_rounded,
-                          const Color(0xFF946514),
+                          AppTheme.resolve(context, const Color(0xFF946514)),
                         ),
                       ),
                     ],
@@ -260,23 +272,23 @@ class RiderEarningsScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3DC),
+                    color: AppTheme.resolve(context, const Color(0xFFFFF3DC), fill: true),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
+                       Icon(
                         Icons.hourglass_top_rounded,
-                        color: Color(0xFF946514),
+                        color: AppTheme.resolve(context, Color(0xFF946514)),
                         size: 20,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           '${totals.unallocatedCount} earning record(s) awaiting allocation. These amounts are not included in your total yet.',
-                          style: const TextStyle(
-                            color: Color(0xFF80581E),
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, Color(0xFF80581E)),
                             fontSize: 12,
                             height: 1.5,
                           ),
@@ -287,29 +299,29 @@ class RiderEarningsScreen extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 26),
-              const Text(
+               Text(
                 'Earnings activity',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 5),
-              const Text(
+               Text(
                 'Pickup and delivery records for your account.',
-                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.5),
               ),
               const SizedBox(height: 14),
               Container(
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: _surface,
+                  color: AppTheme.resolve(context, _surface, fill: true),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _border),
+                  border: Border.all(color: AppTheme.resolve(context, _border)),
                 ),
                 child: earningsRows.isEmpty
-                    ? const Padding(
+                    ?  Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal: 24,
                           vertical: 34,
@@ -318,7 +330,7 @@ class RiderEarningsScreen extends StatelessWidget {
                           children: [
                             Icon(
                               Icons.receipt_long_outlined,
-                              color: _muted,
+                              color: AppTheme.resolve(context, _muted),
                               size: 36,
                             ),
                             SizedBox(height: 14),
@@ -326,7 +338,7 @@ class RiderEarningsScreen extends StatelessWidget {
                               'No earnings recorded yet',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: _text,
+                                color: AppTheme.resolve(context, _text),
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -336,7 +348,7 @@ class RiderEarningsScreen extends StatelessWidget {
                               'Your earnings will appear here when they are recorded for your rider account.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: _muted,
+                                color: AppTheme.resolve(context, _muted),
                                 fontSize: 12,
                                 height: 1.5,
                               ),
@@ -347,8 +359,8 @@ class RiderEarningsScreen extends StatelessWidget {
                     : Column(
                         children: [
                           for (int i = 0; i < earningsRows.length; i++) ...[
-                            if (i > 0) const Divider(height: 1, color: _border),
-                            _record(earningsRows[i]),
+                            if (i > 0)  Divider(height: 1, color: AppTheme.resolve(context, _border)),
+                            _record(context, earningsRows[i]),
                           ],
                         ],
                       ),
@@ -357,8 +369,8 @@ class RiderEarningsScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   earningsNotice,
-                  style: const TextStyle(
-                    color: _muted,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _muted),
                     fontSize: 12,
                     height: 1.5,
                   ),
@@ -371,28 +383,28 @@ class RiderEarningsScreen extends StatelessWidget {
     );
   }
 
-  Widget _summaryCard(String label, double amount, IconData icon, Color color) {
+  Widget _summaryCard(BuildContext context, String label, double amount, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(height: 14),
-          Text(label, style: const TextStyle(color: _muted, fontSize: 12)),
+          Text(label, style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12)),
           const SizedBox(height: 6),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(
               _pesos(amount),
-              style: const TextStyle(
-                color: _text,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _text),
                 fontSize: 21,
                 fontWeight: FontWeight.w800,
               ),
@@ -403,13 +415,13 @@ class RiderEarningsScreen extends StatelessWidget {
     );
   }
 
-  Widget _record(RiderEarningRowData row) {
+  Widget _record(BuildContext context, RiderEarningRowData row) {
     final amount = row.numericAmount;
     final color = row.isVoided
-        ? const Color(0xFFB42318)
+        ? AppTheme.resolve(context, const Color(0xFFB42318))
         : row.isPaid
-        ? const Color(0xFF28724D)
-        : const Color(0xFF946514);
+        ? AppTheme.resolve(context, const Color(0xFF28724D))
+        : AppTheme.resolve(context, const Color(0xFF946514));
     final status = amount == null && !row.isVoided
         ? 'Awaiting allocation'
         : row.status.trim().isEmpty
@@ -426,12 +438,12 @@ class RiderEarningsScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF6EFE7),
+                  color: AppTheme.resolve(context, const Color(0xFFF6EFE7), fill: true),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child:  Icon(
                   Icons.receipt_long_outlined,
-                  color: _maroon,
+                  color: AppTheme.resolve(context, _maroon),
                   size: 21,
                 ),
               ),
@@ -442,8 +454,8 @@ class RiderEarningsScreen extends StatelessWidget {
                   children: [
                     Text(
                       row.reference.isEmpty ? 'Earnings record' : row.reference,
-                      style: const TextStyle(
-                        color: _text,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                       ),
@@ -451,7 +463,7 @@ class RiderEarningsScreen extends StatelessWidget {
                     const SizedBox(height: 5),
                     Text(
                       row.date,
-                      style: const TextStyle(color: _muted, fontSize: 12),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                     ),
                   ],
                 ),
@@ -485,8 +497,8 @@ class RiderEarningsScreen extends StatelessWidget {
               if (amount != null)
                 Text(
                   _pesos(amount),
-                  style: const TextStyle(
-                    color: _maroon,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _maroon),
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                   ),

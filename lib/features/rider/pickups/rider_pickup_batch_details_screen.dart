@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../rider_product_image.dart';
@@ -188,7 +190,7 @@ class _RiderPickupBatchDetailsScreenState
         }
 
         return AlertDialog(
-          backgroundColor: _surface,
+          backgroundColor: AppTheme.resolve(context, _surface, fill: true),
           title: const Text('Enter tracking code'),
           content: TextField(
             autofocus: true,
@@ -221,7 +223,7 @@ class _RiderPickupBatchDetailsScreenState
     final String? reason = await showDialog<String>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        backgroundColor: _surface,
+        backgroundColor: AppTheme.resolve(context, _surface, fill: true),
         title: const Text('Mark parcel not collected'),
         content: TextField(
           onChanged: (value) => enteredReason = value,
@@ -277,10 +279,10 @@ class _RiderPickupBatchDetailsScreenState
         : _batch.statusLabel;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         title: Text(
           _batch.batchNumber.isEmpty ? 'Pickup Batch' : _batch.batchNumber,
@@ -399,7 +401,7 @@ class _RiderPickupBatchDetailsScreenState
               ),
             if (_busy) ...<Widget>[
               const SizedBox(height: 14),
-              const Center(child: CircularProgressIndicator(color: _maroon)),
+               Center(child: CircularProgressIndicator(color: AppTheme.resolve(context, _maroon))),
             ],
           ],
         ),
@@ -411,17 +413,17 @@ class _RiderPickupBatchDetailsScreenState
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             _batch.sellerName.isEmpty ? 'Seller' : _batch.sellerName,
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 20,
               fontWeight: FontWeight.w900,
             ),
@@ -430,7 +432,7 @@ class _RiderPickupBatchDetailsScreenState
           _infoRow(Icons.storefront_outlined, 'Pickup address', _batch.address),
           if (_batch.logisticsCenter.isNotEmpty ||
               _batch.destinationAddress.isNotEmpty) ...<Widget>[
-            const Divider(height: 22, color: _border),
+             Divider(height: 22, color: AppTheme.resolve(context, _border)),
             _infoRow(
               Icons.local_shipping_outlined,
               'Logistics center',
@@ -441,8 +443,8 @@ class _RiderPickupBatchDetailsScreenState
                 padding: const EdgeInsets.only(left: 29, top: 4),
                 child: Text(
                   _batch.destinationAddress,
-                  style: const TextStyle(
-                    color: _muted,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _muted),
                     fontSize: 12,
                     height: 1.4,
                   ),
@@ -453,8 +455,8 @@ class _RiderPickupBatchDetailsScreenState
             const SizedBox(height: 12),
             Text(
               'Approved capacity: ${_batch.approvedCapacity} parcels',
-              style: const TextStyle(
-                color: _muted,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _muted),
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -469,17 +471,17 @@ class _RiderPickupBatchDetailsScreenState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3DC),
+        color: AppTheme.resolve(context, const Color(0xFFFFF3DC), fill: true),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.inventory_2_outlined, color: _maroon),
+           Icon(Icons.inventory_2_outlined, color: AppTheme.resolve(context, _maroon)),
           const SizedBox(width: 11),
           Expanded(
             child: Text(
               '$collected of ${_batch.parcels.length} parcels collected',
-              style: const TextStyle(color: _text, fontWeight: FontWeight.w800),
+              style:  TextStyle(color: AppTheme.resolve(context, _text), fontWeight: FontWeight.w800),
             ),
           ),
           _statusChip(statusLabel),
@@ -491,9 +493,9 @@ class _RiderPickupBatchDetailsScreenState
   Widget _buildParcelList(bool inProgress) {
     return Container(
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -502,19 +504,19 @@ class _RiderPickupBatchDetailsScreenState
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Text(
               'Parcels (${_batch.parcels.length})',
-              style: const TextStyle(
-                color: _text,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _text),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
             ),
           ),
           if (_batch.parcels.isEmpty)
-            const Padding(
+             Padding(
               padding: EdgeInsets.fromLTRB(16, 4, 16, 18),
               child: Text(
                 'No parcels are attached to this batch.',
-                style: TextStyle(color: _muted),
+                style: TextStyle(color: AppTheme.resolve(context, _muted)),
               ),
             )
           else
@@ -522,7 +524,7 @@ class _RiderPickupBatchDetailsScreenState
               final RiderPickupBatchItemData parcel = entry.value;
               return Column(
                 children: <Widget>[
-                  if (entry.key > 0) const Divider(height: 1, color: _border),
+                  if (entry.key > 0)  Divider(height: 1, color: AppTheme.resolve(context, _border)),
                   Padding(
                     padding: const EdgeInsets.all(15),
                     child: Column(
@@ -544,8 +546,8 @@ class _RiderPickupBatchDetailsScreenState
                                     parcel.trackingCode.isEmpty
                                         ? 'Tracking unavailable'
                                         : parcel.trackingCode,
-                                    style: const TextStyle(
-                                      color: _text,
+                                    style:  TextStyle(
+                                      color: AppTheme.resolve(context, _text),
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -555,8 +557,8 @@ class _RiderPickupBatchDetailsScreenState
                                     const SizedBox(height: 4),
                                     Text(
                                       'Order ${parcel.sellerOrderNumber}',
-                                      style: const TextStyle(
-                                        color: _muted,
+                                      style:  TextStyle(
+                                        color: AppTheme.resolve(context, _muted),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -567,8 +569,8 @@ class _RiderPickupBatchDetailsScreenState
                                       parcel.products.join(', '),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: _muted,
+                                      style:  TextStyle(
+                                        color: AppTheme.resolve(context, _muted),
                                         fontSize: 12,
                                         height: 1.35,
                                       ),
@@ -586,7 +588,7 @@ class _RiderPickupBatchDetailsScreenState
                           const SizedBox(height: 8),
                           Text(
                             'Reason: ${parcel.notCollectedReason}',
-                            style: const TextStyle(color: _muted, fontSize: 12),
+                            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                           ),
                         ],
                         if (inProgress && !parcel.isResolved) ...<Widget>[
@@ -603,7 +605,7 @@ class _RiderPickupBatchDetailsScreenState
                               ),
                               label: const Text('Not collected'),
                               style: TextButton.styleFrom(
-                                foregroundColor: const Color(0xFF9E3328),
+                                foregroundColor: AppTheme.resolve(context, const Color(0xFF9E3328)),
                               ),
                             ),
                           ),
@@ -623,18 +625,18 @@ class _RiderPickupBatchDetailsScreenState
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(icon, color: _muted, size: 19),
+        Icon(icon, color: AppTheme.resolve(context, _muted), size: 19),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(label, style: const TextStyle(color: _muted, fontSize: 11)),
+              Text(label, style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11)),
               const SizedBox(height: 3),
               Text(
                 value.isEmpty ? 'Address unavailable' : value,
-                style: const TextStyle(
-                  color: _text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 13,
                   height: 1.4,
                   fontWeight: FontWeight.w700,
@@ -657,7 +659,7 @@ class _RiderPickupBatchDetailsScreenState
       icon: Icon(icon),
       label: Text(label, textAlign: TextAlign.center),
       style: FilledButton.styleFrom(
-        backgroundColor: _maroon,
+        backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -672,13 +674,13 @@ class _RiderPickupBatchDetailsScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: success ? const Color(0xFFEAF6EE) : const Color(0xFFFFF3DC),
+        color: success ? AppTheme.resolve(context, const Color(0xFFEAF6EE), fill: true) : AppTheme.resolve(context, const Color(0xFFFFF3DC), fill: true),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: success ? _green : const Color(0xFF946514),
+          color: success ? AppTheme.resolve(context, _green) : AppTheme.resolve(context, const Color(0xFF946514)),
           fontSize: 10,
           fontWeight: FontWeight.w800,
         ),
@@ -690,13 +692,13 @@ class _RiderPickupBatchDetailsScreenState
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F0),
+        color: AppTheme.resolve(context, const Color(0xFFFFF1F0), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF1B7B2)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF1B7B2))),
       ),
       child: Text(
         message,
-        style: const TextStyle(color: Color(0xFF9E3328), height: 1.4),
+        style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF9E3328)), height: 1.4),
       ),
     );
   }
@@ -705,13 +707,13 @@ class _RiderPickupBatchDetailsScreenState
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF6EE),
+        color: AppTheme.resolve(context, const Color(0xFFEAF6EE), fill: true),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
         message,
-        style: const TextStyle(
-          color: _green,
+        style:  TextStyle(
+          color: AppTheme.resolve(context, _green),
           fontWeight: FontWeight.w700,
           height: 1.4,
         ),

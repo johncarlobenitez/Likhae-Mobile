@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -452,18 +454,18 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
+        title:  Text(
           'Pickups',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 18,
             fontWeight: FontWeight.w900,
           ),
@@ -475,7 +477,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
               child: FilledButton(
                 onPressed: widget.onViewDeliveries,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -506,7 +508,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
-          color: _maroon,
+          color: AppTheme.resolve(context, _maroon),
           onRefresh: _refresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -538,10 +540,10 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text(
+         Text(
           'PICKUP MANAGEMENT',
           style: TextStyle(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             fontSize: 11.5,
             letterSpacing: 1.7,
             fontWeight: FontWeight.w900,
@@ -550,10 +552,10 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
 
         const SizedBox(height: 8),
 
-        const Text(
+         Text(
           'Seller Pickup Batches',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 26,
             height: 1.12,
             letterSpacing: -0.4,
@@ -563,9 +565,9 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
 
         const SizedBox(height: 9),
 
-        const Text(
+         Text(
           'Accept a seller batch, scan each parcel, then take the collected items to the logistics center.',
-          style: TextStyle(color: _muted, fontSize: 13.5, height: 1.55),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13.5, height: 1.55),
         ),
 
         const SizedBox(height: 14),
@@ -573,13 +575,13 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
-            color: _warningSoft,
+            color: AppTheme.resolve(context, _warningSoft, fill: true),
             borderRadius: BorderRadius.circular(100),
           ),
           child: Text(
             '${widget.stats.ready} Assigned Batch${widget.stats.ready == 1 ? '' : 'es'}',
-            style: const TextStyle(
-              color: _warning,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _warning),
               fontSize: 12.5,
               fontWeight: FontWeight.w900,
             ),
@@ -644,14 +646,14 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Padding(
+           Padding(
             padding: EdgeInsets.fromLTRB(18, 18, 18, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,7 +661,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
                 Text(
                   'Pickup Tasks',
                   style: TextStyle(
-                    color: _text,
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
@@ -669,13 +671,13 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
 
                 Text(
                   'Each card groups parcels from the same seller into one pickup batch.',
-                  style: TextStyle(color: _muted, fontSize: 12.5, height: 1.45),
+                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5, height: 1.45),
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 1, color: _border),
+           Divider(height: 1, color: AppTheme.resolve(context, _border)),
 
           if (widget.pickups.isEmpty)
             const _PickupEmptyState()
@@ -693,7 +695,7 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
                   ),
 
                   if (index != widget.pickups.length - 1)
-                    const Divider(height: 1, color: _border),
+                     Divider(height: 1, color: AppTheme.resolve(context, _border)),
                 ],
               );
             }),
@@ -707,22 +709,22 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _dangerSoft,
+        color: AppTheme.resolve(context, _dangerSoft, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF1B7B2)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF1B7B2))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(Icons.error_outline_rounded, color: _danger, size: 20),
+           Icon(Icons.error_outline_rounded, color: AppTheme.resolve(context, _danger), size: 20),
 
           const SizedBox(width: 9),
 
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: _danger,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _danger),
                 fontSize: 13,
                 height: 1.45,
                 fontWeight: FontWeight.w700,
@@ -760,9 +762,9 @@ class _PickupStatCard extends StatelessWidget {
       constraints: BoxConstraints(minHeight: compact ? 76 : 118),
       padding: EdgeInsets.all(compact ? 12 : 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
+        color: AppTheme.resolve(context, const Color(0xFFFFFDF9), fill: true),
         borderRadius: BorderRadius.circular(compact ? 16 : 18),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -771,11 +773,11 @@ class _PickupStatCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
-                    Icon(stat.icon, color: const Color(0xFF561C17), size: 18),
+                    Icon(stat.icon, color: AppTheme.resolve(context, const Color(0xFF561C17)), size: 18),
                     Text(
                       stat.value.toString(),
-                      style: const TextStyle(
-                        color: Color(0xFF3B211B),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF3B211B)),
                         fontSize: 22,
                         height: 1,
                         fontWeight: FontWeight.w900,
@@ -788,28 +790,28 @@ class _PickupStatCard extends StatelessWidget {
                   stat.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF987865),
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, Color(0xFF987865)),
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ]
             : <Widget>[
-                Icon(stat.icon, color: const Color(0xFF561C17), size: 22),
+                Icon(stat.icon, color: AppTheme.resolve(context, const Color(0xFF561C17)), size: 22),
                 const SizedBox(height: 16),
                 Text(
                   stat.label,
-                  style: const TextStyle(
-                    color: Color(0xFF987865),
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, Color(0xFF987865)),
                     fontSize: 12,
                   ),
                 ),
                 const SizedBox(height: 5),
                 Text(
                   stat.value.toString(),
-                  style: const TextStyle(
-                    color: Color(0xFF3B211B),
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, Color(0xFF3B211B)),
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
                   ),
@@ -851,8 +853,8 @@ class _PickupTaskCard extends StatelessWidget {
                           : 'Pickup batch ${pickup.batchNumber}',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF3B211B),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF3B211B)),
                         fontSize: 15,
                         height: 1.25,
                         fontWeight: FontWeight.w900,
@@ -863,8 +865,8 @@ class _PickupTaskCard extends StatelessWidget {
 
                     Text(
                       'Seller: ${pickup.sellerName}',
-                      style: const TextStyle(
-                        color: Color(0xFF987865),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF987865)),
                         fontSize: 12.5,
                         height: 1.4,
                       ),
@@ -876,8 +878,8 @@ class _PickupTaskCard extends StatelessWidget {
                       pickup.address,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF987865),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF987865)),
                         fontSize: 12,
                         height: 1.4,
                       ),
@@ -887,8 +889,8 @@ class _PickupTaskCard extends StatelessWidget {
 
                     Text(
                       '${pickup.itemCount} item(s)',
-                      style: const TextStyle(
-                        color: Color(0xFF987865),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF987865)),
                         fontSize: 12,
                       ),
                     ),
@@ -909,8 +911,8 @@ class _PickupTaskCard extends StatelessWidget {
               OutlinedButton(
                 onPressed: onView,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF3B211B),
-                  side: const BorderSide(color: Color(0xFFEADCCC)),
+                  foregroundColor: AppTheme.resolve(context, const Color(0xFF3B211B)),
+                  side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFEADCCC))),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -942,13 +944,13 @@ class _PickupStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3DC),
+        color: AppTheme.resolve(context, const Color(0xFFFFF3DC), fill: true),
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Color(0xFF946514),
+        style:  TextStyle(
+          color: AppTheme.resolve(context, Color(0xFF946514)),
           fontSize: 11,
           fontWeight: FontWeight.w900,
         ),
@@ -971,23 +973,23 @@ class _PickupImage extends StatelessWidget {
       height: 64,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xFFF3ECE4),
+        color: AppTheme.resolve(context, const Color(0xFFF3ECE4), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
       ),
       child: url == null || url.isEmpty
-          ? const Center(
-              child: Icon(Icons.inventory_2_outlined, color: Color(0xFFA99386)),
+          ?  Center(
+              child: Icon(Icons.inventory_2_outlined, color: AppTheme.resolve(context, Color(0xFFA99386))),
             )
           : SizedNetworkImage(
               url: url,
               fit: BoxFit.cover,
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
-                    return const Center(
+                    return  Center(
                       child: Icon(
                         Icons.broken_image_outlined,
-                        color: Color(0xFFA99386),
+                        color: AppTheme.resolve(context, Color(0xFFA99386)),
                       ),
                     );
                   },
@@ -1001,14 +1003,14 @@ class _PickupEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
+    return  Padding(
       padding: EdgeInsets.symmetric(horizontal: 24, vertical: 38),
       child: Center(
         child: Column(
           children: <Widget>[
             Icon(
               Icons.inventory_2_outlined,
-              color: Color(0xFFA99386),
+              color: AppTheme.resolve(context, Color(0xFFA99386)),
               size: 46,
             ),
 
@@ -1017,7 +1019,7 @@ class _PickupEmptyState extends StatelessWidget {
             Text(
               'No seller pickup batches are available.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF987865), fontSize: 13),
+              style: TextStyle(color: AppTheme.resolve(context, Color(0xFF987865)), fontSize: 13),
             ),
           ],
         ),

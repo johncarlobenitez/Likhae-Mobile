@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/sized_network_image.dart';
@@ -160,6 +162,8 @@ class RiderProfileData {
   bool get isLocalBarangay =>
       const <String>{'motorcycle', 'tricycle'}.contains(normalizedVehicleType);
 
+  bool get isVan => normalizedVehicleType == 'van';
+
   bool get isInterLogistics => const <String>{
     'van',
     'closed_van',
@@ -169,7 +173,7 @@ class RiderProfileData {
 
   bool get hasOperationalRole => isLocalBarangay || isInterLogistics;
 
-  bool get supportsAvailabilityStatus => isLocalBarangay;
+  bool get supportsAvailabilityStatus => isLocalBarangay || isVan;
 
   String get initials {
     final List<String> parts = name
@@ -369,6 +373,10 @@ class RiderProfileScreen extends StatefulWidget {
   final VoidCallback? onSystemSettings;
 
   final VoidCallback? onEditProfile;
+  final VoidCallback? onReturns;
+  final VoidCallback? onTrips;
+  final VoidCallback? onAttendance;
+  final VoidCallback? onProfileUpdates;
 
   const RiderProfileScreen({
     super.key,
@@ -378,6 +386,10 @@ class RiderProfileScreen extends StatefulWidget {
     this.onLogout,
     this.onSystemSettings,
     this.onEditProfile,
+    this.onReturns,
+    this.onTrips,
+    this.onAttendance,
+    this.onProfileUpdates,
   });
 
   @override
@@ -433,17 +445,23 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           context: context,
           builder: (BuildContext context) {
             return AlertDialog(
-              backgroundColor: _surface,
+              backgroundColor: AppTheme.resolve(context, _surface, fill: true),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: const Text(
+              title: Text(
                 'Sign out?',
-                style: TextStyle(color: _text, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _text),
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              content: const Text(
+              content: Text(
                 'You will need to sign in again to access your rider account.',
-                style: TextStyle(color: _muted, height: 1.5),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  height: 1.5,
+                ),
               ),
               actions: <Widget>[
                 TextButton(
@@ -457,7 +475,11 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                     Navigator.of(context).pop(true);
                   },
                   style: FilledButton.styleFrom(
-                    backgroundColor: _danger,
+                    backgroundColor: AppTheme.resolve(
+                      context,
+                      _danger,
+                      fill: true,
+                    ),
                     foregroundColor: Colors.white,
                   ),
                   child: const Text('Sign Out'),
@@ -508,16 +530,16 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     final RiderProfileData? profile = widget.profile;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
+        title: Text(
           'My Profile',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 19,
             fontWeight: FontWeight.w900,
           ),
@@ -526,7 +548,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
-          color: _maroon,
+          color: AppTheme.resolve(context, _maroon),
           onRefresh: _refresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -537,8 +559,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
                     widget.statusMessage!,
-                    style: const TextStyle(
-                      color: _danger,
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _danger),
                       fontSize: 13,
                       height: 1.45,
                     ),
@@ -572,15 +594,30 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                     icon: const Icon(Icons.edit_outlined),
                     label: const Text('Edit Profile & Address'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: _maroon,
-                      backgroundColor: _surface,
-                      side: const BorderSide(color: _maroon),
+                      foregroundColor: AppTheme.resolve(context, _maroon),
+                      backgroundColor: AppTheme.resolve(
+                        context,
+                        _surface,
+                        fill: true,
+                      ),
+                      side: BorderSide(
+                        color: AppTheme.resolve(context, _maroon),
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(13),
                       ),
                     ),
                   ),
                 ),
+              ],
+
+              if (profile != null &&
+                  (widget.onReturns != null ||
+                      widget.onTrips != null ||
+                      widget.onAttendance != null ||
+                      widget.onProfileUpdates != null)) ...<Widget>[
+                const SizedBox(height: 14),
+                _buildWorkflowLinks(profile),
               ],
 
               const SizedBox(height: 14),
@@ -599,28 +636,15 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
   }
 
   Widget _buildHeading() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           'ACCOUNT SETTINGS',
           style: TextStyle(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             fontSize: 10.5,
             letterSpacing: 1.7,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-
-        SizedBox(height: 7),
-
-        Text(
-          'My Profile',
-          style: TextStyle(
-            color: _text,
-            fontSize: 30,
-            height: 1.08,
-            letterSpacing: -0.6,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -629,7 +653,11 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
         Text(
           'Your profile is loaded from your authenticated rider account.',
-          style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
+          style: TextStyle(
+            color: AppTheme.resolve(context, _muted),
+            fontSize: 12.5,
+            height: 1.5,
+          ),
         ),
       ],
     );
@@ -640,13 +668,17 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
-      child: const Column(
+      child: Column(
         children: <Widget>[
-          Icon(Icons.person_off_outlined, color: _muted, size: 46),
+          Icon(
+            Icons.person_off_outlined,
+            color: AppTheme.resolve(context, _muted),
+            size: 46,
+          ),
 
           SizedBox(height: 13),
 
@@ -654,7 +686,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
             'Rider profile not available',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 16,
               fontWeight: FontWeight.w900,
             ),
@@ -665,10 +697,83 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           Text(
             'Load the authenticated rider account from Laravel to display the profile.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 12.5,
+              height: 1.5,
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildWorkflowLinks(RiderProfileData profile) {
+    final List<Widget> links = <Widget>[
+      if (profile.isLocalBarangay && widget.onReturns != null)
+        _workflowLink(
+          icon: Icons.assignment_return_outlined,
+          title: 'Return parcels',
+          onTap: widget.onReturns!,
+        ),
+      if (profile.isLocalBarangay && widget.onTrips != null)
+        _workflowLink(
+          icon: Icons.route_outlined,
+          title: 'Delivery trips',
+          onTap: widget.onTrips!,
+        ),
+      if (profile.isInterLogistics && widget.onAttendance != null)
+        _workflowLink(
+          icon: Icons.schedule_outlined,
+          title: 'Attendance & payroll',
+          onTap: widget.onAttendance!,
+        ),
+      if (widget.onProfileUpdates != null)
+        _workflowLink(
+          icon: Icons.badge_outlined,
+          title: 'Vehicle & document review',
+          onTap: widget.onProfileUpdates!,
+        ),
+    ];
+    if (links.isEmpty) return const SizedBox.shrink();
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.resolve(context, _surface, fill: true),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 15, 16, 4),
+            child: Text(
+              'RIDER WORKFLOWS',
+              style: TextStyle(
+                color: AppTheme.resolve(context, _maroon),
+                fontSize: 10,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          ...links,
+        ],
+      ),
+    );
+  }
+
+  Widget _workflowLink({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, color: AppTheme.resolve(context, _maroon)),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onTap,
     );
   }
 
@@ -677,9 +782,9 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -691,8 +796,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                 width: 88,
                 height: 88,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: _maroonSoft,
+                decoration: BoxDecoration(
+                  color: AppTheme.resolve(context, _maroonSoft, fill: true),
                   shape: BoxShape.circle,
                 ),
                 child: profile.profilePhotoUrl?.trim().isNotEmpty == true
@@ -702,8 +807,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Text(
                             profile.initials,
-                            style: const TextStyle(
-                              color: _maroon,
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, _maroon),
                               fontSize: 25,
                               fontWeight: FontWeight.w900,
                             ),
@@ -712,8 +817,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                       )
                     : Text(
                         profile.initials,
-                        style: const TextStyle(
-                          color: _maroon,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _maroon),
                           fontSize: 25,
                           fontWeight: FontWeight.w900,
                         ),
@@ -728,8 +833,8 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                   children: <Widget>[
                     Text(
                       profile.name,
-                      style: const TextStyle(
-                        color: _text,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 20,
                         height: 1.2,
                         fontWeight: FontWeight.w900,
@@ -740,7 +845,10 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
                     Text(
                       'Rider ID: ${profile.riderId}',
-                      style: const TextStyle(color: _muted, fontSize: 11.5),
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 11.5,
+                      ),
                     ),
 
                     const SizedBox(height: 11),
@@ -850,7 +958,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
   Widget _buildSystemSettings() {
     return Material(
-      color: _surface,
+      color: AppTheme.resolve(context, _surface, fill: true),
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: widget.onSystemSettings,
@@ -859,28 +967,32 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _border),
+            border: Border.all(color: AppTheme.resolve(context, _border)),
           ),
           child: Row(
             children: <Widget>[
               Container(
                 width: 42,
                 height: 42,
-                decoration: const BoxDecoration(
-                  color: _maroonSoft,
+                decoration: BoxDecoration(
+                  color: AppTheme.resolve(context, _maroonSoft, fill: true),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.tune_rounded, color: _maroon, size: 21),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: AppTheme.resolve(context, _maroon),
+                  size: 21,
+                ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       'System Settings',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
                       ),
@@ -889,7 +1001,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                     Text(
                       'Notifications, sounds, appearance, and language.',
                       style: TextStyle(
-                        color: _muted,
+                        color: AppTheme.resolve(context, _muted),
                         fontSize: 11.5,
                         height: 1.4,
                       ),
@@ -898,7 +1010,10 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.chevron_right_rounded, color: _muted),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppTheme.resolve(context, _muted),
+              ),
             ],
           ),
         ),
@@ -911,17 +1026,19 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: _dangerSoft,
+        color: AppTheme.resolve(context, _dangerSoft, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF3C4C0)),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFF3C4C0)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+          Text(
             'Account Actions',
             style: TextStyle(
-              color: _danger,
+              color: AppTheme.resolve(context, _danger),
               fontSize: 16,
               fontWeight: FontWeight.w900,
             ),
@@ -929,10 +1046,10 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
           const SizedBox(height: 5),
 
-          const Text(
+          Text(
             'Sign out from your rider account.',
             style: TextStyle(
-              color: Color(0xFFB85B54),
+              color: AppTheme.resolve(context, Color(0xFFB85B54)),
               fontSize: 12,
               height: 1.45,
             ),
@@ -946,21 +1063,25 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
             child: OutlinedButton.icon(
               onPressed: _loggingOut ? null : _confirmLogout,
               style: OutlinedButton.styleFrom(
-                foregroundColor: _danger,
-                disabledForegroundColor: _muted,
-                backgroundColor: _surface,
-                side: const BorderSide(color: _danger),
+                foregroundColor: AppTheme.resolve(context, _danger),
+                disabledForegroundColor: AppTheme.resolve(context, _muted),
+                backgroundColor: AppTheme.resolve(
+                  context,
+                  _surface,
+                  fill: true,
+                ),
+                side: BorderSide(color: AppTheme.resolve(context, _danger)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(13),
                 ),
               ),
               icon: _loggingOut
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: _danger,
+                        color: AppTheme.resolve(context, _danger),
                       ),
                     )
                   : const Icon(Icons.logout_rounded),
@@ -990,12 +1111,12 @@ class _ProfileBadge extends StatelessWidget {
     final bool success = type == _ProfileBadgeType.success;
 
     final Color background = success
-        ? const Color(0xFFEAF6EE)
-        : const Color(0xFFF1E4D7);
+        ? AppTheme.resolve(context, const Color(0xFFEAF6EE))
+        : AppTheme.resolve(context, const Color(0xFFF1E4D7));
 
     final Color foreground = success
-        ? const Color(0xFF237A44)
-        : const Color(0xFF561C17);
+        ? AppTheme.resolve(context, const Color(0xFF237A44))
+        : AppTheme.resolve(context, const Color(0xFF561C17));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1042,17 +1163,19 @@ class _ProfileSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF9),
+        color: AppTheme.resolve(context, const Color(0xFFFFFDF9), fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFEADCCC)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
-            style: const TextStyle(
-              color: Color(0xFF3B211B),
+            style: TextStyle(
+              color: AppTheme.resolve(context, Color(0xFF3B211B)),
               fontSize: 16,
               fontWeight: FontWeight.w900,
             ),
@@ -1112,7 +1235,7 @@ class _ProfileInformationCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6EFE7),
+        color: AppTheme.resolve(context, const Color(0xFFF6EFE7), fill: true),
         borderRadius: BorderRadius.circular(13),
       ),
       child: Row(
@@ -1123,12 +1246,16 @@ class _ProfileInformationCard extends StatelessWidget {
             height: 38,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFFDF9),
+              color: AppTheme.resolve(
+                context,
+                const Color(0xFFFFFDF9),
+                fill: true,
+              ),
               borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(
               information.icon,
-              color: const Color(0xFF561C17),
+              color: AppTheme.resolve(context, const Color(0xFF561C17)),
               size: 19,
             ),
           ),
@@ -1141,8 +1268,8 @@ class _ProfileInformationCard extends StatelessWidget {
               children: <Widget>[
                 Text(
                   information.label.toUpperCase(),
-                  style: const TextStyle(
-                    color: Color(0xFF987865),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, Color(0xFF987865)),
                     fontSize: 9.5,
                     letterSpacing: 0.5,
                     fontWeight: FontWeight.w700,
@@ -1153,8 +1280,8 @@ class _ProfileInformationCard extends StatelessWidget {
 
                 Text(
                   information.value,
-                  style: const TextStyle(
-                    color: Color(0xFF3B211B),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, Color(0xFF3B211B)),
                     fontSize: 12.5,
                     height: 1.45,
                     fontWeight: FontWeight.w800,

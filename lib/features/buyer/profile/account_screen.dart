@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -12,6 +14,7 @@ import '../../../shared/widgets/sized_network_image.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
+import 'package:likhae/services/philippine_address_geocoding.dart';
 
 import '../../auth/register_screen.dart'
     show AddressLoader, AddressOption, ChildAddressLoader, PostalCodeLoader;
@@ -837,7 +840,7 @@ class _AccountScreenState extends State<AccountScreen> {
     await manager.create(
       maplibre.CircleAnnotationOptions(
         geometry: _toMapLibrePoint(location),
-        circleColor: _maroon.toARGB32(),
+        circleColor: AppTheme.resolve(context, _maroon).toARGB32(),
         circleRadius: 11,
         circleStrokeColor: Colors.white.toARGB32(),
         circleStrokeWidth: 3,
@@ -1145,7 +1148,9 @@ class _AccountScreenState extends State<AccountScreen> {
   }) {
     final OutlineInputBorder border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
-      borderSide: const BorderSide(color: ShopColors.border),
+      borderSide: BorderSide(
+        color: AppTheme.resolve(context, ShopColors.border),
+      ),
     );
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -1159,10 +1164,17 @@ class _AccountScreenState extends State<AccountScreen> {
             isExpanded: true,
             decoration: InputDecoration(
               hintText: loading ? 'Loading...' : hint,
-              hintStyle: const TextStyle(color: ShopColors.faint, fontSize: 14),
+              hintStyle: TextStyle(
+                color: AppTheme.resolve(context, ShopColors.faint),
+                fontSize: 14,
+              ),
               isDense: true,
               filled: true,
-              fillColor: ShopColors.canvas,
+              fillColor: AppTheme.resolve(
+                context,
+                ShopColors.canvas,
+                fill: true,
+              ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 13,
                 vertical: 15,
@@ -1179,17 +1191,19 @@ class _AccountScreenState extends State<AccountScreen> {
               border: border,
               enabledBorder: border,
               focusedBorder: border.copyWith(
-                borderSide: const BorderSide(
-                  color: ShopColors.accent,
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, ShopColors.accent),
                   width: 1.3,
                 ),
               ),
               errorBorder: border.copyWith(
-                borderSide: const BorderSide(color: Color(0xFFD64A59)),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, Color(0xFFD64A59)),
+                ),
               ),
               focusedErrorBorder: border.copyWith(
-                borderSide: const BorderSide(
-                  color: Color(0xFFD64A59),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, Color(0xFFD64A59)),
                   width: 1.3,
                 ),
               ),
@@ -1285,22 +1299,24 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _findAddress() async {
-    final String searchText = _addressSearchController.text.trim();
-    final String query = <String>[
-      if (searchText.isNotEmpty) searchText,
-      if (_barangayController.text.trim().isNotEmpty)
-        _barangayController.text.trim(),
-      if (_municipalityController.text.trim().isNotEmpty)
-        _municipalityController.text.trim(),
-      if (_provinceController.text.trim().isNotEmpty)
-        _provinceController.text.trim(),
-      'Philippines',
-    ].join(', ');
+    if (_findingAddress) {
+      return;
+    }
+    final List<String> queries = PhilippineAddressGeocoding.buildQueries(
+      searchText: _addressSearchController.text,
+      houseNumber: _houseNumberController.text,
+      street: _streetController.text,
+      landmark: _landmarkController.text,
+      barangay: _barangayController.text,
+      municipality: _municipalityController.text,
+      province: _provinceController.text,
+      region: _regionController.text,
+    );
 
-    if (query == 'Philippines' || _findingAddress) {
+    if (queries.isEmpty) {
       setState(() {
         _addressLocationMessage =
-            'Enter your barangay or address first, then search to place the pin.';
+            'Enter a street, barangay, city, or province first, then search to place the pin.';
       });
       return;
     }
@@ -1311,28 +1327,35 @@ class _AccountScreenState extends State<AccountScreen> {
     });
 
     try {
-      final Response<dynamic> response = await ApiClient.get(
-        'maps/geocode',
-        queryParameters: <String, dynamic>{'text': query},
-      );
-      final dynamic features = response.data is Map
-          ? (response.data as Map)['features']
-          : null;
-      final dynamic coordinates = features is List && features.isNotEmpty
-          ? (features.first is Map ? (features.first as Map)['center'] : null)
-          : null;
-
-      if (coordinates is! List || coordinates.length < 2) {
-        throw const FormatException('No matching address was found.');
+      LatLng? location;
+      for (final String query in queries) {
+        final Response<dynamic> response = await ApiClient.get(
+          'maps/geocode',
+          queryParameters: <String, dynamic>{'text': query},
+          refresh: true,
+        );
+        final int statusCode = response.statusCode ?? 500;
+        final String? errorMessage =
+            PhilippineAddressGeocoding.errorMessageForResponse(
+              statusCode,
+              response.data,
+            );
+        if (errorMessage != null) {
+          throw FormatException(errorMessage);
+        }
+        location = PhilippineAddressGeocoding.locationFromResponse(
+          response.data,
+        );
+        if (location != null) break;
       }
 
-      final double? longitude = double.tryParse(coordinates[0].toString());
-      final double? latitude = double.tryParse(coordinates[1].toString());
-      if (latitude == null || longitude == null) {
-        throw const FormatException('The selected address has no coordinates.');
+      if (location == null) {
+        throw const FormatException(
+          'No matching address was found. Check the street and city, or tap the map to place the pin manually.',
+        );
       }
 
-      _setAddressLocation(LatLng(latitude, longitude));
+      _setAddressLocation(location);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -1817,13 +1840,20 @@ class _AccountScreenState extends State<AccountScreen> {
               }
 
               return AlertDialog(
-                backgroundColor: _surface,
+                backgroundColor: AppTheme.resolve(
+                  context,
+                  _surface,
+                  fill: true,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
-                title: const Text(
+                title: Text(
                   'Verify mobile number',
-                  style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _text),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 content: Form(
                   key: formKey,
@@ -1835,8 +1865,8 @@ class _AccountScreenState extends State<AccountScreen> {
                         verification.message.isEmpty
                             ? 'Enter the six-digit code sent to ${verification.target}.'
                             : verification.message,
-                        style: const TextStyle(
-                          color: _muted,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _muted),
                           fontSize: 14,
                           height: 1.45,
                         ),
@@ -1851,8 +1881,8 @@ class _AccountScreenState extends State<AccountScreen> {
                         ],
                         maxLength: 6,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: _text,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _text),
                           fontSize: 22,
                           letterSpacing: 8,
                           fontWeight: FontWeight.w700,
@@ -1861,18 +1891,28 @@ class _AccountScreenState extends State<AccountScreen> {
                           hintText: '------',
                           counterText: '',
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: AppTheme.resolve(
+                            context,
+                            Colors.white,
+                            fill: true,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(13),
-                            borderSide: const BorderSide(color: _border),
+                            borderSide: BorderSide(
+                              color: AppTheme.resolve(context, _border),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(13),
-                            borderSide: const BorderSide(color: _border),
+                            borderSide: BorderSide(
+                              color: AppTheme.resolve(context, _border),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(13),
-                            borderSide: const BorderSide(color: _maroon),
+                            borderSide: BorderSide(
+                              color: AppTheme.resolve(context, _maroon),
+                            ),
                           ),
                         ),
                         validator: (String? value) {
@@ -1887,8 +1927,8 @@ class _AccountScreenState extends State<AccountScreen> {
                         const SizedBox(height: 8),
                         Text(
                           dialogError!,
-                          style: const TextStyle(
-                            color: _danger,
+                          style: TextStyle(
+                            color: AppTheme.resolve(context, _danger),
                             fontSize: 12,
                             height: 1.35,
                           ),
@@ -1898,7 +1938,10 @@ class _AccountScreenState extends State<AccountScreen> {
                         const SizedBox(height: 8),
                         Text(
                           dialogNotice!,
-                          style: const TextStyle(color: _maroon, fontSize: 12),
+                          style: TextStyle(
+                            color: AppTheme.resolve(context, _maroon),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                       Align(
@@ -1911,7 +1954,9 @@ class _AccountScreenState extends State<AccountScreen> {
                               : resendCode,
                           child: Text(
                             resending ? 'Sending…' : 'Resend code',
-                            style: const TextStyle(color: _maroon),
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, _maroon),
+                            ),
                           ),
                         ),
                       ),
@@ -1928,7 +1973,11 @@ class _AccountScreenState extends State<AccountScreen> {
                   ElevatedButton(
                     onPressed: submitting ? null : submitCode,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _maroon,
+                      backgroundColor: AppTheme.resolve(
+                        context,
+                        _maroon,
+                        fill: true,
+                      ),
                       foregroundColor: Colors.white,
                       elevation: 0,
                     ),
@@ -1989,17 +2038,24 @@ class _AccountScreenState extends State<AccountScreen> {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          backgroundColor: _surface,
+          backgroundColor: AppTheme.resolve(context, _surface, fill: true),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
-          title: const Text(
+          title: Text(
             'Remove profile photo?',
-            style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _text),
+              fontWeight: FontWeight.w800,
           ),
-          content: const Text(
+          ),
+          content: Text(
             'Your account will use your initial when no profile photo is saved.',
-            style: TextStyle(color: _muted, fontSize: 15, height: 1.55),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 15,
+              height: 1.55,
+            ),
           ),
           actions: [
             TextButton(
@@ -2013,7 +2069,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 Navigator.of(dialogContext).pop(true);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _danger,
+                backgroundColor: AppTheme.resolve(context, _danger, fill: true),
                 foregroundColor: Colors.white,
                 elevation: 0,
               ),
@@ -2379,17 +2435,24 @@ class _AccountScreenState extends State<AccountScreen> {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          backgroundColor: _surface,
+          backgroundColor: AppTheme.resolve(context, _surface, fill: true),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
-          title: const Text(
+          title: Text(
             'Delete address?',
-            style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _text),
+              fontWeight: FontWeight.w800,
+            ),
           ),
           content: Text(
             'Remove "${address.label}" from your saved delivery addresses?',
-            style: const TextStyle(color: _muted, fontSize: 15, height: 1.55),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 15,
+              height: 1.55,
+            ),
           ),
           actions: [
             TextButton(
@@ -2403,7 +2466,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 Navigator.of(dialogContext).pop(true);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _danger,
+                backgroundColor: AppTheme.resolve(context, _danger, fill: true),
                 foregroundColor: Colors.white,
                 elevation: 0,
               ),
@@ -2557,7 +2620,9 @@ class _AccountScreenState extends State<AccountScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : _maroonDark,
+          backgroundColor: error
+              ? AppTheme.resolve(context, _danger, fill: true)
+              : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -2580,7 +2645,7 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -2589,7 +2654,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
             Expanded(
               child: RefreshIndicator(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refresh,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -2662,9 +2727,9 @@ class _AccountScreenState extends State<AccountScreen> {
           : const Icon(Icons.logout_rounded),
       label: Text(_loggingOut ? 'Signing Out...' : 'Sign Out'),
       style: OutlinedButton.styleFrom(
-        foregroundColor: _danger,
-        disabledForegroundColor: _muted2,
-        side: const BorderSide(color: _danger),
+        foregroundColor: AppTheme.resolve(context, _danger),
+        disabledForegroundColor: AppTheme.resolve(context, _muted2),
+        side: BorderSide(color: AppTheme.resolve(context, _danger)),
         minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
       ),
@@ -2756,13 +2821,13 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Widget _buildHeading() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'BUYER CENTER',
           style: TextStyle(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             fontSize: 12,
             letterSpacing: 1.7,
             fontWeight: FontWeight.w800,
@@ -2774,7 +2839,7 @@ class _AccountScreenState extends State<AccountScreen> {
         Text(
           'Account Management',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 30,
             height: 1.05,
             letterSpacing: -0.7,
@@ -2786,7 +2851,11 @@ class _AccountScreenState extends State<AccountScreen> {
 
         Text(
           'Manage your profile, delivery addresses, and account security.',
-          style: TextStyle(color: _muted, fontSize: 13, height: 1.45),
+          style: TextStyle(
+            color: AppTheme.resolve(context, _muted),
+            fontSize: 13,
+            height: 1.45,
+          ),
         ),
       ],
     );
@@ -2796,9 +2865,9 @@ class _AccountScreenState extends State<AccountScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Row(
         children: [
@@ -2818,8 +2887,8 @@ class _AccountScreenState extends State<AccountScreen> {
                   _profile.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _text,
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2831,7 +2900,10 @@ class _AccountScreenState extends State<AccountScreen> {
                   _profile.email,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _muted, fontSize: 12.5),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _muted),
+                    fontSize: 12.5,
+                  ),
                 ),
 
                 if (_profile.phone.trim().isNotEmpty) ...[
@@ -2841,7 +2913,10 @@ class _AccountScreenState extends State<AccountScreen> {
                     _profile.phone,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _muted2, fontSize: 12),
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _muted2),
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ],
@@ -2887,7 +2962,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
     return Material(
       key: _tabKeys[tab],
-      color: selected ? ShopColors.accentSoft : _surface,
+      color: selected
+          ? AppTheme.resolve(context, ShopColors.accentSoft, fill: true)
+          : AppTheme.resolve(context, _surface, fill: true),
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: () {
@@ -2913,13 +2990,19 @@ class _AccountScreenState extends State<AccountScreen> {
           padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: selected ? _tan : _border),
+            border: Border.all(
+              color: selected
+                  ? AppTheme.resolve(context, _tan)
+                  : AppTheme.resolve(context, _border),
+            ),
           ),
           child: Row(
             children: [
               Icon(
                 tab.icon,
-                color: selected ? _maroon : _muted,
+                color: selected
+                    ? AppTheme.resolve(context, _maroon)
+                    : AppTheme.resolve(context, _muted),
                 size: compact ? 16 : 18,
               ),
               SizedBox(width: compact ? 5 : 8),
@@ -2933,7 +3016,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: selected ? _maroon : _text,
+                        color: selected
+                            ? AppTheme.resolve(context, _maroon)
+                            : AppTheme.resolve(context, _text),
                         fontSize: compact ? 11.5 : 13,
                         fontWeight: FontWeight.w800,
                       ),
@@ -2944,7 +3029,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       maxLines: compact ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: _muted2,
+                        color: AppTheme.resolve(context, _muted2),
                         fontSize: compact ? 9.5 : 11.5,
                         height: compact ? 1.1 : null,
                       ),
@@ -3009,9 +3094,9 @@ class _AccountScreenState extends State<AccountScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: _soft,
+                color: AppTheme.resolve(context, _soft, fill: true),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _border),
+                border: Border.all(color: AppTheme.resolve(context, _border)),
               ),
               child: Column(
                 children: [
@@ -3023,10 +3108,10 @@ class _AccountScreenState extends State<AccountScreen> {
 
                   const SizedBox(height: 12),
 
-                  const Text(
+                  Text(
                     'Profile photo',
                     style: TextStyle(
-                      color: _text,
+                      color: AppTheme.resolve(context, _text),
                       fontSize: 14.5,
                       fontWeight: FontWeight.w800,
                     ),
@@ -3034,11 +3119,11 @@ class _AccountScreenState extends State<AccountScreen> {
 
                   const SizedBox(height: 4),
 
-                  const Text(
+                  Text(
                     'Choose an image up to 2 MB. Laravel will perform the final image validation.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: _muted,
+                      color: AppTheme.resolve(context, _muted),
                       fontSize: 12.5,
                       height: 1.5,
                     ),
@@ -3051,8 +3136,8 @@ class _AccountScreenState extends State<AccountScreen> {
                       '${_selectedPhoto!.fileName} · ${_formatFileSize(_selectedPhoto!.sizeInBytes)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _brown,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _brown),
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -3070,7 +3155,11 @@ class _AccountScreenState extends State<AccountScreen> {
                               : _pickPhoto,
                           style: ElevatedButton.styleFrom(
                             elevation: 0,
-                            backgroundColor: _maroon,
+                            backgroundColor: AppTheme.resolve(
+                              context,
+                              _maroon,
+                              fill: true,
+                            ),
                             foregroundColor: Colors.white,
                             minimumSize: const Size.fromHeight(44),
                             shape: RoundedRectangleBorder(
@@ -3106,20 +3195,22 @@ class _AccountScreenState extends State<AccountScreen> {
                               ? null
                               : _removeProfilePhoto,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: _brown,
-                            side: const BorderSide(color: _border),
+                            foregroundColor: AppTheme.resolve(context, _brown),
+                            side: BorderSide(
+                              color: AppTheme.resolve(context, _border),
+                            ),
                             minimumSize: const Size.fromHeight(44),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(11),
                             ),
                           ),
                           icon: _removingPhoto
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: _maroon,
+                                    color: AppTheme.resolve(context, _maroon),
                                   ),
                                 )
                               : const Icon(
@@ -3188,14 +3279,25 @@ class _AccountScreenState extends State<AccountScreen> {
 
             TextFormField(
               controller: _emailController,
+              readOnly:
+                  widget.onRequestEmailChange == null ||
+                  widget.onVerifyEmailChange == null,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
               maxLength: 255,
               autofillHints: const <String>[AutofillHints.email],
-              decoration: _inputDecoration(
+              decoration:
+                  _inputDecoration(
                 hintText: 'Email address',
                 prefixIcon: Icons.email_outlined,
-              ).copyWith(counterText: ''),
+                  ).copyWith(
+                    counterText: '',
+                    helperText:
+                        widget.onRequestEmailChange == null ||
+                            widget.onVerifyEmailChange == null
+                        ? 'Email changes are not available in the mobile API.'
+                        : null,
+                  ),
               validator: (String? value) {
                 final String email = value?.trim() ?? '';
 
@@ -3263,7 +3365,9 @@ class _AccountScreenState extends State<AccountScreen> {
                       ? 'Select birthday'
                       : _formatDate(_birthday!),
                   style: TextStyle(
-                    color: _birthday == null ? _muted2 : _text,
+                    color: _birthday == null
+                        ? AppTheme.resolve(context, _muted2)
+                        : AppTheme.resolve(context, _text),
                     fontSize: 14,
                   ),
                 ),
@@ -3314,7 +3418,11 @@ class _AccountScreenState extends State<AccountScreen> {
                     : _saveProfile,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(
+                    context,
+                    _maroon,
+                    fill: true,
+                  ),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(13),
@@ -3354,15 +3462,22 @@ class _AccountScreenState extends State<AccountScreen> {
                 child: TextButton.icon(
                   onPressed: _savingProfile ? null : _deleteAccount,
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFB42318),
+                    foregroundColor: AppTheme.resolve(
+                      context,
+                      const Color(0xFFB42318),
+                    ),
                   ),
                   icon: const Icon(Icons.person_off_outlined),
                   label: const Text('Close buyer account'),
                 ),
               ),
-              const Text(
+              Text(
                 'Active orders must be completed or cancelled before the account can be closed.',
-                style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 12,
+                  height: 1.4,
+                ),
               ),
             ],
           ],
@@ -3449,7 +3564,11 @@ class _AccountScreenState extends State<AccountScreen> {
                 FilledButton(
                   onPressed: submitting ? null : submit,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFB42318),
+                    backgroundColor: AppTheme.resolve(
+                      context,
+                      const Color(0xFFB42318),
+                      fill: true,
+                    ),
                   ),
                   child: submitting
                       ? const SizedBox(
@@ -3495,19 +3614,26 @@ class _AccountScreenState extends State<AccountScreen> {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: _soft,
+                color: AppTheme.resolve(context, _soft, fill: true),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Column(
+              child: Column(
                 children: [
-                  Icon(Icons.location_off_outlined, color: _muted2, size: 30),
+                  Icon(
+                    Icons.location_off_outlined,
+                    color: AppTheme.resolve(context, _muted2),
+                    size: 30,
+                  ),
 
                   SizedBox(height: 9),
 
                   Text(
                     'No saved delivery address yet.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: _muted, fontSize: 13),
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _muted),
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -3534,7 +3660,7 @@ class _AccountScreenState extends State<AccountScreen> {
           Container(
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.resolve(context, Colors.white, fill: true),
               borderRadius: BorderRadius.circular(24),
             ),
             child: Form(
@@ -3547,7 +3673,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         ? 'Add delivery address'
                         : 'Edit delivery address',
                     style: TextStyle(
-                      color: ShopColors.text,
+                      color: AppTheme.resolve(context, ShopColors.text),
                       fontSize: 21,
                       fontWeight: FontWeight.w800,
                     ),
@@ -3555,10 +3681,10 @@ class _AccountScreenState extends State<AccountScreen> {
 
                   const SizedBox(height: 5),
 
-                  const Text(
+                  Text(
                     'Choose a precise location so the courier can find you.',
                     style: TextStyle(
-                      color: ShopColors.muted,
+                      color: AppTheme.resolve(context, ShopColors.muted),
                       fontSize: 12.5,
                       height: 1.4,
                     ),
@@ -3645,7 +3771,7 @@ class _AccountScreenState extends State<AccountScreen> {
                           children: [
                             Checkbox(
                               value: _newAddressIsDefault,
-                              activeColor: _maroon,
+                              activeColor: AppTheme.resolve(context, _maroon),
                               onChanged: _addingAddress
                                   ? null
                                   : (bool? value) {
@@ -3655,11 +3781,11 @@ class _AccountScreenState extends State<AccountScreen> {
                                     },
                             ),
 
-                            const Expanded(
+                            Expanded(
                               child: Text(
                                 'Set as default address',
                                 style: TextStyle(
-                                  color: _text,
+                                  color: AppTheme.resolve(context, _text),
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -3679,7 +3805,11 @@ class _AccountScreenState extends State<AccountScreen> {
                       onPressed: _addingAddress ? null : _addAddress,
                       style: ElevatedButton.styleFrom(
                         elevation: 0,
-                        backgroundColor: _maroon,
+                        backgroundColor: AppTheme.resolve(
+                          context,
+                          _maroon,
+                          fill: true,
+                        ),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(13),
@@ -3728,9 +3858,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -3741,19 +3871,23 @@ class _AccountScreenState extends State<AccountScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Confirm location',
                   style: TextStyle(
-                    color: _brown,
+                    color: AppTheme.resolve(context, _brown),
                     fontSize: 11,
                     letterSpacing: 1.4,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 7),
-                const Text(
+                Text(
                   'Search your barangay or address, then adjust the pin to the exact location for the rider.',
-                  style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _muted),
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -3765,11 +3899,13 @@ class _AccountScreenState extends State<AccountScreen> {
                           ? null
                           : _findAddress,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _maroon,
+                        foregroundColor: AppTheme.resolve(context, _maroon),
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         minimumSize: const Size(0, 34),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: const BorderSide(color: _border),
+                        side: BorderSide(
+                          color: AppTheme.resolve(context, _border),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -3790,11 +3926,13 @@ class _AccountScreenState extends State<AccountScreen> {
                           ? null
                           : _useDeviceLocation,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _maroon,
+                        foregroundColor: AppTheme.resolve(context, _maroon),
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         minimumSize: const Size(0, 34),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        side: const BorderSide(color: _border),
+                        side: BorderSide(
+                          color: AppTheme.resolve(context, _border),
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -3836,7 +3974,11 @@ class _AccountScreenState extends State<AccountScreen> {
                     onTapListener: _onAddressMapTap,
                   )
                 : Container(
-                    color: const Color(0xFFF7F2EE),
+                    color: AppTheme.resolve(
+                      context,
+                      const Color(0xFFF7F2EE),
+                      fill: true,
+                    ),
                     alignment: Alignment.center,
                     padding: const EdgeInsets.all(24),
                     child: Text(
@@ -3844,8 +3986,8 @@ class _AccountScreenState extends State<AccountScreen> {
                           ? 'The interactive address map is available on Android, iOS, and web.'
                           : 'Interactive address maps are unavailable on this device.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: _muted,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
                         fontSize: 13,
                         height: 1.45,
                         fontWeight: FontWeight.w700,
@@ -3859,8 +4001,8 @@ class _AccountScreenState extends State<AccountScreen> {
               selectedLocation == null
                   ? 'Tap the map, search your barangay, or use device location to pin the delivery point.'
                   : 'Pinned for rider: ${selectedLocation.latitude.toStringAsFixed(6)}, ${selectedLocation.longitude.toStringAsFixed(6)}',
-              style: const TextStyle(
-                color: _muted,
+              style: TextStyle(
+                color: AppTheme.resolve(context, _muted),
                 fontSize: 11.5,
                 height: 1.4,
               ),
@@ -3871,7 +4013,10 @@ class _AccountScreenState extends State<AccountScreen> {
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
               child: Text(
                 _addressLocationMessage!,
-                style: const TextStyle(color: _danger, fontSize: 11.5),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _danger),
+                  fontSize: 11.5,
+                ),
               ),
             ),
         ],
@@ -4021,7 +4166,11 @@ class _AccountScreenState extends State<AccountScreen> {
                 onPressed: _changingPassword ? null : _changePassword,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(
+                    context,
+                    _maroon,
+                    fill: true,
+                  ),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(13),
@@ -4057,32 +4206,45 @@ class _AccountScreenState extends State<AccountScreen> {
   }) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: _muted2, fontSize: 13.5),
+      hintStyle: TextStyle(
+        color: AppTheme.resolve(context, _muted2),
+        fontSize: 13.5,
+      ),
       prefixIcon: prefixIcon == null
           ? null
-          : Icon(prefixIcon, color: _muted, size: 19),
+          : Icon(
+              prefixIcon,
+              color: AppTheme.resolve(context, _muted),
+              size: 19,
+            ),
       filled: true,
-      fillColor: _surface,
+      fillColor: AppTheme.resolve(context, _surface, fill: true),
       contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _border),
+        borderSide: BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _border),
+        borderSide: BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _maroon, width: 1.3),
+        borderSide: BorderSide(
+          color: AppTheme.resolve(context, _maroon),
+          width: 1.3,
+        ),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _danger),
+        borderSide: BorderSide(color: AppTheme.resolve(context, _danger)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _danger, width: 1.3),
+        borderSide: BorderSide(
+          color: AppTheme.resolve(context, _danger),
+          width: 1.3,
+        ),
       ),
     );
   }
@@ -4101,7 +4263,7 @@ class _AccountScreenState extends State<AccountScreen> {
         onPressed: onToggle,
         icon: Icon(
           visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-          color: _muted,
+          color: AppTheme.resolve(context, _muted),
           size: 19,
         ),
       ),
@@ -4146,14 +4308,18 @@ class _AccountTip extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: ShopColors.soft,
+        color: AppTheme.resolve(context, ShopColors.soft, fill: true),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: ShopColors.accent, size: 19),
+          Icon(
+            icon,
+            color: AppTheme.resolve(context, ShopColors.accent),
+            size: 19,
+          ),
           const SizedBox(width: 9),
           Expanded(
             child: Column(
@@ -4161,8 +4327,8 @@ class _AccountTip extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
@@ -4170,8 +4336,8 @@ class _AccountTip extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   message,
-                  style: const TextStyle(
-                    color: ShopColors.secondaryText,
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.secondaryText),
                     fontSize: 12.5,
                     height: 1.5,
                   ),
@@ -4195,10 +4361,14 @@ class _AccountStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: active ? const Color(0xFFEEF8F1) : ShopColors.soft,
+        color: active
+            ? AppTheme.resolve(context, const Color(0xFFEEF8F1), fill: true)
+            : AppTheme.resolve(context, ShopColors.soft, fill: true),
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
-          color: active ? const Color(0xFFCDE5D4) : ShopColors.border,
+          color: active
+              ? AppTheme.resolve(context, const Color(0xFFCDE5D4))
+              : AppTheme.resolve(context, ShopColors.border),
         ),
       ),
       child: Row(
@@ -4208,7 +4378,13 @@ class _AccountStatusBadge extends StatelessWidget {
             width: 7,
             height: 7,
             decoration: BoxDecoration(
-              color: active ? const Color(0xFF256F4A) : ShopColors.faint,
+              color: active
+                  ? AppTheme.resolve(
+                      context,
+                      const Color(0xFF256F4A),
+                      fill: true,
+                    )
+                  : AppTheme.resolve(context, ShopColors.faint, fill: true),
               shape: BoxShape.circle,
             ),
           ),
@@ -4218,7 +4394,9 @@ class _AccountStatusBadge extends StatelessWidget {
           Text(
             active ? 'Active' : 'Inactive',
             style: TextStyle(
-              color: active ? const Color(0xFF256F4A) : ShopColors.muted,
+              color: active
+                  ? AppTheme.resolve(context, const Color(0xFF256F4A))
+                  : AppTheme.resolve(context, ShopColors.muted),
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -4248,12 +4426,15 @@ class _AccountPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: ShopColors.surface,
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: ShopColors.accent.withValues(alpha: 0.035),
+            color: AppTheme.resolve(
+              context,
+              ShopColors.accent,
+            ).withValues(alpha: 0.035),
             blurRadius: 18,
             offset: const Offset(0, 7),
           ),
@@ -4269,11 +4450,19 @@ class _AccountPanel extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: ShopColors.accentSoft,
+                    color: AppTheme.resolve(
+                      context,
+                      ShopColors.accentSoft,
+                      fill: true,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: ShopColors.accent, size: 19),
+                  child: Icon(
+                    icon,
+                    color: AppTheme.resolve(context, ShopColors.accent),
+                    size: 19,
+                  ),
                 ),
 
                 const SizedBox(width: 10),
@@ -4284,8 +4473,8 @@ class _AccountPanel extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: ShopColors.text,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 15.5,
                           fontWeight: FontWeight.w800,
                         ),
@@ -4295,8 +4484,8 @@ class _AccountPanel extends StatelessWidget {
 
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 12.5,
                           height: 1.5,
                         ),
@@ -4308,7 +4497,10 @@ class _AccountPanel extends StatelessWidget {
             ),
           ),
 
-          const Divider(height: 1, color: ShopColors.border),
+          Divider(
+            height: 1,
+            color: AppTheme.resolve(context, ShopColors.border),
+          ),
 
           Padding(padding: const EdgeInsets.all(15), child: child),
         ],
@@ -4341,9 +4533,9 @@ class _ProfileAvatar extends StatelessWidget {
       height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: ShopColors.accentSoft,
+        color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
         shape: BoxShape.circle,
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: local != null
           ? Image.memory(
@@ -4362,13 +4554,13 @@ class _ProfileAvatar extends StatelessWidget {
                   (BuildContext context, Object error, StackTrace? stackTrace) {
                     return _AvatarInitial(value: profile.initial);
                   },
-              placeholder: const Center(
+              placeholder: Center(
                 child: SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: ShopColors.accent,
+                    color: AppTheme.resolve(context, ShopColors.accent),
                   ),
                 ),
               ),
@@ -4387,11 +4579,11 @@ class _AvatarInitial extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       alignment: Alignment.center,
-      color: ShopColors.accentSoft,
+      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
       child: Text(
         value,
-        style: const TextStyle(
-          color: ShopColors.accent,
+        style: TextStyle(
+          color: AppTheme.resolve(context, ShopColors.accent),
           fontSize: 20,
           fontWeight: FontWeight.w800,
         ),
@@ -4424,12 +4616,14 @@ class _AddressCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: address.isDefault ? const Color(0xFFFFF4F0) : ShopColors.surface,
+        color: address.isDefault
+            ? AppTheme.resolve(context, const Color(0xFFFFF4F0), fill: true)
+            : AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: address.isDefault
-              ? const Color(0xFFD9B09D)
-              : ShopColors.border,
+              ? AppTheme.resolve(context, const Color(0xFFD9B09D))
+              : AppTheme.resolve(context, ShopColors.border),
         ),
       ),
       child: Row(
@@ -4439,13 +4633,17 @@ class _AddressCard extends StatelessWidget {
             width: 39,
             height: 39,
             decoration: BoxDecoration(
-              color: ShopColors.accentSoft,
+              color: AppTheme.resolve(
+                context,
+                ShopColors.accentSoft,
+                fill: true,
+              ),
               borderRadius: BorderRadius.circular(11),
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child: Icon(
               Icons.location_on_outlined,
-              color: ShopColors.accent,
+              color: AppTheme.resolve(context, ShopColors.accent),
               size: 19,
             ),
           ),
@@ -4463,8 +4661,8 @@ class _AddressCard extends StatelessWidget {
                   children: [
                     Text(
                       '${address.label} · ${address.recipientName}',
-                      style: const TextStyle(
-                        color: ShopColors.text,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.text),
                         fontSize: 13.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -4477,13 +4675,17 @@ class _AddressCard extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: ShopColors.accentSoft,
+                          color: AppTheme.resolve(
+                            context,
+                            ShopColors.accentSoft,
+                            fill: true,
+                          ),
                           borderRadius: BorderRadius.circular(100),
                         ),
-                        child: const Text(
+                        child: Text(
                           'DEFAULT',
                           style: TextStyle(
-                            color: ShopColors.accent,
+                            color: AppTheme.resolve(context, ShopColors.accent),
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                           ),
@@ -4497,8 +4699,11 @@ class _AddressCard extends StatelessWidget {
 
                   Text(
                     address.contactNumber,
-                    style: const TextStyle(
-                      color: ShopColors.secondaryText,
+                    style: TextStyle(
+                      color: AppTheme.resolve(
+                        context,
+                        ShopColors.secondaryText,
+                      ),
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -4511,8 +4716,8 @@ class _AddressCard extends StatelessWidget {
                   address.displayAddress.isEmpty
                       ? 'No formatted address available.'
                       : address.displayAddress,
-                  style: const TextStyle(
-                    color: ShopColors.muted,
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.muted),
                     fontSize: 13,
                     height: 1.55,
                   ),
@@ -4523,8 +4728,8 @@ class _AddressCard extends StatelessWidget {
 
                   Text(
                     'Landmark: ${address.landmark}',
-                    style: const TextStyle(
-                      color: ShopColors.faint,
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.faint),
                       fontSize: 12,
                     ),
                   ),
@@ -4557,17 +4762,17 @@ class _AddressCard extends StatelessWidget {
                 tooltip: 'Delete address',
                 onPressed: deleting ? null : onDelete,
                 icon: deleting
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 17,
                         height: 17,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Color(0xFFB42318),
+                          color: AppTheme.resolve(context, Color(0xFFB42318)),
                         ),
                       )
-                    : const Icon(
+                    : Icon(
                         Icons.delete_outline_rounded,
-                        color: Color(0xFFB42318),
+                        color: AppTheme.resolve(context, Color(0xFFB42318)),
                         size: 19,
                       ),
               ),
@@ -4617,7 +4822,9 @@ class _AddressInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final OutlineInputBorder border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(13),
-      borderSide: const BorderSide(color: ShopColors.border),
+      borderSide: BorderSide(
+        color: AppTheme.resolve(context, ShopColors.border),
+      ),
     );
 
     return Padding(
@@ -4637,32 +4844,40 @@ class _AddressInput extends StatelessWidget {
                     keyboardType == TextInputType.number
                 ? TextCapitalization.none
                 : TextCapitalization.words,
-            style: const TextStyle(
-              color: ShopColors.text,
+            style: TextStyle(
+              color: AppTheme.resolve(context, ShopColors.text),
               fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(
-                color: ShopColors.faint,
+              hintStyle: TextStyle(
+                color: AppTheme.resolve(context, ShopColors.faint),
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
               ),
               prefixIcon: prefixIcon == null
                   ? null
-                  : Icon(prefixIcon, color: ShopColors.muted, size: 19),
+                  : Icon(
+                      prefixIcon,
+                      color: AppTheme.resolve(context, ShopColors.muted),
+                      size: 19,
+                    ),
               helperText: helperText,
               helperStyle: TextStyle(
                 color: helperTextError
-                    ? const Color(0xFFD64A59)
-                    : ShopColors.muted,
+                    ? AppTheme.resolve(context, const Color(0xFFD64A59))
+                    : AppTheme.resolve(context, ShopColors.muted),
                 fontSize: 12,
               ),
               counterText: '',
               isDense: true,
               filled: true,
-              fillColor: ShopColors.canvas,
+              fillColor: AppTheme.resolve(
+                context,
+                ShopColors.canvas,
+                fill: true,
+              ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 13,
                 vertical: 15,
@@ -4670,22 +4885,24 @@ class _AddressInput extends StatelessWidget {
               border: border,
               enabledBorder: border,
               focusedBorder: border.copyWith(
-                borderSide: const BorderSide(
-                  color: ShopColors.accent,
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, ShopColors.accent),
                   width: 1.3,
                 ),
               ),
               errorBorder: border.copyWith(
-                borderSide: const BorderSide(color: Color(0xFFD64A59)),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, Color(0xFFD64A59)),
+                ),
               ),
               focusedErrorBorder: border.copyWith(
-                borderSide: const BorderSide(
-                  color: Color(0xFFD64A59),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, Color(0xFFD64A59)),
                   width: 1.3,
                 ),
               ),
-              errorStyle: const TextStyle(
-                color: Color(0xFFD64A59),
+              errorStyle: TextStyle(
+                color: AppTheme.resolve(context, Color(0xFFD64A59)),
                 fontSize: 12,
                 height: 1.3,
               ),
@@ -4725,14 +4942,16 @@ class _FieldLabel extends StatelessWidget {
           TextSpan(text: text),
 
           if (requiredField)
-            const TextSpan(
+            TextSpan(
               text: ' *',
-              style: TextStyle(color: Color(0xFFB42318)),
+              style: TextStyle(
+                color: AppTheme.resolve(context, Color(0xFFB42318)),
+              ),
             ),
         ],
       ),
-      style: const TextStyle(
-        color: ShopColors.text,
+      style: TextStyle(
+        color: AppTheme.resolve(context, ShopColors.text),
         fontSize: 13,
         fontWeight: FontWeight.w700,
       ),
@@ -4752,10 +4971,14 @@ class _MessageBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: error ? const Color(0xFFFCECE7) : const Color(0xFFEEF8F1),
+        color: error
+            ? AppTheme.resolve(context, const Color(0xFFFCECE7), fill: true)
+            : AppTheme.resolve(context, const Color(0xFFEEF8F1), fill: true),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: error ? const Color(0xFFEBC9C0) : const Color(0xFFCDE5D4),
+          color: error
+              ? AppTheme.resolve(context, const Color(0xFFEBC9C0))
+              : AppTheme.resolve(context, const Color(0xFFCDE5D4)),
         ),
       ),
       child: Row(
@@ -4765,7 +4988,9 @@ class _MessageBanner extends StatelessWidget {
             error
                 ? Icons.error_outline_rounded
                 : Icons.check_circle_outline_rounded,
-            color: error ? const Color(0xFFB42318) : const Color(0xFF256F4A),
+            color: error
+                ? AppTheme.resolve(context, const Color(0xFFB42318))
+                : AppTheme.resolve(context, const Color(0xFF256F4A)),
             size: 18,
           ),
 
@@ -4776,8 +5001,8 @@ class _MessageBanner extends StatelessWidget {
               message,
               style: TextStyle(
                 color: error
-                    ? const Color(0xFFB42318)
-                    : const Color(0xFF256F4A),
+                    ? AppTheme.resolve(context, const Color(0xFFB42318))
+                    : AppTheme.resolve(context, const Color(0xFF256F4A)),
                 fontSize: 13,
                 height: 1.45,
                 fontWeight: FontWeight.w600,

@@ -341,6 +341,8 @@ class RiderDeliveryTransitionRequest {
   final String? collectedAmount;
   final String? scannedCode;
   final String scanMethod;
+  final String? attemptStatus;
+  final DateTime? nextAttemptAt;
 
   const RiderDeliveryTransitionRequest({
     required this.delivery,
@@ -351,6 +353,8 @@ class RiderDeliveryTransitionRequest {
     this.collectedAmount,
     this.scannedCode,
     this.scanMethod = 'MANUAL',
+    this.attemptStatus,
+    this.nextAttemptAt,
   });
 
   Map<String, dynamic> toFields() {
@@ -400,7 +404,15 @@ class RiderDeliveryTransitionRequest {
     }
 
     if (requiresFailureNote) {
-      return note != null && note!.trim().isNotEmpty;
+      if (note == null || note!.trim().isEmpty) return false;
+      if (attemptStatus != null &&
+          !const {'FAILED', 'RESCHEDULED'}.contains(attemptStatus)) {
+        return false;
+      }
+      if (attemptStatus == 'RESCHEDULED') {
+        return nextAttemptAt != null && nextAttemptAt!.isAfter(DateTime.now());
+      }
+      return true;
     }
 
     if (normalized == 'delivered') {

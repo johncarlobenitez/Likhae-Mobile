@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/features/buyer/orders/orders_screen.dart';
+import 'package:likhae/shared/widgets/glass_navigation.dart';
 
 Future<void> _fillReturnForm(
   WidgetTester tester, {
@@ -96,6 +97,36 @@ void _useTallTestSurface(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('return submit stays above navigation on a small screen', (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const order = BuyerOrderData(
+      id: '12', status: 'completed', statusLabel: 'Completed',
+      payment: 'Cash on Delivery', products: [], total: 100,
+      buyerName: 'Buyer', shippingAddress: 'Address', allowReturnRequest: true,
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: GlassNavigationFrame(
+        navigation: const SizedBox(key: ValueKey('navigation'), height: 80),
+        child: OrdersScreen(
+          orders: const [order], selectedOrderId: '12',
+          initialMode: BuyerOrdersMode.returnRequest,
+          showProductPreviewWhenEmpty: false,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -3000));
+    await tester.pumpAndSettle();
+    final button = find.widgetWithText(ElevatedButton, 'Submit Request');
+    expect(tester.getBottomLeft(button).dy,
+        lessThan(tester.getTopLeft(find.byKey(const ValueKey('navigation'))).dy));
+    expect(button.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('return form submits its issue, reason, items, and evidence', (
     WidgetTester tester,
   ) async {
@@ -215,7 +246,7 @@ void main() {
       tester,
       issue: 'Product is defective / does not work',
       reason: 'Product is defective upon arrival',
-      refundMethod: 'Original payment method',
+      refundMethod: 'Cash refund',
       details: 'The item arrived damaged and cannot be used.',
     );
     await tester.ensureVisible(find.text('Submit Request'));
@@ -223,7 +254,8 @@ void main() {
     await tester.tap(find.text('Submit Request'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Request not submitted'), findsOneWidget);
+    expect(find.text('Unable to confirm submission'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
     expect(find.byType(SelectableText), findsOneWidget);
     expect(
       tester.widget<SelectableText>(find.byType(SelectableText)).data,

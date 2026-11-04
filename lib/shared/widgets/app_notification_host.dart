@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -11,6 +13,7 @@ import '../../services/notification_sound_service.dart';
 import '../../services/app_notification_center.dart';
 import '../../services/buyer_mobile_service.dart';
 import '../../services/rider_mobile_service.dart';
+import 'app_motion.dart';
 
 /// Keeps authenticated notifications visible as an in-app banner on every
 /// buyer and rider route.
@@ -356,18 +359,18 @@ class _AppNotificationHostState extends State<AppNotificationHost>
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: AnimatedSlide(
                   offset: _bannerVisible ? Offset.zero : const Offset(0, -1.3),
-                  duration: const Duration(milliseconds: 260),
+                  duration: appMotionDuration(context, milliseconds: 260),
                   curve: Curves.easeOutCubic,
                   child: AnimatedOpacity(
                     opacity: _bannerVisible ? 1 : 0,
-                    duration: const Duration(milliseconds: 200),
+                    duration: appMotionDuration(context),
                     child: Material(
-                      color: _surface,
+                      color: AppTheme.resolve(context, _surface, fill: true),
                       elevation: 10,
                       shadowColor: Colors.black.withValues(alpha: 0.18),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
-                        side: const BorderSide(color: _border),
+                        side:  BorderSide(color: AppTheme.resolve(context, _border)),
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: Padding(
@@ -377,15 +380,15 @@ class _AppNotificationHostState extends State<AppNotificationHost>
                             Container(
                               width: 40,
                               height: 40,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFF1E4D7),
+                              decoration:  BoxDecoration(
+                                color: AppTheme.resolve(context, Color(0xFFF1E4D7), fill: true),
                                 shape: BoxShape.circle,
                               ),
                               alignment: Alignment.center,
                               child: Icon(
                                 notification.type.icon,
                                 size: 20,
-                                color: _maroon,
+                                color: AppTheme.resolve(context, _maroon),
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -407,8 +410,8 @@ class _AppNotificationHostState extends State<AppNotificationHost>
                                             : notification.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: _text,
+                                        style:  TextStyle(
+                                          color: AppTheme.resolve(context, _text),
                                           fontSize: 13,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -421,8 +424,8 @@ class _AppNotificationHostState extends State<AppNotificationHost>
                                           notification.message,
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: _muted,
+                                          style:  TextStyle(
+                                            color: AppTheme.resolve(context, _muted),
                                             fontSize: 12,
                                             height: 1.3,
                                           ),
@@ -442,10 +445,10 @@ class _AppNotificationHostState extends State<AppNotificationHost>
                                 child: InkWell(
                                   onTap: _dismissBanner,
                                   customBorder: const CircleBorder(),
-                                  child: const Center(
+                                  child:  Center(
                                     child: Icon(
                                       Icons.close_rounded,
-                                      color: _muted,
+                                      color: AppTheme.resolve(context, _muted),
                                       size: 19,
                                     ),
                                   ),

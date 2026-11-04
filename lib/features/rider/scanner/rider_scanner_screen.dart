@@ -1,4 +1,7 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/motion_effects.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -311,16 +314,16 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, Colors.white, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
+        title:  Text(
           'Parcel Scanner',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 18,
             fontWeight: FontWeight.w900,
           ),
@@ -330,17 +333,17 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
             TextButton.icon(
               onPressed: _signingOut ? null : _signOut,
               icon: _signingOut
-                  ? const SizedBox(
+                  ?  SizedBox(
                       width: 17,
                       height: 17,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: _primary,
+                        color: AppTheme.resolve(context, _primary),
                       ),
                     )
                   : const Icon(Icons.logout_rounded, size: 18),
               label: Text(_signingOut ? 'Signing Out' : 'Sign Out'),
-              style: TextButton.styleFrom(foregroundColor: _primary),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.resolve(context, _primary)),
             ),
         ],
       ),
@@ -381,10 +384,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text(
+         Text(
           'PARCEL VERIFICATION',
           style: TextStyle(
-            color: _primary,
+            color: AppTheme.resolve(context, _primary),
             fontSize: 10.5,
             letterSpacing: 1.7,
             fontWeight: FontWeight.w900,
@@ -393,10 +396,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
         const SizedBox(height: 7),
 
-        const Text(
+         Text(
           'Scan Waybill',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 28,
             height: 1.1,
             fontWeight: FontWeight.w900,
@@ -405,9 +408,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
         const SizedBox(height: 8),
 
-        const Text(
+         Text(
           'Scan the QR code or barcode printed on the seller\'s parcel waybill.',
-          style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.5),
         ),
 
         if (expected != null && expected.isNotEmpty) ...<Widget>[
@@ -416,13 +419,13 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: _soft,
+              color: AppTheme.resolve(context, _soft, fill: true),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               'Expected: $expected',
-              style: const TextStyle(
-                color: _primary,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _primary),
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
               ),
@@ -437,9 +440,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.black,
+        color: AppTheme.resolve(context, Colors.black, fill: true),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         children: <Widget>[
@@ -460,6 +463,8 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                     child: CustomPaint(painter: _ScannerOverlayPainter()),
                   ),
                 ),
+                Positioned.fill(child: AppScanBeam(
+                  active: !_scannerPaused && !_handlingScan)),
 
                 Positioned(
                   top: 16,
@@ -482,7 +487,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                   ),
                 ),
 
-                const Positioned(
+                 Positioned(
                   left: 24,
                   right: 24,
                   bottom: 22,
@@ -495,7 +500,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                       height: 1.4,
                       fontWeight: FontWeight.w700,
                       shadows: <Shadow>[
-                        Shadow(color: Colors.black, blurRadius: 6),
+                        Shadow(color: AppTheme.resolve(context, Colors.black), blurRadius: 6),
                       ],
                     ),
                   ),
@@ -529,14 +534,14 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
-            color: _surface,
+            color: AppTheme.resolve(context, _surface, fill: true),
             child: Row(
               children: <Widget>[
                 Expanded(
                   child: Text(
                     _scannerPaused ? 'Scanner paused' : 'Camera scanner active',
-                    style: const TextStyle(
-                      color: _muted,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _muted),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -548,7 +553,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                     onPressed: _scanAgain,
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Scan Again'),
-                    style: TextButton.styleFrom(foregroundColor: _primary),
+                    style: TextButton.styleFrom(foregroundColor: AppTheme.resolve(context, _primary)),
                   ),
               ],
             ),
@@ -560,7 +565,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
   Widget _buildCameraError(BuildContext context, MobileScannerException error) {
     return Container(
-      color: Colors.black,
+      color: AppTheme.resolve(context, Colors.black, fill: true),
       alignment: Alignment.center,
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -606,17 +611,17 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'Manual Tracking Code',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 16,
               fontWeight: FontWeight.w900,
             ),
@@ -624,9 +629,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
           const SizedBox(height: 5),
 
-          const Text(
+           Text(
             'If the camera cannot read the waybill, enter the parcel tracking code manually.',
-            style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.5),
           ),
 
           const SizedBox(height: 14),
@@ -644,18 +649,18 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               hintText: 'Enter tracking code',
               prefixIcon: const Icon(Icons.confirmation_number_outlined),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppTheme.resolve(context, Colors.white, fill: true),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 14,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: _border),
+                borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: _primary, width: 1.4),
+                borderSide:  BorderSide(color: AppTheme.resolve(context, _primary), width: 1.4),
               ),
             ),
           ),
@@ -669,7 +674,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               onPressed: _handlingScan ? null : _submitManualCode,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: _primary,
+                backgroundColor: AppTheme.resolve(context, _primary, fill: true),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -692,14 +697,14 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _successSoft,
+        color: AppTheme.resolve(context, _successSoft, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB7DFC5)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFB7DFC5))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(Icons.check_circle_rounded, color: _success, size: 22),
+           Icon(Icons.check_circle_rounded, color: AppTheme.resolve(context, _success), size: 22),
 
           const SizedBox(width: 9),
 
@@ -707,10 +712,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
+                 Text(
                   'Parcel code scanned',
                   style: TextStyle(
-                    color: _success,
+                    color: AppTheme.resolve(context, _success),
                     fontSize: 12.5,
                     fontWeight: FontWeight.w900,
                   ),
@@ -720,8 +725,8 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
                 Text(
                   _scannedCode ?? '',
-                  style: const TextStyle(
-                    color: _success,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _success),
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -733,7 +738,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           IconButton(
             tooltip: 'Scan Again',
             onPressed: _scanAgain,
-            icon: const Icon(Icons.refresh_rounded, color: _success),
+            icon:  Icon(Icons.refresh_rounded, color: AppTheme.resolve(context, _success)),
           ),
         ],
       ),
@@ -745,22 +750,22 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _dangerSoft,
+        color: AppTheme.resolve(context, _dangerSoft, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF4C3BE)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF4C3BE))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(Icons.error_outline_rounded, color: _danger, size: 22),
+           Icon(Icons.error_outline_rounded, color: AppTheme.resolve(context, _danger), size: 22),
 
           const SizedBox(width: 9),
 
           Expanded(
             child: Text(
               _errorMessage!,
-              style: const TextStyle(
-                color: _danger,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _danger),
                 fontSize: 12.5,
                 height: 1.45,
                 fontWeight: FontWeight.w700,
@@ -771,7 +776,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           IconButton(
             tooltip: 'Scan Again',
             onPressed: _scanAgain,
-            icon: const Icon(Icons.refresh_rounded, color: _danger),
+            icon:  Icon(Icons.refresh_rounded, color: AppTheme.resolve(context, _danger)),
           ),
         ],
       ),

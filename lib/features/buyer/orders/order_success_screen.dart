@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
+import '../../../shared/widgets/app_motion.dart';
 
 class OrderSuccessScreen extends StatelessWidget {
   const OrderSuccessScreen({
@@ -18,10 +19,8 @@ class OrderSuccessScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final String orderNumber = (order['order_number'] ?? '').toString();
     final String status = (order['status'] ?? 'PLACED').toString();
-    final double total = double.tryParse(
-          (order['grand_total'] ?? 0).toString(),
-        ) ??
-        0;
+    final double total =
+        double.tryParse((order['grand_total'] ?? 0).toString()) ?? 0;
     final String amount = formatPesoAmount(total);
 
     return Scaffold(
@@ -35,26 +34,14 @@ class OrderSuccessScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check_rounded,
-                      size: 48,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
+                  const AppSuccessMark(),
                   const SizedBox(height: 20),
                   Text(
                     'Thanks for your order',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -70,7 +57,9 @@ class OrderSuccessScreen extends StatelessWidget {
                         children: <Widget>[
                           _OrderValueRow(
                             label: 'Order number',
-                            value: orderNumber.isEmpty ? 'Confirmed' : orderNumber,
+                            value: orderNumber.isEmpty
+                                ? 'Confirmed'
+                                : orderNumber,
                           ),
                           const Divider(height: 24),
                           _OrderValueRow(label: 'Status', value: status),

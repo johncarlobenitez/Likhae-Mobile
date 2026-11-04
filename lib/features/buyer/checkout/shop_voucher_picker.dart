@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/shop_colors.dart';
@@ -220,8 +222,8 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
       top: false,
       child: Container(
         height: availableHeight,
-        decoration: const BoxDecoration(
-          color: _surface,
+        decoration:  BoxDecoration(
+          color: AppTheme.resolve(context, _surface, fill: true),
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
@@ -230,11 +232,11 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
               padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
               child: Row(
                 children: [
-                  const Expanded(
+                   Expanded(
                     child: Text(
                       'Select Vouchers',
                       style: TextStyle(
-                        color: _ink,
+                        color: AppTheme.resolve(context, _ink),
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
@@ -244,15 +246,15 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                     onPressed: () => Navigator.of(context).pop(),
                     tooltip: 'Close',
                     icon: const Icon(Icons.close_rounded),
-                    color: _muted,
+                    color: AppTheme.resolve(context, _muted),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: _border),
+             Divider(height: 1, color: AppTheme.resolve(context, _border)),
             Expanded(
               child: ColoredBox(
-                color: _canvas,
+                color: AppTheme.resolve(context, _canvas, fill: true),
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                   children: [
@@ -272,14 +274,14 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                             controller: _codeController,
                             textCapitalization: TextCapitalization.characters,
                             autocorrect: false,
-                            cursorColor: _primary,
+                            cursorColor: AppTheme.resolve(context, _primary),
                             decoration: InputDecoration(
                               hintText: 'Enter voucher code',
                               isDense: true,
                               filled: true,
-                              fillColor: _surface,
-                              hintStyle: const TextStyle(
-                                color: ShopColors.faint,
+                              fillColor: AppTheme.resolve(context, _surface, fill: true),
+                              hintStyle:  TextStyle(
+                                color: AppTheme.resolve(context, ShopColors.faint),
                                 fontSize: 12,
                               ),
                               contentPadding: const EdgeInsets.symmetric(
@@ -288,16 +290,16 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: _border),
+                                borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: _border),
+                                borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: _primary,
+                                borderSide:  BorderSide(
+                                  color: AppTheme.resolve(context, _primary),
                                   width: 1.4,
                                 ),
                               ),
@@ -309,7 +311,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                         FilledButton(
                           onPressed: _applyCode,
                           style: FilledButton.styleFrom(
-                            backgroundColor: _primary,
+                            backgroundColor: AppTheme.resolve(context, _primary, fill: true),
                             foregroundColor: Colors.white,
                             elevation: 0,
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -330,7 +332,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                 ),
               ),
             ),
-            const Divider(height: 1, color: _border),
+             Divider(height: 1, color: AppTheme.resolve(context, _border)),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
               child: Column(
@@ -338,7 +340,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                 children: [
                   Text(
                     '${_selection.codes.length} voucher${_selection.codes.length == 1 ? '' : 's'} selected',
-                    style: const TextStyle(color: _muted, fontSize: 12),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
@@ -346,7 +348,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                     child: FilledButton(
                       onPressed: () => Navigator.of(context).pop(_selection),
                       style: FilledButton.styleFrom(
-                        backgroundColor: _primary,
+                        backgroundColor: AppTheme.resolve(context, _primary, fill: true),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -372,14 +374,14 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: ShopColors.soft,
-        border: Border.all(color: _border),
+        color: AppTheme.resolve(context, ShopColors.soft, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: const Text(
+      child:  Text(
         'No active vouchers are available for this checkout.',
         textAlign: TextAlign.center,
-        style: TextStyle(color: _muted, fontSize: 13, height: 1.4),
+        style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.4),
       ),
     );
   }
@@ -393,8 +395,8 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
-                  color: _ink,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _ink),
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                 ),
@@ -402,7 +404,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
             ),
             Text(
               '${vouchers.length} available',
-              style: const TextStyle(color: _muted, fontSize: 12),
+              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
             ),
           ],
         ),
@@ -412,7 +414,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
               'No ${title.toLowerCase()} available for this cart.',
-              style: const TextStyle(color: _muted, fontSize: 12),
+              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
             ),
           )
         else
@@ -446,7 +448,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: selected ? ShopColors.accentSoft : _surface,
+        color: selected ? AppTheme.resolve(context, ShopColors.accentSoft, fill: true) : AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: meetsMinimum || selected
@@ -456,7 +458,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
           child: Container(
             padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              border: Border.all(color: selected ? _primary : _border),
+              border: Border.all(color: selected ? AppTheme.resolve(context, _primary) : AppTheme.resolve(context, _border)),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
@@ -465,7 +467,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                   width: 64,
                   height: 70,
                   decoration: BoxDecoration(
-                    color: _primary,
+                    color: AppTheme.resolve(context, _primary, fill: true),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Column(
@@ -496,8 +498,8 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                     children: [
                       Text(
                         voucher.value.isEmpty ? voucher.code : voucher.value,
-                        style: const TextStyle(
-                          color: _ink,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _ink),
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
@@ -515,8 +517,8 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                                 : 'Shop'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _muted),
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -528,8 +530,8 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                             : '${voucher.condition} · Code ${voucher.code}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _muted),
                           fontSize: 11,
                           height: 1.35,
                         ),
@@ -538,7 +540,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                         const SizedBox(height: 3),
                         Text(
                           'Valid until ${voucher.expires}',
-                          style: const TextStyle(color: _muted, fontSize: 10),
+                          style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10),
                         ),
                       ],
                     ],
@@ -549,7 +551,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                   selected
                       ? Icons.check_circle_rounded
                       : Icons.radio_button_unchecked_rounded,
-                  color: selected ? _primary : ShopColors.borderStrong,
+                  color: selected ? AppTheme.resolve(context, _primary) : AppTheme.resolve(context, ShopColors.borderStrong),
                   size: 24,
                 ),
               ],

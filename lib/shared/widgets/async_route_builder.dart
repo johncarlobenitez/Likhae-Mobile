@@ -2,14 +2,24 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'app_motion.dart';
+import 'loading_skeleton.dart';
+
+export 'loading_skeleton.dart' show LoadingLayout;
+
 class RouteLoadingPage extends StatelessWidget {
-  const RouteLoadingPage({super.key, required this.title});
+  const RouteLoadingPage({
+    super.key,
+    required this.title,
+    this.layout = LoadingLayout.list,
+  });
   final String title;
+  final LoadingLayout layout;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: Text(title)),
-    body: const Center(child: CircularProgressIndicator()),
+    body: LoadingSkeleton(layout: layout),
   );
 }
 
@@ -125,14 +135,17 @@ class _AsyncRouteBuilderState<T> extends State<AsyncRouteBuilder<T>>
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
     children: [
-      widget.builder(context, _snapshot),
+      AppDataReveal(
+        ready: _snapshot.hasData,
+        child: widget.builder(context, _snapshot),
+      ),
       if (_snapshot.hasData &&
           _snapshot.connectionState == ConnectionState.waiting)
         const Positioned(
           top: 0,
           left: 0,
           right: 0,
-          child: SafeArea(child: LinearProgressIndicator(minHeight: 2)),
+          child: SafeArea(child: AppLoadingLine()),
         ),
     ],
   );

@@ -769,6 +769,19 @@ class BuyerMobileService {
     _requirePayload(response);
   }
 
+  static Future<void> confirmShipmentReceived({
+    required String orderId,
+    required String shipmentId,
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/orders/${Uri.encodeComponent(orderId)}/shipments/${Uri.encodeComponent(shipmentId)}/received',
+      ),
+      <String, dynamic>{'confirm_receipt': '1'},
+    );
+    _requirePayload(response);
+  }
+
   static Future<String?> requestOrderReturn(
     BuyerOrderReturnRequest request,
   ) async {
@@ -796,16 +809,35 @@ class BuyerMobileService {
       form.files.add(
         MapEntry<String, MultipartFile>(
           'images[]',
-          await MultipartFile.fromFile(file.path, filename: file.name),
+          MultipartFile.fromBytes(await file.readAsBytes(), filename: file.name),
         ),
       );
     }
-    final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl(
-        'buyer/orders/${Uri.encodeComponent(request.order.id)}/return-refund',
-      ),
-      form,
-    );
+    final Response<dynamic> response;
+    try {
+      response = await ApiClient.post(
+        AppConfig.resolveApiUrl(
+          'buyer/orders/${Uri.encodeComponent(request.order.id)}/return-refund',
+        ),
+        form,
+      );
+    } on DioException catch (error) {
+      if (error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout) {
+        throw Exception(
+          'We could not confirm whether your request was received. '
+          'Your form is still here. Check Returns & Refunds before submitting again.',
+        );
+      }
+      throw Exception(ApiClient.formatError(error));
+    }
+    if ((response.statusCode ?? 500) >= 500) {
+      throw Exception(
+        'The return/refund service is temporarily unavailable. '
+        'Your form is still here. Check Returns & Refunds before submitting again '
+        'because your request may already have been received.',
+      );
+    }
     return _requirePayload(response)['request_id']?.toString();
   }
 
@@ -980,6 +1012,34 @@ class BuyerMobileService {
       );
     }
     return _profileData(Map<String, dynamic>.from(user));
+  }
+
+  static Future<void> requestEmailChange(String email) async {
+    final response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/profile/email-change'),
+      <String, dynamic>{'email': email.trim()},
+    );
+    _requirePayload(response);
+  }
+
+  static Future<BuyerProfileData> verifyEmailChange(String code) async {
+    final response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/profile/email-change/verify'),
+      <String, dynamic>{'code': code.trim()},
+    );
+    final dynamic user = _requirePayload(response)['user'];
+    if (user is! Map) {
+      throw const FormatException('Verified profile was not returned.');
+    }
+    return _profileData(Map<String, dynamic>.from(user));
+  }
+
+  static Future<void> resendEmailChangeCode() async {
+    final response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/profile/email-change/resend'),
+      <String, dynamic>{},
+    );
+    _requirePayload(response);
   }
 
   static Future<void> resendMobileChangeCode() async {
@@ -1605,36 +1665,6 @@ class BuyerMobileService {
       isDefault: row['is_default'] == true,
       formattedAddress: row['formatted_address']?.toString(),
     );
-  }
-
-  static Future<void> requestEmailChange(String email) async {
-    final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl('buyer/profile/email-change'),
-      <String, dynamic>{'email': email.trim()},
-    );
-    _requirePayload(response);
-  }
-
-  static Future<void> resendEmailChangeCode() async {
-    final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl('buyer/profile/email-change/resend'),
-      <String, dynamic>{},
-    );
-    _requirePayload(response);
-  }
-
-  static Future<BuyerProfileData> verifyEmailChange(String code) async {
-    final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl('buyer/profile/email-change/verify'),
-      <String, dynamic>{'code': code.trim()},
-    );
-    final dynamic user = _requirePayload(response)['user'];
-    if (user is! Map) {
-      throw const FormatException(
-        'The server did not return the verified profile.',
-      );
-    }
-    return _profileData(Map<String, dynamic>.from(user));
   }
 
   static Future<Map<String, dynamic>> fetchBuyerSettings() async {

@@ -22,21 +22,14 @@ class PhilippineAddressService {
     ),
   );
 
-  static final Dio _psgcDio = Dio(
-    BaseOptions(
-      baseUrl: 'https://psgc.gitlab.io/api',
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 15),
-      headers: <String, String>{'Accept': 'application/json'},
-    ),
-  );
-
   static Future<List<AddressOption>> fetchRegions() async {
     return _fetchOptions('/regions');
   }
 
   static Future<List<AddressOption>> fetchProvinces(String regionCode) async {
-    return _fetchOptions('/regions/${Uri.encodeComponent(regionCode)}/provinces');
+    return _fetchOptions(
+      '/regions/${Uri.encodeComponent(regionCode)}/provinces',
+    );
   }
 
   static Future<List<AddressOption>> fetchMunicipalities(
@@ -81,19 +74,18 @@ class PhilippineAddressService {
     return null;
   }
 
-  static Future<List<AddressOption>> _fetchOptions(String path) => _options.load(
-    path, () => _loadOptions(path), lifetime: const Duration(hours: 24),
-  );
+  static Future<List<AddressOption>> _fetchOptions(String path) =>
+      _options.load(
+        path,
+        () => _loadOptions(path),
+        lifetime: const Duration(hours: 24),
+      );
 
   static Future<List<AddressOption>> _loadOptions(String path) async {
-    try {
-      final Response<dynamic> response = await _dio.get(path);
-      return _parseOptions(response.data);
-    } catch (_) {
-      // Keep the registration form usable while the Laravel address route is
-      // being deployed. The public PSGC endpoint has the same code/name data.
-      return _fetchFromPsgc(path);
-    }
+    // Laravel owns the canonical PSGC records and fallback policy. Mixing in
+    // another provider can produce codes its address validator does not accept.
+    final Response<dynamic> response = await _dio.get(path);
+    return _parseOptions(response.data);
   }
 
   static List<AddressOption> _parseOptions(dynamic data) {
@@ -104,26 +96,18 @@ class PhilippineAddressService {
       throw const FormatException('Invalid Philippine address response.');
     }
 
-    return data.whereType<Map>().map((Map item) {
-      final Map<String, dynamic> row = Map<String, dynamic>.from(item);
-      return AddressOption(
-        code: (row['code'] ?? '').toString(),
-        name: (row['name'] ?? '').toString(),
-      );
-    }).where((AddressOption option) {
-      return option.code.isNotEmpty && option.name.isNotEmpty;
-    }).toList(growable: false);
-  }
-
-  static Future<List<AddressOption>> _fetchFromPsgc(String path) async {
-    final String psgcPath = path
-        .replaceFirst('/cities-municipalities/', '/cities-municipalities/')
-        .replaceFirst('/municipalities/', '/cities-municipalities/')
-        .replaceFirst('/municipalities', '/cities-municipalities');
-    final Response<dynamic> response = await _psgcDio.get(
-      psgcPath.endsWith('/') ? psgcPath : '$psgcPath/',
-      options: Options(receiveTimeout: const Duration(seconds: 15)),
-    );
-    return _parseOptions(response.data);
+    return data
+        .whereType<Map>()
+        .map((Map item) {
+          final Map<String, dynamic> row = Map<String, dynamic>.from(item);
+          return AddressOption(
+            code: (row['code'] ?? '').toString(),
+            name: (row['name'] ?? '').toString(),
+          );
+        })
+        .where((AddressOption option) {
+          return option.code.isNotEmpty && option.name.isNotEmpty;
+        })
+        .toList(growable: false);
   }
 }

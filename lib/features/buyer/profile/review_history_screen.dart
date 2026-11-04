@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 class BuyerReviewHistoryScreen extends StatelessWidget {
@@ -36,7 +38,7 @@ class BuyerReviewHistoryScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text('${'★' * rating}${'☆' * (5 - rating)}  ${date.isEmpty ? '' : date.substring(0, date.length >= 10 ? 10 : date.length)}', style: const TextStyle(color: Color(0xFF9B6B2F))),
+                          Text('${'★' * rating}${'☆' * (5 - rating)}  ${date.isEmpty ? '' : date.substring(0, date.length >= 10 ? 10 : date.length)}', style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF9B6B2F)))),
                           if ((review['comment'] ?? '').toString().trim().isNotEmpty) ...<Widget>[
                             const SizedBox(height: 5),
                             Text(review['comment'].toString()),

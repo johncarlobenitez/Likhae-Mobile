@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -19,8 +21,14 @@ class OrderTrackingScreen extends StatefulWidget {
   final BuyerOrderData order;
 
   final VoidCallback? onBack;
+  final Widget? previewMap;
 
-  const OrderTrackingScreen({super.key, required this.order, this.onBack});
+  const OrderTrackingScreen({
+    super.key,
+    required this.order,
+    this.onBack,
+    this.previewMap,
+  });
 
   @override
   State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
@@ -201,7 +209,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     super.initState();
     _trackedOrder = widget.order;
     _selectedParcelId = _requestedParcelId(widget.order);
-    if (AppConfig.apiEnabled && !widget.order.isPreview) {
+    if (AppConfig.apiEnabled &&
+        !widget.order.isPreview &&
+        widget.previewMap == null) {
       unawaited(_loadDeliveryProof().then<void>((bool _) {}));
       unawaited(_refreshShipmentMap());
       _locationRefreshTimer = Timer.periodic(_locationRefreshInterval, (_) {
@@ -810,7 +820,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   bool get _canShowMap {
-    return _supportsMapLibre;
+    return widget.previewMap == null && _supportsMapLibre;
   }
 
   LatLng get _center {
@@ -854,7 +864,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _canvas,
+      backgroundColor: AppTheme.resolve(context, _canvas, fill: true),
       appBar: AppBar(
         leading: IconButton(
           onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
@@ -865,8 +875,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           'Track Order',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
-        backgroundColor: _canvas,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _canvas, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
@@ -898,17 +908,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'TRACK A PARCEL',
             style: TextStyle(
-              color: _muted,
+              color: AppTheme.resolve(context, _muted),
               fontSize: 10,
               letterSpacing: 1,
               fontWeight: FontWeight.w800,
@@ -945,8 +955,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       '$seller • ${parcel.statusLabel}$tracking',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _text,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _text),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -960,7 +970,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               padding: const EdgeInsets.only(bottom: 5),
               child: Text(
                 'Destination: ${_selectedParcel!.destination}',
-                style: const TextStyle(color: _muted, fontSize: 11.5),
+                style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
               ),
             ),
         ],
@@ -999,9 +1009,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Row(
         children: <Widget>[
@@ -1024,10 +1034,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
+                 Text(
                   'DELIVERY RIDER',
                   style: TextStyle(
-                    color: _muted,
+                    color: AppTheme.resolve(context, _muted),
                     fontSize: 10,
                     letterSpacing: 0.8,
                     fontWeight: FontWeight.w800,
@@ -1038,8 +1048,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
@@ -1051,13 +1061,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       : riderDetails.join('  •  '),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _muted, fontSize: 12),
+                  style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          const Icon(Icons.delivery_dining_rounded, color: _maroon),
+           Icon(Icons.delivery_dining_rounded, color: AppTheme.resolve(context, _maroon)),
         ],
       ),
     );
@@ -1066,13 +1076,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   Widget _riderAvatarFallback(String initials) {
     return Container(
       alignment: Alignment.center,
-      color: ShopColors.accentSoft,
+      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
       child: initials.trim().isEmpty
-          ? const Icon(Icons.person_rounded, color: _maroon, size: 28)
+          ?  Icon(Icons.person_rounded, color: AppTheme.resolve(context, _maroon), size: 28)
           : Text(
               initials,
-              style: const TextStyle(
-                color: _maroon,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _maroon),
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
@@ -1085,9 +1095,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x12000000),
@@ -1108,12 +1118,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: ShopColors.accentSoft,
+                    color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
+                  child:  Icon(
                     Icons.map_outlined,
-                    color: _maroon,
+                    color: AppTheme.resolve(context, _maroon),
                     size: 20,
                   ),
                 ),
@@ -1122,10 +1132,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Text(
+                       Text(
                         'Shipment Journey',
                         style: TextStyle(
-                          color: _text,
+                          color: AppTheme.resolve(context, _text),
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
                         ),
@@ -1139,7 +1149,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             : order.tracking?.trim().isNotEmpty == true
                             ? 'No live rider position yet. Parcel updates appear in the timeline below.'
                             : 'A map location will appear after the parcel is dispatched.',
-                        style: const TextStyle(color: _muted, fontSize: 12.5),
+                        style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
                       ),
                     ],
                   ),
@@ -1151,7 +1161,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             height: 300,
             child: Stack(
               children: <Widget>[
-                if (_canShowMap)
+                if (widget.previewMap != null)
+                  Positioned.fill(child: widget.previewMap!)
+                else if (_canShowMap)
                   Positioned.fill(
                     child: maplibre.MapLibreMapWidget(
                       viewport: maplibre.MapLibreViewport(
@@ -1164,15 +1176,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 else
                   Positioned.fill(
                     child: Container(
-                      color: _canvas,
+                      color: AppTheme.resolve(context, _canvas, fill: true),
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(
                             'The interactive map is available on Android and iOS.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: _muted,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, _muted),
                               fontSize: 13,
                               height: 1.45,
                               fontWeight: FontWeight.w700,
@@ -1214,8 +1226,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   runSpacing: 8,
                   children: <Widget>[
                     if (order.sellerLocation != null)
-                      const _LegendDot(
-                        color: Color(0xFFB56B32),
+                       _LegendDot(
+                        color: AppTheme.resolve(context, Color(0xFFB56B32)),
                         label: 'Seller',
                       ),
                     ...List<Widget>.generate(
@@ -1225,10 +1237,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         label: order.shipmentRouteStops[index].label,
                       ),
                     ),
-                    const _LegendDot(color: _maroon, label: 'Buyer'),
+                     _LegendDot(color: AppTheme.resolve(context, _maroon), label: 'Buyer'),
                     if (hasRider)
-                      const _LegendDot(
-                        color: Color(0xFF1976D2),
+                       _LegendDot(
+                        color: AppTheme.resolve(context, Color(0xFF1976D2)),
                         label: 'Current rider',
                       ),
                   ],
@@ -1237,8 +1249,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   const SizedBox(height: 10),
                   Text(
                     'Route: ${<String>[if (order.sellerLocation != null) order.sellerLocation!.label, ...order.shipmentRouteStops.map((BuyerOrderLocation stop) => stop.label), order.orderLocation?.label ?? 'Delivery destination'].join(' -> ')}',
-                    style: const TextStyle(
-                      color: _text,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _text),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       height: 1.35,
@@ -1253,8 +1265,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Text(
                 '${order.shipmentRouteStops.isEmpty ? '$_roadRouteSummary\n' : ''}Rider is ${_riderDistanceText ?? 'nearby'} and on the way.',
-                style: const TextStyle(
-                  color: _text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1273,9 +1285,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x1A000000),
@@ -1286,7 +1298,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       ),
       child: IconButton(
         onPressed: onPressed,
-        icon: Icon(icon, color: _text),
+        icon: Icon(icon, color: AppTheme.resolve(context, _text)),
         splashRadius: 20,
         padding: EdgeInsets.zero,
       ),
@@ -1456,9 +1468,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: Color(0x12000000),
@@ -1470,19 +1482,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'Tracking Timeline',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 16),
           if (newestFirstEvents.isEmpty)
-            const Text(
+             Text(
               'No tracking updates yet.',
-              style: TextStyle(color: _muted, fontSize: 13),
+              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
             )
           else
             ...List<Widget>.generate(newestFirstEvents.length, (int index) {
@@ -1513,8 +1525,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     width: 84,
                     child: Text(
                       event.time,
-                      style: const TextStyle(
-                        color: Color(0xFF999999),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF999999)),
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1530,8 +1542,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           height: 10,
                           decoration: BoxDecoration(
                             color: isLatest
-                                ? _timelineActive
-                                : _timelineInactive,
+                                ? AppTheme.resolve(context, _timelineActive, fill: true)
+                                : AppTheme.resolve(context, _timelineInactive, fill: true),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -1543,7 +1555,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                 : event.details.trim().isEmpty
                                 ? 34
                                 : 54,
-                            color: const Color(0xFFE1E1E1),
+                            color: AppTheme.resolve(context, const Color(0xFFE1E1E1), fill: true),
                           ),
                       ],
                     ),
@@ -1559,8 +1571,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             _timelineDescription(event),
                             style: TextStyle(
                               color: isLatest
-                                  ? _timelineActive
-                                  : const Color(0xFF858585),
+                                  ? AppTheme.resolve(context, _timelineActive)
+                                  : AppTheme.resolve(context, const Color(0xFF858585)),
                               fontSize: 14,
                               height: 1.35,
                               fontWeight: isLatest
@@ -1573,7 +1585,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             TextButton(
                               onPressed: _openDeliveryProof,
                               style: TextButton.styleFrom(
-                                foregroundColor: _proofLink,
+                                foregroundColor: AppTheme.resolve(context, _proofLink),
                                 alignment: Alignment.centerLeft,
                                 padding: EdgeInsets.zero,
                               ),
@@ -1664,11 +1676,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                   child: Row(
                     children: <Widget>[
-                      const Expanded(
+                       Expanded(
                         child: Text(
                           'Proof of delivery',
                           style: TextStyle(
-                            color: _text,
+                            color: AppTheme.resolve(context, _text),
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1713,7 +1725,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     padding: const EdgeInsets.all(10),
                     child: Text(
                       'Swipe to view ${files.length} proof photos',
-                      style: const TextStyle(color: _muted, fontSize: 12),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                     ),
                   ),
               ],
@@ -1742,11 +1754,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                   child: Row(
                     children: <Widget>[
-                      const Expanded(
+                       Expanded(
                         child: Text(
                           'Proof of delivery',
                           style: TextStyle(
-                            color: _text,
+                            color: AppTheme.resolve(context, _text),
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1807,7 +1819,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     padding: const EdgeInsets.all(10),
                     child: Text(
                       'Swipe to view ${imageUrls.length} proof photos',
-                      style: const TextStyle(color: _muted, fontSize: 12),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                     ),
                   ),
               ],
@@ -1880,11 +1892,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 stop.longitude == location.longitude,
           );
           final Color markerColor = isRider
-              ? const Color(0xFF1976D2)
+              ? AppTheme.resolve(context, const Color(0xFF1976D2))
               : isSeller
-              ? const Color(0xFFB56B32)
+              ? AppTheme.resolve(context, const Color(0xFFB56B32))
               : isDestination
-              ? _maroon
+              ? AppTheme.resolve(context, _maroon)
               : _routeStopColor(stopIndex < 0 ? 0 : stopIndex);
           return _TrackingMapMarkerSpec(
             latitude: location.latitude,
@@ -1945,7 +1957,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               textAnchor: maplibre.TextAnchor.bottom,
               textOffset: <double?>[0, -0.7],
               textSize: 11,
-              textColor: const Color(0xFF342E2E).toARGB32(),
+              textColor: AppTheme.resolve(context, const Color(0xFF342E2E)).toARGB32(),
               textHaloColor: Colors.white.toARGB32(),
               textHaloWidth: 2,
               symbolSortKey: 10,
@@ -2183,7 +2195,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         _roadRouteLine = await manager.create(
           maplibre.PolylineAnnotationOptions(
             geometry: routeLineGeometry,
-            lineColor: _maroon.toARGB32(),
+            lineColor: AppTheme.resolve(context, _maroon).toARGB32(),
             lineWidth: 5,
             lineOpacity: 0.85,
             lineBorderColor: Colors.white.toARGB32(),
@@ -2295,7 +2307,7 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: ShopColors.muted),
+          style:  TextStyle(fontSize: 11, color: AppTheme.resolve(context, ShopColors.muted)),
         ),
       ],
     );

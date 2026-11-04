@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../shared/widgets/shop_ui.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
@@ -13,11 +12,13 @@ import '../../../services/buyer_ai_service.dart';
 class BuyerAiAssistant extends StatefulWidget {
   final String page;
   final String pageTitle;
+  final String workspace;
 
   const BuyerAiAssistant({
     super.key,
     this.page = 'buyer',
     this.pageTitle = 'Buyer portal',
+    this.workspace = 'buyer',
   });
 
   @override
@@ -52,9 +53,10 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
   void initState() {
     super.initState();
     _messages.add(
-      const _BuyerAiMessage(
-        text:
-            "Hi! I'm your LIKHAE Buyer AI Assistant. I can help with products, cart, orders, delivery updates, vouchers, and account features.",
+      _BuyerAiMessage(
+        text: widget.workspace == 'rider'
+            ? "Hi! I'm your LIKHAE Rider Assistant. I can help with assignments, trips, payouts, attendance, and rider settings."
+            : "Hi! I'm your LIKHAE Buyer AI Assistant. I can help with products, cart, orders, delivery updates, vouchers, and account features.",
         fromBuyer: false,
         options: <String>[
           'How do I track my order?',
@@ -88,6 +90,7 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
       final BuyerAiResponse response = await BuyerAiService.chat(
         message: text,
         page: widget.page,
+        workspace: widget.workspace,
       );
       if (!mounted) return;
       if (BuyerSystemSettingsController.instance.aiResponseSound) {
@@ -226,7 +229,9 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
 
     return Semantics(
       button: true,
-      label: _open ? 'Close Buyer AI Assistant' : 'Open Buyer AI Assistant',
+      label: _open
+          ? 'Close ${widget.workspace == 'rider' ? 'Rider' : 'Buyer'} AI Assistant'
+          : 'Open ${widget.workspace == 'rider' ? 'Rider' : 'Buyer'} AI Assistant',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (_) => _startDraggingLauncher(),
@@ -254,7 +259,7 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
                         dimension: _launcherSize - 4,
                         child: ClipOval(
                           child: ColoredBox(
-                            color: Colors.white,
+                            color: AppTheme.resolve(context, Colors.white, fill: true),
                             child: Image.asset(
                               'assets/icons/likhae_ai_logo.png',
                               width: _launcherSize - 4,
@@ -298,8 +303,8 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
                 Container(
                   width: 38,
                   height: 38,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  decoration:  BoxDecoration(
+                    color: AppTheme.resolve(context, Colors.white, fill: true),
                     shape: BoxShape.circle,
                   ),
                   clipBehavior: Clip.antiAlias,

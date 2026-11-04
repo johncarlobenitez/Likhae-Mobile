@@ -640,6 +640,22 @@ class RiderMobileService {
     _requirePayload(response);
   }
 
+  static Future<Map<String, dynamic>> refreshConversationPresence(
+    RiderConversationData conversation,
+  ) async {
+    if (conversation.id.trim().isEmpty) {
+      throw const FormatException('Conversation identifier is missing.');
+    }
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(
+        'rider/messages/${Uri.encodeComponent(conversation.id)}/receipt',
+      ),
+    );
+    final Map<String, dynamic> payload = _requirePayload(response);
+    final dynamic data = payload['data'];
+    return data is Map ? Map<String, dynamic>.from(data) : payload;
+  }
+
   static Future<List<RiderMessageData>> fetchMessages(
     RiderConversationData conversation,
   ) async {
@@ -757,7 +773,12 @@ class RiderMobileService {
       fields['receiver_name'] = request.receiverName!.trim();
     }
     if (action == 'delivery_failed') {
-      fields['attempt_status'] = 'FAILED';
+      fields['attempt_status'] = request.attemptStatus ?? 'FAILED';
+      if (request.nextAttemptAt != null) {
+        fields['next_attempt_at'] = request.nextAttemptAt!
+            .toUtc()
+            .toIso8601String();
+      }
     }
     if (action == 'delivery_success') {
       fields['collected_amount'] = request.collectedAmount!.trim();

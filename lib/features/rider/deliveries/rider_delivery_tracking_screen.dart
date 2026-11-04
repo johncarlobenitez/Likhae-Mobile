@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -14,6 +16,7 @@ import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
 import '../../../core/api/api_client.dart';
 import '../../../core/config/app_config.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/philippine_address_geocoding.dart';
 import '../../../services/rider_mobile_service.dart';
 import 'rider_delivery_models.dart';
 import 'rider_delivery_scan_field.dart';
@@ -106,6 +109,7 @@ class _RiderDeliveryTrackingScreenState
   final TextEditingController _collectionController = TextEditingController();
 
   final TextEditingController _failedReasonController = TextEditingController();
+  DateTime? _nextAttemptAt;
 
   XFile? _proofPhoto;
 
@@ -113,6 +117,8 @@ class _RiderDeliveryTrackingScreenState
   bool _submitting = false;
   bool _refreshingNavigation = false;
   bool _geocodingBuyerLocation = false;
+  String? _buyerLocationError;
+  String? _geocodingAddress;
   Completer<void>? _buyerLocationResolution;
 
   LatLng? _geocodedBuyerLocation;
@@ -274,13 +280,24 @@ class _RiderDeliveryTrackingScreenState
       _lastSyncedRiderLocation = null;
     }
 
-    if (oldWidget.deliveryLocation != widget.deliveryLocation ||
+    final bool destinationChanged =
+        oldWidget.deliveryLocation != widget.deliveryLocation ||
+        oldWidget.delivery?.id != widget.delivery?.id ||
+        oldWidget.delivery?.address != widget.delivery?.address ||
+        oldWidget.delivery?.deliveryLatitude !=
+            widget.delivery?.deliveryLatitude ||
+        oldWidget.delivery?.deliveryLongitude !=
+            widget.delivery?.deliveryLongitude;
+    if (destinationChanged) {
+      _geocodedBuyerLocation = null;
+      _buyerLocationError = null;
+      _lastRouteDestination = null;
+      _resolveBuyerLocation();
+    }
+    if (destinationChanged ||
         oldWidget.riderLocation != widget.riderLocation ||
         oldWidget.delivery != widget.delivery) {
-      _geocodedBuyerLocation = null;
-      _lastRouteDestination = null;
       _syncMapLibreMarkers();
-      _resolveBuyerLocation();
     }
   }
 
@@ -413,7 +430,12 @@ class _RiderDeliveryTrackingScreenState
 
   Future<void> _resolveBuyerLocation() async {
     if (_geocodingBuyerLocation) {
+      final String? pendingAddress = _geocodingAddress;
       await _buyerLocationResolution?.future;
+      if (mounted &&
+          pendingAddress != (widget.delivery?.address.trim() ?? '')) {
+        await _resolveBuyerLocation();
+      }
       return;
     }
 
@@ -426,62 +448,78 @@ class _RiderDeliveryTrackingScreenState
       return;
     }
 
+    final List<String> queries = PhilippineAddressGeocoding.buildQueries(
+      searchText: address,
+    );
+    if (queries.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _buyerLocationError =
+              'The buyer delivery address is incomplete. Update it with a city or province.';
+        });
+      }
+      return;
+    }
+
     final Completer<void> resolution = Completer<void>();
     _buyerLocationResolution = resolution;
+    _geocodingAddress = address;
 
     if (mounted) {
       setState(() {
         _geocodingBuyerLocation = true;
+        _buyerLocationError = null;
       });
     }
 
     try {
-      final Response<dynamic> response = await ApiClient.get(
-        'maps/geocode',
-        queryParameters: <String, dynamic>{'text': address},
-      );
-
-      final List<dynamic> features =
-          response.data?['features'] as List<dynamic>? ?? <dynamic>[];
-      if (features.isEmpty) {
-        return;
+      LatLng? location;
+      for (final String query in queries) {
+        final Response<dynamic> response = await ApiClient.get(
+          'maps/geocode',
+          queryParameters: <String, dynamic>{'text': query},
+          refresh: true,
+        );
+        final String? errorMessage =
+            PhilippineAddressGeocoding.errorMessageForResponse(
+              response.statusCode ?? 500,
+              response.data,
+            );
+        if (errorMessage != null) {
+          throw FormatException(errorMessage);
+        }
+        location = PhilippineAddressGeocoding.locationFromResponse(
+          response.data,
+        );
+        if (location != null) break;
       }
 
-      final Map<String, dynamic> feature = Map<String, dynamic>.from(
-        features.first as Map,
-      );
-      final Map<String, dynamic> geometry = Map<String, dynamic>.from(
-        feature['geometry'] as Map,
-      );
-      final List<dynamic> coordinates =
-          geometry['coordinates'] as List<dynamic>;
-
-      if (coordinates.length < 2) {
-        return;
+      if (location == null) {
+        throw const FormatException(
+          'No matching buyer address was found. Confirm the city and province in the delivery address.',
+        );
       }
-
-      final double? longitude = double.tryParse(coordinates[0].toString());
-      final double? latitude = double.tryParse(coordinates[1].toString());
-
-      if (latitude == null ||
-          longitude == null ||
-          !mounted ||
-          widget.delivery?.address.trim() != address) {
-        return;
-      }
-
+      if (!mounted || widget.delivery?.address.trim() != address) return;
       setState(() {
-        _geocodedBuyerLocation = LatLng(latitude, longitude);
+        _geocodedBuyerLocation = location;
+        _buyerLocationError = null;
       });
       await _syncMapLibreMarkers();
-    } catch (_) {
-      // The map keeps its unavailable state when an address cannot be resolved.
+    } catch (error) {
+      if (mounted && widget.delivery?.address.trim() == address) {
+        setState(() {
+          _buyerLocationError = error is FormatException
+              ? error.message.toString()
+              : 'Unable to look up the buyer address. Check your connection and delivery address.';
+        });
+      }
     } finally {
       if (!resolution.isCompleted) {
         resolution.complete();
       }
       if (identical(_buyerLocationResolution, resolution)) {
         _buyerLocationResolution = null;
+        _geocodingAddress = null;
       }
       if (mounted) {
         setState(() {
@@ -515,7 +553,7 @@ class _RiderDeliveryTrackingScreenState
     canvas.drawCircle(
       const ui.Offset(center, center + 4),
       47,
-      ui.Paint()..color = Colors.black.withAlpha(45),
+      ui.Paint()..color = AppTheme.resolve(context, Colors.black).withAlpha(45),
     );
     canvas.drawCircle(
       const ui.Offset(center, center),
@@ -525,7 +563,7 @@ class _RiderDeliveryTrackingScreenState
     canvas.drawCircle(
       const ui.Offset(center, center),
       39,
-      ui.Paint()..color = _riderColor,
+      ui.Paint()..color = AppTheme.resolve(context, _riderColor),
     );
 
     const IconData riderIcon = Icons.two_wheeler_rounded;
@@ -591,7 +629,7 @@ class _RiderDeliveryTrackingScreenState
           if (destination != null)
             maplibre.CircleAnnotationOptions(
               geometry: _toMapLibrePoint(destination),
-              circleColor: _routeColor.toARGB32(),
+              circleColor: AppTheme.resolve(context, _routeColor).toARGB32(),
               circleRadius: 11,
               circleStrokeColor: Colors.white.toARGB32(),
               circleStrokeWidth: 3,
@@ -600,7 +638,7 @@ class _RiderDeliveryTrackingScreenState
           if (rider != null && !canShowRiderIcon)
             maplibre.CircleAnnotationOptions(
               geometry: _toMapLibrePoint(rider),
-              circleColor: _riderColor.toARGB32(),
+              circleColor: AppTheme.resolve(context, _riderColor).toARGB32(),
               circleRadius: 10,
               circleStrokeColor: Colors.white.toARGB32(),
               circleStrokeWidth: 3,
@@ -755,7 +793,7 @@ class _RiderDeliveryTrackingScreenState
       await manager.create(
         maplibre.PolylineAnnotationOptions(
           geometry: maplibre.LineString(coordinates: positions),
-          lineColor: _routeColor.toARGB32(),
+          lineColor: AppTheme.resolve(context, _routeColor).toARGB32(),
           lineWidth: 5,
           lineOpacity: 0.85,
           lineBorderColor: Colors.white.toARGB32(),
@@ -1033,9 +1071,71 @@ class _RiderDeliveryTrackingScreenState
           delivery: delivery,
           status: 'failed',
           note: reason,
+          attemptStatus: 'FAILED',
         );
 
     await _submitTransition(request);
+  }
+
+  Future<void> _chooseNextAttemptTime() async {
+    final DateTime now = DateTime.now();
+    final DateTime initial = _nextAttemptAt ?? now.add(const Duration(hours: 2));
+    final DateTime? day = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(now) ? now : initial,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+    );
+    if (!mounted || day == null) return;
+    final TimeOfDay? time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (!mounted || time == null) return;
+    final DateTime selected = DateTime(
+      day.year,
+      day.month,
+      day.day,
+      time.hour,
+      time.minute,
+    );
+    if (!selected.isAfter(DateTime.now())) {
+      _showMessage('Choose a time in the future.');
+      return;
+    }
+    setState(() => _nextAttemptAt = selected);
+  }
+
+  Future<void> _recordRescheduledDelivery(
+    RiderDeliveryData delivery,
+  ) async {
+    final String reason = _failedReasonController.text.trim();
+    final DateTime? nextAttemptAt = _nextAttemptAt;
+    if (reason.isEmpty) {
+      _showMessage('Enter the reason for the delivery reschedule.');
+      return;
+    }
+    if (nextAttemptAt == null || !nextAttemptAt.isAfter(DateTime.now())) {
+      _showMessage('Choose a future delivery time.');
+      return;
+    }
+    await _submitTransition(
+      RiderDeliveryTransitionRequest(
+        delivery: delivery,
+        status: 'failed',
+        note: reason,
+        attemptStatus: 'RESCHEDULED',
+        nextAttemptAt: nextAttemptAt,
+      ),
+    );
+  }
+
+  String _formatNextAttemptTime(DateTime value) {
+    final DateTime local = value.toLocal();
+    final MaterialLocalizations localizations = MaterialLocalizations.of(
+      context,
+    );
+    return '${localizations.formatMediumDate(local)} ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
   }
 
   Future<void> _submitTransition(RiderDeliveryTransitionRequest request) async {
@@ -1077,7 +1177,12 @@ class _RiderDeliveryTrackingScreenState
         _locationSyncEnabled = _isActiveDeliveryStatus(request.status);
       });
 
-      _showMessage('Delivery status updated successfully.');
+      _showMessage(
+        request.attemptStatus == 'RESCHEDULED' &&
+                request.nextAttemptAt != null
+            ? 'Delivery rescheduled for ${_formatNextAttemptTime(request.nextAttemptAt!)}.'
+            : 'Delivery status updated successfully.',
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -1112,9 +1217,9 @@ class _RiderDeliveryTrackingScreenState
     }
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -1124,12 +1229,12 @@ class _RiderDeliveryTrackingScreenState
               () {
                 Navigator.of(context).maybePop();
               },
-          icon: const Icon(Icons.arrow_back_rounded, color: _text),
+          icon:  Icon(Icons.arrow_back_rounded, color: AppTheme.resolve(context, _text)),
         ),
-        title: const Text(
+        title:  Text(
           'Delivery Tracking',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 19,
             fontWeight: FontWeight.w900,
           ),
@@ -1168,9 +1273,9 @@ class _RiderDeliveryTrackingScreenState
 
   Widget _buildMissingDelivery() {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
         elevation: 0,
         leading: IconButton(
           onPressed:
@@ -1182,18 +1287,18 @@ class _RiderDeliveryTrackingScreenState
         ),
         title: const Text('Delivery Tracking'),
       ),
-      body: const Center(
+      body:  Center(
         child: Padding(
           padding: EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(Icons.location_off_outlined, color: _mutedLight, size: 52),
+              Icon(Icons.location_off_outlined, color: AppTheme.resolve(context, _mutedLight), size: 52),
               SizedBox(height: 14),
               Text(
                 'Delivery not available',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 19,
                   fontWeight: FontWeight.w900,
                 ),
@@ -1202,7 +1307,7 @@ class _RiderDeliveryTrackingScreenState
               Text(
                 'Open a valid rider delivery to view its tracking information.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.5),
               ),
             ],
           ),
@@ -1215,17 +1320,17 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'LIVE DELIVERY',
             style: TextStyle(
-              color: _maroon,
+              color: AppTheme.resolve(context, _maroon),
               fontSize: 11.5,
               letterSpacing: 1.6,
               fontWeight: FontWeight.w900,
@@ -1234,8 +1339,8 @@ class _RiderDeliveryTrackingScreenState
           const SizedBox(height: 7),
           Text(
             parcel.trackingCode,
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 25,
               height: 1.1,
               fontWeight: FontWeight.w900,
@@ -1244,7 +1349,7 @@ class _RiderDeliveryTrackingScreenState
           const SizedBox(height: 8),
           Text(
             '${parcel.statusLabel} · ${parcel.address}',
-            style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.5),
+            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13.5, height: 1.5),
           ),
         ],
       ),
@@ -1258,7 +1363,7 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.resolve(context, Colors.white, fill: true),
         borderRadius: BorderRadius.circular(20),
         boxShadow: const <BoxShadow>[
           BoxShadow(
@@ -1280,24 +1385,24 @@ class _RiderDeliveryTrackingScreenState
                   height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1E4D7),
+                    color: AppTheme.resolve(context, const Color(0xFFF1E4D7), fill: true),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
+                  child:  Icon(
                     Icons.map_outlined,
-                    color: _maroon,
+                    color: AppTheme.resolve(context, _maroon),
                     size: 20,
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
+                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
                         'Live Delivery Map',
                         style: TextStyle(
-                          color: _text,
+                          color: AppTheme.resolve(context, _text),
                           fontSize: 17,
                           fontWeight: FontWeight.w900,
                         ),
@@ -1305,7 +1410,7 @@ class _RiderDeliveryTrackingScreenState
                       SizedBox(height: 4),
                       Text(
                         'Live rider location and route to the buyer.',
-                        style: TextStyle(color: _muted, fontSize: 12.5),
+                        style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
                       ),
                     ],
                   ),
@@ -1330,15 +1435,15 @@ class _RiderDeliveryTrackingScreenState
                 else
                   Positioned.fill(
                     child: ColoredBox(
-                      color: _soft,
+                      color: AppTheme.resolve(context, _soft, fill: true),
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(
                             'The interactive map is available on Android, iOS, and web.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: _muted,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, _muted),
                               fontSize: 13,
                               height: 1.45,
                               fontWeight: FontWeight.w700,
@@ -1359,7 +1464,7 @@ class _RiderDeliveryTrackingScreenState
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppTheme.resolve(context, Colors.white, fill: true),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: const <BoxShadow>[
                               BoxShadow(
@@ -1371,7 +1476,7 @@ class _RiderDeliveryTrackingScreenState
                           ),
                           child: IconButton(
                             onPressed: () => _zoomMap(1),
-                            icon: const Icon(Icons.add, color: _text),
+                            icon:  Icon(Icons.add, color: AppTheme.resolve(context, _text)),
                             splashRadius: 20,
                             padding: EdgeInsets.zero,
                           ),
@@ -1381,7 +1486,7 @@ class _RiderDeliveryTrackingScreenState
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppTheme.resolve(context, Colors.white, fill: true),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: const <BoxShadow>[
                               BoxShadow(
@@ -1393,7 +1498,7 @@ class _RiderDeliveryTrackingScreenState
                           ),
                           child: IconButton(
                             onPressed: () => _zoomMap(-1),
-                            icon: const Icon(Icons.remove, color: _text),
+                            icon:  Icon(Icons.remove, color: AppTheme.resolve(context, _text)),
                             splashRadius: 20,
                             padding: EdgeInsets.zero,
                           ),
@@ -1408,10 +1513,22 @@ class _RiderDeliveryTrackingScreenState
                         child: Card(
                           child: Padding(
                             padding: const EdgeInsets.all(12),
-                            child: Text(
-                              _geocodingBuyerLocation
-                                  ? 'Finding buyer location...'
-                                  : 'Waiting for buyer location',
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 300),
+                              child: Text(
+                                _geocodingBuyerLocation
+                                    ? 'Finding buyer location...'
+                                    : _buyerLocationError ??
+                                          'Waiting for buyer location',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: _buyerLocationError == null
+                                      ? AppTheme.resolve(context, _text)
+                                      : AppTheme.resolve(context, _danger),
+                                  fontSize: 12.5,
+                                  height: 1.4,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -1428,13 +1545,13 @@ class _RiderDeliveryTrackingScreenState
               runSpacing: 8,
               children: <Widget>[
                 _MapLegendDot(
-                  color: _maroon,
+                  color: AppTheme.resolve(context, _maroon),
                   label: hasDestination
                       ? 'Buyer location'
                       : 'Buyer location unavailable',
                 ),
                 _MapLegendRider(
-                  color: _riderColor,
+                  color: AppTheme.resolve(context, _riderColor),
                   label: hasRider
                       ? 'Current rider location'
                       : 'Rider GPS unavailable',
@@ -1459,7 +1576,7 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.resolve(context, Colors.white, fill: true),
         borderRadius: BorderRadius.circular(20),
         boxShadow: const <BoxShadow>[
           BoxShadow(
@@ -1472,10 +1589,10 @@ class _RiderDeliveryTrackingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'Tracking Timeline',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
@@ -1509,13 +1626,13 @@ class _RiderDeliveryTrackingScreenState
                           height: 12,
                           decoration: BoxDecoration(
                             color: isCurrent || isDone
-                                ? _maroon
-                                : const Color(0xFFEDE4DC),
+                                ? AppTheme.resolve(context, _maroon, fill: true)
+                                : AppTheme.resolve(context, const Color(0xFFEDE4DC), fill: true),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: isCurrent || isDone
-                                  ? _maroon
-                                  : const Color(0xFFD9CFC3),
+                                  ? AppTheme.resolve(context, _maroon)
+                                  : AppTheme.resolve(context, const Color(0xFFD9CFC3)),
                               width: 2,
                             ),
                           ),
@@ -1524,7 +1641,7 @@ class _RiderDeliveryTrackingScreenState
                           Container(
                             width: 2,
                             height: 34,
-                            color: const Color(0xFFD9CFC3),
+                            color: AppTheme.resolve(context, const Color(0xFFD9CFC3), fill: true),
                           ),
                       ],
                     ),
@@ -1534,7 +1651,7 @@ class _RiderDeliveryTrackingScreenState
                     child: Text(
                       step.label,
                       style: TextStyle(
-                        color: isCurrent || isDone ? _text : _muted,
+                        color: isCurrent || isDone ? AppTheme.resolve(context, _text) : AppTheme.resolve(context, _muted),
                         fontSize: 15,
                         fontWeight: isCurrent || isDone
                             ? FontWeight.w700
@@ -1555,17 +1672,17 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'Recipient',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
@@ -1592,17 +1709,17 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text(
+           Text(
             'Delivery Actions',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
@@ -1689,7 +1806,7 @@ class _RiderDeliveryTrackingScreenState
                       },
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _success,
+                  backgroundColor: AppTheme.resolve(context, _success, fill: true),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -1714,7 +1831,7 @@ class _RiderDeliveryTrackingScreenState
 
             const SizedBox(height: 18),
 
-            const Divider(color: _border, height: 1),
+             Divider(color: AppTheme.resolve(context, _border), height: 1),
 
             const SizedBox(height: 18),
 
@@ -1740,9 +1857,9 @@ class _RiderDeliveryTrackingScreenState
                         _recordFailedDelivery(parcel);
                       },
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _danger,
-                  backgroundColor: const Color(0xFFFFF3F2),
-                  side: const BorderSide(color: Color(0xFFF5B7B1)),
+                  foregroundColor: AppTheme.resolve(context, _danger),
+                  backgroundColor: AppTheme.resolve(context, const Color(0xFFFFF3F2), fill: true),
+                  side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFF5B7B1))),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -1752,6 +1869,27 @@ class _RiderDeliveryTrackingScreenState
                   'Record Delivery Failed',
                   style: TextStyle(fontWeight: FontWeight.w900),
                 ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _submitting ? null : _chooseNextAttemptTime,
+              icon: const Icon(Icons.event_available_outlined),
+              label: Text(
+                _nextAttemptAt == null
+                    ? 'Choose a new delivery time'
+                    : 'Scheduled: ${_formatNextAttemptTime(_nextAttemptAt!)}',
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 50,
+              child: FilledButton.tonalIcon(
+                onPressed: _submitting
+                    ? null
+                    : () => _recordRescheduledDelivery(parcel),
+                icon: const Icon(Icons.schedule_send_outlined),
+                label: const Text('Record Failed & Reschedule'),
               ),
             ),
           ],
@@ -1777,9 +1915,9 @@ class _RiderDeliveryTrackingScreenState
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           decoration: BoxDecoration(
-            color: const Color(0xFFFCF9F5),
+            color: AppTheme.resolve(context, const Color(0xFFFCF9F5), fill: true),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _border),
+            border: Border.all(color: AppTheme.resolve(context, _border)),
           ),
           child: Column(
             children: <Widget>[
@@ -1787,22 +1925,22 @@ class _RiderDeliveryTrackingScreenState
                 width: 54,
                 height: 54,
                 alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF1E4D7),
+                decoration:  BoxDecoration(
+                  color: AppTheme.resolve(context, Color(0xFFF1E4D7), fill: true),
                   shape: BoxShape.circle,
                 ),
                 child: _takingPhoto
-                    ? const SizedBox(
+                    ?  SizedBox(
                         width: 23,
                         height: 23,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          color: _maroon,
+                          color: AppTheme.resolve(context, _maroon),
                         ),
                       )
-                    : const Icon(
+                    :  Icon(
                         Icons.photo_camera_outlined,
-                        color: _maroon,
+                        color: AppTheme.resolve(context, _maroon),
                         size: 27,
                       ),
               ),
@@ -1811,17 +1949,17 @@ class _RiderDeliveryTrackingScreenState
                 _takingPhoto
                     ? 'Capturing and watermarking...'
                     : 'Take Proof of Delivery',
-                style: const TextStyle(
-                  color: _text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 5),
-              const Text(
+               Text(
                 'Take a clear photo showing that the parcel was delivered.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.45),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -1838,9 +1976,9 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1848,7 +1986,7 @@ class _RiderDeliveryTrackingScreenState
           AspectRatio(
             aspectRatio: 4 / 3,
             child: ColoredBox(
-              color: _soft,
+              color: AppTheme.resolve(context, _soft, fill: true),
               child: Image.file(
                 File(photo.path),
                 fit: BoxFit.contain,
@@ -1858,11 +1996,11 @@ class _RiderDeliveryTrackingScreenState
                       Object error,
                       StackTrace? stackTrace,
                     ) {
-                      return const Center(
+                      return  Center(
                         child: Icon(
                           Icons.broken_image_outlined,
                           size: 40,
-                          color: _mutedLight,
+                          color: AppTheme.resolve(context, _mutedLight),
                         ),
                       );
                     },
@@ -1873,17 +2011,17 @@ class _RiderDeliveryTrackingScreenState
             padding: const EdgeInsets.all(12),
             child: Row(
               children: <Widget>[
-                const Icon(
+                 Icon(
                   Icons.check_circle_rounded,
-                  color: _success,
+                  color: AppTheme.resolve(context, _success),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                 Expanded(
                   child: Text(
                     'Proof of delivery photo captured',
                     style: TextStyle(
-                      color: _text,
+                      color: AppTheme.resolve(context, _text),
                       fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1892,14 +2030,14 @@ class _RiderDeliveryTrackingScreenState
                 IconButton(
                   tooltip: 'Take another photo',
                   onPressed: _submitting ? null : _takeProofPhoto,
-                  icon: const Icon(Icons.photo_camera_outlined, color: _maroon),
+                  icon:  Icon(Icons.photo_camera_outlined, color: AppTheme.resolve(context, _maroon)),
                 ),
                 IconButton(
                   tooltip: 'Remove proof',
                   onPressed: _submitting ? null : _removeProofPhoto,
-                  icon: const Icon(
+                  icon:  Icon(
                     Icons.delete_outline_rounded,
-                    color: _danger,
+                    color: AppTheme.resolve(context, _danger),
                   ),
                 ),
               ],
@@ -1928,12 +2066,12 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: _soft,
+        color: AppTheme.resolve(context, _soft, fill: true),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         message,
-        style: const TextStyle(color: _muted, fontSize: 12.5, height: 1.45),
+        style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5, height: 1.45),
       ),
     );
   }
@@ -1947,17 +2085,17 @@ class _RiderDeliveryTrackingScreenState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text(
+           Text(
             'Actions',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
@@ -1973,7 +2111,7 @@ class _RiderDeliveryTrackingScreenState
                     },
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: _maroon,
+                backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -2026,22 +2164,22 @@ class _RiderDeliveryTrackingScreenState
   }) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: _mutedLight, fontSize: 13),
-      prefixIcon: Icon(prefixIcon, color: _muted, size: 20),
+      hintStyle:  TextStyle(color: AppTheme.resolve(context, _mutedLight), fontSize: 13),
+      prefixIcon: Icon(prefixIcon, color: AppTheme.resolve(context, _muted), size: 20),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AppTheme.resolve(context, Colors.white, fill: true),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _maroon, width: 1.4),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _danger),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _danger)),
       ),
     );
   }
@@ -2085,9 +2223,9 @@ class _TrackingStepCard extends StatelessWidget {
           height: 12,
           margin: const EdgeInsets.only(top: 3),
           decoration: BoxDecoration(
-            color: active ? _accent : _inactive,
+            color: active ? AppTheme.resolve(context, _accent, fill: true) : AppTheme.resolve(context, _inactive, fill: true),
             shape: BoxShape.circle,
-            border: Border.all(color: active ? _accent : _line, width: 2),
+            border: Border.all(color: active ? AppTheme.resolve(context, _accent) : AppTheme.resolve(context, _line), width: 2),
           ),
         ),
         const SizedBox(width: 10),
@@ -2098,7 +2236,7 @@ class _TrackingStepCard extends StatelessWidget {
               Text(
                 step.label,
                 style: TextStyle(
-                  color: active ? _text : _muted,
+                  color: active ? AppTheme.resolve(context, _text) : AppTheme.resolve(context, _muted),
                   fontSize: 15,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                 ),
@@ -2110,8 +2248,8 @@ class _TrackingStepCard extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   delivery.failureReason!,
-                  style: const TextStyle(
-                    color: _muted,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _muted),
                     fontSize: 12,
                     height: 1.45,
                   ),
@@ -2173,7 +2311,7 @@ class _PrimaryActionButton extends StatelessWidget {
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: const Color(0xFF561C17),
+          backgroundColor: AppTheme.resolve(context, const Color(0xFF561C17), fill: true),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -2215,8 +2353,8 @@ class _TrackingActionButton extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF3B211B),
-          side: const BorderSide(color: Color(0xFFEADCCC)),
+          foregroundColor: AppTheme.resolve(context, const Color(0xFF3B211B)),
+          side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFEADCCC))),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -2242,8 +2380,8 @@ class _InfoRow extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(
-            color: Color(0xFF987865),
+          style:  TextStyle(
+            color: AppTheme.resolve(context, Color(0xFF987865)),
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
           ),
@@ -2251,8 +2389,8 @@ class _InfoRow extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           value,
-          style: const TextStyle(
-            color: Color(0xFF3B211B),
+          style:  TextStyle(
+            color: AppTheme.resolve(context, Color(0xFF3B211B)),
             fontSize: 13.5,
             height: 1.45,
             fontWeight: FontWeight.w800,
@@ -2283,7 +2421,7 @@ class _MapLegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(color: Color(0xFF766C65), fontSize: 11),
+          style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF766C65)), fontSize: 11),
         ),
       ],
     );
@@ -2316,7 +2454,7 @@ class _MapLegendRider extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(color: Color(0xFF766C65), fontSize: 11),
+          style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF766C65)), fontSize: 11),
         ),
       ],
     );
@@ -2331,20 +2469,20 @@ class _TrackingPreviewNotice extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6EFE7),
+        color: AppTheme.resolve(context, const Color(0xFFF6EFE7), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEADCCC)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
       ),
-      child: const Row(
+      child:  Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.visibility_outlined, color: Color(0xFF561C17), size: 19),
+          Icon(Icons.visibility_outlined, color: AppTheme.resolve(context, Color(0xFF561C17)), size: 19),
           SizedBox(width: 8),
           Expanded(
             child: Text(
               'Sample tracking preview only. Sample locations are not stored in Laravel. Real shipment data and GPS coordinates will come from the backend.',
               style: TextStyle(
-                color: Color(0xFF987865),
+                color: AppTheme.resolve(context, Color(0xFF987865)),
                 fontSize: 12.5,
                 height: 1.5,
                 fontWeight: FontWeight.w600,

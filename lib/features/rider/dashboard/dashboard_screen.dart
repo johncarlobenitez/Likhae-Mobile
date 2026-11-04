@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../deliveries/rider_delivery_models.dart';
@@ -121,11 +123,11 @@ class RiderDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          color: _maroon,
+          color: AppTheme.resolve(context, _maroon),
           onRefresh: () async {
             await onRefresh?.call();
           },
@@ -139,20 +141,20 @@ class RiderDashboardScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _topBar(),
+                      _topBar(context),
                       const SizedBox(height: 22),
                       if (statusMessage?.trim().isNotEmpty == true) ...[
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFF1F0),
+                            color: AppTheme.resolve(context, const Color(0xFFFFF1F0), fill: true),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
                             statusMessage!,
-                            style: const TextStyle(
-                              color: Color(0xFFB42318),
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, Color(0xFFB42318)),
                               fontSize: 12,
                               height: 1.5,
                             ),
@@ -160,33 +162,33 @@ class RiderDashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 14),
                       ],
-                      _welcomeCard(),
+                      _welcomeCard(context),
                       const SizedBox(height: 14),
-                      _pickupCard(),
+                      _pickupCard(context),
                       const SizedBox(height: 28),
-                      const Text(
+                       Text(
                         'Delivery overview',
                         style: TextStyle(
-                          color: _text,
+                          color: AppTheme.resolve(context, _text),
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 5),
-                      const Text(
+                       Text(
                         'A quick look at your assigned deliveries.',
                         style: TextStyle(
-                          color: _muted,
+                          color: AppTheme.resolve(context, _muted),
                           fontSize: 12,
                           height: 1.5,
                         ),
                       ),
                       const SizedBox(height: 14),
-                      _statistics(),
+                      _statistics(context),
                       const SizedBox(height: 14),
-                      _earningsShortcut(),
+                      _earningsShortcut(context),
                       const SizedBox(height: 28),
-                      _recentParcels(),
+                      _recentParcels(context),
                     ],
                   ),
                 ),
@@ -198,14 +200,14 @@ class RiderDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _topBar() {
+  Widget _topBar(BuildContext context) {
     return Row(
       children: [
         Container(
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon, fill: true),
             borderRadius: BorderRadius.circular(14),
           ),
           child: const Icon(
@@ -215,14 +217,14 @@ class RiderDashboardScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        const Expanded(
+         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'LIKHAE',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 17,
                   letterSpacing: 2,
                   fontWeight: FontWeight.w900,
@@ -231,7 +233,7 @@ class RiderDashboardScreen extends StatelessWidget {
               SizedBox(height: 2),
               Text(
                 'Rider dashboard',
-                style: TextStyle(color: _muted, fontSize: 11),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
               ),
             ],
           ),
@@ -239,18 +241,18 @@ class RiderDashboardScreen extends StatelessWidget {
         IconButton(
           tooltip: 'Messages',
           onPressed: onOpenMessages,
-          icon: const Icon(
+          icon:  Icon(
             Icons.chat_bubble_outline_rounded,
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             size: 22,
           ),
         ),
         IconButton(
           tooltip: 'Notifications',
           onPressed: onOpenNotifications,
-          icon: const Icon(
+          icon:  Icon(
             Icons.notifications_none_rounded,
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             size: 24,
           ),
         ),
@@ -258,22 +260,22 @@ class RiderDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _welcomeCard() {
+  Widget _welcomeCard(BuildContext context) {
     final name = riderName.trim();
     final firstName = name.isEmpty ? '' : name.split(RegExp(r'\s+')).first;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [_maroon, Color(0xFF793D2F)],
+        gradient:  LinearGradient(
+          colors: [AppTheme.resolve(context, _maroon, fill: true), AppTheme.resolve(context, Color(0xFF793D2F), fill: true)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: _maroon.withValues(alpha: 0.13),
+            color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.13),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -286,8 +288,8 @@ class RiderDashboardScreen extends StatelessWidget {
             firstName.isEmpty
                 ? 'YOUR DAY AT A GLANCE'
                 : 'HELLO, ${firstName.toUpperCase()}',
-            style: const TextStyle(
-              color: Color(0xFFEBD5BF),
+            style:  TextStyle(
+              color: AppTheme.resolve(context, Color(0xFFEBD5BF)),
               fontSize: 11,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
@@ -305,10 +307,10 @@ class RiderDashboardScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+           Text(
             'Your pickups, deliveries, and progress\nin one place.',
             style: TextStyle(
-              color: Color(0xFFEBD5BF),
+              color: AppTheme.resolve(context, Color(0xFFEBD5BF)),
               fontSize: 12.5,
               height: 1.6,
             ),
@@ -319,10 +321,10 @@ class RiderDashboardScreen extends StatelessWidget {
             icon: const Icon(Icons.qr_code_scanner_rounded, size: 19),
             label: const Text('Scan a parcel'),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFF7E8D8),
-              foregroundColor: _maroon,
-              disabledBackgroundColor: const Color(0xFFF7E8D8),
-              disabledForegroundColor: _muted,
+              backgroundColor: AppTheme.resolve(context, const Color(0xFFF7E8D8), fill: true),
+              foregroundColor: AppTheme.resolve(context, _maroon),
+              disabledBackgroundColor: AppTheme.resolve(context, const Color(0xFFF7E8D8), fill: true),
+              disabledForegroundColor: AppTheme.resolve(context, _muted),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               textStyle: const TextStyle(
                 fontWeight: FontWeight.w800,
@@ -338,10 +340,10 @@ class RiderDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _pickupCard() {
+  Widget _pickupCard(BuildContext context) {
     final count = _count('pickup');
     return Material(
-      color: const Color(0xFFF3E8DB),
+      color: AppTheme.resolve(context, const Color(0xFFF3E8DB), fill: true),
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -353,12 +355,12 @@ class RiderDashboardScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: _surface,
+                  color: AppTheme.resolve(context, _surface, fill: true),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: const Icon(
+                child:  Icon(
                   Icons.storefront_outlined,
-                  color: _maroon,
+                  color: AppTheme.resolve(context, _maroon),
                   size: 23,
                 ),
               ),
@@ -369,8 +371,8 @@ class RiderDashboardScreen extends StatelessWidget {
                   children: [
                     Text(
                       '$count pickup ${count == 1 ? 'batch' : 'batches'}',
-                      style: const TextStyle(
-                        color: _text,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                       ),
@@ -380,8 +382,8 @@ class RiderDashboardScreen extends StatelessWidget {
                       count == 0
                           ? 'New seller pickups will appear here'
                           : 'View your seller pickup tasks',
-                      style: const TextStyle(
-                        color: _muted,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _muted),
                         fontSize: 11.5,
                         height: 1.4,
                       ),
@@ -390,7 +392,7 @@ class RiderDashboardScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_rounded, color: _maroon, size: 20),
+               Icon(Icons.arrow_forward_rounded, color: AppTheme.resolve(context, _maroon), size: 20),
             ],
           ),
         ),
@@ -398,31 +400,31 @@ class RiderDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _statistics() {
+  Widget _statistics(BuildContext context) {
     final cards = <({String label, int count, IconData icon, Color color})>[
       (
         label: 'Assigned',
         count: _count('assigned parcels'),
         icon: Icons.assignment_outlined,
-        color: _maroon,
+        color: AppTheme.resolve(context, _maroon),
       ),
       (
         label: 'In transit',
         count: _count('in transit'),
         icon: Icons.local_shipping_outlined,
-        color: const Color(0xFF946514),
+        color: AppTheme.resolve(context, const Color(0xFF946514)),
       ),
       (
         label: 'Out for delivery',
         count: _count('out for delivery'),
         icon: Icons.near_me_outlined,
-        color: const Color(0xFF38658C),
+        color: AppTheme.resolve(context, const Color(0xFF38658C)),
       ),
       (
         label: 'Completed today',
         count: _count('completed today'),
         icon: Icons.task_alt_rounded,
-        color: const Color(0xFF28724D),
+        color: AppTheme.resolve(context, const Color(0xFF28724D)),
       ),
     ];
     return LayoutBuilder(
@@ -442,10 +444,10 @@ class RiderDashboardScreen extends StatelessWidget {
               SizedBox(
                 width: width,
                 child: Material(
-                  color: _surface,
+                  color: AppTheme.resolve(context, _surface, fill: true),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(19),
-                    side: const BorderSide(color: _border),
+                    side:  BorderSide(color: AppTheme.resolve(context, _border)),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
@@ -474,8 +476,8 @@ class RiderDashboardScreen extends StatelessWidget {
                                 child: Text(
                                   '${card.count}',
                                   textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    color: _text,
+                                  style:  TextStyle(
+                                    color: AppTheme.resolve(context, _text),
                                     fontSize: 28,
                                     fontWeight: FontWeight.w800,
                                     height: 1.1,
@@ -487,8 +489,8 @@ class RiderDashboardScreen extends StatelessWidget {
                           const SizedBox(height: 16),
                           Text(
                             card.label,
-                            style: const TextStyle(
-                              color: _muted,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, _muted),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -505,23 +507,23 @@ class RiderDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _earningsShortcut() {
+  Widget _earningsShortcut(BuildContext context) {
     return Material(
-      color: _surface,
+      color: AppTheme.resolve(context, _surface, fill: true),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(17),
-        side: const BorderSide(color: _border),
+        side:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onOpenEarnings,
-        child: const Padding(
+        child:  Padding(
           padding: EdgeInsets.all(16),
           child: Row(
             children: [
               Icon(
                 Icons.account_balance_wallet_outlined,
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 size: 22,
               ),
               SizedBox(width: 12),
@@ -529,13 +531,13 @@ class RiderDashboardScreen extends StatelessWidget {
                 child: Text(
                   'View my earnings',
                   style: TextStyle(
-                    color: _text,
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              Icon(Icons.arrow_forward_rounded, color: _muted, size: 18),
+              Icon(Icons.arrow_forward_rounded, color: AppTheme.resolve(context, _muted), size: 18),
             ],
           ),
         ),
@@ -543,17 +545,17 @@ class RiderDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _recentParcels() {
+  Widget _recentParcels(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Expanded(
+             Expanded(
               child: Text(
                 'Recent parcels',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                 ),
@@ -561,7 +563,7 @@ class RiderDashboardScreen extends StatelessWidget {
             ),
             TextButton(
               onPressed: onViewAllShipments,
-              style: TextButton.styleFrom(foregroundColor: _maroon),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.resolve(context, _maroon)),
               child: const Text(
                 'View all',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
@@ -574,21 +576,21 @@ class RiderDashboardScreen extends StatelessWidget {
           width: double.infinity,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: _surface,
+            color: AppTheme.resolve(context, _surface, fill: true),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: _border),
+            border: Border.all(color: AppTheme.resolve(context, _border)),
           ),
           child: recentParcels.isEmpty
-              ? const Padding(
+              ?  Padding(
                   padding: EdgeInsets.symmetric(horizontal: 26, vertical: 34),
                   child: Column(
                     children: [
-                      Icon(Icons.inventory_2_outlined, color: _muted, size: 36),
+                      Icon(Icons.inventory_2_outlined, color: AppTheme.resolve(context, _muted), size: 36),
                       SizedBox(height: 14),
                       Text(
                         'All clear for now',
                         style: TextStyle(
-                          color: _text,
+                          color: AppTheme.resolve(context, _text),
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                         ),
@@ -598,7 +600,7 @@ class RiderDashboardScreen extends StatelessWidget {
                         'Your recent parcels will appear here\nwhen deliveries are assigned to you.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: _muted,
+                          color: AppTheme.resolve(context, _muted),
                           fontSize: 12,
                           height: 1.6,
                         ),
@@ -609,8 +611,8 @@ class RiderDashboardScreen extends StatelessWidget {
               : Column(
                   children: [
                     for (int i = 0; i < recentParcels.length; i++) ...[
-                      if (i > 0) const Divider(height: 1, color: _border),
-                      _parcelCard(recentParcels[i]),
+                      if (i > 0)  Divider(height: 1, color: AppTheme.resolve(context, _border)),
+                      _parcelCard(context, recentParcels[i]),
                     ],
                   ],
                 ),
@@ -619,13 +621,13 @@ class RiderDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _parcelCard(RiderDashboardParcelData parcel) {
+  Widget _parcelCard(BuildContext context, RiderDashboardParcelData parcel) {
     final status = parcel.status.toLowerCase();
     final color = status == 'delivered'
-        ? const Color(0xFF28724D)
+        ? AppTheme.resolve(context, const Color(0xFF28724D))
         : status.contains('fail')
-        ? const Color(0xFFB42318)
-        : _maroon;
+        ? AppTheme.resolve(context, const Color(0xFFB42318))
+        : AppTheme.resolve(context, _maroon);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -646,8 +648,8 @@ class RiderDashboardScreen extends StatelessWidget {
                       children: [
                         Text(
                           parcel.trackingCode,
-                          style: const TextStyle(
-                            color: _text,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, _text),
                             fontSize: 12.5,
                             fontWeight: FontWeight.w800,
                           ),
@@ -657,7 +659,7 @@ class RiderDashboardScreen extends StatelessWidget {
                           parcel.buyerName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: _text, fontSize: 12),
+                          style:  TextStyle(color: AppTheme.resolve(context, _text), fontSize: 12),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -666,8 +668,8 @@ class RiderDashboardScreen extends StatelessWidget {
                               : parcel.address,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _muted,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, _muted),
                             fontSize: 11.5,
                             height: 1.5,
                           ),
@@ -701,9 +703,9 @@ class RiderDashboardScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  const Icon(
+                   Icon(
                     Icons.arrow_forward_rounded,
-                    color: _muted,
+                    color: AppTheme.resolve(context, _muted),
                     size: 17,
                   ),
                 ],

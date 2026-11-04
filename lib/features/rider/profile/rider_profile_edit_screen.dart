@@ -1,6 +1,9 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +11,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
 
+import '../../../core/api/api_client.dart';
+import '../../../services/philippine_address_geocoding.dart';
 import '../../../services/philippine_address_service.dart';
 import '../../../services/rider_mobile_service.dart';
 import '../../auth/register_screen.dart' show AddressOption;
@@ -45,6 +50,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   final TextEditingController _houseNumber = TextEditingController();
   final TextEditingController _street = TextEditingController();
   final TextEditingController _landmark = TextEditingController();
+  final TextEditingController _addressSearch = TextEditingController();
   final TextEditingController _currentPassword = TextEditingController();
   final TextEditingController _newPassword = TextEditingController();
   final TextEditingController _confirmPassword = TextEditingController();
@@ -65,6 +71,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   String? _profilePhotoFileName;
   bool _loadingAddressOptions = false;
   bool _loadingPostalCode = false;
+  bool _findingAddress = false;
   bool _usingDeviceLocation = false;
   bool _pinConfirmed = false;
   bool _savingProfile = false;
@@ -73,6 +80,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   bool _savingPassword = false;
   bool _addressChanged = false;
   bool _hasSaved = false;
+  int _addressEditRevision = 0;
   String? _addressError;
 
   bool get _canShowMap =>
@@ -118,6 +126,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     _houseNumber.dispose();
     _street.dispose();
     _landmark.dispose();
+    _addressSearch.dispose();
     _currentPassword.dispose();
     _newPassword.dispose();
     _confirmPassword.dispose();
@@ -336,9 +345,90 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
 
   void _markAddressChanged() {
     _addressChanged = true;
+    _addressEditRevision++;
     _pinConfirmed = false;
     _selectedLocation = null;
+    _addressError = null;
     unawaited(_syncAddressMarker());
+  }
+
+  Future<void> _findAddress() async {
+    if (_findingAddress) return;
+    final List<String> queries = PhilippineAddressGeocoding.buildQueries(
+      searchText: _addressSearch.text,
+      houseNumber: _houseNumber.text,
+      street: _street.text,
+      landmark: _landmark.text,
+      barangay: _barangay?.name ?? '',
+      municipality: _municipality?.name ?? '',
+      province: _province?.name ?? '',
+      region: _region?.name ?? '',
+    );
+
+    if (queries.isEmpty) {
+      setState(() {
+        _addressError =
+            'Enter a street, barangay, city, or province first, then search to place the pin.';
+      });
+      return;
+    }
+
+    final int editRevision = _addressEditRevision;
+    setState(() {
+      _findingAddress = true;
+      _addressError = null;
+    });
+
+    try {
+      LatLng? location;
+      for (final String query in queries) {
+        final Response<dynamic> response = await ApiClient.get(
+          'maps/geocode',
+          queryParameters: <String, dynamic>{'text': query},
+          refresh: true,
+        );
+        if (!mounted || editRevision != _addressEditRevision) return;
+
+        final String? errorMessage =
+            PhilippineAddressGeocoding.errorMessageForResponse(
+              response.statusCode ?? 500,
+              response.data,
+            );
+        if (errorMessage != null) throw FormatException(errorMessage);
+
+        location = PhilippineAddressGeocoding.locationFromResponse(
+          response.data,
+        );
+        if (location != null) break;
+      }
+
+      if (!mounted || editRevision != _addressEditRevision) return;
+      if (location == null) {
+        throw const FormatException(
+          'No matching address was found. Check the street and city, or tap the map to place the pin manually.',
+        );
+      }
+
+      setState(() {
+        _selectedLocation = location;
+        _pinConfirmed = true;
+        _addressError = null;
+      });
+      await _map?.setCamera(
+        maplibre.CameraOptions(center: _mapPoint(location), zoom: 16),
+      );
+      await _syncAddressMarker();
+    } catch (error) {
+      if (mounted && editRevision == _addressEditRevision) {
+        setState(() {
+          _addressError = error is FormatException
+              ? error.message.toString()
+              : 'Unable to look up the address. Check your connection or pin the map manually.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _findingAddress = false);
+    }
   }
 
   Future<void> _pickProfilePhoto() async {
@@ -535,7 +625,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
         geometry: maplibre.Point(
           coordinates: maplibre.Position(location.longitude, location.latitude),
         ),
-        circleColor: _maroon.toARGB32(),
+        circleColor: AppTheme.resolve(context, _maroon).toARGB32(),
         circleRadius: 10,
         circleStrokeColor: Colors.white.toARGB32(),
         circleStrokeWidth: 3,
@@ -553,7 +643,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: error ? const Color(0xFF9D3029) : _maroon,
+          backgroundColor: error ? AppTheme.resolve(context, const Color(0xFF9D3029), fill: true) : AppTheme.resolve(context, _maroon, fill: true),
         ),
       );
   }
@@ -574,10 +664,10 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     final RiderResidentialAddressData? address = _profile.residentialAddress;
     final LatLng mapCenter = _selectedLocation ?? _defaultMapCenter;
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _surface,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _surface, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         title: const Text('Edit Rider Account'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
@@ -589,29 +679,29 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
           children: <Widget>[
-            const Text(
+             Text(
               'ACCOUNT MANAGEMENT',
               style: TextStyle(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 fontSize: 10,
                 letterSpacing: 1.6,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
+             Text(
               'Your rider profile',
               style: TextStyle(
-                color: _text,
+                color: AppTheme.resolve(context, _text),
                 fontSize: 27,
                 height: 1.1,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 7),
-            const Text(
+             Text(
               'Changes saved here will appear on your LIKHAE web account too.',
-              style: TextStyle(color: _muted, fontSize: 12.5, height: 1.5),
+              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5, height: 1.5),
             ),
             const SizedBox(height: 16),
             _panel(
@@ -665,7 +755,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                         padding: const EdgeInsets.only(bottom: 14),
                         child: Text(
                           'Birthday: ${_profile.birthday} · Status: ${_profile.status}',
-                          style: const TextStyle(color: _muted, fontSize: 11.5),
+                          style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
                         ),
                       ),
                     _saveButton(
@@ -787,27 +877,71 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                       onChanged: (_) => _markAddressChanged(),
                     ),
                     const SizedBox(height: 4),
-                    _buildMap(mapCenter),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _usingDeviceLocation
-                          ? null
-                          : _useDeviceLocation,
-                      icon: _usingDeviceLocation
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.my_location_rounded, size: 18),
-                      label: const Text('Use device location for the pin'),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Find exact location',
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _text),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _addressSearch,
+                      textInputAction: TextInputAction.search,
+                      onChanged: (_) => _addressEditRevision++,
+                      onSubmitted: (_) => _findAddress(),
+                      decoration: _inputDecoration(
+                        hintText: 'Search barangay, street, landmark, or address',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: <Widget>[
+                        OutlinedButton.icon(
+                          onPressed: _findingAddress || _usingDeviceLocation
+                              ? null
+                              : _findAddress,
+                          icon: _findingAddress
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.search_rounded, size: 18),
+                          label: const Text('Search & pin'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _findingAddress || _usingDeviceLocation
+                              ? null
+                              : _useDeviceLocation,
+                          icon: _usingDeviceLocation
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.my_location_rounded, size: 18),
+                          label: const Text('Use device location'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _buildMap(mapCenter),
                     const SizedBox(height: 9),
                     Text(
                       _selectedLocation == null
                           ? 'Tap the map to pin the exact residential address.'
                           : 'Pinned location: ${_selectedLocation!.latitude.toStringAsFixed(5)}, ${_selectedLocation!.longitude.toStringAsFixed(5)}',
                       style: TextStyle(
-                        color: _pinConfirmed ? const Color(0xFF2D705C) : _muted,
+                        color: _pinConfirmed ? AppTheme.resolve(context, const Color(0xFF2D705C)) : AppTheme.resolve(context, _muted),
                         fontSize: 11.5,
                         height: 1.45,
                       ),
@@ -816,8 +950,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                       const SizedBox(height: 8),
                       Text(
                         _addressError!,
-                        style: const TextStyle(
-                          color: Color(0xFFB42318),
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, Color(0xFFB42318)),
                           fontSize: 11.5,
                         ),
                       ),
@@ -833,8 +967,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                         padding: const EdgeInsets.only(top: 10),
                         child: Text(
                           'Current address: ${address!.formatted}',
-                          style: const TextStyle(
-                            color: _muted,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, _muted),
                             fontSize: 11,
                             height: 1.4,
                           ),
@@ -905,15 +1039,15 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
       children: <Widget>[
         CircleAvatar(
           radius: 32,
-          backgroundColor: _maroonSoft,
+          backgroundColor: AppTheme.resolve(context, _maroonSoft, fill: true),
           backgroundImage: _newProfilePhoto != null
               ? MemoryImage(_newProfilePhoto!)
               : existingImage,
           child: _newProfilePhoto == null && existingImage == null
               ? Text(
                   _profile.initials,
-                  style: const TextStyle(
-                    color: _maroon,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _maroon),
                     fontWeight: FontWeight.w900,
                   ),
                 )
@@ -924,18 +1058,18 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const Text(
+               Text(
                 'Profile photo',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 3),
-              const Text(
+               Text(
                 'JPG, PNG, or WebP · maximum 5 MB',
-                style: TextStyle(color: _muted, fontSize: 11),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
               ),
               const SizedBox(height: 7),
               OutlinedButton(
@@ -958,13 +1092,13 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
         alignment: Alignment.center,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFFF1ECE8),
+          color: AppTheme.resolve(context, const Color(0xFFF1ECE8), fill: true),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: const Text(
+        child:  Text(
           'Interactive address maps are available on Android, iOS, and web. You can also use device location to set the address pin.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.45),
         ),
       );
     }
@@ -998,8 +1132,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
         children: <Widget>[
           Text(
             label,
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 11,
               fontWeight: FontWeight.w800,
             ),
@@ -1047,8 +1181,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
         children: <Widget>[
           Text(
             label,
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 11,
               fontWeight: FontWeight.w800,
             ),
@@ -1072,9 +1206,9 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   InputDecoration _inputDecoration({required String hintText}) =>
       InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(color: _muted, fontSize: 12),
+        hintStyle:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
         filled: true,
-        fillColor: _surface,
+        fillColor: AppTheme.resolve(context, _surface, fill: true),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -1082,15 +1216,15 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
+          borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
+          borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _maroon, width: 1.3),
+          borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.3),
         ),
       );
 
@@ -1103,9 +1237,9 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1113,7 +1247,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(icon, color: _maroon, size: 20),
+              Icon(icon, color: AppTheme.resolve(context, _maroon), size: 20),
               const SizedBox(width: 9),
               Expanded(
                 child: Column(
@@ -1121,8 +1255,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                   children: <Widget>[
                     Text(
                       title,
-                      style: const TextStyle(
-                        color: _text,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1130,8 +1264,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
-                      style: const TextStyle(
-                        color: _muted,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _muted),
                         fontSize: 11,
                         height: 1.4,
                       ),
@@ -1157,14 +1291,14 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
           width: 125,
           child: Text(
             label,
-            style: const TextStyle(color: _muted, fontSize: 11.5),
+            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -1184,7 +1318,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
       child: FilledButton(
         onPressed: saving ? null : onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: _maroon,
+          backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),

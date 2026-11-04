@@ -1,4 +1,7 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/motion_effects.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../scanner/rider_parcel_scan_result.dart';
 
@@ -350,10 +353,10 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -365,10 +368,10 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
               },
           icon: const Icon(Icons.arrow_back_rounded),
         ),
-        title: const Text(
+        title:  Text(
           'Pickup Details',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 19,
             fontWeight: FontWeight.w900,
           ),
@@ -414,17 +417,17 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'PICKUP DETAILS',
             style: TextStyle(
-              color: _maroon,
+              color: AppTheme.resolve(context, _maroon),
               fontSize: 11.5,
               letterSpacing: 1.7,
               fontWeight: FontWeight.w900,
@@ -435,8 +438,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           Text(
             _pickup.trackingCode,
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 25,
               height: 1.1,
               fontWeight: FontWeight.w900,
@@ -447,7 +450,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           Text(
             '${_pickup.statusLabel} - Seller: ${_pickup.sellerName}',
-            style: const TextStyle(color: _muted, fontSize: 13.5, height: 1.5),
+            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13.5, height: 1.5),
           ),
         ],
       ),
@@ -459,17 +462,17 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
+           Text(
             'Parcel Information',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
@@ -503,17 +506,17 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text(
+           Text(
             'Pickup Actions',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 17,
               fontWeight: FontWeight.w900,
             ),
@@ -568,22 +571,22 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color: _successSoft,
+                color: AppTheme.resolve(context, _successSoft, fill: true),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFB7DFC5)),
+                border: Border.all(color: AppTheme.resolve(context, const Color(0xFFB7DFC5))),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Icon(Icons.verified_rounded, color: _success, size: 20),
+                   Icon(Icons.verified_rounded, color: AppTheme.resolve(context, _success), size: 20),
 
                   const SizedBox(width: 8),
 
                   Expanded(
                     child: Text(
                       'Parcel Verified: ${_pickup.trackingCode}',
-                      style: const TextStyle(
-                        color: _success,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _success),
                         fontSize: 12.5,
                         height: 1.4,
                         fontWeight: FontWeight.w800,
@@ -605,22 +608,22 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
           ],
 
           if (_pickup.isInProgress && !_verified)
-            const Text(
+             Text(
               'Scan and verify the seller\'s waybill before confirming collection.',
-              style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
+              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.5),
             ),
 
           if (_pickup.isPickedUp)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _successSoft,
+                color: AppTheme.resolve(context, _successSoft, fill: true),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text(
+              child:  Text(
                 'Pickup completed and recorded. The parcel will continue through the logistics center workflow.',
                 style: TextStyle(
-                  color: _success,
+                  color: AppTheme.resolve(context, _success),
                   fontSize: 12.5,
                   height: 1.5,
                   fontWeight: FontWeight.w700,
@@ -632,13 +635,13 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _warningSoft,
+                color: AppTheme.resolve(context, _warningSoft, fill: true),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 'Current pickup status: ${_pickup.statusLabel}',
-                style: const TextStyle(
-                  color: _warning,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _warning),
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                 ),
@@ -661,8 +664,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _text,
-                side: const BorderSide(color: _border),
+                foregroundColor: AppTheme.resolve(context, _text),
+                side:  BorderSide(color: AppTheme.resolve(context, _border)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -679,9 +682,9 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -694,26 +697,26 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                 height: 42,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: _warningSoft,
+                  color: AppTheme.resolve(context, _warningSoft, fill: true),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
+                child:  Icon(
                   Icons.qr_code_scanner_rounded,
-                  color: _warning,
+                  color: AppTheme.resolve(context, _warning),
                   size: 22,
                 ),
               ),
 
               const SizedBox(width: 10),
 
-              const Expanded(
+               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       'Scan Parcel At Seller',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
@@ -724,7 +727,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                     Text(
                       'The tracking code must match this pickup assignment. Scanning alone does not mark the parcel picked up.',
                       style: TextStyle(
-                        color: _muted,
+                        color: AppTheme.resolve(context, _muted),
                         fontSize: 12,
                         height: 1.45,
                       ),
@@ -745,7 +748,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                   : _openScanner,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: _maroon,
+                backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -761,16 +764,16 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
           const SizedBox(height: 14),
 
-          const Row(
+           Row(
             children: <Widget>[
-              Expanded(child: Divider(color: _border)),
+              Expanded(child: Divider(color: AppTheme.resolve(context, _border))),
 
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: 10),
                 child: Text(
                   'OR ENTER TRACKING CODE',
                   style: TextStyle(
-                    color: _muted,
+                    color: AppTheme.resolve(context, _muted),
                     fontSize: 10,
                     letterSpacing: 0.7,
                     fontWeight: FontWeight.w800,
@@ -778,7 +781,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                 ),
               ),
 
-              Expanded(child: Divider(color: _border)),
+              Expanded(child: Divider(color: AppTheme.resolve(context, _border))),
             ],
           ),
 
@@ -795,18 +798,18 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
               hintText: 'Tracking code',
               prefixIcon: const Icon(Icons.confirmation_number_outlined),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: AppTheme.resolve(context, Colors.white, fill: true),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 14,
                 vertical: 14,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: _border),
+                borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: _maroon, width: 1.4),
+                borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.4),
               ),
             ),
             onChanged: (String value) {
@@ -830,19 +833,19 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                   ? null
                   : _verifyParcel,
               style: OutlinedButton.styleFrom(
-                foregroundColor: _maroon,
-                side: const BorderSide(color: _border),
+                foregroundColor: AppTheme.resolve(context, _maroon),
+                side:  BorderSide(color: AppTheme.resolve(context, _border)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               icon: _verifying
-                  ? const SizedBox(
+                  ?  SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: _maroon,
+                        color: AppTheme.resolve(context, _maroon),
                       ),
                     )
                   : const Icon(Icons.verified_outlined),
@@ -859,12 +862,12 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _successSoft,
+                color: AppTheme.resolve(context, _successSoft, fill: true),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child:  Row(
                 children: <Widget>[
-                  Icon(Icons.check_circle_rounded, color: _success, size: 20),
+                  Icon(Icons.check_circle_rounded, color: AppTheme.resolve(context, _success), size: 20),
 
                   SizedBox(width: 8),
 
@@ -872,7 +875,7 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                     child: Text(
                       'Parcel verified successfully.',
                       style: TextStyle(
-                        color: _success,
+                        color: AppTheme.resolve(context, _success),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -889,16 +892,16 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _dangerSoft,
+                color: AppTheme.resolve(context, _dangerSoft, fill: true),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF5C5C1)),
+                border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF5C5C1))),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Icon(
+                   Icon(
                     Icons.error_outline_rounded,
-                    color: _danger,
+                    color: AppTheme.resolve(context, _danger),
                     size: 20,
                   ),
 
@@ -907,8 +910,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
                   Expanded(
                     child: Text(
                       _verificationError!,
-                      style: const TextStyle(
-                        color: _danger,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _danger),
                         fontSize: 12.5,
                         height: 1.45,
                         fontWeight: FontWeight.w700,
@@ -929,16 +932,16 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _successSoft,
+        color: AppTheme.resolve(context, _successSoft, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFB7DFC5)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFB7DFC5))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(
+           Icon(
             Icons.check_circle_outline_rounded,
-            color: _success,
+            color: AppTheme.resolve(context, _success),
             size: 20,
           ),
 
@@ -947,8 +950,8 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: _success,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _success),
                 fontSize: 13,
                 height: 1.45,
                 fontWeight: FontWeight.w700,
@@ -1016,9 +1019,9 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppTheme.resolve(context, Colors.black, fill: true),
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppTheme.resolve(context, Colors.black, fill: true),
         foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
@@ -1051,6 +1054,8 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
             ),
           ),
 
+          Positioned.fill(child: AppScanBeam(active: !_handled,
+            frameSize: const Size(260, 180))),
           Positioned(
             left: 18,
             right: 18,
@@ -1093,7 +1098,7 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
 
   Widget _buildCameraError(BuildContext context, MobileScannerException error) {
     return Container(
-      color: Colors.black,
+      color: AppTheme.resolve(context, Colors.black, fill: true),
       alignment: Alignment.center,
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1150,15 +1155,15 @@ class _PickupInfoRow extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(color: Color(0xFF987865), fontSize: 11.5),
+          style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF987865)), fontSize: 11.5),
         ),
 
         const SizedBox(height: 3),
 
         Text(
           value,
-          style: const TextStyle(
-            color: Color(0xFF3B211B),
+          style:  TextStyle(
+            color: AppTheme.resolve(context, Color(0xFF3B211B)),
             fontSize: 13.5,
             height: 1.45,
             fontWeight: FontWeight.w800,
@@ -1193,7 +1198,7 @@ class _PickupPrimaryButton extends StatelessWidget {
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: const Color(0xFF561C17),
+          backgroundColor: AppTheme.resolve(context, const Color(0xFF561C17), fill: true),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),

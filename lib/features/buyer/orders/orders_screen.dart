@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -1914,7 +1916,7 @@ class BuyerOrderReturnRequest {
     required this.issueCategory,
     required this.issueReason,
     required this.description,
-    this.refundMethod = 'original_payment_method',
+    this.refundMethod = 'cash',
     required this.quantitiesByItem,
     required this.buyerEmail,
     required this.evidence,
@@ -1925,6 +1927,10 @@ typedef CancelOrderCallback =
     Future<void> Function(BuyerOrderData order, String reason, String note);
 
 typedef ReceiveOrderCallback = Future<void> Function(BuyerOrderData order);
+typedef ConfirmShipmentCallback = Future<void> Function(
+  BuyerOrderData order,
+  BuyerOrderParcelData shipment,
+);
 typedef ConfirmOrderDeliveryPinCallback =
     Future<void> Function(
       BuyerOrderData order,
@@ -1996,6 +2002,7 @@ class OrdersScreen extends StatefulWidget {
 
   final CancelOrderCallback? onCancelOrder;
   final ReceiveOrderCallback? onReceiveOrder;
+  final ConfirmShipmentCallback? onConfirmShipmentReceived;
   final ConfirmOrderDeliveryPinCallback? onConfirmDeliveryPin;
   final BuyAgainCallback? onBuyAgain;
 
@@ -2036,6 +2043,7 @@ class OrdersScreen extends StatefulWidget {
     this.onOpenHelpCenter,
     this.onCancelOrder,
     this.onReceiveOrder,
+    this.onConfirmShipmentReceived,
     this.onConfirmDeliveryPin,
     this.onBuyAgain,
     this.onSubmitReview,
@@ -2085,6 +2093,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String? _selectedReviewProductId;
 
   bool _receivingOrder = false;
+  final Set<String> _confirmingShipmentIds = <String>{};
   final Set<String> _confirmingDeliveryPinOrderIds = <String>{};
   bool _submittingReview = false;
   String? _reviewNotice;
@@ -2110,7 +2119,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   String? _returnIssueCategory;
   String? _returnReason;
-  String _returnRefundMethod = 'original_payment_method';
+  String _returnRefundMethod = 'cash';
   final Map<String, int> _returnQuantities = <String, int>{};
   List<XFile> _returnEvidence = <XFile>[];
   bool _confirmReturnCashTerms = false;
@@ -2787,7 +2796,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
       _returnIssueCategory = null;
       _returnReason = null;
-      _returnRefundMethod = 'original_payment_method';
+      _returnRefundMethod = 'cash';
       _returnQuantities.clear();
       _returnEvidence = <XFile>[];
       _confirmReturnCashTerms = false;
@@ -2972,17 +2981,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          backgroundColor: _surface,
+          backgroundColor: AppTheme.resolve(context, _surface, fill: true),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
-          title: const Text(
+          title:  Text(
             'Confirm receipt?',
-            style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+            style: TextStyle(color: AppTheme.resolve(context, _text), fontWeight: FontWeight.w800),
           ),
-          content: const Text(
+          content:  Text(
             'Confirm only after the parcel has actually been delivered to you.',
-            style: TextStyle(color: _muted, fontSize: 14, height: 1.5),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 14, height: 1.5),
           ),
           actions: [
             TextButton(
@@ -2997,7 +3006,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               },
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: _maroon,
+                backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                 foregroundColor: Colors.white,
               ),
               child: const Text('Order Received'),
@@ -3049,6 +3058,57 @@ class _OrdersScreenState extends State<OrdersScreen> {
       }
     }
   }
+
+  Future<void> _confirmShipmentReceived(
+    BuyerOrderData order,
+    BuyerOrderParcelData shipment,
+  ) async {
+    final ConfirmShipmentCallback? callback =
+        widget.onConfirmShipmentReceived;
+    if (callback == null) {
+      _showMessage('Shipment receipt confirmation is unavailable.', error: true);
+      return;
+    }
+    if (!_isDeliveredShipment(shipment)) {
+      _showMessage('You can confirm a parcel only after it is delivered.', error: true);
+      return;
+    }
+    if (_confirmingShipmentIds.contains(shipment.id)) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('Confirm this parcel?'),
+        content: Text(
+          'Confirm receipt of ${shipment.trackingNumber?.trim().isNotEmpty == true ? shipment.trackingNumber : 'this delivered parcel'} only after it has arrived.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Confirm receipt'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _confirmingShipmentIds.add(shipment.id));
+    try {
+      await callback(order, shipment);
+      await _refresh();
+      if (mounted) _showMessage('Parcel receipt confirmed.');
+    } catch (error) {
+      if (mounted) _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) setState(() => _confirmingShipmentIds.remove(shipment.id));
+    }
+  }
+
+  bool _isDeliveredShipment(BuyerOrderParcelData shipment) =>
+      shipment.status.trim().toLowerCase().replaceAll(RegExp(r'[-\s]+'), '_') ==
+      'delivered';
 
   Future<void> _showCancelDialog(BuyerOrderData order) async {
     if (!order.canCancel) {
@@ -3151,8 +3211,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 top: false,
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(18, 10, 18, 22),
-                  decoration: const BoxDecoration(
-                    color: _surface,
+                  decoration:  BoxDecoration(
+                    color: AppTheme.resolve(context, _surface, fill: true),
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(26),
                     ),
@@ -3167,7 +3227,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             width: 42,
                             height: 4,
                             decoration: BoxDecoration(
-                              color: _border,
+                              color: AppTheme.resolve(context, _border, fill: true),
                               borderRadius: BorderRadius.circular(100),
                             ),
                           ),
@@ -3175,10 +3235,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
                         const SizedBox(height: 18),
 
-                        const Text(
+                         Text(
                           'CANCELLATION',
                           style: TextStyle(
-                            color: _maroon,
+                            color: AppTheme.resolve(context, _maroon),
                             fontSize: 11,
                             letterSpacing: 1.6,
                             fontWeight: FontWeight.w800,
@@ -3187,10 +3247,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
                         const SizedBox(height: 7),
 
-                        const Text(
+                         Text(
                           'If Laravel no longer allows cancellation when this request reaches the server, the order will remain active.',
                           style: TextStyle(
-                            color: _muted,
+                            color: AppTheme.resolve(context, _muted),
                             fontSize: 12.5,
                             height: 1.5,
                           ),
@@ -3256,8 +3316,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                         Navigator.of(sheetContext).pop();
                                       },
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: _maroon,
-                                  side: const BorderSide(color: _tan),
+                                  foregroundColor: AppTheme.resolve(context, _maroon),
+                                  side:  BorderSide(color: AppTheme.resolve(context, _tan)),
                                   minimumSize: const Size.fromHeight(48),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(13),
@@ -3276,7 +3336,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                     : submitCancellation,
                                 style: ElevatedButton.styleFrom(
                                   elevation: 0,
-                                  backgroundColor: _danger,
+                                  backgroundColor: AppTheme.resolve(context, _danger, fill: true),
                                   foregroundColor: Colors.white,
                                   minimumSize: const Size.fromHeight(48),
                                   shape: RoundedRectangleBorder(
@@ -3396,6 +3456,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Future<void> _submitReturn() async {
+    if (_submittingReturn) return;
     final BuyerOrderData? order = _selectedOrder;
 
     if (order == null) {
@@ -3517,7 +3578,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
           _returnSubmissionError = message;
         });
       }
-      _showMessage(message, error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -3537,7 +3597,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : _maroonDark,
+          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -3564,19 +3624,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
         : null;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       bottomNavigationBar: detailOrder == null
           ? null
           : _buildDetailsBottomBar(detailOrder),
       body: SafeArea(
-        bottom: false,
+        bottom: _mode == BuyerOrdersMode.returnRequest,
         child: Column(
           children: [
             _buildTopBar(),
 
             Expanded(
               child: RefreshIndicator(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refresh,
                 child: _buildCurrentMode(),
               ),
@@ -3816,13 +3876,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: ShopColors.accentSoft,
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               borderRadius: BorderRadius.circular(100),
             ),
-            child: const Text(
+            child:  Text(
               'ORDER CENTER',
               style: TextStyle(
-                color: _maroonDark,
+                color: AppTheme.resolve(context, _maroonDark),
                 fontSize: 9,
                 letterSpacing: 1.1,
                 fontWeight: FontWeight.w800,
@@ -3831,10 +3891,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
+         Text(
           'My Orders',
           style: TextStyle(
-            color: Color(0xFF432A25),
+            color: AppTheme.resolve(context, Color(0xFF432A25)),
             fontFamily: 'serif',
             fontSize: 36,
             height: 1.05,
@@ -3843,10 +3903,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
         ),
         const SizedBox(height: 3),
-        const Text(
+         Text(
           'Track fulfillment and confirm receipt after delivery.',
           style: TextStyle(
-            color: Color(0xFF8A7163),
+            color: AppTheme.resolve(context, Color(0xFF8A7163)),
             fontSize: 11.5,
             height: 1.4,
           ),
@@ -3870,7 +3930,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           final bool selected = tab == _activeTab;
 
           return Material(
-            color: selected ? _maroon : _surface,
+            color: selected ? AppTheme.resolve(context, _maroon, fill: true) : AppTheme.resolve(context, _surface, fill: true),
             borderRadius: BorderRadius.circular(11),
             child: InkWell(
               onTap: () {
@@ -3882,7 +3942,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 13),
                 decoration: BoxDecoration(
-                  border: Border.all(color: selected ? _maroon : _border),
+                  border: Border.all(color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border)),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 alignment: Alignment.center,
@@ -3891,7 +3951,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     Text(
                       tab.label,
                       style: TextStyle(
-                        color: selected ? Colors.white : _text,
+                        color: selected ? Colors.white : AppTheme.resolve(context, _text),
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
@@ -3904,7 +3964,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       style: TextStyle(
                         color: selected
                             ? Colors.white.withValues(alpha: 0.75)
-                            : _muted,
+                            : AppTheme.resolve(context, _muted),
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -3929,25 +3989,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
             Container(
               width: 70,
               height: 70,
-              decoration: const BoxDecoration(
-                color: ShopColors.accentSoft,
+              decoration:  BoxDecoration(
+                color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: const Icon(
+              child:  Icon(
                 Icons.receipt_long_outlined,
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 size: 31,
               ),
             ),
 
             const SizedBox(height: 18),
 
-            const Text(
+             Text(
               'No orders in this section',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: _text,
+                color: AppTheme.resolve(context, _text),
                 fontSize: 19,
                 fontWeight: FontWeight.w800,
               ),
@@ -3955,10 +4015,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
             const SizedBox(height: 7),
 
-            const Text(
+             Text(
               'Orders matching this status will appear here.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: _muted, fontSize: 12.5),
+              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
             ),
 
             const SizedBox(height: 19),
@@ -3966,8 +4026,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             OutlinedButton.icon(
               onPressed: widget.onShopProducts,
               style: OutlinedButton.styleFrom(
-                foregroundColor: _maroon,
-                side: const BorderSide(color: _tan),
+                foregroundColor: AppTheme.resolve(context, _maroon),
+                side:  BorderSide(color: AppTheme.resolve(context, _tan)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -3993,21 +4053,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
             width: 70,
             height: 70,
             decoration: BoxDecoration(
-              color: ShopColors.accentSoft,
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               borderRadius: BorderRadius.circular(21),
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.check_rounded, size: 38, color: _maroon),
+            child:  Icon(Icons.check_rounded, size: 38, color: AppTheme.resolve(context, _maroon)),
           ),
         ),
 
         const SizedBox(height: 20),
 
-        const Text(
+         Text(
           'ORDER PLACED',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             fontSize: 11,
             letterSpacing: 1.8,
             fontWeight: FontWeight.w800,
@@ -4016,11 +4076,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
         const SizedBox(height: 7),
 
-        const Text(
+         Text(
           'Thank you for your order',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 25,
             fontWeight: FontWeight.w800,
           ),
@@ -4028,10 +4088,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
         const SizedBox(height: 9),
 
-        const Text(
+         Text(
           'Your order was submitted successfully. Open My Orders to follow its current payment, preparation, shipment, and delivery status.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _muted, fontSize: 13, height: 1.55),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.55),
         ),
 
         const SizedBox(height: 24),
@@ -4042,7 +4102,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             onPressed: _openIndex,
             style: ElevatedButton.styleFrom(
               elevation: 0,
-              backgroundColor: _maroon,
+              backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(13),
@@ -4062,8 +4122,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           child: OutlinedButton(
             onPressed: widget.onShopProducts,
             style: OutlinedButton.styleFrom(
-              foregroundColor: _maroon,
-              side: const BorderSide(color: _tan),
+              foregroundColor: AppTheme.resolve(context, _maroon),
+              side:  BorderSide(color: AppTheme.resolve(context, _tan)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(13),
               ),
@@ -4100,6 +4160,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
         const SizedBox(height: 12),
         _buildBuyerProductsCard(order),
         const SizedBox(height: 12),
+        if (order.parcels.isNotEmpty ||
+            order.sellerOrders.any((BuyerSellerOrderData seller) => seller.parcels.isNotEmpty)) ...<Widget>[
+          _buildShipmentsCard(order),
+          const SizedBox(height: 12),
+        ],
         _buildBuyerSupportCard(order),
         const SizedBox(height: 12),
         _buildBuyerOrderInfoCard(order),
@@ -4122,13 +4187,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: ShopColors.accentSoft,
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               borderRadius: BorderRadius.circular(13),
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child:  Icon(
               Icons.receipt_long_outlined,
-              color: ShopColors.accent,
+              color: AppTheme.resolve(context, ShopColors.accent),
               size: 21,
             ),
           ),
@@ -4137,10 +4202,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                 Text(
                   'ORDER SUMMARY',
                   style: TextStyle(
-                    color: ShopColors.muted,
+                    color: AppTheme.resolve(context, ShopColors.muted),
                     fontSize: 10,
                     letterSpacing: 1.1,
                     fontWeight: FontWeight.w800,
@@ -4153,8 +4218,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       : 'Tracking ID pending',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
@@ -4163,8 +4228,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   const SizedBox(height: 3),
                   Text(
                     _formatDetailDate(order.createdAt!),
-                    style: const TextStyle(
-                      color: ShopColors.muted,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.muted),
                       fontSize: 11.5,
                     ),
                   ),
@@ -4183,10 +4248,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
       'delivered',
       'completed',
     }.contains(order.normalizedStatus);
-    final Color statusColor = delivered ? const Color(0xFF168548) : _maroon;
+    final Color statusColor = delivered ? AppTheme.resolve(context, const Color(0xFF168548)) : AppTheme.resolve(context, _maroon);
     final Color statusBackground = delivered
-        ? const Color(0xFFEAF6EE)
-        : ShopColors.accentSoft;
+        ? AppTheme.resolve(context, const Color(0xFFEAF6EE))
+        : AppTheme.resolve(context, ShopColors.accentSoft);
 
     return _BuyerDetailCard(
       padding: EdgeInsets.zero,
@@ -4206,13 +4271,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: ShopColors.accentSoft,
+                      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(
+                    child:  Icon(
                       Icons.local_shipping_outlined,
-                      color: ShopColors.accent,
+                      color: AppTheme.resolve(context, ShopColors.accent),
                       size: 20,
                     ),
                   ),
@@ -4221,10 +4286,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                         Text(
                           'Shipping information',
                           style: TextStyle(
-                            color: ShopColors.text,
+                            color: AppTheme.resolve(context, ShopColors.text),
                             fontSize: 14,
                             fontWeight: FontWeight.w800,
                           ),
@@ -4236,8 +4301,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               : 'Tracking number will appear after shipment.',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.muted,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.muted),
                             fontSize: 11.5,
                           ),
                         ),
@@ -4245,9 +4310,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     ),
                   ),
                   if (widget.onTrackOrder != null)
-                    const Icon(
+                     Icon(
                       Icons.chevron_right_rounded,
-                      color: ShopColors.faint,
+                      color: AppTheme.resolve(context, ShopColors.faint),
                       size: 23,
                     ),
                 ],
@@ -4291,8 +4356,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           latestEvent?.time.trim().isNotEmpty == true
                               ? latestEvent!.time
                               : 'Shipment update pending',
-                          style: const TextStyle(
-                            color: ShopColors.muted,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.muted),
                             fontSize: 11.5,
                           ),
                         ),
@@ -4300,8 +4365,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           const SizedBox(height: 4),
                           Text(
                             latestEvent!.details,
-                            style: const TextStyle(
-                              color: ShopColors.muted,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.muted),
                               fontSize: 11.5,
                               height: 1.4,
                             ),
@@ -4314,16 +4379,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ),
             ),
           ),
-          const Divider(height: 1, indent: 15, endIndent: 15, color: _border),
+           Divider(height: 1, indent: 15, endIndent: 15, color: AppTheme.resolve(context, _border)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 13, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                 Text(
                   'DELIVER TO',
                   style: TextStyle(
-                    color: ShopColors.muted,
+                    color: AppTheme.resolve(context, ShopColors.muted),
                     fontSize: 10,
                     letterSpacing: 1,
                     fontWeight: FontWeight.w800,
@@ -4337,13 +4402,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       width: 34,
                       height: 34,
                       decoration: BoxDecoration(
-                        color: ShopColors.soft,
+                        color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                         borderRadius: BorderRadius.circular(11),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(
+                      child:  Icon(
                         Icons.location_on_outlined,
-                        color: ShopColors.secondaryText,
+                        color: AppTheme.resolve(context, ShopColors.secondaryText),
                         size: 19,
                       ),
                     ),
@@ -4356,8 +4421,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             order.buyerName.trim().isEmpty
                                 ? 'Buyer'
                                 : order.buyerName,
-                            style: const TextStyle(
-                              color: ShopColors.text,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.text),
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                             ),
@@ -4367,8 +4432,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             const SizedBox(height: 2),
                             Text(
                               order.buyerContact!,
-                              style: const TextStyle(
-                                color: ShopColors.muted,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, ShopColors.muted),
                                 fontSize: 11.5,
                               ),
                             ),
@@ -4378,8 +4443,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             order.shippingAddress.trim().isEmpty
                                 ? 'No delivery address recorded.'
                                 : order.shippingAddress,
-                            style: const TextStyle(
-                              color: ShopColors.secondaryText,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.secondaryText),
                               fontSize: 11.5,
                               height: 1.45,
                             ),
@@ -4429,13 +4494,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     width: 37,
                     height: 37,
                     decoration: BoxDecoration(
-                      color: ShopColors.accentSoft,
+                      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(
+                    child:  Icon(
                       Icons.storefront_outlined,
-                      color: ShopColors.accent,
+                      color: AppTheme.resolve(context, ShopColors.accent),
                       size: 19,
                     ),
                   ),
@@ -4444,10 +4509,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                         Text(
                           'SOLD BY',
                           style: TextStyle(
-                            color: ShopColors.muted,
+                            color: AppTheme.resolve(context, ShopColors.muted),
                             fontSize: 9.5,
                             letterSpacing: 1,
                             fontWeight: FontWeight.w800,
@@ -4460,8 +4525,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               : 'Likhae Marketplace',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.text,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.text),
                             fontSize: 13.5,
                             fontWeight: FontWeight.w800,
                           ),
@@ -4469,9 +4534,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       ],
                     ),
                   ),
-                  const Icon(
+                   Icon(
                     Icons.chevron_right_rounded,
-                    color: ShopColors.faint,
+                    color: AppTheme.resolve(context, ShopColors.faint),
                     size: 23,
                   ),
                 ],
@@ -4479,13 +4544,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ),
           ),
           if (order.products.isEmpty)
-            const Padding(
+             Padding(
               padding: EdgeInsets.fromLTRB(16, 14, 16, 20),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'No products recorded for this order.',
-                  style: TextStyle(color: _muted, fontSize: 12.5),
+                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
                 ),
               ),
             )
@@ -4503,9 +4568,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
-            decoration: const BoxDecoration(
-              color: Color(0xFFFAF7F4),
-              border: Border(top: BorderSide(color: _border)),
+            decoration:  BoxDecoration(
+              color: AppTheme.resolve(context, Color(0xFFFAF7F4), fill: true),
+              border: Border(top: BorderSide(color: AppTheme.resolve(context, _border))),
             ),
             child: Row(
               children: [
@@ -4513,10 +4578,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                       Text(
                         'Order total',
                         style: TextStyle(
-                          color: ShopColors.text,
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -4524,8 +4589,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       const SizedBox(height: 2),
                       Text(
                         '$totalQuantity ${totalQuantity == 1 ? 'item' : 'items'}',
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 11,
                         ),
                       ),
@@ -4534,8 +4599,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ),
                 Text(
                   _formatPrice(order.total),
-                  style: const TextStyle(
-                    color: ShopColors.accentDark,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.accentDark),
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
@@ -4554,20 +4619,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+           Padding(
             padding: EdgeInsets.fromLTRB(16, 15, 16, 8),
             child: Row(
               children: [
                 Icon(
                   Icons.support_agent_rounded,
-                  color: ShopColors.accent,
+                  color: AppTheme.resolve(context, ShopColors.accent),
                   size: 19,
                 ),
                 SizedBox(width: 8),
                 Text(
                   'Need help?',
                   style: TextStyle(
-                    color: ShopColors.text,
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                   ),
@@ -4581,7 +4646,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             subtitle: order.returnRequestSubtitle,
             onTap: order.canRequestReturn ? () => _openReturn(order) : null,
           ),
-          const Divider(height: 1, indent: 58, endIndent: 14, color: _border),
+           Divider(height: 1, indent: 58, endIndent: 14, color: AppTheme.resolve(context, _border)),
           _BuyerDetailActionRow(
             icon: Icons.forum_outlined,
             title: 'Contact seller',
@@ -4594,7 +4659,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               _showMessage('Seller messaging is currently unavailable.');
             },
           ),
-          const Divider(height: 1, indent: 58, endIndent: 14, color: _border),
+           Divider(height: 1, indent: 58, endIndent: 14, color: AppTheme.resolve(context, _border)),
           _BuyerDetailActionRow(
             icon: Icons.help_outline_rounded,
             title: 'Help center',
@@ -4612,6 +4677,67 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
+  Widget _buildShipmentsCard(BuyerOrderData order) {
+    final List<BuyerOrderParcelData> shipments = order.parcels.isNotEmpty
+        ? order.parcels
+        : order.sellerOrders
+              .expand((BuyerSellerOrderData sellerOrder) => sellerOrder.parcels)
+              .toList(growable: false);
+    return _BuyerDetailCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'PARCELS',
+            style: TextStyle(
+              color: AppTheme.resolve(context, ShopColors.muted),
+              fontSize: 10,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (int index = 0; index < shipments.length; index++) ...<Widget>[
+            if (index > 0) Divider(color: AppTheme.resolve(context, _border)),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.local_shipping_outlined,
+                color: AppTheme.resolve(context, ShopColors.accent),
+              ),
+              title: Text(
+                shipments[index].trackingNumber?.trim().isNotEmpty == true
+                    ? shipments[index].trackingNumber!
+                    : 'Parcel ${index + 1}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                shipments[index].statusLabel.trim().isNotEmpty
+                    ? shipments[index].statusLabel
+                    : shipments[index].status,
+              ),
+              trailing: _isDeliveredShipment(shipments[index]) &&
+                      widget.onConfirmShipmentReceived != null
+                  ? TextButton(
+                      onPressed: _confirmingShipmentIds.contains(shipments[index].id)
+                          ? null
+                          : () => _confirmShipmentReceived(order, shipments[index]),
+                      child: Text(
+                        _confirmingShipmentIds.contains(shipments[index].id)
+                            ? 'Saving…'
+                            : 'Received',
+                      ),
+                    )
+                  : null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildBuyerOrderInfoCard(BuyerOrderData order) {
     final String trackingId = order.tracking?.trim() ?? '';
 
@@ -4619,10 +4745,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+           Text(
             'Payment details',
             style: TextStyle(
-              color: ShopColors.text,
+              color: AppTheme.resolve(context, ShopColors.text),
               fontSize: 14,
               fontWeight: FontWeight.w800,
             ),
@@ -4631,14 +4757,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
           Container(
             padding: const EdgeInsets.fromLTRB(11, 10, 7, 10),
             decoration: BoxDecoration(
-              color: ShopColors.soft,
+              color: AppTheme.resolve(context, ShopColors.soft, fill: true),
               borderRadius: BorderRadius.circular(13),
             ),
             child: Row(
               children: [
-                const Icon(
+                 Icon(
                   Icons.tag_rounded,
-                  color: ShopColors.secondaryText,
+                  color: AppTheme.resolve(context, ShopColors.secondaryText),
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -4646,10 +4772,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                       Text(
                         'TRACKING ID',
                         style: TextStyle(
-                          color: ShopColors.muted,
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 9,
                           letterSpacing: .9,
                           fontWeight: FontWeight.w800,
@@ -4660,8 +4786,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         trackingId.isEmpty ? 'Not assigned yet' : trackingId,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ShopColors.text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -4674,7 +4800,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       ? null
                       : () => _copyTrackingId(trackingId),
                   style: TextButton.styleFrom(
-                    foregroundColor: ShopColors.accentDark,
+                    foregroundColor: AppTheme.resolve(context, ShopColors.accentDark),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     minimumSize: const Size(48, 38),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -4779,9 +4905,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: _border)),
+        decoration:  BoxDecoration(
+          color: AppTheme.resolve(context, Colors.white, fill: true),
+          border: Border(top: BorderSide(color: AppTheme.resolve(context, _border))),
         ),
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
@@ -4828,16 +4954,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   width: 39,
                   height: 39,
                   decoration: BoxDecoration(
-                    color: selected ? const Color(0xFFFFC107) : _soft,
+                    color: selected ? AppTheme.resolve(context, const Color(0xFFFFC107), fill: true) : AppTheme.resolve(context, _soft, fill: true),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: selected ? const Color(0xFFE0A800) : _border,
+                      color: selected ? AppTheme.resolve(context, const Color(0xFFE0A800)) : AppTheme.resolve(context, _border),
                     ),
                   ),
                   alignment: Alignment.center,
                   child: Icon(
                     selected ? Icons.star_rounded : Icons.star_border_rounded,
-                    color: selected ? _star : _muted2,
+                    color: selected ? AppTheme.resolve(context, _star) : AppTheme.resolve(context, _muted2),
                     size: 23,
                   ),
                 ),
@@ -4848,7 +4974,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         const SizedBox(height: 5),
         Text(
           '$rating out of 5',
-          style: const TextStyle(color: _muted, fontSize: 11.5),
+          style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
         ),
       ],
     );
@@ -4860,9 +4986,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       children: [
         const _InputLabel(text: 'Add product photos', requiredField: false),
         const SizedBox(height: 5),
-        const Text(
+         Text(
           'JPG, PNG, or WebP · one photo · 5 MB maximum',
-          style: TextStyle(color: _muted, fontSize: 11.5),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
         ),
         const SizedBox(height: 9),
         Wrap(
@@ -4886,24 +5012,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 AsyncSnapshot<List<int>> snapshot,
                               ) {
                                 if (snapshot.hasError) {
-                                  return const ColoredBox(
-                                    color: _soft,
+                                  return  ColoredBox(
+                                    color: AppTheme.resolve(context, _soft, fill: true),
                                     child: Icon(
                                       Icons.broken_image_outlined,
-                                      color: _muted,
+                                      color: AppTheme.resolve(context, _muted),
                                     ),
                                   );
                                 }
                                 if (!snapshot.hasData) {
-                                  return const ColoredBox(
-                                    color: _soft,
+                                  return  ColoredBox(
+                                    color: AppTheme.resolve(context, _soft, fill: true),
                                     child: Center(
                                       child: SizedBox(
                                         width: 18,
                                         height: 18,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: _maroon,
+                                          color: AppTheme.resolve(context, _maroon),
                                         ),
                                       ),
                                     ),
@@ -4928,9 +5054,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             });
                           },
                           borderRadius: BorderRadius.circular(24),
-                          child: const CircleAvatar(
+                          child:  CircleAvatar(
                             radius: 12,
-                            backgroundColor: _maroon,
+                            backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                             child: Icon(
                               Icons.close_rounded,
                               color: Colors.white,
@@ -4946,8 +5072,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
               OutlinedButton(
                 onPressed: _submittingReview ? null : _addReviewPhotos,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
-                  side: const BorderSide(color: _border),
+                  foregroundColor: AppTheme.resolve(context, _maroon),
+                  side:  BorderSide(color: AppTheme.resolve(context, _border)),
                   minimumSize: const Size(76, 76),
                   padding: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(
@@ -4983,8 +5109,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
         children: [
           Text(
             'ORDER #${order.id}',
-            style: const TextStyle(
-              color: _maroon,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _maroon),
               fontSize: 11,
               letterSpacing: 1.6,
               fontWeight: FontWeight.w800,
@@ -4993,10 +5119,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
           const SizedBox(height: 6),
 
-          const Text(
+           Text(
             'Rate and review your order',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 27,
               fontWeight: FontWeight.w800,
             ),
@@ -5004,9 +5130,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
           const SizedBox(height: 7),
 
-          const Text(
+           Text(
             'Ratings and photos lock after your first submission. Review text can still be edited.',
-            style: TextStyle(color: _muted, fontSize: 12.5),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
           ),
 
           const SizedBox(height: 17),
@@ -5014,8 +5140,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: _surface,
-              border: Border.all(color: _border),
+              color: AppTheme.resolve(context, _surface, fill: true),
+              border: Border.all(color: AppTheme.resolve(context, _border)),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
@@ -5058,9 +5184,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
                 _SelectedProduct(product: product),
 
-                const Padding(
+                 Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Divider(height: 1, color: _border),
+                  child: Divider(height: 1, color: AppTheme.resolve(context, _border)),
                 ),
 
                 _buildRatingPicker(
@@ -5160,7 +5286,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     onPressed: _submittingReview ? null : _submitReview,
                     style: ElevatedButton.styleFrom(
                       elevation: 0,
-                      backgroundColor: _maroon,
+                      backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(13),
@@ -5197,14 +5323,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return const SizedBox.shrink();
     }
 
-    final Color color = _reviewNoticeIsError ? _danger : _maroon;
+    final Color color = _reviewNoticeIsError ? AppTheme.resolve(context, _danger) : AppTheme.resolve(context, _maroon);
     return Container(
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: _reviewNoticeIsError
-            ? const Color(0xFFFFF3F2)
-            : const Color(0xFFF4F7F2),
+            ? AppTheme.resolve(context, const Color(0xFFFFF3F2), fill: true)
+            : AppTheme.resolve(context, const Color(0xFFF4F7F2), fill: true),
         border: Border.all(color: color.withOpacity(0.2)),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -5241,9 +5367,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFFFFF7F5) : const Color(0xFFFAFAFA),
+        color: selected ? AppTheme.resolve(context, const Color(0xFFFFF7F5), fill: true) : AppTheme.resolve(context, const Color(0xFFFAFAFA), fill: true),
         border: Border.all(
-          color: selected ? _maroon.withOpacity(0.25) : _border,
+          color: selected ? AppTheme.resolve(context, _maroon).withOpacity(0.25) : AppTheme.resolve(context, _border),
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -5251,7 +5377,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         children: [
           Checkbox(
             value: selected,
-            activeColor: _maroon,
+            activeColor: AppTheme.resolve(context, _maroon),
             onChanged: _submittingReturn
                 ? null
                 : (bool? value) {
@@ -5306,8 +5432,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 builder:
                     (BuildContext context, AsyncSnapshot<List<int>> snapshot) {
                       if (!snapshot.hasData) {
-                        return const ColoredBox(
-                          color: _soft,
+                        return  ColoredBox(
+                          color: AppTheme.resolve(context, _soft, fill: true),
                           child: Center(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
@@ -5329,9 +5455,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ? null
                   : () => setState(() => _returnEvidence.removeAt(index)),
               borderRadius: BorderRadius.circular(24),
-              child: const CircleAvatar(
+              child:  CircleAvatar(
                 radius: 12,
-                backgroundColor: _maroon,
+                backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                 child: Icon(Icons.close_rounded, color: Colors.white, size: 15),
               ),
             ),
@@ -5352,12 +5478,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
       key: _returnFormKey,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(14, 16, 14, 90),
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
         children: [
           Text(
             'ORDER #${order.id}',
-            style: const TextStyle(
-              color: _maroon,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _maroon),
               fontSize: 11,
               letterSpacing: 1.6,
               fontWeight: FontWeight.w800,
@@ -5366,10 +5492,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
           const SizedBox(height: 6),
 
-          const Text(
+           Text(
             'Return / Refund Request',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 25,
               fontWeight: FontWeight.w800,
             ),
@@ -5377,9 +5503,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
           const SizedBox(height: 7),
 
-          const Text(
+           Text(
             'Select the affected items, describe the issue, and attach clear photos.',
-            style: TextStyle(color: _muted, fontSize: 12.5),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
           ),
 
           if (order.returnDeadlineForDisplay != null) ...[
@@ -5392,8 +5518,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ) +
                         '. Eligibility ends after this date.'
                   : order.returnRequestSubtitle,
-              style: const TextStyle(
-                color: _maroon,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _maroon),
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -5405,8 +5531,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: _surface,
-              border: Border.all(color: _border),
+              color: AppTheme.resolve(context, _surface, fill: true),
+              border: Border.all(color: AppTheme.resolve(context, _border)),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(
@@ -5419,9 +5545,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 for (final BuyerOrderProductData product in order.products)
                   _buildReturnItemSelector(product),
 
-                const Padding(
+                 Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Divider(height: 1, color: _border),
+                  child: Divider(height: 1, color: AppTheme.resolve(context, _border)),
                 ),
 
                 const _InputLabel(text: 'Issue category'),
@@ -5512,10 +5638,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                   items: const <DropdownMenuItem<String>>[
                     DropdownMenuItem<String>(
-                      value: 'original_payment_method',
-                      child: Text('Original payment method'),
-                    ),
-                    DropdownMenuItem<String>(
                       value: 'cash',
                       child: Text('Cash refund'),
                     ),
@@ -5599,9 +5721,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
                 const SizedBox(height: 4),
 
-                const Text(
+                 Text(
                   'Add at least one clear photo. Up to five photos, 5 MB each.',
-                  style: TextStyle(color: _muted, fontSize: 11.5),
+                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
                 ),
 
                 const SizedBox(height: 9),
@@ -5621,8 +5743,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             ? null
                             : _addReturnEvidence,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: _maroon,
-                          side: const BorderSide(color: _border),
+                          foregroundColor: AppTheme.resolve(context, _maroon),
+                          side:  BorderSide(color: AppTheme.resolve(context, _border)),
                           minimumSize: const Size(76, 76),
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
@@ -5642,11 +5764,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     value: _confirmReturnCashTerms,
-                    activeColor: _maroon,
-                    title: const Text(
+                    activeColor: AppTheme.resolve(context, _maroon),
+                    title:  Text(
                       'I understand the refund amount and method follow the platform’s return and refund policy.',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 11.5,
                         height: 1.4,
                       ),
@@ -5665,11 +5787,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     value: _confirmReturnRequest,
-                    activeColor: _maroon,
-                    title: const Text(
+                    activeColor: AppTheme.resolve(context, _maroon),
+                    title:  Text(
                       'I confirm these details are accurate and authorize this request to be reviewed.',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 11.5,
                         height: 1.4,
                       ),
@@ -5688,13 +5810,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(13),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7E7),
+                    color: AppTheme.resolve(context, const Color(0xFFFFF7E7), fill: true),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
+                  child:  Text(
                     'Submitting this form creates a request for review. It does not automatically mean the refund or return has been approved.',
                     style: TextStyle(
-                      color: Color(0xFF7A5115),
+                      color: AppTheme.resolve(context, Color(0xFF7A5115)),
                       fontSize: 11.5,
                       height: 1.5,
                     ),
@@ -5707,16 +5829,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(13),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFEFEE),
-                      border: Border.all(color: const Color(0xFFF4B7B2)),
+                      color: AppTheme.resolve(context, const Color(0xFFFFEFEE), fill: true),
+                      border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF4B7B2))),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
+                         Icon(
                           Icons.error_outline_rounded,
-                          color: _danger,
+                          color: AppTheme.resolve(context, _danger),
                           size: 19,
                         ),
                         const SizedBox(width: 9),
@@ -5724,10 +5846,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Request not submitted',
+                               Text(
+                                'Unable to confirm submission',
                                 style: TextStyle(
-                                  color: _danger,
+                                  color: AppTheme.resolve(context, _danger),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -5735,8 +5857,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               const SizedBox(height: 4),
                               SelectableText(
                                 _returnSubmissionError!,
-                                style: const TextStyle(
-                                  color: Color(0xFF7A271A),
+                                style:  TextStyle(
+                                  color: AppTheme.resolve(context, Color(0xFF7A271A)),
                                   fontSize: 12,
                                   height: 1.45,
                                 ),
@@ -5758,7 +5880,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     onPressed: _submittingReturn ? null : _submitReturn,
                     style: ElevatedButton.styleFrom(
                       elevation: 0,
-                      backgroundColor: _maroon,
+                      backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(13),
@@ -5794,15 +5916,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
       children: [
         const SizedBox(height: 80),
 
-        const Icon(Icons.search_off_rounded, size: 58, color: _muted2),
+         Icon(Icons.search_off_rounded, size: 58, color: AppTheme.resolve(context, _muted2)),
 
         const SizedBox(height: 15),
 
-        const Text(
+         Text(
           'Order not found',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 20,
             fontWeight: FontWeight.w800,
           ),
@@ -5810,10 +5932,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
         const SizedBox(height: 7),
 
-        const Text(
+         Text(
           'This order is unavailable or does not belong to your account.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _muted, fontSize: 12.5),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
         ),
 
         const SizedBox(height: 18),
@@ -5831,29 +5953,29 @@ class _OrdersScreenState extends State<OrdersScreen> {
   InputDecoration _inputDecoration({required String hintText}) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: _muted2, fontSize: 12.5),
+      hintStyle:  TextStyle(color: AppTheme.resolve(context, _muted2), fontSize: 12.5),
       filled: true,
-      fillColor: _soft,
+      fillColor: AppTheme.resolve(context, _soft, fill: true),
       contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _maroon, width: 1.3),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.3),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _danger),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _danger)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _danger, width: 1.3),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _danger), width: 1.3),
       ),
     );
   }
@@ -5861,21 +5983,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
   InputDecoration _sheetInputDecoration({required String hintText}) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: _muted2, fontSize: 12.5),
+      hintStyle:  TextStyle(color: AppTheme.resolve(context, _muted2), fontSize: 12.5),
       filled: true,
-      fillColor: _soft,
+      fillColor: AppTheme.resolve(context, _soft, fill: true),
       contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _maroon),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon)),
       ),
     );
   }
@@ -5922,8 +6044,8 @@ class _OrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: ShopColors.surface,
-        border: Border.all(color: ShopColors.border),
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         borderRadius: BorderRadius.circular(20),
       ),
       clipBehavior: Clip.antiAlias,
@@ -5932,7 +6054,7 @@ class _OrderCard extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 13, 16, 12),
-            decoration: const BoxDecoration(color: Color(0xFFFAF5EF)),
+            decoration:  BoxDecoration(color: AppTheme.resolve(context, Color(0xFFFAF5EF), fill: true)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -5944,8 +6066,8 @@ class _OrderCard extends StatelessWidget {
                         'Order ${order.orderNumber?.trim().isNotEmpty == true ? order.orderNumber!.trim() : order.id}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ShopColors.text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800,
                         ),
@@ -5957,8 +6079,8 @@ class _OrderCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     _placedLabel(order.createdAt),
-                    style: const TextStyle(
-                      color: ShopColors.muted,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.muted),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -5976,10 +6098,10 @@ class _OrderCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(
+                       Icon(
                         Icons.storefront_outlined,
                         size: 17,
-                        color: ShopColors.accentDark,
+                        color: AppTheme.resolve(context, ShopColors.accentDark),
                       ),
                       const SizedBox(width: 7),
                       Expanded(
@@ -5987,8 +6109,8 @@ class _OrderCard extends StatelessWidget {
                           order.sellerName!.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.text,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.text),
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                           ),
@@ -6032,13 +6154,13 @@ class _OrderCard extends StatelessWidget {
             ),
 
           if (order.products.isEmpty)
-            const Padding(
+             Padding(
               padding: EdgeInsets.all(18),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'No products recorded for this order.',
-                  style: TextStyle(color: ShopColors.muted, fontSize: 12.5),
+                  style: TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12.5),
                 ),
               ),
             )
@@ -6054,7 +6176,7 @@ class _OrderCard extends StatelessWidget {
               }, growable: false),
             ),
 
-          const Divider(height: 1, color: ShopColors.border),
+           Divider(height: 1, color: AppTheme.resolve(context, ShopColors.border)),
 
           Padding(
             padding: const EdgeInsets.all(13),
@@ -6064,8 +6186,8 @@ class _OrderCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     '${_itemCount(order)} ${_itemCount(order) == 1 ? 'item' : 'items'} - Total',
-                    style: const TextStyle(
-                      color: ShopColors.muted,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.muted),
                       fontSize: 11.5,
                     ),
                   ),
@@ -6080,15 +6202,15 @@ class _OrderCard extends StatelessWidget {
                             const TextSpan(text: ' - '),
                             TextSpan(
                               text: _price(order.total),
-                              style: const TextStyle(
-                                color: ShopColors.text,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, ShopColors.text),
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                           ],
                         ),
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 12.5,
                           height: 1.4,
                         ),
@@ -6245,7 +6367,7 @@ class _ParcelUpdateCard extends StatelessWidget {
         : order.shipmentId?.trim() ?? '';
 
     return Material(
-      color: const Color(0xFFEEF9F6),
+      color: AppTheme.resolve(context, const Color(0xFFEEF9F6), fill: true),
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
@@ -6255,11 +6377,11 @@ class _ParcelUpdateCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
+               Padding(
                 padding: EdgeInsets.only(top: 1),
                 child: Icon(
                   Icons.local_shipping_outlined,
-                  color: Color(0xFF338D78),
+                  color: AppTheme.resolve(context, Color(0xFF338D78)),
                   size: 22,
                 ),
               ),
@@ -6273,8 +6395,8 @@ class _ParcelUpdateCard extends StatelessWidget {
                         'Parcel 1 - Tracking $trackingReference',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w600,
                         ),
@@ -6285,8 +6407,8 @@ class _ParcelUpdateCard extends StatelessWidget {
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF267B69),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF267B69)),
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                       ),
@@ -6296,8 +6418,8 @@ class _ParcelUpdateCard extends StatelessWidget {
                       details,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: ShopColors.muted,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.muted),
                         fontSize: 12,
                         height: 1.35,
                       ),
@@ -6306,8 +6428,8 @@ class _ParcelUpdateCard extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         latestEvent!.time,
-                        style: const TextStyle(
-                          color: Color(0xFF6F9188),
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, Color(0xFF6F9188)),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -6318,9 +6440,9 @@ class _ParcelUpdateCard extends StatelessWidget {
               ),
               if (onTap != null) ...[
                 const SizedBox(width: 6),
-                const Icon(
+                 Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF6F9188),
+                  color: AppTheme.resolve(context, Color(0xFF6F9188)),
                   size: 22,
                 ),
               ],
@@ -6368,9 +6490,9 @@ class _OrderProductRow extends StatelessWidget {
                 height: 66,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: ShopColors.soft,
+                  color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: ShopColors.border),
+                  border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
                 ),
                 child: _OrderProductGallery(images: product.galleryImages),
               ),
@@ -6385,8 +6507,8 @@ class _OrderProductRow extends StatelessWidget {
                       product.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: ShopColors.text,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.text),
                         fontSize: 13,
                         height: 1.3,
                         fontWeight: FontWeight.w800,
@@ -6399,8 +6521,8 @@ class _OrderProductRow extends StatelessWidget {
                         product.variant!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 11.5,
                         ),
                       ),
@@ -6416,13 +6538,13 @@ class _OrderProductRow extends StatelessWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: ShopColors.soft,
+                            color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             'Qty ${product.safeQuantity}',
-                            style: const TextStyle(
-                              color: ShopColors.secondaryText,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.secondaryText),
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
                             ),
@@ -6431,8 +6553,8 @@ class _OrderProductRow extends StatelessWidget {
                         const Spacer(),
                         Text(
                           formatPesoAmount(product.lineTotal),
-                          style: const TextStyle(
-                            color: ShopColors.accentDark,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.accentDark),
                             fontSize: 12.5,
                             fontWeight: FontWeight.w800,
                           ),
@@ -6446,7 +6568,7 @@ class _OrderProductRow extends StatelessWidget {
           ),
         ),
 
-        if (showDivider) const Divider(height: 1, color: ShopColors.border),
+        if (showDivider)  Divider(height: 1, color: AppTheme.resolve(context, ShopColors.border)),
       ],
     );
   }
@@ -6467,8 +6589,8 @@ class _SellerAction extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Text(
           text,
-          style: const TextStyle(
-            color: ShopColors.accentDark,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, ShopColors.accentDark),
             fontSize: 11,
             fontWeight: FontWeight.w800,
           ),
@@ -6502,7 +6624,7 @@ class _SmallActionButton extends StatelessWidget {
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: ShopColors.accent,
+            backgroundColor: AppTheme.resolve(context, ShopColors.accent, fill: true),
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 13),
             shape: RoundedRectangleBorder(
@@ -6522,9 +6644,9 @@ class _SmallActionButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: danger ? const Color(0xFFB42318) : ShopColors.accent,
+          foregroundColor: danger ? AppTheme.resolve(context, const Color(0xFFB42318)) : AppTheme.resolve(context, ShopColors.accent),
           side: BorderSide(
-            color: danger ? const Color(0xFFE5B4A9) : ShopColors.tan,
+            color: danger ? AppTheme.resolve(context, const Color(0xFFE5B4A9)) : AppTheme.resolve(context, ShopColors.tan),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(
@@ -6555,8 +6677,8 @@ class _BuyerDetailCard extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: ShopColors.surface,
-        border: Border.all(color: ShopColors.border),
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         borderRadius: BorderRadius.circular(20),
       ),
       clipBehavior: Clip.antiAlias,
@@ -6591,15 +6713,15 @@ class _BuyerDetailActionRow extends StatelessWidget {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: ShopColors.soft,
+                color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                 borderRadius: BorderRadius.circular(11),
               ),
               alignment: Alignment.center,
               child: Icon(
                 icon,
                 color: onTap == null
-                    ? ShopColors.faint
-                    : ShopColors.secondaryText,
+                    ? AppTheme.resolve(context, ShopColors.faint)
+                    : AppTheme.resolve(context, ShopColors.secondaryText),
                 size: 18,
               ),
             ),
@@ -6612,8 +6734,8 @@ class _BuyerDetailActionRow extends StatelessWidget {
                     title,
                     style: TextStyle(
                       color: onTap == null
-                          ? ShopColors.secondaryText
-                          : ShopColors.text,
+                          ? AppTheme.resolve(context, ShopColors.secondaryText)
+                          : AppTheme.resolve(context, ShopColors.text),
                       fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                     ),
@@ -6622,8 +6744,8 @@ class _BuyerDetailActionRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      style: const TextStyle(
-                        color: ShopColors.muted,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.muted),
                         fontSize: 10.5,
                         height: 1.35,
                       ),
@@ -6634,11 +6756,11 @@ class _BuyerDetailActionRow extends StatelessWidget {
             ),
             if (onTap != null) ...[
               const SizedBox(width: 8),
-              const Padding(
+               Padding(
                 padding: EdgeInsets.only(top: 1),
                 child: Icon(
                   Icons.chevron_right_rounded,
-                  color: ShopColors.faint,
+                  color: AppTheme.resolve(context, ShopColors.faint),
                   size: 23,
                 ),
               ),
@@ -6666,16 +6788,16 @@ class _BuyerDetailBottomButton extends StatelessWidget {
     final ButtonStyle style = filled
         ? ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: ShopColors.accent,
+            backgroundColor: AppTheme.resolve(context, ShopColors.accent, fill: true),
             foregroundColor: Colors.white,
-            disabledBackgroundColor: const Color(0xFFD8CBC3),
+            disabledBackgroundColor: AppTheme.resolve(context, const Color(0xFFD8CBC3), fill: true),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
           )
         : OutlinedButton.styleFrom(
-            foregroundColor: ShopColors.accent,
-            side: const BorderSide(color: ShopColors.accent),
+            foregroundColor: AppTheme.resolve(context, ShopColors.accent),
+            side:  BorderSide(color: AppTheme.resolve(context, ShopColors.accent)),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -6713,7 +6835,7 @@ class _SelectedProduct extends StatelessWidget {
           height: 64,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: ShopColors.soft,
+            color: AppTheme.resolve(context, ShopColors.soft, fill: true),
             borderRadius: BorderRadius.circular(12),
           ),
           child: _OrderProductGallery(images: product.galleryImages),
@@ -6727,8 +6849,8 @@ class _SelectedProduct extends StatelessWidget {
             children: [
               Text(
                 product.name,
-                style: const TextStyle(
-                  color: ShopColors.text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.text),
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
@@ -6739,7 +6861,7 @@ class _SelectedProduct extends StatelessWidget {
 
                 Text(
                   product.variant!,
-                  style: const TextStyle(color: ShopColors.muted, fontSize: 11),
+                  style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 11),
                 ),
               ],
 
@@ -6747,7 +6869,7 @@ class _SelectedProduct extends StatelessWidget {
 
               Text(
                 'Qty ${product.safeQuantity}',
-                style: const TextStyle(color: ShopColors.faint, fontSize: 11),
+                style:  TextStyle(color: AppTheme.resolve(context, ShopColors.faint), fontSize: 11),
               ),
             ],
           ),
@@ -6755,8 +6877,8 @@ class _SelectedProduct extends StatelessWidget {
 
         Text(
           formatPesoAmount(product.lineTotal),
-          style: const TextStyle(
-            color: ShopColors.accent,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, ShopColors.accent),
             fontSize: 12.5,
             fontWeight: FontWeight.w800,
           ),
@@ -6782,8 +6904,8 @@ class _OrderProductGalleryState extends State<_OrderProductGallery> {
   Widget build(BuildContext context) {
     final List<String> images = widget.images;
     if (images.isEmpty) {
-      return const Center(
-        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 28),
+      return  Center(
+        child: Icon(Icons.image_outlined, color: AppTheme.resolve(context, ShopColors.faint), size: 28),
       );
     }
 
@@ -6817,8 +6939,8 @@ class _OrderProductGalleryState extends State<_OrderProductGallery> {
                   height: 3,
                   decoration: BoxDecoration(
                     color: active
-                        ? ShopColors.accent
-                        : ShopColors.faint.withValues(alpha: 0.55),
+                        ? AppTheme.resolve(context, ShopColors.accent, fill: true)
+                        : AppTheme.resolve(context, ShopColors.faint, fill: true).withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 );
@@ -6837,10 +6959,10 @@ class _OrderProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = url?.trim() ?? '';
     if (value.isEmpty)
-      return const Center(
+      return  Center(
         child: Icon(
           Icons.inventory_2_outlined,
-          color: ShopColors.faint,
+          color: AppTheme.resolve(context, ShopColors.faint),
           size: 34,
         ),
       );
@@ -6865,7 +6987,7 @@ class _DetailRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(color: ShopColors.muted, fontSize: 12),
+            style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12),
           ),
         ),
 
@@ -6875,8 +6997,8 @@ class _DetailRow extends StatelessWidget {
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: ShopColors.text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.text),
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),
@@ -6902,14 +7024,14 @@ class _InputLabel extends StatelessWidget {
           TextSpan(text: text),
 
           if (requiredField)
-            const TextSpan(
+             TextSpan(
               text: ' *',
-              style: TextStyle(color: Color(0xFFB42318)),
+              style: TextStyle(color: AppTheme.resolve(context, Color(0xFFB42318))),
             ),
         ],
       ),
-      style: const TextStyle(
-        color: ShopColors.text,
+      style:  TextStyle(
+        color: AppTheme.resolve(context, ShopColors.text),
         fontSize: 12.5,
         fontWeight: FontWeight.w700,
       ),
@@ -6927,16 +7049,16 @@ class _NoticeCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCECE7),
-        border: Border.all(color: const Color(0xFFEBC9C0)),
+        color: AppTheme.resolve(context, const Color(0xFFFCECE7), fill: true),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEBC9C0))),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
+           Icon(
             Icons.info_outline_rounded,
-            color: ShopColors.accent,
+            color: AppTheme.resolve(context, ShopColors.accent),
             size: 18,
           ),
 
@@ -6945,8 +7067,8 @@ class _NoticeCard extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: ShopColors.accent,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, ShopColors.accent),
                 fontSize: 12,
                 height: 1.5,
                 fontWeight: FontWeight.w600,

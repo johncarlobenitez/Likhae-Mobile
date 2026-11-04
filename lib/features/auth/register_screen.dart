@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -73,6 +75,8 @@ class RegisterFormData {
   final String password;
 
   final String emailVerificationToken;
+  final bool termsAcknowledged;
+  final bool privacyAcknowledged;
 
   const RegisterFormData({
     required this.accountType,
@@ -101,6 +105,8 @@ class RegisterFormData {
     required this.driversLicense,
     required this.password,
     required this.emailVerificationToken,
+    required this.termsAcknowledged,
+    required this.privacyAcknowledged,
   });
 }
 
@@ -936,6 +942,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             : null,
         password: _passwordController.text,
         emailVerificationToken: _emailVerificationToken ?? '',
+        termsAcknowledged: _termsAccepted,
+        privacyAcknowledged: _termsAccepted,
       );
 
       await widget.onSubmit!(data);
@@ -1086,7 +1094,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? const Color(0xFFB42318) : _primary,
+          backgroundColor: error ? AppTheme.resolve(context, const Color(0xFFB42318), fill: true) : AppTheme.resolve(context, _primary, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -1118,7 +1126,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final double horizontalPadding = screenWidth < 370 ? 14 : 18;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         bottom: false,
@@ -1198,23 +1206,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.resolve(context, Colors.white, fill: true),
               borderRadius: BorderRadius.circular(100),
-              border: Border.all(color: _border),
+              border: Border.all(color: AppTheme.resolve(context, _border)),
             ),
-            child: const Row(
+            child:  Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   Icons.lock_outline_rounded,
                   size: 13,
-                  color: _secondaryText,
+                  color: AppTheme.resolve(context, _secondaryText),
                 ),
                 SizedBox(width: 4),
                 Text(
                   'Secure',
                   style: TextStyle(
-                    color: _secondaryText,
+                    color: AppTheme.resolve(context, _secondaryText),
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1228,7 +1236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildHeader() {
-    return const Padding(
+    return  Padding(
       padding: EdgeInsets.symmetric(horizontal: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1236,7 +1244,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Text(
             'ACCOUNT REGISTRATION',
             style: TextStyle(
-              color: _accent,
+              color: AppTheme.resolve(context, _accent),
               fontSize: 10,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w800,
@@ -1248,7 +1256,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Text(
             'Create your account',
             style: TextStyle(
-              color: _primary,
+              color: AppTheme.resolve(context, _primary),
               fontSize: 29,
               height: 1.05,
               letterSpacing: -0.8,
@@ -1260,7 +1268,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           Text(
             'Choose how you will use LIKHAE and complete each registration step.',
-            style: TextStyle(color: _secondaryText, fontSize: 13, height: 1.45),
+            style: TextStyle(color: AppTheme.resolve(context, _secondaryText), fontSize: 13, height: 1.45),
           ),
         ],
       ),
@@ -1271,7 +1279,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Container(
       padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAE6DF),
+        color: AppTheme.resolve(context, const Color(0xFFEAE6DF), fill: true),
         borderRadius: BorderRadius.circular(17),
       ),
       child: Row(
@@ -1314,9 +1322,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1327,10 +1335,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                     Text(
                       'Registration progress',
                       style: TextStyle(
-                        color: _secondaryText,
+                        color: AppTheme.resolve(context, _secondaryText),
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1340,8 +1348,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     Text(
                       steps[_currentStep].title,
-                      style: const TextStyle(
-                        color: _primary,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _primary),
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                       ),
@@ -1352,8 +1360,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               Text(
                 'Step ${_currentStep + 1} of ${steps.length}',
-                style: const TextStyle(
-                  color: _secondaryText,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _secondaryText),
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1368,8 +1376,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 5,
-              backgroundColor: const Color(0xFFEDE9E3),
-              valueColor: const AlwaysStoppedAnimation<Color>(_primary),
+              backgroundColor: AppTheme.resolve(context, const Color(0xFFEDE9E3), fill: true),
+              valueColor:  AlwaysStoppedAnimation<Color>(AppTheme.resolve(context, _primary)),
             ),
           ),
 
@@ -1391,8 +1399,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: active || completed
-                            ? _primary
-                            : const Color(0xFFF3F0EB),
+                            ? AppTheme.resolve(context, _primary, fill: true)
+                            : AppTheme.resolve(context, const Color(0xFFF3F0EB), fill: true),
                       ),
                       alignment: Alignment.center,
                       child: completed
@@ -1404,7 +1412,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           : Text(
                               '${index + 1}',
                               style: TextStyle(
-                                color: active ? Colors.white : _secondaryText,
+                                color: active ? Colors.white : AppTheme.resolve(context, _secondaryText),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1418,7 +1426,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: active ? _primary : _secondaryText,
+                        color: active ? AppTheme.resolve(context, _primary) : AppTheme.resolve(context, _secondaryText),
                         fontSize: 8.5,
                         fontWeight: active ? FontWeight.w800 : FontWeight.w500,
                       ),
@@ -1453,9 +1461,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 22),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.035),
@@ -1488,11 +1496,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2EFEA),
+                color: AppTheme.resolve(context, const Color(0xFFF2EFEA), fill: true),
                 borderRadius: BorderRadius.circular(13),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, color: _primary, size: 20),
+              child: Icon(icon, color: AppTheme.resolve(context, _primary), size: 20),
             ),
 
             const SizedBox(width: 12),
@@ -1503,8 +1511,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   Text(
                     'STEP $number',
-                    style: const TextStyle(
-                      color: _accent,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _accent),
                       fontSize: 9,
                       letterSpacing: 1.2,
                       fontWeight: FontWeight.w800,
@@ -1515,8 +1523,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: _primary,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _primary),
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1526,8 +1534,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: _secondaryText,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _secondaryText),
                       fontSize: 11.5,
                       height: 1.4,
                     ),
@@ -1697,9 +1705,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           const SizedBox(height: 7),
 
-          const Text(
+           Text(
             'Automatically calculated from your birthday.',
-            style: TextStyle(color: _secondaryText, fontSize: 10),
+            style: TextStyle(color: AppTheme.resolve(context, _secondaryText), fontSize: 10),
           ),
         ],
       ),
@@ -1742,14 +1750,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           if (widget.googleProfile != null && _emailVerified) ...[
             const SizedBox(height: 10),
-            const Row(
+             Row(
               children: [
-                Icon(Icons.verified_rounded, color: Color(0xFF16794A), size: 18),
+                Icon(Icons.verified_rounded, color: AppTheme.resolve(context, Color(0xFF16794A)), size: 18),
                 SizedBox(width: 7),
                 Text(
                   'Email verified with Google',
                   style: TextStyle(
-                    color: Color(0xFF16794A),
+                    color: AppTheme.resolve(context, Color(0xFF16794A)),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1777,8 +1785,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       : 'Send verification code',
                 ),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _primary,
-                  side: const BorderSide(color: _border),
+                  foregroundColor: AppTheme.resolve(context, _primary),
+                  side:  BorderSide(color: AppTheme.resolve(context, _border)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -1823,7 +1831,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ? _verifyEmail
                         : null,
                     style: FilledButton.styleFrom(
-                      backgroundColor: _primary,
+                      backgroundColor: AppTheme.resolve(context, _primary, fill: true),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -1852,8 +1860,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   : 'Verify your email before continuing.',
               style: TextStyle(
                 color: _emailVerified
-                    ? const Color(0xFF16794A)
-                    : _secondaryText,
+                    ? AppTheme.resolve(context, const Color(0xFF16794A))
+                    : AppTheme.resolve(context, _secondaryText),
                 fontSize: 11,
               ),
             ),
@@ -2120,7 +2128,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 Expanded(
                   child: Text(
                     _logisticsCentersLoadError!,
-                    style: const TextStyle(color: _accent, fontSize: 10.5),
+                    style:  TextStyle(color: AppTheme.resolve(context, _accent), fontSize: 10.5),
                   ),
                 ),
                 TextButton(
@@ -2133,9 +2141,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ] else ...[
             const SizedBox(height: 5),
-            const Text(
+             Text(
               'The hub must serve your selected province and municipality.',
-              style: TextStyle(color: _secondaryText, fontSize: 10.5),
+              style: TextStyle(color: AppTheme.resolve(context, _secondaryText), fontSize: 10.5),
             ),
           ],
 
@@ -2297,7 +2305,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ? Icons.visibility_outlined
                       : Icons.visibility_off_outlined,
                   size: 20,
-                  color: _secondaryText,
+                  color: AppTheme.resolve(context, _secondaryText),
                 ),
               ),
             ),
@@ -2329,7 +2337,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ? Icons.visibility_outlined
                       : Icons.visibility_off_outlined,
                   size: 20,
-                  color: _secondaryText,
+                  color: AppTheme.resolve(context, _secondaryText),
                 ),
               ),
             ),
@@ -2351,16 +2359,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF7E8),
+              color: AppTheme.resolve(context, const Color(0xFFFFF7E8), fill: true),
               borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: const Color(0xFFF2DFC0)),
+              border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF2DFC0))),
             ),
-            child: const Row(
+            child:  Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   Icons.info_outline_rounded,
-                  color: Color(0xFF8B6425),
+                  color: AppTheme.resolve(context, Color(0xFF8B6425)),
                   size: 20,
                 ),
 
@@ -2373,7 +2381,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Text(
                         'Administrator approval required',
                         style: TextStyle(
-                          color: Color(0xFF6E4C18),
+                          color: AppTheme.resolve(context, Color(0xFF6E4C18)),
                           fontSize: 12.5,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2384,7 +2392,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Text(
                         'After submitting your registration, wait for administrator approval before signing in.',
                         style: TextStyle(
-                          color: Color(0xFF846B45),
+                          color: AppTheme.resolve(context, Color(0xFF846B45)),
                           fontSize: 10.5,
                           height: 1.4,
                         ),
@@ -2412,7 +2420,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 children: [
                   Checkbox(
                     value: _termsAccepted,
-                    activeColor: _primary,
+                    activeColor: AppTheme.resolve(context, _primary),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -2425,13 +2433,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   const SizedBox(width: 2),
 
-                  const Expanded(
+                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.only(top: 10),
                       child: Text(
-                        'I confirm that the information provided is correct and I agree to LIKHAE\'s terms and marketplace policies.',
+                        'I confirm that the information provided is correct and I agree to LIKHAE\'s Terms & Conditions and Privacy Policy.',
                         style: TextStyle(
-                          color: _secondaryText,
+                          color: AppTheme.resolve(context, _secondaryText),
                           fontSize: 11,
                           height: 1.45,
                         ),
@@ -2459,8 +2467,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 icon: const Icon(Icons.arrow_back_rounded, size: 18),
                 label: const Text('Back'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _primary,
-                  side: const BorderSide(color: _border),
+                  foregroundColor: AppTheme.resolve(context, _primary),
+                  side:  BorderSide(color: AppTheme.resolve(context, _border)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -2479,9 +2487,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               onPressed: _isSubmitting ? null : _next,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: _primary,
+                backgroundColor: AppTheme.resolve(context, _primary, fill: true),
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: _primary.withValues(alpha: 0.55),
+                disabledBackgroundColor: AppTheme.resolve(context, _primary, fill: true).withValues(alpha: 0.55),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -2527,9 +2535,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
+         Text(
           'Already registered? ',
-          style: TextStyle(color: _secondaryText, fontSize: 12),
+          style: TextStyle(color: AppTheme.resolve(context, _secondaryText), fontSize: 12),
         ),
 
         TextButton(
@@ -2541,10 +2549,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: const Text(
+          child:  Text(
             'Sign in',
             style: TextStyle(
-              color: _primary,
+              color: AppTheme.resolve(context, _primary),
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -2558,14 +2566,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5FA),
+        color: AppTheme.resolve(context, const Color(0xFFF1F5FA), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFD9E2ED)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFD9E2ED))),
       ),
-      child: const Row(
+      child:  Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.cloud_outlined, size: 18, color: Color(0xFF51677F)),
+          Icon(Icons.cloud_outlined, size: 18, color: AppTheme.resolve(context, Color(0xFF51677F))),
 
           SizedBox(width: 9),
 
@@ -2573,7 +2581,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Text(
               'The Philippine address dropdowns will become active after the existing Laravel address API is connected to Flutter.',
               style: TextStyle(
-                color: Color(0xFF51677F),
+                color: AppTheme.resolve(context, Color(0xFF51677F)),
                 fontSize: 10.5,
                 height: 1.4,
                 fontWeight: FontWeight.w500,
@@ -2648,31 +2656,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
       prefixText: prefixText,
       prefixIcon: prefixIcon == null
           ? null
-          : Icon(prefixIcon, size: 19, color: const Color(0xFF6D6862)),
+          : Icon(prefixIcon, size: 19, color: AppTheme.resolve(context, const Color(0xFF6D6862))),
       suffixIcon: suffix,
       filled: true,
-      fillColor: _fieldBackground,
-      hintStyle: const TextStyle(color: Color(0xFFA39E98), fontSize: 12.5),
+      fillColor: AppTheme.resolve(context, _fieldBackground, fill: true),
+      hintStyle:  TextStyle(color: AppTheme.resolve(context, Color(0xFFA39E98)), fontSize: 12.5),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _primary, width: 1.3),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _primary), width: 1.3),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _accent),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _accent)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(13),
-        borderSide: const BorderSide(color: _accent, width: 1.3),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _accent), width: 1.3),
       ),
       errorStyle: const TextStyle(fontSize: 10),
     );
@@ -2699,10 +2707,10 @@ class _LikhaeBrand extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+         Text(
           'LIKHAE',
           style: TextStyle(
-            color: Color(0xFF191816),
+            color: AppTheme.resolve(context, Color(0xFF191816)),
             fontSize: 17,
             fontWeight: FontWeight.w900,
             letterSpacing: 1,
@@ -2715,7 +2723,7 @@ class _LikhaeBrand extends StatelessWidget {
           width: 4,
           height: 4,
           decoration: BoxDecoration(
-            color: Color(0xFFD94343),
+            color: AppTheme.resolve(context, Color(0xFFD94343), fill: true),
             shape: BoxShape.circle,
           ),
         ),
@@ -2725,7 +2733,7 @@ class _LikhaeBrand extends StatelessWidget {
         Text(
           'Marketplace',
           style: TextStyle(
-            color: Color(0xFF89837D),
+            color: AppTheme.resolve(context, Color(0xFF89837D)),
             fontSize: 9.5,
             fontWeight: FontWeight.w600,
           ),
@@ -2745,17 +2753,17 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return RichText(
       text: TextSpan(
-        style: const TextStyle(
-          color: Color(0xFF292724),
+        style:  TextStyle(
+          color: AppTheme.resolve(context, Color(0xFF292724)),
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
         children: [
           TextSpan(text: text),
           if (required)
-            const TextSpan(
+             TextSpan(
               text: ' *',
-              style: TextStyle(color: Color(0xFFD94343)),
+              style: TextStyle(color: AppTheme.resolve(context, Color(0xFFD94343))),
             ),
         ],
       ),
@@ -2781,7 +2789,7 @@ class _AccountTypeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? Colors.white : Colors.transparent,
+      color: selected ? AppTheme.resolve(context, Colors.white, fill: true) : Colors.transparent,
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
@@ -2808,15 +2816,15 @@ class _AccountTypeButton extends StatelessWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(0xFF191816)
-                      : const Color(0xFFDCD7CF),
+                      ? AppTheme.resolve(context, const Color(0xFF191816), fill: true)
+                      : AppTheme.resolve(context, const Color(0xFFDCD7CF), fill: true),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   icon,
                   size: 17,
-                  color: selected ? Colors.white : const Color(0xFF706A64),
+                  color: selected ? Colors.white : AppTheme.resolve(context, const Color(0xFF706A64)),
                 ),
               ),
 
@@ -2829,7 +2837,7 @@ class _AccountTypeButton extends StatelessWidget {
                     Text(
                       title,
                       style: TextStyle(
-                        color: const Color(0xFF191816),
+                        color: AppTheme.resolve(context, const Color(0xFF191816)),
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -2841,8 +2849,8 @@ class _AccountTypeButton extends StatelessWidget {
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF847E78),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF847E78)),
                         fontSize: 8.5,
                       ),
                     ),
@@ -2851,10 +2859,10 @@ class _AccountTypeButton extends StatelessWidget {
               ),
 
               if (selected)
-                const Icon(
+                 Icon(
                   Icons.check_circle_rounded,
                   size: 17,
-                  color: Color(0xFF227A42),
+                  color: AppTheme.resolve(context, Color(0xFF227A42)),
                 ),
             ],
           ),
@@ -2892,7 +2900,7 @@ class _AddressDropdown extends StatelessWidget {
       isExpanded: true,
       decoration: InputDecoration(
         filled: true,
-        fillColor: const Color(0xFFFBFAF8),
+        fillColor: AppTheme.resolve(context, const Color(0xFFFBFAF8), fill: true),
         prefixIcon: loading
             ? const Padding(
                 padding: EdgeInsets.all(14),
@@ -2902,28 +2910,28 @@ class _AddressDropdown extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               )
-            : const Icon(
+            :  Icon(
                 Icons.location_on_outlined,
                 size: 19,
-                color: Color(0xFF6D6862),
+                color: AppTheme.resolve(context, Color(0xFF6D6862)),
               ),
         hintText: loading ? 'Loading...' : hint,
-        hintStyle: const TextStyle(color: Color(0xFFA39E98), fontSize: 12.5),
+        hintStyle:  TextStyle(color: AppTheme.resolve(context, Color(0xFFA39E98)), fontSize: 12.5),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(color: Color(0xFFE4E0DA)),
+          borderSide:  BorderSide(color: AppTheme.resolve(context, Color(0xFFE4E0DA))),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(color: Color(0xFFE4E0DA)),
+          borderSide:  BorderSide(color: AppTheme.resolve(context, Color(0xFFE4E0DA))),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(color: Color(0xFF191816), width: 1.3),
+          borderSide:  BorderSide(color: AppTheme.resolve(context, Color(0xFF191816)), width: 1.3),
         ),
       ),
       items: items.map((AddressOption option) {
@@ -2969,7 +2977,7 @@ class _DocumentUploadCard extends StatelessWidget {
     final bool selected = document != null;
 
     return Material(
-      color: selected ? const Color(0xFFF2F8F4) : const Color(0xFFFBFAF8),
+      color: selected ? AppTheme.resolve(context, const Color(0xFFF2F8F4), fill: true) : AppTheme.resolve(context, const Color(0xFFFBFAF8), fill: true),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -2980,8 +2988,8 @@ class _DocumentUploadCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: selected
-                  ? const Color(0xFFCFE4D5)
-                  : const Color(0xFFE4E0DA),
+                  ? AppTheme.resolve(context, const Color(0xFFCFE4D5))
+                  : AppTheme.resolve(context, const Color(0xFFE4E0DA)),
             ),
           ),
           child: Row(
@@ -2991,16 +2999,16 @@ class _DocumentUploadCard extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(0xFFDFF0E4)
-                      : const Color(0xFFF0ECE6),
+                      ? AppTheme.resolve(context, const Color(0xFFDFF0E4), fill: true)
+                      : AppTheme.resolve(context, const Color(0xFFF0ECE6), fill: true),
                   borderRadius: BorderRadius.circular(13),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   selected ? Icons.check_rounded : icon,
                   color: selected
-                      ? const Color(0xFF227A42)
-                      : const Color(0xFF65605A),
+                      ? AppTheme.resolve(context, const Color(0xFF227A42))
+                      : AppTheme.resolve(context, const Color(0xFF65605A)),
                 ),
               ),
 
@@ -3012,17 +3020,17 @@ class _DocumentUploadCard extends StatelessWidget {
                   children: [
                     RichText(
                       text: TextSpan(
-                        style: const TextStyle(
-                          color: Color(0xFF292724),
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, Color(0xFF292724)),
                           fontSize: 12.5,
                           fontWeight: FontWeight.w800,
                         ),
                         children: [
                           TextSpan(text: title),
                           if (required)
-                            const TextSpan(
+                             TextSpan(
                               text: ' *',
-                              style: TextStyle(color: Color(0xFFD94343)),
+                              style: TextStyle(color: AppTheme.resolve(context, Color(0xFFD94343))),
                             ),
                         ],
                       ),
@@ -3034,8 +3042,8 @@ class _DocumentUploadCard extends StatelessWidget {
                       document?.name ?? description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF7F7973),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFF7F7973)),
                         fontSize: 10,
                         height: 1.3,
                       ),
@@ -3051,8 +3059,8 @@ class _DocumentUploadCard extends StatelessWidget {
                     ? Icons.check_circle_rounded
                     : Icons.upload_file_outlined,
                 color: selected
-                    ? const Color(0xFF227A42)
-                    : const Color(0xFF77716B),
+                    ? AppTheme.resolve(context, const Color(0xFF227A42))
+                    : AppTheme.resolve(context, const Color(0xFF77716B)),
                 size: 20,
               ),
             ],

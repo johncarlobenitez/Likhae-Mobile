@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 import '../pickups/rider_pickup_details_screen.dart'
     show RiderParcelScannerScreen;
@@ -243,10 +245,10 @@ class _RiderInterHubTransfersScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         child: RefreshIndicator(
-          color: _maroon,
+          color: AppTheme.resolve(context, _maroon),
           onRefresh: () async {
             await widget.onRefresh?.call();
           },
@@ -256,21 +258,21 @@ class _RiderInterHubTransfersScreenState
             children: <Widget>[
               _brandHeader(),
               const SizedBox(height: 28),
-              const Text(
+               Text(
                 'Inter-hub transfers',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 25,
                   fontWeight: FontWeight.w800,
                   height: 1.15,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+               Text(
                 'Review your assigned manifest, accept it before the origin hub '
                 'releases the parcels, then scan every parcel to start the trip. '
                 'The destination hub records receipt on arrival.',
-                style: TextStyle(color: _muted, fontSize: 13, height: 1.55),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.55),
               ),
               if (widget.statusMessage?.trim().isNotEmpty == true) ...<Widget>[
                 const SizedBox(height: 16),
@@ -299,19 +301,19 @@ class _RiderInterHubTransfersScreenState
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon, fill: true),
             borderRadius: BorderRadius.circular(13),
           ),
           child: const Icon(Icons.local_shipping_rounded, color: Colors.white),
         ),
         const SizedBox(width: 11),
-        const Column(
+         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
               'LIKHAE RIDER',
               style: TextStyle(
-                color: _text,
+                color: AppTheme.resolve(context, _text),
                 fontSize: 14,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0.6,
@@ -320,7 +322,7 @@ class _RiderInterHubTransfersScreenState
             SizedBox(height: 2),
             Text(
               'Inter-logistics workspace',
-              style: TextStyle(color: _muted, fontSize: 11),
+              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
             ),
           ],
         ),
@@ -333,13 +335,13 @@ class _RiderInterHubTransfersScreenState
       width: double.infinity,
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F0),
+        color: AppTheme.resolve(context, const Color(0xFFFFF1F0), fill: true),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
         message,
-        style: const TextStyle(
-          color: Color(0xFFB42318),
+        style:  TextStyle(
+          color: AppTheme.resolve(context, Color(0xFFB42318)),
           fontSize: 12,
           height: 1.5,
         ),
@@ -350,18 +352,18 @@ class _RiderInterHubTransfersScreenState
   Widget _transferCard(RiderInterHubTransferData transfer) {
     final String parcelCount = transfer.items.length.toString();
     final Color statusColor = transfer.isReceived
-        ? const Color(0xFF237A44)
+        ? AppTheme.resolve(context, const Color(0xFF237A44))
         : <String>{'CANCELLED', 'CANCELED'}.contains(transfer.displayStatus)
-        ? const Color(0xFF8A3E34)
-        : _muted;
+        ? AppTheme.resolve(context, const Color(0xFF8A3E34))
+        : AppTheme.resolve(context, _muted);
     final bool busy = _busyManifestIds.contains(transfer.id);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border.all(color: _border),
+        color: AppTheme.resolve(context, _surface, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         borderRadius: BorderRadius.circular(15),
       ),
       child: Column(
@@ -378,8 +380,8 @@ class _RiderInterHubTransfersScreenState
                       transfer.displayManifestNumber,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _text,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                       ),
@@ -389,8 +391,8 @@ class _RiderInterHubTransfersScreenState
                       '$transfer.originHub  →  $transfer.destinationHub',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _muted,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _muted),
                         fontSize: 12,
                         height: 1.45,
                       ),
@@ -398,7 +400,7 @@ class _RiderInterHubTransfersScreenState
                     const SizedBox(height: 5),
                     Text(
                       '$parcelCount parcels',
-                      style: const TextStyle(color: _muted, fontSize: 11),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
                     ),
                   ],
                 ),
@@ -449,7 +451,7 @@ class _RiderInterHubTransfersScreenState
                     onPressed: busy ? null : () => _accept(transfer),
                     icon: const Icon(Icons.check_rounded, size: 18),
                     label: const Text('Accept'),
-                    style: FilledButton.styleFrom(backgroundColor: _maroon),
+                    style: FilledButton.styleFrom(backgroundColor: AppTheme.resolve(context, _maroon, fill: true)),
                   ),
                 if (transfer.canDecline && widget.onDecline != null)
                   OutlinedButton.icon(
@@ -464,13 +466,13 @@ class _RiderInterHubTransfersScreenState
                         : () => _start(transfer),
                     icon: const Icon(Icons.route_rounded, size: 18),
                     label: const Text('Start transport'),
-                    style: FilledButton.styleFrom(backgroundColor: _maroon),
+                    style: FilledButton.styleFrom(backgroundColor: AppTheme.resolve(context, _maroon, fill: true)),
                   ),
               ],
             ),
             if (busy) ...<Widget>[
               const SizedBox(height: 10),
-              const LinearProgressIndicator(color: _maroon),
+               LinearProgressIndicator(color: AppTheme.resolve(context, _maroon)),
             ],
           ],
         ],
@@ -770,7 +772,7 @@ class _RiderInterHubTransfersScreenState
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: isError ? const Color(0xFF8A3E34) : _maroon,
+          backgroundColor: isError ? AppTheme.resolve(context, const Color(0xFF8A3E34), fill: true) : AppTheme.resolve(context, _maroon, fill: true),
         ),
       );
   }
@@ -780,19 +782,19 @@ class _RiderInterHubTransfersScreenState
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border.all(color: _border),
+        color: AppTheme.resolve(context, _surface, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: const Column(
+      child:  Column(
         children: <Widget>[
-          Icon(Icons.swap_horiz_rounded, size: 34, color: _muted),
+          Icon(Icons.swap_horiz_rounded, size: 34, color: AppTheme.resolve(context, _muted)),
           SizedBox(height: 12),
           Text(
             'No inter-hub transfers assigned',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 15,
               fontWeight: FontWeight.w800,
             ),
@@ -801,7 +803,7 @@ class _RiderInterHubTransfersScreenState
           Text(
             'Assigned manifests will appear here.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.5),
           ),
         ],
       ),
@@ -820,13 +822,13 @@ class _TransferNote extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(icon, size: 17, color: const Color(0xFF237A44)),
+        Icon(icon, size: 17, color: AppTheme.resolve(context, const Color(0xFF237A44))),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              color: Color(0xFF60473E),
+            style:  TextStyle(
+              color: AppTheme.resolve(context, Color(0xFF60473E)),
               fontSize: 11,
               height: 1.4,
             ),

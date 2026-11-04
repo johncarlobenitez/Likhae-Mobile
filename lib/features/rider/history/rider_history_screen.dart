@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/sized_network_image.dart';
@@ -176,16 +178,16 @@ class _RiderHistoryScreenState
     BuildContext context,
   ) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
-        backgroundColor: _background,
-        foregroundColor: _text,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
+        foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
+        title:  Text(
           'Delivery History',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 19,
             fontWeight: FontWeight.w900,
           ),
@@ -194,7 +196,7 @@ class _RiderHistoryScreenState
       body: SafeArea(
         top: false,
         child: RefreshIndicator(
-          color: _maroon,
+          color: AppTheme.resolve(context, _maroon),
           onRefresh: _refresh,
           child: ListView(
             physics:
@@ -235,14 +237,14 @@ class _RiderHistoryScreenState
   }
 
   Widget _buildHeader() {
-    return const Column(
+    return  Column(
       crossAxisAlignment:
           CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           'RIDER HISTORY',
           style: TextStyle(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             fontSize: 11.5,
             letterSpacing: 1.8,
             fontWeight: FontWeight.w900,
@@ -256,7 +258,7 @@ class _RiderHistoryScreenState
         Text(
           'Pickup and Delivery History',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 27,
             height: 1.12,
             letterSpacing: -0.45,
@@ -271,7 +273,7 @@ class _RiderHistoryScreenState
         Text(
           'Completed, failed, returned, and sorting-center handoff records from the deliveries table.',
           style: TextStyle(
-            color: _muted,
+            color: AppTheme.resolve(context, _muted),
             fontSize: 13.5,
             height: 1.55,
           ),
@@ -285,20 +287,20 @@ class _RiderHistoryScreenState
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius:
             BorderRadius.circular(
           22,
         ),
         border: Border.all(
-          color: _border,
+          color: AppTheme.resolve(context, _border),
         ),
       ),
       child: Column(
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: <Widget>[
-          const Padding(
+           Padding(
             padding:
                 EdgeInsets.fromLTRB(
               18,
@@ -313,7 +315,7 @@ class _RiderHistoryScreenState
                 Text(
                   'History',
                   style: TextStyle(
-                    color: _text,
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 18,
                     fontWeight:
                         FontWeight.w900,
@@ -327,7 +329,7 @@ class _RiderHistoryScreenState
                 Text(
                   'This list uses your real rider assignments only.',
                   style: TextStyle(
-                    color: _muted,
+                    color: AppTheme.resolve(context, _muted),
                     fontSize: 12.5,
                     height: 1.45,
                   ),
@@ -336,10 +338,10 @@ class _RiderHistoryScreenState
             ),
           ),
 
-          const Divider(
+           Divider(
             height: 1,
             thickness: 1,
-            color: _border,
+            color: AppTheme.resolve(context, _border),
           ),
 
           if (widget.history.isEmpty)
@@ -373,10 +375,10 @@ class _RiderHistoryScreenState
                     if (index !=
                         widget.history.length -
                             1)
-                      const Divider(
+                       Divider(
                         height: 1,
                         thickness: 1,
-                        color: _border,
+                        color: AppTheme.resolve(context, _border),
                       ),
                   ],
                 );
@@ -402,12 +404,12 @@ class _RiderHistoryScreenState
               height: 58,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: _maroonSoft,
+                color: AppTheme.resolve(context, _maroonSoft, fill: true),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.history_rounded,
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 size: 28,
               ),
             ),
@@ -420,7 +422,7 @@ class _RiderHistoryScreenState
               'No rider history found yet.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: _text,
+                color: AppTheme.resolve(context, _text),
                 fontSize: 16,
                 fontWeight:
                     FontWeight.w900,
@@ -435,7 +437,7 @@ class _RiderHistoryScreenState
               'Your completed and previous pickup or delivery assignments will appear here.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: _muted,
+                color: AppTheme.resolve(context, _muted),
                 fontSize: 12.5,
                 height: 1.5,
               ),
@@ -455,25 +457,23 @@ class _RiderHistoryScreenState
         14,
       ),
       decoration: BoxDecoration(
-        color: _successSoft,
+        color: AppTheme.resolve(context, _successSoft, fill: true),
         borderRadius:
             BorderRadius.circular(
           14,
         ),
         border: Border.all(
-          color: const Color(
-            0xFFB7DFC5,
-          ),
+          color: AppTheme.resolve(context, const Color(0xFFB7DFC5)),
         ),
       ),
       child: Row(
         crossAxisAlignment:
             CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(
+           Icon(
             Icons
                 .check_circle_outline_rounded,
-            color: _success,
+            color: AppTheme.resolve(context, _success),
             size: 20,
           ),
 
@@ -484,8 +484,8 @@ class _RiderHistoryScreenState
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: _success,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _success),
                 fontSize: 13,
                 height: 1.45,
                 fontWeight:
@@ -574,8 +574,8 @@ class _HistoryItem
                               TextOverflow
                                   .ellipsis,
                           style:
-                              const TextStyle(
-                            color: _text,
+                               TextStyle(
+                            color: AppTheme.resolve(context, _text),
                             fontSize: 15,
                             height: 1.25,
                             fontWeight:
@@ -595,8 +595,8 @@ class _HistoryItem
                               TextOverflow
                                   .ellipsis,
                           style:
-                              const TextStyle(
-                            color: _muted,
+                               TextStyle(
+                            color: AppTheme.resolve(context, _muted),
                             fontSize: 12.5,
                             height: 1.4,
                           ),
@@ -609,8 +609,8 @@ class _HistoryItem
                         Text(
                           '${parcel.statusLabel} - ${parcel.updatedLabel}',
                           style:
-                              const TextStyle(
-                            color: _muted,
+                               TextStyle(
+                            color: AppTheme.resolve(context, _muted),
                             fontSize: 12,
                             height: 1.4,
                           ),
@@ -636,7 +636,7 @@ class _HistoryItem
                   ),
                   decoration:
                       BoxDecoration(
-                    color: _dangerSoft,
+                    color: AppTheme.resolve(context, _dangerSoft, fill: true),
                     borderRadius:
                         BorderRadius.circular(
                       11,
@@ -644,9 +644,7 @@ class _HistoryItem
                     border:
                         Border.all(
                       color:
-                          const Color(
-                        0xFFF5C5C1,
-                      ),
+                          AppTheme.resolve(context, const Color(0xFFF5C5C1)),
                     ),
                   ),
                   child: Row(
@@ -654,10 +652,10 @@ class _HistoryItem
                         CrossAxisAlignment
                             .start,
                     children: <Widget>[
-                      const Icon(
+                       Icon(
                         Icons
                             .error_outline_rounded,
-                        color: _danger,
+                        color: AppTheme.resolve(context, _danger),
                         size: 18,
                       ),
 
@@ -669,8 +667,8 @@ class _HistoryItem
                         child: Text(
                           'Reason: ${parcel.failureReason}',
                           style:
-                              const TextStyle(
-                            color: _danger,
+                               TextStyle(
+                            color: AppTheme.resolve(context, _danger),
                             fontSize: 12,
                             height: 1.45,
                             fontWeight:
@@ -700,7 +698,7 @@ class _HistoryItem
                     decoration:
                         BoxDecoration(
                       color:
-                          _maroonSoft,
+                          AppTheme.resolve(context, _maroonSoft, fill: true),
                       borderRadius:
                           BorderRadius
                               .circular(
@@ -710,8 +708,8 @@ class _HistoryItem
                     child: Text(
                       parcel.statusLabel,
                       style:
-                          const TextStyle(
-                        color: _maroon,
+                           TextStyle(
+                        color: AppTheme.resolve(context, _maroon),
                         fontSize: 11,
                         fontWeight:
                             FontWeight
@@ -723,13 +721,11 @@ class _HistoryItem
                   const Spacer(),
 
                   if (onTap != null)
-                    const Icon(
+                     Icon(
                       Icons
                           .chevron_right_rounded,
                       color:
-                          Color(
-                        0xFFA99386,
-                      ),
+                          AppTheme.resolve(context, Color(0xFFA99386)),
                     ),
                 ],
               ),
@@ -761,41 +757,35 @@ class _HistoryImage
       height: 58,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(
-          0xFFF3ECE4,
-        ),
+        color: AppTheme.resolve(context, const Color(0xFFF3ECE4), fill: true),
         borderRadius:
             BorderRadius.circular(
           12,
         ),
         border: Border.all(
-          color: const Color(
-            0xFFEADCCC,
-          ),
+          color: AppTheme.resolve(context, const Color(0xFFEADCCC)),
         ),
       ),
       child: url == null ||
               url.isEmpty
-          ? const Center(
+          ?  Center(
               child: Icon(
                 Icons
                     .inventory_2_outlined,
-                color: Color(
-                  0xFFA99386,
-                ),
+                color: AppTheme.resolve(context, Color(0xFFA99386)),
                 size: 25,
               ),
             )
           : SizedNetworkImage(
               url: url,
               fit: BoxFit.cover,
-              placeholder: const Center(
+              placeholder:  Center(
                 child: SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF561C17),
+                    color: AppTheme.resolve(context, Color(0xFF561C17)),
                   ),
                 ),
               ),
@@ -805,13 +795,11 @@ class _HistoryImage
                 StackTrace?
                     stackTrace,
               ) {
-                return const Center(
+                return  Center(
                   child: Icon(
                     Icons
                         .broken_image_outlined,
-                    color: Color(
-                      0xFFA99386,
-                    ),
+                    color: AppTheme.resolve(context, Color(0xFFA99386)),
                     size: 25,
                   ),
                 );

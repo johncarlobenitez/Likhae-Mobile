@@ -23,7 +23,7 @@ class ThemeController extends ValueNotifier<ThemeMode> {
   }
 
   void toggleTheme() {
-    value = isDarkMode
+    value = usesDarkPalette
         ? ThemeMode.light
         : ThemeMode.dark;
   }

@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../models/platform_policy.dart';
@@ -47,7 +49,7 @@ class _PolicyReviewScreenState extends State<PolicyReviewScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: error ? const Color(0xFFB42318) : null,
+          backgroundColor: error ? AppTheme.resolve(context, const Color(0xFFB42318), fill: true) : null,
         ),
       );
   }

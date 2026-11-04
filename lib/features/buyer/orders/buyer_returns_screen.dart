@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -148,9 +150,9 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                     ? 'Enter at least 10 characters.'
                     : null,
               ),
-              const Text(
+               Text(
                 'Support will review the case and contact you through your account.',
-                style: TextStyle(color: _muted, fontSize: 12),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
               ),
             ],
           ),
@@ -261,7 +263,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
   Widget build(BuildContext context) {
     final bool showingDetail = _selectedId != null;
     return Scaffold(
-      backgroundColor: ShopColors.canvas,
+      backgroundColor: AppTheme.resolve(context, ShopColors.canvas, fill: true),
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -274,7 +276,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             ),
             Expanded(
               child: RefreshIndicator(
-                color: _accent,
+                color: AppTheme.resolve(context, _accent),
                 onRefresh: () => _load(detailId: _selectedId),
                 child: _loading && _requests.isEmpty
                     ? ListView(
@@ -309,14 +311,14 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
   Widget _buildList() {
     if (_requests.isEmpty) {
       return ListView(
-        children: const <Widget>[
+        children:  <Widget>[
           SizedBox(height: 110),
-          Icon(Icons.assignment_return_outlined, size: 54, color: _muted),
+          Icon(Icons.assignment_return_outlined, size: 54, color: AppTheme.resolve(context, _muted)),
           SizedBox(height: 12),
           Center(
             child: Text(
               'No return or refund requests yet',
-              style: TextStyle(color: _ink, fontWeight: FontWeight.w700),
+              style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -332,10 +334,10 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
         final String updatedAt =
             (row['updated_at'] ?? row['submitted_at'] ?? '').toString();
         return Card(
-          color: Colors.white,
+          color: AppTheme.resolve(context, Colors.white, fill: true),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            side: const BorderSide(color: _border),
+            side:  BorderSide(color: AppTheme.resolve(context, _border)),
             borderRadius: BorderRadius.circular(16),
           ),
           child: InkWell(
@@ -352,8 +354,8 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                         child: Text(
                           (row['request_number'] ?? 'Return request')
                               .toString(),
-                          style: const TextStyle(
-                            color: _ink,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, _ink),
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -364,21 +366,21 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   const SizedBox(height: 7),
                   Text(
                     'Order ${row['order_number'] ?? row['order_id'] ?? '—'} · ${(row['issue_category'] ?? '').toString().replaceAll('_', ' ')}',
-                    style: const TextStyle(color: _muted, fontSize: 12),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                   ),
                   if (updatedAt.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 5),
                     Text(
                       'Last updated $updatedAt',
-                      style: const TextStyle(color: _muted, fontSize: 11),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
                     ),
                   ],
                   if (cases.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 10),
                     Text(
                       '${cases.length} seller case${cases.length == 1 ? '' : 's'}',
-                      style: const TextStyle(
-                        color: _accent,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _accent),
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                       ),
@@ -421,8 +423,8 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   Expanded(
                     child: Text(
                       (detail['request_number'] ?? 'Return request').toString(),
-                      style: const TextStyle(
-                        color: _ink,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _ink),
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
@@ -434,13 +436,13 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
               const SizedBox(height: 8),
               Text(
                 'Order ${order['order_number'] ?? order['id'] ?? '—'}',
-                style: const TextStyle(color: _muted),
+                style:  TextStyle(color: AppTheme.resolve(context, _muted)),
               ),
               const SizedBox(height: 8),
               Text(
                 '${detail['issue_category'] ?? ''} · ${detail['issue_reason'] ?? ''}',
-                style: const TextStyle(
-                  color: _ink,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _ink),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -450,14 +452,14 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                 const SizedBox(height: 8),
                 Text(
                   detail['description'].toString(),
-                  style: const TextStyle(color: _muted, height: 1.4),
+                  style:  TextStyle(color: AppTheme.resolve(context, _muted), height: 1.4),
                 ),
               ],
               const SizedBox(height: 10),
               Text(
                 'Refund amount requested: ₱${detail['refundable_amount'] ?? 0}',
-                style: const TextStyle(
-                  color: _ink,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _ink),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -474,8 +476,8 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
           _sectionCard(
             Text(
               'Refund method: ${(detail['refund_method'] ?? detail['requested_refund_method']).toString().replaceAll('_', ' ')}',
-              style: const TextStyle(
-                color: _ink,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _ink),
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -487,16 +489,16 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
+                 Text(
                   'Affected items',
-                  style: TextStyle(color: _ink, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w800),
                 ),
                 for (final Map<String, dynamic> item in items)
                   Padding(
                     padding: const EdgeInsets.only(top: 9),
                     child: Text(
                       '${item['quantity'] ?? 0} × ${item['product_name'] ?? 'Item'} · ₱${item['amount'] ?? 0}',
-                      style: const TextStyle(color: _muted, fontSize: 13),
+                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
                     ),
                   ),
               ],
@@ -509,9 +511,9 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
+                 Text(
                   'Submitted evidence',
-                  style: TextStyle(color: _ink, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -550,16 +552,16 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const Text(
+               Text(
                 'Request timeline',
-                style: TextStyle(color: _ink, fontWeight: FontWeight.w800),
+                style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w800),
               ),
               if (events.isEmpty)
-                const Padding(
+                 Padding(
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
                     'No updates yet.',
-                    style: TextStyle(color: _muted),
+                    style: TextStyle(color: AppTheme.resolve(context, _muted)),
                   ),
                 ),
               for (final Map<String, dynamic> event in events)
@@ -568,7 +570,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Icon(Icons.circle, size: 8, color: _accent),
+                       Icon(Icons.circle, size: 8, color: AppTheme.resolve(context, _accent)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -579,23 +581,23 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                                 '_',
                                 ' ',
                               ),
-                              style: const TextStyle(
-                                color: _ink,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, _ink),
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             if ((event['note'] ?? '').toString().isNotEmpty)
                               Text(
                                 event['note'].toString(),
-                                style: const TextStyle(
-                                  color: _muted,
+                                style:  TextStyle(
+                                  color: AppTheme.resolve(context, _muted),
                                   fontSize: 12,
                                 ),
                               ),
                             Text(
                               (event['created_at'] ?? '').toString(),
-                              style: const TextStyle(
-                                color: _muted,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, _muted),
                                 fontSize: 10,
                               ),
                             ),
@@ -635,8 +637,8 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                 Expanded(
                   child: Text(
                     (sellerCase['seller_name'] ?? 'Seller').toString(),
-                    style: const TextStyle(
-                      color: _ink,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _ink),
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -647,14 +649,14 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             const SizedBox(height: 7),
             Text(
               'Requested ₱${sellerCase['requested_amount'] ?? 0} · Approved ₱${sellerCase['approved_amount'] ?? '—'}',
-              style: const TextStyle(color: _muted, fontSize: 12),
+              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
             ),
             if (caseEvidence.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-              const Text(
+               Text(
                 'Seller evidence',
                 style: TextStyle(
-                  color: _ink,
+                  color: AppTheme.resolve(context, _ink),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -682,10 +684,10 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             ],
             if (caseEvents.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-              const Text(
+               Text(
                 'Seller case updates',
                 style: TextStyle(
-                  color: _ink,
+                  color: AppTheme.resolve(context, _ink),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -695,7 +697,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   padding: const EdgeInsets.only(top: 5),
                   child: Text(
                     '${(event['event'] ?? '').toString().replaceAll('_', ' ')}${(event['note'] ?? '').toString().isEmpty ? '' : ': ${event['note']}'}',
-                    style: const TextStyle(color: _muted, fontSize: 11),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
                   ),
                 ),
             ],
@@ -761,8 +763,8 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
   Widget _sectionCard(Widget child) => Container(
     padding: const EdgeInsets.all(15),
     decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: _border),
+      color: AppTheme.resolve(context, Colors.white, fill: true),
+      border: Border.all(color: AppTheme.resolve(context, _border)),
       borderRadius: BorderRadius.circular(16),
     ),
     child: child,
@@ -776,13 +778,13 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7EDE8),
+        color: AppTheme.resolve(context, const Color(0xFFF7EDE8), fill: true),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         status,
-        style: const TextStyle(
-          color: _accent,
+        style:  TextStyle(
+          color: AppTheme.resolve(context, _accent),
           fontSize: 9,
           fontWeight: FontWeight.w800,
         ),

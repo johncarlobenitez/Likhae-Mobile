@@ -1,9 +1,13 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
+import '../../../shared/widgets/app_motion.dart';
+import '../../../shared/widgets/loading_skeleton.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/core/utils/api_value_parsers.dart';
 import 'package:likhae/services/product_service.dart';
@@ -1309,8 +1313,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
             return SafeArea(
               child: Container(
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-                decoration: const BoxDecoration(
-                  color: _surface,
+                decoration:  BoxDecoration(
+                  color: AppTheme.resolve(context, _surface, fill: true),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 child: Column(
@@ -1320,19 +1324,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       width: 42,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: _border,
+                        color: AppTheme.resolve(context, _border, fill: true),
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
 
                     const SizedBox(height: 18),
 
-                    const Row(
+                     Row(
                       children: [
                         Text(
                           'Sort products',
                           style: TextStyle(
-                            color: _text,
+                            color: AppTheme.resolve(context, _text),
                             fontSize: 19,
                             fontWeight: FontWeight.w800,
                           ),
@@ -1376,7 +1380,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : _maroonDark,
+          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -1409,13 +1413,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
         !_showSearchExperience &&
         !_searchFocusNode.hasFocus) {
       return Scaffold(
-        backgroundColor: _background,
+        backgroundColor: AppTheme.resolve(context, _background, fill: true),
         body: SafeArea(
           child: Column(
             children: [
               _buildHeader(),
               const Expanded(
-                child: Center(child: CircularProgressIndicator(color: _maroon)),
+                child: LoadingSkeleton(layout: LoadingLayout.products),
               ),
             ],
           ),
@@ -1424,7 +1428,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         child: Column(
           children: [
@@ -1433,7 +1437,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
             Expanded(
               child: RefreshIndicator(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refreshProducts,
                 child: CustomScrollView(
                   key: const PageStorageKey<String>('buyer-products-scroll'),
@@ -1453,10 +1457,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       ),
 
                       if (_isRemoteSearchLoading && allProducts.isEmpty)
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(
-                            child: CircularProgressIndicator(color: _maroon),
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: ProductGridSkeleton(),
                           ),
                         )
                       else if (_errorMessage != null && products.isEmpty)
@@ -1467,17 +1471,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(
+                                 Icon(
                                   Icons.error_outline_rounded,
                                   size: 52,
-                                  color: _maroon,
+                                  color: AppTheme.resolve(context, _maroon),
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
                                   'Could not load products',
                                   style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
-                                        color: _text,
+                                        color: AppTheme.resolve(context, _text),
                                         fontWeight: FontWeight.w700,
                                       ),
                                 ),
@@ -1485,7 +1489,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                 Text(
                                   _errorMessage!,
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(color: _muted),
+                                  style:  TextStyle(color: AppTheme.resolve(context, _muted)),
                                 ),
                               ],
                             ),
@@ -1564,13 +1568,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   onChanged: _onSearchChanged,
                   decoration: InputDecoration(
                     hintText: 'Search products, shops...',
-                    hintStyle: const TextStyle(
-                      color: _mutedLight,
+                    hintStyle:  TextStyle(
+                      color: AppTheme.resolve(context, _mutedLight),
                       fontSize: 12,
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon:  Icon(
                       Icons.search_rounded,
-                      color: _muted,
+                      color: AppTheme.resolve(context, _muted),
                       size: 21,
                     ),
                     suffixIcon: _searchQuery.trim().isEmpty
@@ -1578,26 +1582,26 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         : IconButton(
                             tooltip: 'Clear',
                             onPressed: _clearSearch,
-                            icon: const Icon(
+                            icon:  Icon(
                               Icons.close_rounded,
-                              color: _muted,
+                              color: AppTheme.resolve(context, _muted),
                               size: 18,
                             ),
                           ),
                     filled: true,
-                    fillColor: _surface,
+                    fillColor: AppTheme.resolve(context, _surface, fill: true),
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(15),
-                      borderSide: const BorderSide(color: _border),
+                      borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(15),
-                      borderSide: const BorderSide(color: _border),
+                      borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(15),
-                      borderSide: const BorderSide(color: _maroon, width: 1.3),
+                      borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.3),
                     ),
                   ),
                 ),
@@ -1606,7 +1610,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               const SizedBox(width: 9),
 
               Material(
-                color: _surface,
+                color: AppTheme.resolve(context, _surface, fill: true),
                 borderRadius: BorderRadius.circular(15),
                 child: InkWell(
                   onTap: _showSortSheet,
@@ -1615,13 +1619,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      border: Border.all(color: _border),
+                      border: Border.all(color: AppTheme.resolve(context, _border)),
                       borderRadius: BorderRadius.circular(15),
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(
+                    child:  Icon(
                       Icons.swap_vert_rounded,
-                      color: _maroon,
+                      color: AppTheme.resolve(context, _maroon),
                       size: 23,
                     ),
                   ),
@@ -1648,7 +1652,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 icon: const Icon(Icons.auto_awesome, size: 15),
                 label: Text('Did you mean "$suggestion"?'),
                 style: TextButton.styleFrom(
-                  foregroundColor: _maroon,
+                  foregroundColor: AppTheme.resolve(context, _maroon),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   visualDensity: VisualDensity.compact,
                   textStyle: const TextStyle(
@@ -1661,15 +1665,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ],
           const SizedBox(height: 8),
           Material(
-            color: _surface,
+            color: AppTheme.resolve(context, _surface, fill: true),
             borderRadius: BorderRadius.circular(15),
             child: ExpansionTile(
               key: const PageStorageKey<String>('buyer-products-filters'),
               tilePadding: const EdgeInsets.symmetric(horizontal: 14),
               childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              leading: const Icon(
+              leading:  Icon(
                 Icons.filter_list_rounded,
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 size: 20,
               ),
               title: const Text(
@@ -1678,7 +1682,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ),
               subtitle: Text(
                 '${_filteredProducts.length} matching products',
-                style: const TextStyle(fontSize: 11, color: _muted),
+                style:  TextStyle(fontSize: 11, color: AppTheme.resolve(context, _muted)),
               ),
               children: [
                 Align(
@@ -1686,7 +1690,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   child: Text(
                     'Category',
                     style: TextStyle(
-                      color: _text,
+                      color: AppTheme.resolve(context, _text),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -1720,7 +1724,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                               selected: selected,
                               label: label,
                               child: Material(
-                                color: selected ? _maroon : _surface,
+                                color: selected ? AppTheme.resolve(context, _maroon, fill: true) : AppTheme.resolve(context, _surface, fill: true),
                                 borderRadius: BorderRadius.circular(100),
                                 child: InkWell(
                                   onTap: () => setState(() {
@@ -1740,13 +1744,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(100),
                                       border: Border.all(
-                                        color: selected ? _maroon : _border,
+                                        color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border),
                                       ),
                                     ),
                                     child: Text(
                                       label,
                                       style: TextStyle(
-                                        color: selected ? Colors.white : _text,
+                                        color: selected ? Colors.white : AppTheme.resolve(context, _text),
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -1848,7 +1852,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
         .map<Widget>((ProductSearchRecord search) {
           final BuyerProduct? product = _productForSearch(search);
           return Material(
-            color: ShopColors.soft,
+            color: AppTheme.resolve(context, ShopColors.soft, fill: true),
             borderRadius: BorderRadius.circular(24),
             child: InkWell(
               borderRadius: BorderRadius.circular(24),
@@ -1864,8 +1868,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         search.query,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _text),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -1897,12 +1901,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
       Tooltip(
         message: 'Clear recent searches',
         child: Material(
-          color: ShopColors.soft,
+          color: AppTheme.resolve(context, ShopColors.soft, fill: true),
           shape: const CircleBorder(),
           child: IconButton(
             onPressed: _clearSearchHistory,
             icon: const Icon(Icons.delete_outline_rounded),
-            color: _muted,
+            color: AppTheme.resolve(context, _muted),
             iconSize: 20,
             constraints: const BoxConstraints.tightFor(width: 40, height: 40),
             padding: EdgeInsets.zero,
@@ -1926,7 +1930,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             tooltip: 'Back',
             onPressed: _leaveSearchExperience,
             icon: const Icon(Icons.arrow_back_rounded),
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             iconSize: 23,
             constraints: const BoxConstraints.tightFor(width: 38, height: 52),
             padding: EdgeInsets.zero,
@@ -1939,14 +1943,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
               textInputAction: TextInputAction.search,
               onSubmitted: _submitSearch,
               onChanged: _onSearchChanged,
-              style: const TextStyle(color: _text, fontSize: 14),
-              cursorColor: _maroon,
+              style:  TextStyle(color: AppTheme.resolve(context, _text), fontSize: 14),
+              cursorColor: AppTheme.resolve(context, _maroon),
               decoration: InputDecoration(
                 hintText: 'Search products, shops...',
-                hintStyle: const TextStyle(color: _mutedLight, fontSize: 14),
-                prefixIcon: const Icon(
+                hintStyle:  TextStyle(color: AppTheme.resolve(context, _mutedLight), fontSize: 14),
+                prefixIcon:  Icon(
                   Icons.search_rounded,
-                  color: _muted,
+                  color: AppTheme.resolve(context, _muted),
                   size: 21,
                 ),
                 suffixIcon: _searchQuery.trim().isEmpty
@@ -1955,25 +1959,25 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         tooltip: 'Clear search',
                         onPressed: _clearSearch,
                         icon: const Icon(Icons.close_rounded, size: 18),
-                        color: _muted,
+                        color: AppTheme.resolve(context, _muted),
                       ),
                 filled: true,
-                fillColor: _surface,
+                fillColor: AppTheme.resolve(context, _surface, fill: true),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 8,
                   vertical: 17,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide(color: _maroon.withValues(alpha: .65)),
+                  borderSide: BorderSide(color: AppTheme.resolve(context, _maroon).withValues(alpha: .65)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide(color: _maroon.withValues(alpha: .65)),
+                  borderSide: BorderSide(color: AppTheme.resolve(context, _maroon).withValues(alpha: .65)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
-                  borderSide: const BorderSide(color: _maroon, width: 1.3),
+                  borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.3),
                 ),
               ),
             ),
@@ -1983,7 +1987,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             tooltip: 'Sort results',
             onPressed: _showSortSheet,
             icon: const Icon(Icons.swap_vert_rounded),
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             iconSize: 25,
             constraints: const BoxConstraints.tightFor(width: 42, height: 50),
             padding: EdgeInsets.zero,
@@ -2013,13 +2017,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const ColoredBox(color: ShopColors.soft, child: SizedBox(height: 7)),
+         ColoredBox(color: AppTheme.resolve(context, ShopColors.soft, fill: true), child: SizedBox(height: 7)),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-          child: const Text(
+          child:  Text(
             'Search Suggestions',
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
@@ -2047,15 +2051,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           'seller' => Icons.storefront_outlined,
                           _ => Icons.search_rounded,
                         },
-                        color: _maroon,
+                        color: AppTheme.resolve(context, _maroon),
                         size: 20,
                       ),
                       title: Text(
                         suggestion.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _text),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -2068,12 +2072,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ] else if (_isRemoteSuggestionLoading)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: LinearProgressIndicator(minHeight: 2),
+                    child: AppLoadingLine(),
                   )
                 else if (_remoteSuggestionFailed)
-                  const Text(
+                   Text(
                     'Live suggestions are unavailable. You can still search.',
-                    style: TextStyle(color: _muted, fontSize: 12),
+                    style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                   ),
               ],
             ),
@@ -2081,7 +2085,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
         if (products.isEmpty && _isLoading)
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 28, 20, 40),
-            child: Center(child: CircularProgressIndicator(color: _maroon)),
+            child: ProductGridSkeleton(),
           )
         else if (products.isEmpty)
           Padding(
@@ -2093,7 +2097,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ? 'No product suggestions yet. Try a different search.'
                   : 'Products you search for will appear here.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _muted, fontSize: 13),
+              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
             ),
           )
         else
@@ -2151,7 +2155,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       ? 'Shop Deals'
                       : 'Explore Products',
                   style: TextStyle(
-                    color: _text,
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 24,
                     height: 1,
                     fontWeight: FontWeight.w800,
@@ -2165,7 +2169,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   searching
                       ? '$resultCount matching “$query”'
                       : '$resultCount found',
-                  style: const TextStyle(color: _muted, fontSize: 10.5),
+                  style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10.5),
                 ),
               ],
             ),
@@ -2176,13 +2180,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
-              color: ShopColors.accentSoft,
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
               _sort.badgeLabel,
-              style: const TextStyle(
-                color: _maroon,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _maroon),
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
               ),
@@ -2266,7 +2270,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Text(
               'Page ${_pageIndex + 1} of $pageCount',
-              style: const TextStyle(color: _muted, fontSize: 11),
+              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
             ),
           ),
           OutlinedButton.icon(
@@ -2294,8 +2298,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
             Container(
               width: 68,
               height: 68,
-              decoration: const BoxDecoration(
-                color: ShopColors.accentSoft,
+              decoration:  BoxDecoration(
+                color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
@@ -2303,7 +2307,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 searching
                     ? Icons.search_off_rounded
                     : Icons.shopping_bag_outlined,
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 size: 30,
               ),
             ),
@@ -2313,8 +2317,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
             Text(
               searching ? 'No matching products' : 'No products available yet',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: _text,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _text),
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
               ),
@@ -2327,7 +2331,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   ? 'Try another product name, category, or seller.'
                   : 'Products from approved sellers will appear here.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _muted, fontSize: 11, height: 1.45),
+              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11, height: 1.45),
             ),
 
             if (searching) ...[
@@ -2336,8 +2340,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
               OutlinedButton(
                 onPressed: _clearSearch,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
-                  side: const BorderSide(color: _tan),
+                  foregroundColor: AppTheme.resolve(context, _maroon),
+                  side:  BorderSide(color: AppTheme.resolve(context, _tan)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(11),
                   ),
@@ -2374,21 +2378,19 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool saleEnded = product.isFlashSaleExpired;
     return ShopProductCard(
+      key: ValueKey(product.id),
       image: _ProductImage(imageUrl: product.imageUrl),
       name: product.name,
       category: product.category,
       seller: product.sellerName,
-      price: saleEnded
-          ? product.originalPrice ?? product.price
-          : product.price,
+      price: saleEnded ? product.originalPrice ?? product.price : product.price,
       originalPrice: saleEnded ? null : product.originalPrice,
       priceLabel: saleEnded && product.originalPrice == null
           ? 'Refresh for price'
           : null,
       rating: product.rating,
       soldCount: product.soldCount,
-      outOfStock:
-          product.isOutOfStock || product.sellerOnVacation || saleEnded,
+      outOfStock: product.isOutOfStock || product.sellerOnVacation || saleEnded,
       availabilityLabel: product.sellerOnVacation
           ? 'Seller on vacation'
           : product.isOutOfStock
@@ -2457,10 +2459,10 @@ class _ProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = imageUrl?.trim() ?? '';
     if (value.isEmpty) {
-      return const Center(
+      return  Center(
         child: Icon(
           Icons.inventory_2_outlined,
-          color: ShopColors.faint,
+          color: AppTheme.resolve(context, ShopColors.faint),
           size: 36,
         ),
       );
@@ -2481,7 +2483,7 @@ class _SearchSuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: ShopColors.surface,
+    color: AppTheme.resolve(context, ShopColors.surface, fill: true),
     borderRadius: BorderRadius.circular(14),
     child: InkWell(
       onTap: onTap,
@@ -2489,7 +2491,7 @@ class _SearchSuggestionCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-          border: Border.all(color: ShopColors.border),
+          border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -2505,10 +2507,10 @@ class _SearchSuggestionCard extends StatelessWidget {
                           fit: BoxFit.contain,
                           iconSize: 38,
                         )
-                      : const Center(
+                      :  Center(
                           child: Icon(
                             Icons.inventory_2_outlined,
-                            color: ShopColors.faint,
+                            color: AppTheme.resolve(context, ShopColors.faint),
                             size: 38,
                           ),
                         ),
@@ -2524,8 +2526,8 @@ class _SearchSuggestionCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: ShopColors.text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.text),
                     fontSize: 14,
                     height: 1.15,
                     fontWeight: FontWeight.w500,
@@ -2559,13 +2561,13 @@ class _SortOption extends StatelessWidget {
       title: Text(
         sort.label,
         style: TextStyle(
-          color: ShopColors.text,
+          color: AppTheme.resolve(context, ShopColors.text),
           fontSize: 13,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
         ),
       ),
       trailing: selected
-          ? const Icon(Icons.check_circle_rounded, color: ShopColors.accent)
+          ?  Icon(Icons.check_circle_rounded, color: AppTheme.resolve(context, ShopColors.accent))
           : null,
     );
   }

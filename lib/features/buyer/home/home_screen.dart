@@ -4,6 +4,8 @@ import '../../../core/api/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
+import '../../../shared/widgets/app_motion.dart';
+import '../../../shared/widgets/loading_skeleton.dart';
 import 'package:likhae/core/theme/app_theme.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/core/utils/api_value_parsers.dart';
@@ -401,6 +403,8 @@ class BuyerHomeScreen extends StatefulWidget {
   final BuyerHomeRefreshCallback? onRefresh;
   final int cartItemCount;
   final int unreadNotificationCount;
+  final bool localPreview;
+  final ScrollController? scrollController;
 
   const BuyerHomeScreen({
     super.key,
@@ -431,6 +435,8 @@ class BuyerHomeScreen extends StatefulWidget {
     this.onRefresh,
     this.cartItemCount = 0,
     this.unreadNotificationCount = 0,
+    this.localPreview = false,
+    this.scrollController,
   });
 
   @override
@@ -491,15 +497,15 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         ),
       ];
 
-  static Color get background => AppTheme.adaptive(ShopColors.canvas);
-  static Color get backgroundSoft => AppTheme.adaptive(ShopColors.accentSoft);
-  static Color get card => AppTheme.adaptive(ShopColors.surface);
-  static Color get border => AppTheme.adaptive(ShopColors.border);
-  static Color get maroon => AppTheme.adaptive(ShopColors.accent);
-  static Color get maroonLight => AppTheme.adaptive(ShopColors.accentLight);
-  static Color get text => AppTheme.adaptive(ShopColors.text);
-  static Color get muted => AppTheme.adaptive(ShopColors.muted);
-  static Color get muted2 => AppTheme.adaptive(ShopColors.faint);
+  static const Color background = ShopColors.canvas;
+  static const Color backgroundSoft = ShopColors.accentSoft;
+  static const Color card = ShopColors.surface;
+  static const Color border = ShopColors.border;
+  static const Color maroon = ShopColors.accent;
+  static const Color maroonLight = ShopColors.accentLight;
+  static const Color text = ShopColors.text;
+  static const Color muted = ShopColors.muted;
+  static const Color muted2 = ShopColors.faint;
   final Set<int> _wishlistIds = <int>{};
   final Set<int> _wishlistLoading = <int>{};
   List<BuyerHomeProduct> _loadedProducts = <BuyerHomeProduct>[];
@@ -526,6 +532,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _syncWishlistState();
+    if (widget.localPreview) {
+      _invalidateProductCaches();
+      return;
+    }
     _refreshWishlistState();
     WishlistService.productIds.addListener(_onWishlistChanged);
     _invalidateProductCaches();
@@ -567,6 +577,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   }
 
   void _refreshIfStale() {
+    if (widget.localPreview) return;
     if (widget.products.isNotEmpty || _productsRequest != null) return;
     if (_loadedAt == null ||
         _loadedRevision != ApiClient.dataRevision ||
@@ -583,6 +594,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   }
 
   Future<void> _loadProducts() {
+    if (widget.localPreview) return Future<void>.value();
     return _productsRequest ??= _loadHomeContent().whenComplete(() {
       _productsRequest = null;
     });
@@ -677,6 +689,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   }
 
   Future<void> _refreshWishlistState() async {
+    if (widget.localPreview) return;
     if (!AppConfig.apiEnabled) return;
     try {
       final products = await BuyerMobileService.fetchWishlist();
@@ -786,6 +799,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     for (final BuyerHomeProduct product in known) {
       if (product.wishlisted) incoming.add(product.id);
     }
+    if (widget.localPreview) {
+      _wishlistIds
+        ..clear()
+        ..addAll(incoming);
+      return;
+    }
     WishlistService.recordKnownProducts(
       known.map(
         (BuyerHomeProduct product) =>
@@ -862,6 +881,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   }
 
   Future<void> _toggleWishlist(BuyerHomeProduct product) async {
+    if (widget.localPreview) return;
     if (_wishlistLoading.contains(product.id)) return;
 
     final BuyerHomeWishlistCallback? asyncCallback =
@@ -901,6 +921,28 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final content = Scaffold(
+      backgroundColor: AppTheme.resolve(context, background, fill: true),
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          color: AppTheme.resolve(context, maroon),
+          onRefresh: () async {
+            await Future.wait([_loadProducts(), _refreshWishlistState()]);
+          },
+          child: CustomScrollView(
+            controller: widget.scrollController,
+            key: const PageStorageKey<String>('buyer-home-scroll'),
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: <Widget>[
+              SliverToBoxAdapter(child: _buildHeader()),
+              _buildMainContent(),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (widget.localPreview) return content;
     return BuyerNavigationFrame(
       currentIndex: 0,
       aiPage: 'home',
@@ -909,26 +951,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       onOrders: widget.onViewOrders ?? widget.onBrowseProducts ?? () {},
       onMessages: widget.onMessages ?? widget.onBrowseProducts ?? () {},
       onProfile: widget.onProfile ?? widget.onBrowseProducts ?? () {},
-      child: Scaffold(
-        backgroundColor: background,
-        body: SafeArea(
-          bottom: false,
-          child: RefreshIndicator(
-            color: maroon,
-            onRefresh: () async {
-              await Future.wait([_loadProducts(), _refreshWishlistState()]);
-            },
-            child: CustomScrollView(
-              key: const PageStorageKey<String>('buyer-home-scroll'),
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: <Widget>[
-                SliverToBoxAdapter(child: _buildHeader()),
-                _buildMainContent(),
-              ],
-            ),
-          ),
-        ),
-      ),
+      child: content,
     );
   }
 
@@ -959,7 +982,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                             Text(
                               'LIKHAE',
                               style: TextStyle(
-                                color: text,
+                                color: AppTheme.resolve(context, text),
                                 fontFamily: 'serif',
                                 fontSize: 24,
                                 fontWeight: FontWeight.w700,
@@ -971,7 +994,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                         const SizedBox(height: 3),
                         Text(
                           'Shop smart with LIKHAE',
-                          style: TextStyle(color: muted, fontSize: 11.5),
+                          style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 11.5),
                         ),
                       ],
                     ),
@@ -1025,7 +1048,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
               ),
               const SizedBox(height: 20),
               Material(
-                color: card,
+                color: AppTheme.resolve(context, card, fill: true),
                 borderRadius: BorderRadius.circular(18),
                 child: InkWell(
                   onTap: widget.onSearch,
@@ -1037,12 +1060,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.search_rounded, size: 22, color: maroon),
+                        Icon(Icons.search_rounded, size: 22, color: AppTheme.resolve(context, maroon)),
                         const SizedBox(width: 11),
                         Expanded(
                           child: Text(
                             'Search products, categories, local sellers...',
-                            style: TextStyle(color: muted, fontSize: 13),
+                            style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 13),
                           ),
                         ),
                       ],
@@ -1072,7 +1095,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         .take(4)
         .toList(growable: false);
     final sections = <Widget>[
-      if (_loadingProducts) const LinearProgressIndicator(minHeight: 2),
+      if (_loadingProducts) const AppLoadingLine(),
       _buildHero(_heroProduct),
       const SizedBox(height: 22),
       _buildQuickActions(),
@@ -1087,7 +1110,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         widget.onViewFeatured,
       ),
       const SizedBox(height: 16),
-      if (featuredProducts.isEmpty)
+      if (_loadingProducts && featuredProducts.isEmpty)
+        const ProductGridSkeleton()
+      else if (featuredProducts.isEmpty)
         _buildHomeEmptyState(
           title: 'Featured products are coming soon',
           description: 'Products from trusted local sellers will appear here.',
@@ -1122,13 +1147,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           onWishlistProduct: _toggleWishlist,
         )
       else if (_loadingDeals)
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            'Loading deals...',
-            style: TextStyle(color: muted, fontSize: 12),
-          ),
-        )
+        const ProductGridSkeleton()
       else
         _buildHomeEmptyState(
           title: 'No discounted products are available right now',
@@ -1145,7 +1164,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         widget.onViewRecommended,
       ),
       const SizedBox(height: 16),
-      if (recommendedProducts.isEmpty)
+      if (_loadingProducts && recommendedProducts.isEmpty)
+        const ProductGridSkeleton()
+      else if (recommendedProducts.isEmpty)
         _buildHomeEmptyState(
           title: 'More recommendations will appear here',
           description:
@@ -1189,19 +1210,19 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
       decoration: BoxDecoration(
-        color: card,
+        color: AppTheme.resolve(context, card, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border),
+        border: Border.all(color: AppTheme.resolve(context, border)),
       ),
       child: Column(
         children: [
-          Icon(Icons.storefront_outlined, color: maroonLight, size: 30),
+          Icon(Icons.storefront_outlined, color: AppTheme.resolve(context, maroonLight), size: 30),
           const SizedBox(height: 12),
           Text(
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: text,
+              color: AppTheme.resolve(context, text),
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
@@ -1210,14 +1231,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           Text(
             description,
             textAlign: TextAlign.center,
-            style: TextStyle(color: muted, fontSize: 11, height: 1.4),
+            style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 11, height: 1.4),
           ),
           if (actionLabel != null) ...[
             const SizedBox(height: 14),
             FilledButton(
               onPressed: onAction,
               style: FilledButton.styleFrom(
-                backgroundColor: maroon,
+                backgroundColor: AppTheme.resolve(context, maroon, fill: true),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 18,
@@ -1246,11 +1267,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient:  LinearGradient(
           colors: <Color>[
-            ShopColors.accentDark,
-            ShopColors.accent,
-            ShopColors.accentLight,
+            AppTheme.resolve(context, ShopColors.accentDark, fill: true),
+            AppTheme.resolve(context, ShopColors.accent, fill: true),
+            AppTheme.resolve(context, ShopColors.accentLight, fill: true),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -1258,7 +1279,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: ShopColors.accentDark.withValues(alpha: .14),
+            color: AppTheme.resolve(context, ShopColors.accentDark).withValues(alpha: .14),
             blurRadius: 20,
             offset: const Offset(0, 9),
           ),
@@ -1280,10 +1301,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Text(
+                 Text(
                   'CURRENT DISCOUNTS',
                   style: TextStyle(
-                    color: Color(0xFFE9C7A5),
+                    color: AppTheme.resolve(context, Color(0xFFE9C7A5)),
                     fontSize: 9,
                     letterSpacing: 1.5,
                     fontWeight: FontWeight.w800,
@@ -1301,10 +1322,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                 Text(
                   'Browse products with current seller discounts.',
                   style: TextStyle(
-                    color: Color(0xFFF4DED4),
+                    color: AppTheme.resolve(context, Color(0xFFF4DED4)),
                     fontSize: 11,
                     height: 1.4,
                   ),
@@ -1315,8 +1336,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                   icon: const Icon(Icons.arrow_forward_rounded, size: 15),
                   label: const Text('Shop Deals'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFF7EF),
-                    foregroundColor: ShopColors.accentDark,
+                    backgroundColor: AppTheme.resolve(context, const Color(0xFFFFF7EF), fill: true),
+                    foregroundColor: AppTheme.resolve(context, ShopColors.accentDark),
                     minimumSize: const Size(0, 38),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     shape: RoundedRectangleBorder(
@@ -1386,12 +1407,22 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         .trim()
         .toLowerCase();
 
-    if (<String>{'inactive', 'cancelled', 'canceled', 'paused', 'draft'}
-        .contains(rawStatus)) {
+    if (<String>{
+      'inactive',
+      'cancelled',
+      'canceled',
+      'paused',
+      'draft',
+    }.contains(rawStatus)) {
       return 'inactive';
     }
-    if (<String>{'expired', 'ended', 'finished', 'complete', 'completed'}
-        .contains(rawStatus)) {
+    if (<String>{
+      'expired',
+      'ended',
+      'finished',
+      'complete',
+      'completed',
+    }.contains(rawStatus)) {
       return 'expired';
     }
     if (endsAt != null && !endsAt.isAfter(now)) return 'expired';
@@ -1416,9 +1447,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       final dynamic value = _platformEventField(event, key);
       if (value is Map) {
         final Map<String, dynamic> row = Map<String, dynamic>.from(value);
-        final String label = (row['description'] ?? row['label'] ?? row['name'] ?? '')
-            .toString()
-            .trim();
+        final String label =
+            (row['description'] ?? row['label'] ?? row['name'] ?? '')
+                .toString()
+                .trim();
         if (label.isNotEmpty) return label;
       } else if (value is String && value.trim().isNotEmpty) {
         return value.trim();
@@ -1433,22 +1465,29 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     ]) {
       final dynamic value = _platformEventField(event, key);
       final List<dynamic> rows = value is List ? value : <dynamic>[value];
-      final List<String> labels = rows.map((dynamic row) {
-        if (row is Map) {
-          final Map<String, dynamic> product = Map<String, dynamic>.from(row);
-          return (product['name'] ??
-                  product['product_name'] ??
-                  product['title'] ??
-                  product['label'] ??
-                  (product['id'] == null ? '' : 'Product #${product['id']}'))
-              .toString()
-              .trim();
-        }
-        final String label = row?.toString().trim() ?? '';
-        return key == 'eligible_product_ids' && label.isNotEmpty
-            ? 'Product #$label'
-            : label;
-      }).where((String label) => label.isNotEmpty).toList(growable: false);
+      final List<String> labels = rows
+          .map((dynamic row) {
+            if (row is Map) {
+              final Map<String, dynamic> product = Map<String, dynamic>.from(
+                row,
+              );
+              return (product['name'] ??
+                      product['product_name'] ??
+                      product['title'] ??
+                      product['label'] ??
+                      (product['id'] == null
+                          ? ''
+                          : 'Product #${product['id']}'))
+                  .toString()
+                  .trim();
+            }
+            final String label = row?.toString().trim() ?? '';
+            return key == 'eligible_product_ids' && label.isNotEmpty
+                ? 'Product #$label'
+                : label;
+          })
+          .where((String label) => label.isNotEmpty)
+          .toList(growable: false);
       if (labels.isNotEmpty) return labels.join(', ');
     }
 
@@ -1483,40 +1522,48 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
 
   int? _platformEventVoucherId(Map<String, dynamic> event) {
     final dynamic voucher = event['voucher'];
-    final dynamic value = event['voucher_id'] ??
-        (voucher is Map ? voucher['id'] : null);
+    final dynamic value =
+        event['voucher_id'] ?? (voucher is Map ? voucher['id'] : null);
     return int.tryParse((value ?? '').toString());
   }
 
   Widget _buildPlatformEventCard(Map<String, dynamic> event) {
     final String status = _platformEventStatus(event);
     final Color statusBackground = switch (status) {
-      'upcoming' => const Color(0xFFF8EDD9),
-      'active' => const Color(0xFFE8F3EA),
-      'expired' || 'inactive' => const Color(0xFFF2E5E3),
-      _ => const Color(0xFFEDE8E3),
+      'upcoming' => AppTheme.resolve(context, const Color(0xFFF8EDD9)),
+      'active' => AppTheme.resolve(context, const Color(0xFFE8F3EA)),
+      'expired' || 'inactive' => AppTheme.resolve(context, const Color(0xFFF2E5E3)),
+      _ => AppTheme.resolve(context, const Color(0xFFEDE8E3)),
     };
     final Color statusForeground = switch (status) {
-      'upcoming' => const Color(0xFF8A5A12),
-      'active' => const Color(0xFF256F4A),
-      'expired' || 'inactive' => const Color(0xFF8B3B35),
-      _ => const Color(0xFF685E57),
+      'upcoming' => AppTheme.resolve(context, const Color(0xFF8A5A12)),
+      'active' => AppTheme.resolve(context, const Color(0xFF256F4A)),
+      'expired' || 'inactive' => AppTheme.resolve(context, const Color(0xFF8B3B35)),
+      _ => AppTheme.resolve(context, const Color(0xFF685E57)),
     };
     final String title = (event['title'] ?? 'Platform event').toString();
     final double discountValue =
-        double.tryParse((_platformEventField(event, 'discount_value') ?? 0).toString()) ?? 0;
+        double.tryParse(
+          (_platformEventField(event, 'discount_value') ?? 0).toString(),
+        ) ??
+        0;
     final bool isPercent =
         (_platformEventField(event, 'discount_type') ?? '')
-                .toString()
-                .toUpperCase() ==
-            'PERCENT';
+            .toString()
+            .toUpperCase() ==
+        'PERCENT';
     final String discount = isPercent
         ? '${discountValue.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '')}%'
         : '${String.fromCharCode(0x20B1)}${discountValue.toStringAsFixed(2)}';
     final double minimumSpend =
-        double.tryParse((_platformEventField(event, 'minimum_order_amount') ?? 0).toString()) ?? 0;
-    final dynamic rawMaximumSavings =
-        _platformEventField(event, 'maximum_discount_amount');
+        double.tryParse(
+          (_platformEventField(event, 'minimum_order_amount') ?? 0).toString(),
+        ) ??
+        0;
+    final dynamic rawMaximumSavings = _platformEventField(
+      event,
+      'maximum_discount_amount',
+    );
     final DateTime? startsAt = DateTime.tryParse(
       (_platformEventField(event, 'starts_at') ?? '').toString(),
     );
@@ -1559,15 +1606,15 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: <Color>[ShopColors.accentDark, ShopColors.accent],
+        gradient:  LinearGradient(
+          colors: <Color>[AppTheme.resolve(context, ShopColors.accentDark, fill: true), AppTheme.resolve(context, ShopColors.accent, fill: true)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: ShopColors.accentDark.withValues(alpha: .12),
+            color: AppTheme.resolve(context, ShopColors.accentDark).withValues(alpha: .12),
             blurRadius: 16,
             offset: const Offset(0, 7),
           ),
@@ -1595,11 +1642,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                 ),
               ),
               const SizedBox(width: 9),
-              const Expanded(
+               Expanded(
                 child: Text(
                   'LIKHAE PLATFORM EVENT',
                   style: TextStyle(
-                    color: Color(0xFFE9C7A5),
+                    color: AppTheme.resolve(context, Color(0xFFE9C7A5)),
                     fontSize: 8,
                     letterSpacing: 1.1,
                     fontWeight: FontWeight.w800,
@@ -1617,8 +1664,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                   title,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFFFFF8F2),
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, Color(0xFFFFF8F2)),
                     fontSize: 23,
                     height: 1.05,
                     letterSpacing: -.4,
@@ -1643,17 +1690,17 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                     Text(
                       discount,
                       maxLines: 1,
-                      style: const TextStyle(
-                        color: Color(0xFFFFF8F2),
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, Color(0xFFFFF8F2)),
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    const Text(
+                     Text(
                       'OFF',
                       style: TextStyle(
-                        color: Color(0xFFE9C7A5),
+                        color: AppTheme.resolve(context, Color(0xFFE9C7A5)),
                         fontSize: 8,
                         letterSpacing: 1.5,
                         fontWeight: FontWeight.w900,
@@ -1690,8 +1737,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
               icon: const Icon(Icons.arrow_forward_rounded, size: 14),
               label: const Text('View Event'),
               style: TextButton.styleFrom(
-                foregroundColor: ShopColors.accentDark,
-                backgroundColor: const Color(0xFFE9C7A5),
+                foregroundColor: AppTheme.resolve(context, ShopColors.accentDark),
+                backgroundColor: AppTheme.resolve(context, const Color(0xFFE9C7A5), fill: true),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 13,
                   vertical: 8,
@@ -1738,7 +1785,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     final String body = rawTerms is List
         ? rawTerms.map((dynamic term) => term.toString()).join('\n')
         : rawTerms is Map
-        ? (rawTerms['description'] ?? rawTerms['text'] ?? rawTerms['label'] ?? '')
+        ? (rawTerms['description'] ??
+                  rawTerms['text'] ??
+                  rawTerms['label'] ??
+                  '')
               .toString()
         : (rawTerms ?? '').toString();
     final String code = (_platformEventField(event, 'code') ?? '')
@@ -1765,10 +1815,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         ? 'Unknown'
         : '${status[0].toUpperCase()}${status.substring(1)}';
     final Color statusColor = switch (status) {
-      'active' => const Color(0xFF256F4A),
-      'upcoming' => const Color(0xFF8A5A12),
-      'expired' || 'inactive' => const Color(0xFF8B3B35),
-      _ => muted,
+      'active' => AppTheme.resolve(context, const Color(0xFF256F4A)),
+      'upcoming' => AppTheme.resolve(context, const Color(0xFF8A5A12)),
+      'expired' || 'inactive' => AppTheme.resolve(context, const Color(0xFF8B3B35)),
+      _ => AppTheme.resolve(context, muted),
     };
     final String validPeriod =
         '${startsAt == null ? 'Start time not provided' : _formatCampaignDate(startsAt)} \u2013 ${endsAt == null ? 'No end date' : _formatCampaignDate(endsAt)}';
@@ -1786,10 +1836,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(color: text, fontSize: 13, height: 1.4),
-        ),
+        Text(value, style: TextStyle(color: text, fontSize: 13, height: 1.4)),
       ],
     );
 
@@ -1797,7 +1844,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      backgroundColor: card,
+      backgroundColor: AppTheme.resolve(context, card, fill: true),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1806,199 +1853,208 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         builder: (BuildContext context, StateSetter setModalState) => SafeArea(
           child: SingleChildScrollView(
             child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 6, 18, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'PLATFORM EVENT',
-                  style: TextStyle(
-                    color: maroon,
-                    fontSize: 9,
-                    letterSpacing: 1.1,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          color: text,
-                          fontSize: 22,
-                          height: 1.15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+              padding: const EdgeInsets.fromLTRB(18, 6, 18, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'PLATFORM EVENT',
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, maroon),
+                      fontSize: 9,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: .10),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        statusLabel,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: backgroundSoft.withValues(alpha: .55),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: border),
                   ),
-                  child: Column(
+                  const SizedBox(height: 8),
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      detailBlock('Valid period', validPeriod),
-                      const SizedBox(height: 14),
-                      detailBlock(
-                        'Eligibility',
-                        _platformEventEligibility(event),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            color: AppTheme.resolve(context, text),
+                            fontSize: 22,
+                            height: 1.15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                      if (destination.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: 14),
-                        detailBlock('Reward destination', destination),
-                      ],
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: .10),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                if (body.trim().isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 16),
-                  detailBlock('About this event', body.trim()),
-                ],
-                if (code.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: maroon.withValues(alpha: .07),
+                      color: AppTheme.resolve(context, backgroundSoft, fill: true).withValues(alpha: .55),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: maroon.withValues(alpha: .18)),
+                      border: Border.all(color: AppTheme.resolve(context, border)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(
-                          'VOUCHER CODE',
-                          style: TextStyle(
-                            color: maroon,
-                            fontSize: 9,
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w900,
-                          ),
+                        detailBlock('Valid period', validPeriod),
+                        const SizedBox(height: 14),
+                        detailBlock(
+                          'Eligibility',
+                          _platformEventEligibility(event),
                         ),
-                        const SizedBox(height: 6),
-                        SelectableText(
-                          code,
-                          style: TextStyle(
-                            color: text,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1,
-                          ),
-                        ),
+                        if (destination.isNotEmpty) ...<Widget>[
+                          const SizedBox(height: 14),
+                          detailBlock('Reward destination', destination),
+                        ],
                       ],
                     ),
                   ),
-                ],
-                if (voucherId != null &&
-                    status == 'active' &&
-                    AppConfig.apiEnabled) ...<Widget>[
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed:
-                          _claimingPlatformEvents.contains(voucherId) ||
-                              claimedFromServer ||
-                              _claimedPlatformEvents.contains(voucherId)
-                          ? null
-                          : () async {
-                              if (context.mounted) {
-                                setModalState(
-                                  () => _claimingPlatformEvents.add(voucherId),
-                                );
-                              }
-                              try {
-                                if (!claimedFromServer &&
-                                    !_claimedPlatformEvents.contains(voucherId)) {
-                                  await BuyerMobileService.claimVoucher(
-                                    voucherId,
-                                  );
-                                }
-                                _claimedPlatformEvents.add(voucherId);
-                                if (mounted) setState(() {});
-                                if (context.mounted) setModalState(() {});
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(
-                                    this.context,
-                                  ).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Platform voucher added to your Rewards.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              } catch (error) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(
-                                    this.context,
-                                  ).showSnackBar(
-                                    SnackBar(content: Text(error.toString())),
-                                  );
-                                }
-                              } finally {
-                                _claimingPlatformEvents.remove(voucherId);
-                                if (context.mounted) setModalState(() {});
-                              }
-                            },
-                      icon: _claimingPlatformEvents.contains(voucherId)
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(
-                              (claimedFromServer ||
-                                  _claimedPlatformEvents.contains(voucherId))
-                                  ? Icons.check_circle_outline
-                                  : Icons.card_giftcard_outlined,
+                  if (body.trim().isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 16),
+                    detailBlock('About this event', body.trim()),
+                  ],
+                  if (code.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.resolve(context, maroon, fill: true).withValues(alpha: .07),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppTheme.resolve(context, maroon).withValues(alpha: .18),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'VOUCHER CODE',
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, maroon),
+                              fontSize: 9,
+                              letterSpacing: 1.1,
+                              fontWeight: FontWeight.w900,
                             ),
-                      label: Text(
-                        _claimingPlatformEvents.contains(voucherId)
-                            ? 'Collecting'
-                            : (claimedFromServer ||
-                                  _claimedPlatformEvents.contains(voucherId))
-                            ? 'Added to Rewards'
-                            : 'Collect voucher',
+                          ),
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            code,
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, text),
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
+                  ],
+                  if (voucherId != null &&
+                      status == 'active' &&
+                      AppConfig.apiEnabled) ...<Widget>[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed:
+                            _claimingPlatformEvents.contains(voucherId) ||
+                                claimedFromServer ||
+                                _claimedPlatformEvents.contains(voucherId)
+                            ? null
+                            : () async {
+                                if (context.mounted) {
+                                  setModalState(
+                                    () =>
+                                        _claimingPlatformEvents.add(voucherId),
+                                  );
+                                }
+                                try {
+                                  if (!claimedFromServer &&
+                                      !_claimedPlatformEvents.contains(
+                                        voucherId,
+                                      )) {
+                                    await BuyerMobileService.claimVoucher(
+                                      voucherId,
+                                    );
+                                  }
+                                  _claimedPlatformEvents.add(voucherId);
+                                  if (mounted) setState(() {});
+                                  if (context.mounted) setModalState(() {});
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(
+                                      this.context,
+                                    ).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Platform voucher added to your Rewards.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(
+                                      this.context,
+                                    ).showSnackBar(
+                                      SnackBar(content: Text(error.toString())),
+                                    );
+                                  }
+                                } finally {
+                                  _claimingPlatformEvents.remove(voucherId);
+                                  if (context.mounted) setModalState(() {});
+                                }
+                              },
+                        icon: _claimingPlatformEvents.contains(voucherId)
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Icon(
+                                (claimedFromServer ||
+                                        _claimedPlatformEvents.contains(
+                                          voucherId,
+                                        ))
+                                    ? Icons.check_circle_outline
+                                    : Icons.card_giftcard_outlined,
+                              ),
+                        label: Text(
+                          _claimingPlatformEvents.contains(voucherId)
+                              ? 'Collecting'
+                              : (claimedFromServer ||
+                                    _claimedPlatformEvents.contains(voucherId))
+                              ? 'Added to Rewards'
+                              : 'Collect voucher',
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
           ),
         ),
       ),
@@ -2167,13 +2223,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
             alignment: Alignment.center,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: ShopColors.accentDark.withValues(alpha: .35),
+              color: AppTheme.resolve(context, ShopColors.accentDark, fill: true).withValues(alpha: .35),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text(
+            child:  Text(
               'Products will appear here when available.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFFEEDBD4), fontSize: 12),
+              style: TextStyle(color: AppTheme.resolve(context, Color(0xFFEEDBD4)), fontSize: 12),
             ),
           )
         : Material(
@@ -2204,22 +2260,22 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                             vertical: 7,
                           ),
                           decoration: BoxDecoration(
-                            color: ShopColors.accentSoft,
+                            color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                             borderRadius: BorderRadius.circular(30),
                           ),
-                          child: const Row(
+                          child:  Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
                                 Icons.star_rounded,
-                                color: ShopColors.tan,
+                                color: AppTheme.resolve(context, ShopColors.tan),
                                 size: 12,
                               ),
                               SizedBox(width: 4),
                               Text(
                                 'Best Seller',
                                 style: TextStyle(
-                                  color: ShopColors.accentDark,
+                                  color: AppTheme.resolve(context, ShopColors.accentDark),
                                   fontSize: 9,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -2252,8 +2308,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                             : ''),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFFEEDBD4),
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, Color(0xFFEEDBD4)),
                       fontSize: 10,
                     ),
                   ),
@@ -2369,11 +2425,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         return Container(
           padding: EdgeInsets.all(compact ? 16 : 22),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
+            gradient:  LinearGradient(
               colors: [
-                ShopColors.accentDark,
-                ShopColors.accent,
-                ShopColors.accentLight,
+                AppTheme.resolve(context, ShopColors.accentDark, fill: true),
+                AppTheme.resolve(context, ShopColors.accent, fill: true),
+                AppTheme.resolve(context, ShopColors.accentLight, fill: true),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -2381,7 +2437,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
             borderRadius: BorderRadius.circular(compact ? 23 : 28),
             boxShadow: [
               BoxShadow(
-                color: ShopColors.accent.withValues(alpha: .1),
+                color: AppTheme.resolve(context, ShopColors.accent).withValues(alpha: .1),
                 blurRadius: compact ? 18 : 26,
                 offset: Offset(0, compact ? 7.0 : 10.0),
               ),
@@ -2426,7 +2482,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
               Text(
                 kicker.toUpperCase(),
                 style: TextStyle(
-                  color: maroonLight,
+                  color: AppTheme.resolve(context, maroonLight),
                   fontSize: 9,
                   letterSpacing: 1.3,
                   fontWeight: FontWeight.w800,
@@ -2436,7 +2492,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
               Text(
                 title,
                 style: TextStyle(
-                  color: text,
+                  color: AppTheme.resolve(context, text),
                   fontSize: 19,
                   height: 1.15,
                   letterSpacing: -0.35,
@@ -2446,7 +2502,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
               const SizedBox(height: 5),
               Text(
                 subtitle,
-                style: TextStyle(color: muted, fontSize: 11, height: 1.4),
+                style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 11, height: 1.4),
               ),
             ],
           ),
@@ -2458,7 +2514,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           icon: const Icon(Icons.arrow_forward_rounded, size: 15),
           label: Text(actionText),
           style: TextButton.styleFrom(
-            foregroundColor: maroon,
+            foregroundColor: AppTheme.resolve(context, maroon),
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             visualDensity: VisualDensity.compact,
             textStyle: const TextStyle(
@@ -2568,6 +2624,7 @@ class _ProductCard extends StatelessWidget {
         ? 'Flash sale active'
         : null;
     return ShopProductCard(
+      key: ValueKey(product.id),
       image: _ProductGallery(images: product.galleryImages),
       imageAspectRatio: 4.0 / 3.0,
       name: product.name,
@@ -2580,8 +2637,7 @@ class _ProductCard extends StatelessWidget {
           : null,
       rating: product.rating,
       soldCount: product.soldCount,
-      outOfStock:
-          product.isOutOfStock || product.sellerOnVacation || saleEnded,
+      outOfStock: product.isOutOfStock || product.sellerOnVacation || saleEnded,
       availabilityLabel: product.sellerOnVacation
           ? 'Seller on vacation'
           : saleLabel,
@@ -2632,7 +2688,7 @@ class _ProductGalleryState extends State<_ProductGallery> {
         child: Icon(
           Icons.inventory_2_outlined,
           size: 34,
-          color: _BuyerHomeScreenState.muted2,
+          color: AppTheme.resolve(context, _BuyerHomeScreenState.muted2),
         ),
       );
     }
@@ -2667,8 +2723,8 @@ class _ProductGalleryState extends State<_ProductGallery> {
                   height: 5,
                   decoration: BoxDecoration(
                     color: active
-                        ? _BuyerHomeScreenState.maroon
-                        : _BuyerHomeScreenState.muted2.withValues(alpha: 0.55),
+                        ? AppTheme.resolve(context, _BuyerHomeScreenState.maroon, fill: true)
+                        : AppTheme.resolve(context, _BuyerHomeScreenState.muted2, fill: true).withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 );
@@ -2688,10 +2744,10 @@ class _ProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = url?.trim() ?? '';
     if (value.isEmpty) {
-      return const Center(
+      return  Center(
         child: Icon(
           Icons.inventory_2_outlined,
-          color: ShopColors.faint,
+          color: AppTheme.resolve(context, ShopColors.faint),
           size: 34,
         ),
       );
@@ -2718,7 +2774,7 @@ class _BuyerCategoryCard extends StatelessWidget {
       button: true,
       label: 'Explore ${category.name}',
       child: Material(
-        color: _BuyerHomeScreenState.card,
+        color: AppTheme.resolve(context, _BuyerHomeScreenState.card, fill: true),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
@@ -2727,7 +2783,7 @@ class _BuyerCategoryCard extends StatelessWidget {
             height: 110,
             padding: const EdgeInsets.fromLTRB(6, 8, 6, 6),
             decoration: BoxDecoration(
-              border: Border.all(color: _BuyerHomeScreenState.border),
+              border: Border.all(color: AppTheme.resolve(context, _BuyerHomeScreenState.border)),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Column(
@@ -2737,13 +2793,13 @@ class _BuyerCategoryCard extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: _BuyerHomeScreenState.backgroundSoft,
+                    color: AppTheme.resolve(context, _BuyerHomeScreenState.backgroundSoft, fill: true),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     icon,
                     size: 21,
-                    color: _BuyerHomeScreenState.maroonLight,
+                    color: AppTheme.resolve(context, _BuyerHomeScreenState.maroonLight),
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -2753,7 +2809,7 @@ class _BuyerCategoryCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: _BuyerHomeScreenState.text,
+                    color: AppTheme.resolve(context, _BuyerHomeScreenState.text),
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                     height: 1.1,
@@ -2763,7 +2819,7 @@ class _BuyerCategoryCard extends StatelessWidget {
                 Text(
                   'Explore',
                   style: TextStyle(
-                    color: _BuyerHomeScreenState.muted,
+                    color: AppTheme.resolve(context, _BuyerHomeScreenState.muted),
                     fontSize: 8,
                     fontWeight: FontWeight.w500,
                   ),
@@ -2802,7 +2858,7 @@ class _BuyerQuickActionCard extends StatelessWidget {
       button: true,
       label: '${action.label}, ${action.description}',
       child: Material(
-        color: _BuyerHomeScreenState.card,
+        color: AppTheme.resolve(context, _BuyerHomeScreenState.card, fill: true),
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: action.onTap,
@@ -2811,7 +2867,7 @@ class _BuyerQuickActionCard extends StatelessWidget {
             height: 92,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              border: Border.all(color: _BuyerHomeScreenState.border),
+              border: Border.all(color: AppTheme.resolve(context, _BuyerHomeScreenState.border)),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -2820,13 +2876,13 @@ class _BuyerQuickActionCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: _BuyerHomeScreenState.backgroundSoft,
+                    color: AppTheme.resolve(context, _BuyerHomeScreenState.backgroundSoft, fill: true),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     action.icon,
                     size: 22,
-                    color: _BuyerHomeScreenState.maroon,
+                    color: AppTheme.resolve(context, _BuyerHomeScreenState.maroon),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -2840,7 +2896,7 @@ class _BuyerQuickActionCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _BuyerHomeScreenState.text,
+                          color: AppTheme.resolve(context, _BuyerHomeScreenState.text),
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2851,7 +2907,7 @@ class _BuyerQuickActionCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _BuyerHomeScreenState.muted,
+                          color: AppTheme.resolve(context, _BuyerHomeScreenState.muted),
                           fontSize: 10.5,
                           height: 1.25,
                         ),

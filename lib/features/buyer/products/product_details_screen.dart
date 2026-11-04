@@ -1,9 +1,12 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
+import '../../../shared/widgets/app_motion.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/core/utils/api_value_parsers.dart';
 import 'package:likhae/services/buyer_mobile_service.dart';
@@ -1046,6 +1049,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   int _currentImageIndex = 0;
 
   bool _addingToCart = false;
+  bool _cartAdded = false;
+  Timer? _cartFeedbackTimer;
   bool _buyingNow = false;
   bool _updatingWishlist = false;
   bool _flashReminderRegistered = false;
@@ -1160,6 +1165,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           : _optionValuesForVariation(_selectedVariation!);
 
       _currentImageIndex = 0;
+      _cartFeedbackTimer?.cancel();
+      _cartAdded = false;
       _descriptionExpanded = false;
       _flashReminderRegistered = false;
       _loadedRelatedProducts = <ProductDetailData>[];
@@ -1185,6 +1192,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   @override
   void dispose() {
+    _cartFeedbackTimer?.cancel();
     WishlistService.productIds.removeListener(_onWishlistChanged);
     _galleryController.dispose();
 
@@ -1464,26 +1472,26 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Color _colorForOption(String value) {
     final String normalized = value.toLowerCase().trim();
-    if (normalized.contains('black')) return const Color(0xFF252525);
-    if (normalized.contains('white')) return const Color(0xFFF8F8F8);
-    if (normalized.contains('navy')) return const Color(0xFF1E365E);
-    if (normalized.contains('red')) return const Color(0xFFB73535);
-    if (normalized.contains('khaki')) return const Color(0xFFB9A06C);
-    if (normalized.contains('peach')) return const Color(0xFFE7A18E);
+    if (normalized.contains('black')) return AppTheme.resolve(context, const Color(0xFF252525));
+    if (normalized.contains('white')) return AppTheme.resolve(context, const Color(0xFFF8F8F8));
+    if (normalized.contains('navy')) return AppTheme.resolve(context, const Color(0xFF1E365E));
+    if (normalized.contains('red')) return AppTheme.resolve(context, const Color(0xFFB73535));
+    if (normalized.contains('khaki')) return AppTheme.resolve(context, const Color(0xFFB9A06C));
+    if (normalized.contains('peach')) return AppTheme.resolve(context, const Color(0xFFE7A18E));
     if (normalized.contains('mocha') || normalized.contains('brown')) {
-      return const Color(0xFF876452);
+      return AppTheme.resolve(context, const Color(0xFF876452));
     }
-    if (normalized.contains('olive')) return const Color(0xFF7A8156);
-    if (normalized.contains('blue')) return const Color(0xFF557CA8);
-    if (normalized.contains('green')) return const Color(0xFF5D8A63);
-    if (normalized.contains('pink')) return const Color(0xFFD98B9A);
-    if (normalized.contains('orange')) return const Color(0xFFD6813A);
-    if (normalized.contains('yellow')) return const Color(0xFFE0B948);
-    if (normalized.contains('purple')) return const Color(0xFF8B6FA7);
+    if (normalized.contains('olive')) return AppTheme.resolve(context, const Color(0xFF7A8156));
+    if (normalized.contains('blue')) return AppTheme.resolve(context, const Color(0xFF557CA8));
+    if (normalized.contains('green')) return AppTheme.resolve(context, const Color(0xFF5D8A63));
+    if (normalized.contains('pink')) return AppTheme.resolve(context, const Color(0xFFD98B9A));
+    if (normalized.contains('orange')) return AppTheme.resolve(context, const Color(0xFFD6813A));
+    if (normalized.contains('yellow')) return AppTheme.resolve(context, const Color(0xFFE0B948));
+    if (normalized.contains('purple')) return AppTheme.resolve(context, const Color(0xFF8B6FA7));
     if (normalized.contains('gray') || normalized.contains('grey')) {
-      return const Color(0xFF969696);
+      return AppTheme.resolve(context, const Color(0xFF969696));
     }
-    return const Color(0xFFD7C9BE);
+    return AppTheme.resolve(context, const Color(0xFFD7C9BE));
   }
 
   void _resetGalleryToSelectedOption() {
@@ -1638,7 +1646,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
     setState(() {
       _addingToCart = true;
+      _cartAdded = false;
     });
+    _cartFeedbackTimer?.cancel();
 
     try {
       if (widget.onAddToCartRequest != null) {
@@ -1651,8 +1661,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         return;
       }
 
+      setState(() => _cartAdded = true);
+      _cartFeedbackTimer = Timer(const Duration(milliseconds: 1600), () {
+        if (mounted) setState(() => _cartAdded = false);
+      });
       _showMessage(
-        '$_quantity item${_quantity == 1 ? '' : 's'} added to your cart.',
+        'Added to cart', success: true,
       );
     } catch (error) {
       _showMessage(_errorText(error), error: true);
@@ -1726,7 +1740,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: _surface,
+      backgroundColor: AppTheme.resolve(context, _surface, fill: true),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -1761,11 +1775,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     children: [
                       Row(
                         children: [
-                          const Expanded(
+                           Expanded(
                             child: Text(
                               'Choose product options',
                               style: TextStyle(
-                                color: _text,
+                                color: AppTheme.resolve(context, _text),
                                 fontSize: 19,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1774,7 +1788,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           IconButton(
                             onPressed: () => Navigator.of(sheetContext).pop(),
                             icon: const Icon(Icons.close_rounded),
-                            color: _muted,
+                            color: AppTheme.resolve(context, _muted),
                           ),
                         ],
                       ),
@@ -1782,7 +1796,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         _product.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _muted, fontSize: 13),
+                        style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -1793,14 +1807,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             height: 92,
                             clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
-                              color: ShopColors.soft,
+                              color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: _border),
+                              border: Border.all(color: AppTheme.resolve(context, _border)),
                             ),
                             child: previewImages.isEmpty
-                                ? const Icon(
+                                ?  Icon(
                                     Icons.inventory_2_outlined,
-                                    color: _muted2,
+                                    color: AppTheme.resolve(context, _muted2),
                                   )
                                 : _ProductImage(url: previewImages.first),
                           ),
@@ -1813,8 +1827,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   _formatPrice(
                                     matchingVariation?.price ?? _product.price,
                                   ),
-                                  style: const TextStyle(
-                                    color: _maroon,
+                                  style:  TextStyle(
+                                    color: AppTheme.resolve(context, _maroon),
                                     fontSize: 24,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -1827,7 +1841,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                       ? 'Stock: $previewStock'
                                       : 'Unavailable',
                                   style: TextStyle(
-                                    color: previewStock > 0 ? _muted : _danger,
+                                    color: previewStock > 0 ? AppTheme.resolve(context, _muted) : AppTheme.resolve(context, _danger),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -1838,8 +1852,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                     matchingVariation.value,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _brown,
+                                    style:  TextStyle(
+                                      color: AppTheme.resolve(context, _brown),
                                       fontSize: 11,
                                     ),
                                   ),
@@ -1858,8 +1872,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               for (final ProductOptionData group in groups) ...[
                                 Text(
                                   group.name,
-                                  style: const TextStyle(
-                                    color: _brown,
+                                  style:  TextStyle(
+                                    color: AppTheme.resolve(context, _brown),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -1888,10 +1902,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                         const <String>[];
                                     return Material(
                                       color: !optionAvailable
-                                          ? const Color(0xFFF1F1F1)
+                                          ? AppTheme.resolve(context, const Color(0xFFF1F1F1), fill: true)
                                           : selected
-                                          ? const Color(0xFFF5E4DA)
-                                          : const Color(0xFFF8F7F5),
+                                          ? AppTheme.resolve(context, const Color(0xFFF5E4DA), fill: true)
+                                          : AppTheme.resolve(context, const Color(0xFFF8F7F5), fill: true),
                                       borderRadius: BorderRadius.circular(9),
                                       child: InkWell(
                                         onTap: optionAvailable
@@ -1918,10 +1932,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                             ),
                                             border: Border.all(
                                               color: !optionAvailable
-                                                  ? const Color(0xFFE3E3E3)
+                                                  ? AppTheme.resolve(context, const Color(0xFFE3E3E3))
                                                   : selected
-                                                  ? _maroon
-                                                  : _border,
+                                                  ? AppTheme.resolve(context, _maroon)
+                                                  : AppTheme.resolve(context, _border),
                                               width: selected ? 1.4 : 1,
                                             ),
                                           ),
@@ -1945,8 +1959,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                                       ),
                                                       border: Border.all(
                                                         color: selected
-                                                            ? _maroon
-                                                            : _border,
+                                                            ? AppTheme.resolve(context, _maroon)
+                                                            : AppTheme.resolve(context, _border),
                                                       ),
                                                     ),
                                                     child: optionImages.isEmpty
@@ -1963,10 +1977,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                                 value,
                                                 style: TextStyle(
                                                   color: !optionAvailable
-                                                      ? const Color(0xFF999999)
+                                                      ? AppTheme.resolve(context, const Color(0xFF999999))
                                                       : selected
-                                                      ? _maroon
-                                                      : _text,
+                                                      ? AppTheme.resolve(context, _maroon)
+                                                      : AppTheme.resolve(context, _text),
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w700,
                                                 ),
@@ -1983,9 +1997,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF8F1),
+                                  color: AppTheme.resolve(context, const Color(0xFFFFF8F1), fill: true),
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: _border),
+                                  border: Border.all(color: AppTheme.resolve(context, _border)),
                                 ),
                                 child: Text(
                                   matchingVariation == null
@@ -1995,8 +2009,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                       : matchingVariation.stock == null
                                       ? 'Selected option: ${matchingVariation.value}'
                                       : '${_formatPrice(matchingVariation.price ?? _product.price)} · ${_variationStock(matchingVariation)} available',
-                                  style: const TextStyle(
-                                    color: _brown,
+                                  style:  TextStyle(
+                                    color: AppTheme.resolve(context, _brown),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -2005,11 +2019,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               const SizedBox(height: 14),
                               Row(
                                 children: [
-                                  const Expanded(
+                                   Expanded(
                                     child: Text(
                                       'Quantity',
                                       style: TextStyle(
-                                        color: _brown,
+                                        color: AppTheme.resolve(context, _brown),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w800,
                                       ),
@@ -2028,16 +2042,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                     width: 42,
                                     height: 40,
                                     alignment: Alignment.center,
-                                    decoration: const BoxDecoration(
-                                      color: _surface,
+                                    decoration:  BoxDecoration(
+                                      color: AppTheme.resolve(context, _surface, fill: true),
                                       border: Border.symmetric(
-                                        horizontal: BorderSide(color: _border),
+                                        horizontal: BorderSide(color: AppTheme.resolve(context, _border)),
                                       ),
                                     ),
                                     child: Text(
                                       '$_quantity',
-                                      style: const TextStyle(
-                                        color: _text,
+                                      style:  TextStyle(
+                                        color: AppTheme.resolve(context, _text),
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
@@ -2080,9 +2094,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               : null,
                           style: ElevatedButton.styleFrom(
                             elevation: 0,
-                            backgroundColor: _maroon,
+                            backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                             foregroundColor: Colors.white,
-                            disabledBackgroundColor: _maroon.withValues(
+                            disabledBackgroundColor: AppTheme.resolve(context, _maroon, fill: true).withValues(
                               alpha: 0.25,
                             ),
                             shape: RoundedRectangleBorder(
@@ -2155,7 +2169,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
-  void _showMessage(String message, {bool error = false}) {
+  void _showMessage(String message, {bool error = false, bool success = false}) {
     if (!mounted) {
       return;
     }
@@ -2165,18 +2179,25 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : _maroonDark,
+          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          content: Text(
+          content: Row(children: [
+            if (success) ...[
+              const AppReveal(child: Icon(Icons.check_circle_rounded,
+                color: Color(0xFF6FD19A), size: 20)),
+              const SizedBox(width: 10),
+            ],
+            Expanded(child: Text(
             message,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w500,
             ),
-          ),
+          )),
+          ]),
         ),
       );
   }
@@ -2232,14 +2253,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final bool wide = MediaQuery.sizeOf(context).width >= 900;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
             Expanded(
               child: RefreshIndicator(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refresh,
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -2322,29 +2343,29 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       spacing: 7,
       runSpacing: 4,
       children: [
-        const Text(
+         Text(
           'Products',
           style: TextStyle(
-            color: _brown,
+            color: AppTheme.resolve(context, _brown),
             fontSize: 10.5,
             fontWeight: FontWeight.w700,
           ),
         ),
 
-        const Text('/', style: TextStyle(color: _muted2, fontSize: 10.5)),
+         Text('/', style: TextStyle(color: AppTheme.resolve(context, _muted2), fontSize: 10.5)),
 
         if (category.isNotEmpty) ...[
-          Text(category, style: const TextStyle(color: _brown, fontSize: 10.5)),
+          Text(category, style:  TextStyle(color: AppTheme.resolve(context, _brown), fontSize: 10.5)),
 
-          const Text('/', style: TextStyle(color: _muted2, fontSize: 10.5)),
+           Text('/', style: TextStyle(color: AppTheme.resolve(context, _muted2), fontSize: 10.5)),
         ],
 
         Text(
           _product.name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: _text,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, _text),
             fontSize: 10.5,
             fontWeight: FontWeight.w800,
           ),
@@ -2390,7 +2411,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(icon, color: _maroon, size: 21),
+            child: Icon(icon, color: AppTheme.resolve(context, _maroon), size: 21),
           ),
         ),
       ),
@@ -2404,12 +2425,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         boxShadow: [
           BoxShadow(
-            color: _maroon.withValues(alpha: 0.035),
+            color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.035),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -2425,12 +2446,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 fit: StackFit.expand,
                 children: [
                   Container(
-                    color: ShopColors.soft,
+                    color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                     child: images.isEmpty
-                        ? const Center(
+                        ?  Center(
                             child: Icon(
                               Icons.inventory_2_outlined,
-                              color: _muted2,
+                              color: AppTheme.resolve(context, _muted2),
                               size: 52,
                             ),
                           )
@@ -2458,7 +2479,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: _maroon,
+                          color: AppTheme.resolve(context, _maroon, fill: true),
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text(
@@ -2507,7 +2528,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: _maroonDark.withValues(alpha: 0.82),
+                          color: AppTheme.resolve(context, _maroonDark, fill: true).withValues(alpha: 0.82),
                           borderRadius: BorderRadius.circular(100),
                         ),
                         child: Text(
@@ -2554,7 +2575,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: active ? _maroon : _border,
+                          color: active ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border),
                           width: active ? 1.8 : 1,
                         ),
                       ),
@@ -2576,12 +2597,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
         boxShadow: [
           BoxShadow(
-            color: _maroon.withValues(alpha: 0.035),
+            color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.035),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -2594,13 +2615,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFF6EAE3),
+                color: AppTheme.resolve(context, const Color(0xFFF6EAE3), fill: true),
                 borderRadius: BorderRadius.circular(100),
               ),
               child: Text(
                 category.toUpperCase(),
-                style: const TextStyle(
-                  color: _maroon,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, _maroon),
                   fontSize: 9.5,
                   letterSpacing: 0.9,
                   fontWeight: FontWeight.w800,
@@ -2613,7 +2634,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           Text(
             _product.name,
             style: TextStyle(
-              color: _text,
+              color: AppTheme.resolve(context, _text),
               fontSize: showDesktopActions ? 29 : 23,
               height: 1.08,
               letterSpacing: -0.7,
@@ -2632,14 +2653,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.star_rounded, color: _star, size: 15),
+                     Icon(Icons.star_rounded, color: AppTheme.resolve(context, _star), size: 15),
 
                     const SizedBox(width: 3),
 
                     Text(
                       _product.rating!.toStringAsFixed(1),
-                      style: const TextStyle(
-                        color: _brown,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, _brown),
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                       ),
@@ -2649,12 +2670,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
               Text(
                 '${_product.reviewCount} ${_product.reviewCount == 1 ? 'review' : 'reviews'}',
-                style: const TextStyle(color: _muted, fontSize: 10.5),
+                style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10.5),
               ),
 
               Text(
                 '${_product.soldCount} sold',
-                style: const TextStyle(color: _muted, fontSize: 10.5),
+                style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10.5),
               ),
             ],
           ),
@@ -2671,7 +2692,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             const SizedBox(height: 10),
             _buildFlashSaleTimingPanel(
               upcoming: _product.isFlashSaleUpcoming,
-              showReminder: _product.flashSaleReminderAvailable &&
+              showReminder:
+                  _product.flashSaleReminderAvailable &&
                   widget.onFlashSaleReminder != null,
             ),
           ],
@@ -2684,7 +2706,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
           const SizedBox(height: 16),
 
-          const Divider(height: 1, color: _border),
+           Divider(height: 1, color: AppTheme.resolve(context, _border)),
 
           const SizedBox(height: 14),
 
@@ -2709,9 +2731,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7EBDD),
+        color: AppTheme.resolve(context, const Color(0xFFF7EBDD), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE6CCB6)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFE6CCB6))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2721,12 +2743,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             runSpacing: 5,
             crossAxisAlignment: WrapCrossAlignment.end,
             children: [
-              if (_product.isFlashSaleExpired &&
-                  _displayOriginalPrice == null)
-                const Text(
+              if (_product.isFlashSaleExpired && _displayOriginalPrice == null)
+                 Text(
                   'Refresh for current price',
                   style: TextStyle(
-                    color: _maroon,
+                    color: AppTheme.resolve(context, _maroon),
                     fontSize: 16,
                     height: 1.2,
                     fontWeight: FontWeight.w800,
@@ -2735,8 +2756,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               else
                 Text(
                   _formatPrice(_displayPrice),
-                  style: const TextStyle(
-                    color: _maroon,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _maroon),
                     fontSize: 25,
                     height: 1,
                     letterSpacing: -0.6,
@@ -2750,8 +2771,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
                     _formatPrice(_displayOriginalPrice!),
-                    style: const TextStyle(
-                      color: _muted2,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _muted2),
                       fontSize: 11.5,
                       decoration: TextDecoration.lineThrough,
                     ),
@@ -2768,26 +2789,32 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 _outOfStock
                     ? Icons.cancel_outlined
                     : Icons.check_circle_outline_rounded,
-                color: _outOfStock ? _danger : _success,
+                color: _outOfStock ? AppTheme.resolve(context, _danger) : AppTheme.resolve(context, _success),
                 size: 14,
               ),
 
               const SizedBox(width: 5),
 
-              Text(
-                _availabilityLabel,
-                style: TextStyle(
-                  color: _outOfStock ? _danger : _success,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
+              Flexible(
+                child: Text(
+                  _availabilityLabel,
+                  style: TextStyle(
+                    color: _outOfStock ? AppTheme.resolve(context, _danger) : AppTheme.resolve(context, _success),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
 
-              const Spacer(),
+              const SizedBox(width: 8),
 
-              const Text(
-                'Price shown before delivery fee',
-                style: TextStyle(color: _muted, fontSize: 9.5),
+               Expanded(
+                flex: 2,
+                child: Text(
+                  'Price shown before delivery fee',
+                  textAlign: TextAlign.end,
+                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 9.5),
+                ),
               ),
             ],
           ),
@@ -2800,7 +2827,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 icon: const Icon(Icons.card_giftcard_outlined, size: 16),
                 label: const Text('See vouchers in Rewards'),
                 style: TextButton.styleFrom(
-                  foregroundColor: _maroon,
+                  foregroundColor: AppTheme.resolve(context, _maroon),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
                 ),
@@ -2829,15 +2856,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4E8),
-        border: Border.all(color: const Color(0xFFEAD3B7)),
+        color: AppTheme.resolve(context, const Color(0xFFFFF4E8), fill: true),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEAD3B7))),
         borderRadius: BorderRadius.circular(13),
       ),
       child: Row(
         children: <Widget>[
           Icon(
             upcoming ? Icons.notifications_active_outlined : Icons.bolt_rounded,
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             size: 19,
           ),
           const SizedBox(width: 9),
@@ -2847,15 +2874,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               children: <Widget>[
                 Text(
                   upcoming ? 'Upcoming flash sale' : 'Flash sale is live',
-                  style: const TextStyle(
-                    color: _text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 Text(
                   timingLabel,
-                  style: const TextStyle(color: _muted, fontSize: 10.5),
+                  style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10.5),
                 ),
               ],
             ),
@@ -2881,19 +2908,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1EF),
-        border: Border.all(color: const Color(0xFFE7C6C1)),
+        color: AppTheme.resolve(context, const Color(0xFFFFF1EF), fill: true),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFE7C6C1))),
         borderRadius: BorderRadius.circular(13),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.timer_off_outlined, color: _danger, size: 19),
+           Icon(Icons.timer_off_outlined, color: AppTheme.resolve(context, _danger), size: 19),
           const SizedBox(width: 9),
-          const Expanded(
+           Expanded(
             child: Text(
               'This flash sale has ended. Refresh to load the current price.',
               style: TextStyle(
-                color: _text,
+                color: AppTheme.resolve(context, _text),
                 fontSize: 11,
                 height: 1.3,
                 fontWeight: FontWeight.w700,
@@ -2916,8 +2943,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         for (final ProductOptionData group in groups) ...[
           Text(
             group.name.toUpperCase(),
-            style: const TextStyle(
-              color: _brown,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _brown),
               fontSize: 10,
               letterSpacing: 0.8,
               fontWeight: FontWeight.w800,
@@ -2942,10 +2969,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   previewVariation?.galleryImages ?? const <String>[];
               return Material(
                 color: !optionAvailable
-                    ? const Color(0xFFF1F1F1)
+                    ? AppTheme.resolve(context, const Color(0xFFF1F1F1), fill: true)
                     : selected
-                    ? const Color(0xFFF5E4DA)
-                    : _surface,
+                    ? AppTheme.resolve(context, const Color(0xFFF5E4DA), fill: true)
+                    : AppTheme.resolve(context, _surface, fill: true),
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
                   onTap: optionAvailable
@@ -2973,10 +3000,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: !optionAvailable
-                            ? const Color(0xFFE3E3E3)
+                            ? AppTheme.resolve(context, const Color(0xFFE3E3E3))
                             : selected
-                            ? _maroon
-                            : _border,
+                            ? AppTheme.resolve(context, _maroon)
+                            : AppTheme.resolve(context, _border),
                         width: selected ? 1.4 : 1,
                       ),
                     ),
@@ -2994,7 +3021,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                 shape: BoxShape.circle,
                                 color: _colorForOption(value),
                                 border: Border.all(
-                                  color: selected ? _maroon : _border,
+                                  color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border),
                                   width: selected ? 1.5 : 1,
                                 ),
                               ),
@@ -3008,9 +3035,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         ],
 
                         if (selected) ...[
-                          const Icon(
+                           Icon(
                             Icons.check_rounded,
-                            color: _maroon,
+                            color: AppTheme.resolve(context, _maroon),
                             size: 14,
                           ),
 
@@ -3021,10 +3048,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           value,
                           style: TextStyle(
                             color: !optionAvailable
-                                ? const Color(0xFF999999)
+                                ? AppTheme.resolve(context, const Color(0xFF999999))
                                 : selected
-                                ? _maroon
-                                : _text,
+                                ? AppTheme.resolve(context, _maroon)
+                                : AppTheme.resolve(context, _text),
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                           ),
@@ -3046,14 +3073,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Widget _buildInlineQuantity() {
     return Row(
       children: [
-        const Expanded(
+         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'QUANTITY',
                 style: TextStyle(
-                  color: _brown,
+                  color: AppTheme.resolve(context, _brown),
                   fontSize: 10,
                   letterSpacing: 0.8,
                   fontWeight: FontWeight.w800,
@@ -3064,7 +3091,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
               Text(
                 'Choose how many you want.',
-                style: TextStyle(color: _muted, fontSize: 10),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10),
               ),
             ],
           ),
@@ -3080,14 +3107,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           width: 50,
           height: 40,
           alignment: Alignment.center,
-          decoration: const BoxDecoration(
-            color: _surface,
-            border: Border.symmetric(horizontal: BorderSide(color: _border)),
+          decoration:  BoxDecoration(
+            color: AppTheme.resolve(context, _surface, fill: true),
+            border: Border.symmetric(horizontal: BorderSide(color: AppTheme.resolve(context, _border))),
           ),
           child: Text(
             '$_quantity',
-            style: const TextStyle(
-              color: _text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, _text),
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -3107,9 +3134,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBF6),
+        color: AppTheme.resolve(context, const Color(0xFFFFFBF6), fill: true),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3147,29 +3174,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: OutlinedButton(
                 onPressed: busy || _purchaseBlocked ? null : _addToCart,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
-                  side: const BorderSide(color: _maroon),
+                  foregroundColor: AppTheme.resolve(context, _maroon),
+                  side:  BorderSide(color: AppTheme.resolve(context, _maroon)),
                   minimumSize: const Size.fromHeight(46),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(11),
                   ),
                 ),
-                child: _addingToCart
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: _maroon,
-                        ),
-                      )
-                    : const Text(
-                        'Add to Cart',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                child: _buildCartButtonContent(),
               ),
             ),
 
@@ -3180,9 +3192,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 onPressed: busy || _purchaseBlocked ? null : _buyNow,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: _maroon.withValues(alpha: 0.35),
+                  disabledBackgroundColor: AppTheme.resolve(context, _maroon, fill: true).withValues(alpha: 0.35),
                   minimumSize: const Size.fromHeight(46),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(11),
@@ -3216,28 +3228,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           child: OutlinedButton.icon(
             onPressed: _updatingWishlist ? null : _toggleWishlist,
             style: OutlinedButton.styleFrom(
-              foregroundColor: _maroon,
-              side: const BorderSide(color: _tan),
+              foregroundColor: AppTheme.resolve(context, _maroon),
+              side:  BorderSide(color: AppTheme.resolve(context, _tan)),
               minimumSize: const Size.fromHeight(42),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(11),
               ),
             ),
-            icon: _updatingWishlist
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _maroon,
-                    ),
-                  )
-                : Icon(
-                    _wishlisted
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    size: 15,
-                  ),
+            icon: AppFavoriteIcon(
+              key: ValueKey(_product.id),
+              selected: _wishlisted,
+              loading: _updatingWishlist,
+              size: 16,
+              color: AppTheme.resolve(context, _maroon),
+            ),
             label: Text(
               _wishlisted ? 'Saved to Wishlist' : 'Save to Wishlist',
               style: const TextStyle(
@@ -3255,9 +3259,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -3294,8 +3298,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: _product.sellerVerified
-                                        ? _success
-                                        : _muted,
+                                        ? AppTheme.resolve(context, _success)
+                                        : AppTheme.resolve(context, _muted),
                                     fontSize: 9.5,
                                     letterSpacing: 0.8,
                                     fontWeight: FontWeight.w800,
@@ -3306,9 +3310,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               if (_product.sellerVerified) ...[
                                 const SizedBox(width: 4),
 
-                                const Icon(
+                                 Icon(
                                   Icons.verified_rounded,
-                                  color: _success,
+                                  color: AppTheme.resolve(context, _success),
                                   size: 13,
                                 ),
                               ],
@@ -3321,8 +3325,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                             _product.sellerName!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _text,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, _text),
                               fontSize: 12.5,
                               fontWeight: FontWeight.w800,
                             ),
@@ -3336,8 +3340,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               _product.sellerLocation!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: _muted,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, _muted),
                                 fontSize: 10,
                                 height: 1.35,
                               ),
@@ -3362,8 +3366,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         widget.onViewStore!(_product);
                       },
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
-                  side: const BorderSide(color: _tan),
+                  foregroundColor: AppTheme.resolve(context, _maroon),
+                  side:  BorderSide(color: AppTheme.resolve(context, _tan)),
                   minimumSize: const Size(0, 38),
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   shape: RoundedRectangleBorder(
@@ -3386,7 +3390,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       },
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(0, 38),
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -3485,16 +3489,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               description,
               maxLines: 6,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _brown,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _brown),
                 fontSize: 11.5,
                 height: 1.65,
               ),
             ),
             secondChild: Text(
               description,
-              style: const TextStyle(
-                color: _brown,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _brown),
                 fontSize: 11.5,
                 height: 1.65,
               ),
@@ -3511,7 +3515,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 });
               },
               style: TextButton.styleFrom(
-                foregroundColor: _maroon,
+                foregroundColor: AppTheme.resolve(context, _maroon),
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -3546,7 +3550,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             decoration: BoxDecoration(
               border: index == items.length - 1
                   ? null
-                  : const Border(bottom: BorderSide(color: Color(0xFFF0E7DE))),
+                  :  Border(bottom: BorderSide(color: AppTheme.resolve(context, Color(0xFFF0E7DE)))),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3555,7 +3559,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   flex: 4,
                   child: Text(
                     item.key,
-                    style: const TextStyle(color: _muted, fontSize: 10.5),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10.5),
                   ),
                 ),
 
@@ -3566,8 +3570,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   child: Text(
                     item.value,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: _text,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _text),
                       fontSize: 10.5,
                       height: 1.35,
                       fontWeight: FontWeight.w700,
@@ -3588,9 +3592,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3598,14 +3602,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(
+               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'CUSTOMER FEEDBACK',
                       style: TextStyle(
-                        color: _maroon,
+                        color: AppTheme.resolve(context, _maroon),
                         fontSize: 9.5,
                         letterSpacing: 1.2,
                         fontWeight: FontWeight.w800,
@@ -3617,7 +3621,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     Text(
                       'Ratings & Reviews',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
@@ -3631,8 +3635,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 children: [
                   Text(
                     '${displayRating.toStringAsFixed(1)} ',
-                    style: const TextStyle(
-                      color: _maroon,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, _maroon),
                       fontSize: 24,
                       height: 1,
                       fontWeight: FontWeight.w800,
@@ -3647,7 +3651,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
                   Text(
                     '${_product.reviewCount} ${_product.reviewCount == 1 ? 'rating' : 'ratings'}',
-                    style: const TextStyle(color: _muted, fontSize: 9.5),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 9.5),
                   ),
                 ],
               ),
@@ -3656,20 +3660,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
           const SizedBox(height: 14),
 
-          const Divider(height: 1, color: _border),
+           Divider(height: 1, color: AppTheme.resolve(context, _border)),
 
           if (_product.reviews.isEmpty)
-            const Padding(
+             Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Row(
                 children: [
-                  Icon(Icons.rate_review_outlined, color: _muted2, size: 18),
+                  Icon(Icons.rate_review_outlined, color: AppTheme.resolve(context, _muted2), size: 18),
 
                   SizedBox(width: 8),
 
                   Text(
                     'No written reviews yet.',
-                    style: TextStyle(color: _muted, fontSize: 11),
+                    style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
                   ),
                 ],
               ),
@@ -3694,10 +3698,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+         Text(
           'KEEP EXPLORING',
           style: TextStyle(
-            color: _maroon,
+            color: AppTheme.resolve(context, _maroon),
             fontSize: 9.5,
             letterSpacing: 1.4,
             fontWeight: FontWeight.w800,
@@ -3706,10 +3710,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
         const SizedBox(height: 4),
 
-        const Text(
+         Text(
           'Related Products',
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 21,
             letterSpacing: -0.6,
             fontWeight: FontWeight.w800,
@@ -3718,9 +3722,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
         const SizedBox(height: 3),
 
-        const Text(
+         Text(
           'More finds you may like.',
-          style: TextStyle(color: _muted, fontSize: 10.5),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10.5),
         ),
 
         const SizedBox(height: 13),
@@ -3792,11 +3796,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
         decoration: BoxDecoration(
-          color: _surface,
-          border: const Border(top: BorderSide(color: _border)),
+          color: AppTheme.resolve(context, _surface, fill: true),
+          border:  Border(top: BorderSide(color: AppTheme.resolve(context, _border))),
           boxShadow: [
             BoxShadow(
-              color: _maroon.withValues(alpha: 0.08),
+              color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, -4),
             ),
@@ -3810,28 +3814,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: OutlinedButton(
                 onPressed: _updatingWishlist ? null : _toggleWishlist,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
+                  foregroundColor: AppTheme.resolve(context, _maroon),
                   padding: EdgeInsets.zero,
-                  side: const BorderSide(color: _tan),
+                  side:  BorderSide(color: AppTheme.resolve(context, _tan)),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: _updatingWishlist
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: _maroon,
-                        ),
-                      )
-                    : Icon(
-                        _wishlisted
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        size: 19,
-                      ),
+                child: AppFavoriteIcon(
+                  key: ValueKey(_product.id),
+                  selected: _wishlisted,
+                  loading: _updatingWishlist,
+                  size: 19,
+                  color: AppTheme.resolve(context, _maroon),
+                ),
               ),
             ),
 
@@ -3841,29 +3837,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               child: OutlinedButton(
                 onPressed: busy || _purchaseBlocked ? null : _addToCart,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
-                  side: const BorderSide(color: _maroon),
+                  foregroundColor: AppTheme.resolve(context, _maroon),
+                  side:  BorderSide(color: AppTheme.resolve(context, _maroon)),
                   minimumSize: const Size.fromHeight(47),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: _addingToCart
-                    ? const SizedBox(
-                        width: 19,
-                        height: 19,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: _maroon,
-                        ),
-                      )
-                    : const Text(
-                        'Add to Cart',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                child: _buildCartButtonContent(),
               ),
             ),
 
@@ -3874,9 +3855,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 onPressed: busy || _purchaseBlocked ? null : _buyNow,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: _maroon.withValues(alpha: 0.35),
+                  disabledBackgroundColor: AppTheme.resolve(context, _maroon, fill: true).withValues(alpha: 0.35),
                   minimumSize: const Size.fromHeight(47),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -3905,6 +3886,36 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       ),
     );
   }
+
+  Widget _buildCartButtonContent() => AppStatusSwitcher(
+    child: _addingToCart
+        ?  AppLoadingIndicator(
+            key: ValueKey('adding'),
+            size: 19,
+            color: AppTheme.resolve(context, _maroon),
+            label: 'Adding to cart',
+          )
+        : _cartAdded
+        ? const Row(
+            key: ValueKey('added'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_rounded, size: 17),
+              SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  'Added',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          )
+        : const Text(
+            'Add to Cart',
+            key: ValueKey('idle'),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+          ),
+  );
 
   static String _formatPrice(double value) {
     final String raw = value.toStringAsFixed(2);
@@ -3948,17 +3959,17 @@ class _EditorialCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: ShopColors.surface,
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             eyebrow,
-            style: const TextStyle(
-              color: ShopColors.accent,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.accent),
               fontSize: 9.5,
               letterSpacing: 1.2,
               fontWeight: FontWeight.w800,
@@ -3969,8 +3980,8 @@ class _EditorialCard extends StatelessWidget {
 
           Text(
             title,
-            style: const TextStyle(
-              color: ShopColors.text,
+            style:  TextStyle(
+              color: AppTheme.resolve(context, ShopColors.text),
               fontSize: 15,
               fontWeight: FontWeight.w800,
             ),
@@ -4005,11 +4016,11 @@ class _SmallInfoTile extends StatelessWidget {
           width: 30,
           height: 30,
           decoration: BoxDecoration(
-            color: const Color(0xFFF3E6DA),
+            color: AppTheme.resolve(context, const Color(0xFFF3E6DA), fill: true),
             borderRadius: BorderRadius.circular(9),
           ),
           alignment: Alignment.center,
-          child: Icon(icon, color: ShopColors.accent, size: 15),
+          child: Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 15),
         ),
 
         const SizedBox(width: 8),
@@ -4020,8 +4031,8 @@ class _SmallInfoTile extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  color: ShopColors.text,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.text),
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                 ),
@@ -4031,8 +4042,8 @@ class _SmallInfoTile extends StatelessWidget {
 
               Text(
                 body,
-                style: const TextStyle(
-                  color: ShopColors.muted,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.muted),
                   fontSize: 9.5,
                   height: 1.45,
                 ),
@@ -4059,7 +4070,7 @@ class _StarDisplay extends StatelessWidget {
           index + 1 <= rating.round()
               ? Icons.star_rounded
               : Icons.star_border_rounded,
-          color: const Color(0xFFC88418),
+          color: AppTheme.resolve(context, const Color(0xFFC88418)),
           size: 12,
         );
       }),
@@ -4081,7 +4092,7 @@ class _QuantityButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: enabled ? ShopColors.surface : ShopColors.soft,
+      color: enabled ? AppTheme.resolve(context, ShopColors.surface, fill: true) : AppTheme.resolve(context, ShopColors.soft, fill: true),
       borderRadius: BorderRadius.circular(9),
       child: InkWell(
         onTap: enabled ? onTap : null,
@@ -4092,11 +4103,11 @@ class _QuantityButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: ShopColors.border),
+            border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
           ),
           child: Icon(
             icon,
-            color: enabled ? ShopColors.accent : ShopColors.faint,
+            color: enabled ? AppTheme.resolve(context, ShopColors.accent) : AppTheme.resolve(context, ShopColors.faint),
             size: 17,
           ),
         ),
@@ -4120,8 +4131,8 @@ class _SellerAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(13),
-        color: const Color(0xFF6A2019),
-        border: Border.all(color: ShopColors.border),
+        color: AppTheme.resolve(context, const Color(0xFF6A2019), fill: true),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: url == null || url.trim().isEmpty
           ? _SellerInitial(value: product.sellerInitial)
@@ -4156,7 +4167,7 @@ class _SellerInitial extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       alignment: Alignment.center,
-      color: const Color(0xFF6A2019),
+      color: AppTheme.resolve(context, const Color(0xFF6A2019), fill: true),
       child: Text(
         value,
         style: const TextStyle(
@@ -4181,7 +4192,7 @@ class _ReviewCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: showDivider
-            ? const Border(bottom: BorderSide(color: ShopColors.border))
+            ?  Border(bottom: BorderSide(color: AppTheme.resolve(context, ShopColors.border)))
             : null,
       ),
       child: Row(
@@ -4202,8 +4213,8 @@ class _ReviewCard extends StatelessWidget {
                         review.buyerName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ShopColors.text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -4213,8 +4224,8 @@ class _ReviewCard extends StatelessWidget {
                     if (review.date.isNotEmpty)
                       Text(
                         review.date,
-                        style: const TextStyle(
-                          color: ShopColors.faint,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.faint),
                           fontSize: 9.5,
                         ),
                       ),
@@ -4229,7 +4240,7 @@ class _ReviewCard extends StatelessWidget {
                       index < review.rating
                           ? Icons.star_rounded
                           : Icons.star_border_rounded,
-                      color: const Color(0xFFC88418),
+                      color: AppTheme.resolve(context, const Color(0xFFC88418)),
                       size: 13,
                     );
                   }),
@@ -4240,8 +4251,8 @@ class _ReviewCard extends StatelessWidget {
 
                   Text(
                     review.body,
-                    style: const TextStyle(
-                      color: ShopColors.secondaryText,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.secondaryText),
                       fontSize: 10.5,
                       height: 1.5,
                     ),
@@ -4311,18 +4322,18 @@ class _ReviewCard extends StatelessWidget {
                   ),
                 ] else if (review.hasPhoto) ...[
                   const SizedBox(height: 6),
-                  const Row(
+                   Row(
                     children: [
                       Icon(
                         Icons.photo_outlined,
-                        color: ShopColors.muted,
+                        color: AppTheme.resolve(context, ShopColors.muted),
                         size: 13,
                       ),
                       SizedBox(width: 4),
                       Text(
                         'Review includes a photo',
                         style: TextStyle(
-                          color: ShopColors.muted,
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 9.5,
                         ),
                       ),
@@ -4351,16 +4362,16 @@ class _ReviewAvatar extends StatelessWidget {
       width: 34,
       height: 34,
       clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
+      decoration:  BoxDecoration(
         shape: BoxShape.circle,
-        color: ShopColors.accentSoft,
+        color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
       ),
       child: url == null || url.trim().isEmpty
           ? Center(
               child: Text(
                 review.buyerInitial,
-                style: const TextStyle(
-                  color: ShopColors.accent,
+                style:  TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.accent),
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                 ),
@@ -4374,8 +4385,8 @@ class _ReviewAvatar extends StatelessWidget {
                     return Center(
                       child: Text(
                         review.buyerInitial,
-                        style: const TextStyle(
-                          color: ShopColors.accent,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.accent),
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                         ),
@@ -4398,7 +4409,7 @@ class _RelatedProductCard extends StatelessWidget {
     final List<String> images = product.galleryImages;
 
     return Material(
-      color: ShopColors.surface,
+      color: AppTheme.resolve(context, ShopColors.surface, fill: true),
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
         onTap: onTap,
@@ -4406,7 +4417,7 @@ class _RelatedProductCard extends StatelessWidget {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            border: Border.all(color: ShopColors.border),
+            border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
             borderRadius: BorderRadius.circular(15),
           ),
           child: Column(
@@ -4416,11 +4427,11 @@ class _RelatedProductCard extends StatelessWidget {
                 aspectRatio: 1,
                 child: Container(
                   width: double.infinity,
-                  color: ShopColors.soft,
+                  color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                   child: images.isEmpty
-                      ? const Icon(
+                      ?  Icon(
                           Icons.inventory_2_outlined,
-                          color: ShopColors.faint,
+                          color: AppTheme.resolve(context, ShopColors.faint),
                         )
                       : _ProductImage(url: images.first),
                 ),
@@ -4436,8 +4447,8 @@ class _RelatedProductCard extends StatelessWidget {
                         product.category!.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: ShopColors.secondaryText,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.secondaryText),
                           fontSize: 10,
                           letterSpacing: 0.6,
                           fontWeight: FontWeight.w800,
@@ -4451,8 +4462,8 @@ class _RelatedProductCard extends StatelessWidget {
                       product.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: ShopColors.text,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.text),
                         fontSize: 13,
                         height: 1.3,
                         fontWeight: FontWeight.w800,
@@ -4463,8 +4474,8 @@ class _RelatedProductCard extends StatelessWidget {
 
                     Text(
                       _ProductDetailsScreenState._formatPrice(product.price),
-                      style: const TextStyle(
-                        color: ShopColors.accent,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.accent),
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                       ),
@@ -4475,18 +4486,18 @@ class _RelatedProductCard extends StatelessWidget {
                     Row(
                       children: [
                         if (product.rating != null) ...[
-                          const Icon(
+                           Icon(
                             Icons.star_rounded,
                             size: 11,
-                            color: Color(0xFFC88418),
+                            color: AppTheme.resolve(context, Color(0xFFC88418)),
                           ),
 
                           const SizedBox(width: 2),
 
                           Text(
                             product.rating!.toStringAsFixed(1),
-                            style: const TextStyle(
-                              color: ShopColors.secondaryText,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.secondaryText),
                               fontSize: 10,
                             ),
                           ),
@@ -4499,8 +4510,8 @@ class _RelatedProductCard extends StatelessWidget {
                             '${product.soldCount} sold',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: ShopColors.muted,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.muted),
                               fontSize: 10,
                             ),
                           ),
@@ -4526,10 +4537,10 @@ class _ProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = url?.trim() ?? '';
     if (value.isEmpty) {
-      return const Center(
+      return  Center(
         child: Icon(
           Icons.inventory_2_outlined,
-          color: ShopColors.faint,
+          color: AppTheme.resolve(context, ShopColors.faint),
           size: 38,
         ),
       );

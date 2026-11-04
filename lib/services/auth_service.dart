@@ -304,10 +304,20 @@ class AuthService {
       );
     }
 
+    if (!data.termsAcknowledged || !data.privacyAcknowledged) {
+      throw const FormatException(
+        'Accept the Terms & Conditions and Privacy Policy before registering.',
+      );
+    }
+
+    final String accountType = data.accountType == MobileAccountType.rider
+        ? 'RIDER'
+        : 'BUYER';
+    final List<PlatformPolicy> policies = await _fetchRegistrationPolicies(
+      accountType,
+    );
     final Map<String, dynamic> fields = <String, dynamic>{
-      'account_type': data.accountType == MobileAccountType.rider
-          ? 'rider'
-          : 'buyer',
+      'account_type': accountType.toLowerCase(),
       'first_name': data.firstName,
       'middle_initial': data.middleInitial,
       'last_name': data.lastName,
@@ -330,8 +340,11 @@ class AuthService {
       'landmark': data.landmark,
       'password': data.password,
       'password_confirmation': data.password,
-      'terms': '1',
+      'terms_acknowledged': '1',
+      'privacy_acknowledged': '1',
       'email_verification_token': data.emailVerificationToken,
+      for (final PlatformPolicy policy in policies)
+        'policy_acceptances[${policy.id}]': policy.version,
     };
 
     if (data.vehicleType != null) fields['vehicle_type'] = data.vehicleType;
@@ -371,6 +384,50 @@ class AuthService {
       throw const FormatException('Invalid registration response from server.');
     }
     return payload;
+  }
+
+  static Future<List<PlatformPolicy>> _fetchRegistrationPolicies(
+    String accountType,
+  ) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('auth/registration-policies'),
+      queryParameters: <String, dynamic>{'role': accountType},
+    );
+    final int statusCode = response.statusCode ?? 500;
+    if (statusCode < 200 || statusCode >= 300) {
+      throw Exception(
+        ApiClient.formatError(
+          DioException.badResponse(
+            statusCode: statusCode,
+            requestOptions: response.requestOptions,
+            response: response,
+          ),
+        ),
+      );
+    }
+
+    final Map<String, dynamic> payload = _jsonMap(response.data);
+    if (payload['success'] == false || payload['ready'] != true) {
+      throw Exception(
+        payload['message']?.toString() ??
+            'Registration is unavailable until the current Terms & Conditions and Privacy Policy are published.',
+      );
+    }
+
+    final List<PlatformPolicy> policies = PlatformPolicy.parseList(
+      payload['policies'],
+    );
+    final Set<String> policyTypes = policies
+        .map((PlatformPolicy policy) => policy.type.toUpperCase())
+        .toSet();
+    if (!policyTypes.contains('TERMS') ||
+        !policyTypes.contains('PRIVACY') ||
+        policies.any((PlatformPolicy policy) => policy.version.trim().isEmpty)) {
+      throw const FormatException(
+        'The server returned incomplete registration policies.',
+      );
+    }
+    return policies;
   }
 
   static String _formatDate(DateTime value) {

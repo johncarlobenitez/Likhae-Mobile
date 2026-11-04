@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -338,13 +340,14 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
       onPressed: () async {
         try {
           final bool synced = await BuyerSystemSettingsController.instance.save(
-            syncServer: !riderMode,
+            syncServer: true,
+            riderMode: riderMode,
           );
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                riderMode || synced
+                synced
                     ? 'Settings saved.'
                     : 'Device settings saved. Account sync is unavailable right now.',
               ),
@@ -490,13 +493,19 @@ class _RiderAvailabilityCardState extends State<_RiderAvailabilityCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            savedStatus
-                ? 'You are online and available for assignments.'
-                : 'You are offline and will not receive new assignments.',
+            _profile?.isVan == true
+                ? (savedStatus
+                      ? 'You are online and available for transfer assignments.'
+                      : 'You are offline and will not receive new transfer assignments.')
+                : (savedStatus
+                      ? 'You are online and available for assignments.'
+                      : 'You are offline and will not receive new assignments.'),
           ),
         ),
       );
-      if (savedStatus) unawaited(_syncAvailabilityLocation());
+      if (savedStatus && _profile?.isLocalBarangay == true) {
+        unawaited(_syncAvailabilityLocation());
+      }
     } catch (error) {
       if (!mounted) return;
       final String message = _availabilityErrorText(error);
@@ -560,7 +569,9 @@ class _RiderAvailabilityCardState extends State<_RiderAvailabilityCard> {
     final ColorScheme colors = Theme.of(context).colorScheme;
     return _SettingsCard(
       title: 'Rider Availability',
-      subtitle: 'Choose whether dispatch can assign new deliveries to you.',
+      subtitle: _profile?.isVan == true
+          ? 'Choose whether your hub can assign new transfers to you.'
+          : 'Choose whether dispatch can assign new deliveries to you.',
       icon: Icons.wifi_tethering_rounded,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -598,7 +609,7 @@ class _RiderAvailabilityCardState extends State<_RiderAvailabilityCard> {
               )
             : _profile?.supportsAvailabilityStatus != true
             ? Text(
-                'Availability controls are for local motorcycle and tricycle riders.',
+                'Availability controls are for local motorcycle, tricycle, and van riders.',
                 style: TextStyle(
                   color: colors.onSurface.withValues(alpha: 0.7),
                   fontSize: 12,
@@ -615,7 +626,7 @@ class _RiderAvailabilityCardState extends State<_RiderAvailabilityCard> {
                             : Icons.pause_circle_filled_rounded,
                         size: 18,
                         color: _isOnline
-                            ? const Color(0xFF27856E)
+                            ? AppTheme.resolve(context, const Color(0xFF27856E))
                             : colors.onSurface.withValues(alpha: 0.55),
                       ),
                       const SizedBox(width: 7),
@@ -794,9 +805,8 @@ class _SoundPreviewRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           OutlinedButton.icon(
-            onPressed: () => unawaited(
-              NotificationSoundService.preview(sound.key),
-            ),
+            onPressed: () =>
+                unawaited(NotificationSoundService.preview(sound.key)),
             icon: const Icon(Icons.play_arrow_rounded, size: 17),
             label: const Text('Preview'),
             style: OutlinedButton.styleFrom(

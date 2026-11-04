@@ -1,6 +1,10 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../shared/widgets/loading_skeleton.dart';
+import '../../shared/widgets/app_motion.dart';
 
 typedef RiderApiPageBuilder<T> =
     Widget Function(
@@ -121,20 +125,24 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
 
         if (_data == null &&
             snapshot.connectionState == ConnectionState.waiting) {
-          return _statusPage(
-            children: const <Widget>[
-              SizedBox(
-                width: 30,
-                height: 30,
-                child: CircularProgressIndicator(
-                  color: Color(0xFF561C17),
-                  strokeWidth: 3,
-                  semanticsLabel: 'Loading rider data',
-                ),
+          return Scaffold(
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    child: Text(
+                      'Loading rider data...',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: LoadingSkeleton()),
+                ],
               ),
-              SizedBox(height: 14),
-              Text('Loading rider data...', textAlign: TextAlign.center),
-            ],
+            ),
           );
         }
 
@@ -142,19 +150,19 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
         if (_data == null && error != null) {
           return _statusPage(
             children: <Widget>[
-              const Icon(
+               Icon(
                 Icons.cloud_off_rounded,
                 size: 36,
-                color: Color(0xFF561C17),
+                color: AppTheme.resolve(context, Color(0xFF561C17)),
               ),
               const SizedBox(height: 16),
-              const Text(
+               Text(
                 'Unable to load rider data',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF3B211B),
+                  color: AppTheme.resolve(context, Color(0xFF3B211B)),
                 ),
               ),
               const SizedBox(height: 8),
@@ -172,7 +180,10 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
           );
         }
 
-        return widget.builder(context, _data, error, _refresh);
+        return AppDataReveal(
+          ready: _data != null,
+          child: widget.builder(context, _data, error, _refresh),
+        );
       },
     );
   }
@@ -186,8 +197,8 @@ class _RiderApiLoaderState<T> extends State<RiderApiLoader<T>>
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
             child: DefaultTextStyle(
-              style: const TextStyle(
-                color: Color(0xFF987865),
+              style:  TextStyle(
+                color: AppTheme.resolve(context, Color(0xFF987865)),
                 fontSize: 14,
                 height: 1.5,
                 decoration: TextDecoration.none,

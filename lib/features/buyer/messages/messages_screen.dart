@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/sized_network_image.dart';
 import '../../../shared/widgets/shop_ui.dart';
+import '../../../shared/widgets/smart_messaging_help.dart';
 import 'message_models.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:likhae/core/config/app_config.dart';
@@ -2070,6 +2071,16 @@ class _MessagesScreenState extends State<MessagesScreen>
               ),
             ),
           ],
+          if (seller.conversationId.trim().isNotEmpty)
+            IconButton(
+              tooltip: 'Smart messaging help',
+              onPressed: () => showSmartMessagingHelp(
+                context,
+                workspace: 'buyer',
+                conversationId: seller.conversationId,
+              ),
+              icon: Icon(Icons.support_agent_outlined, color: _maroon),
+            ),
         ],
       ),
     );
@@ -2140,12 +2151,12 @@ class _MessagesScreenState extends State<MessagesScreen>
                   decoration: BoxDecoration(
                     color: Theme.of(context).brightness == Brightness.dark
                         ? AppTheme.darkSurfaceSoft
-                        : const Color(0xFFFCECE7),
+                        : AppTheme.resolve(context, const Color(0xFFFCECE7), fill: true),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: Theme.of(context).brightness == Brightness.dark
                           ? AppTheme.darkBorderStrong
-                          : const Color(0xFFEBC9C0),
+                          : AppTheme.resolve(context, const Color(0xFFEBC9C0)),
                     ),
                   ),
                   child: Row(
@@ -2759,7 +2770,7 @@ class _ConversationTile extends StatelessWidget {
       color: selected
           ? Theme.of(context).brightness == Brightness.dark
                 ? AppTheme.darkSurfaceStrong
-                : const Color(0xFFF3E4DE)
+                : AppTheme.resolve(context, const Color(0xFFF3E4DE), fill: true)
           : context.messagesSurface,
       borderRadius: BorderRadius.circular(15),
       child: InkWell(
@@ -3127,8 +3138,8 @@ class _ProductInquiryCard extends StatelessWidget {
                 colors: <Color>[
                   context.messagesAccent,
                   Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF4E2523)
-                      : const Color(0xFF642920),
+                      ? AppTheme.resolve(context, const Color(0xFF4E2523), fill: true)
+                      : AppTheme.resolve(context, const Color(0xFF642920), fill: true),
                 ],
               ),
               borderRadius: BorderRadius.circular(20),
@@ -3184,10 +3195,10 @@ class _ProductInquiryCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                       Text(
                         'PRODUCT INQUIRY',
                         style: TextStyle(
-                          color: Color(0xFFE8C8B2),
+                          color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
                           fontSize: 10.5,
                           letterSpacing: 1,
                           fontWeight: FontWeight.w800,
@@ -3213,8 +3224,8 @@ class _ProductInquiryCard extends StatelessWidget {
 
                         Text(
                           '₱${product.price!.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: Color(0xFFFFE7D9),
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, Color(0xFFFFE7D9)),
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                           ),
@@ -3408,7 +3419,7 @@ class _SellerStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color textColor = isOnline == true
-        ? const Color(0xFF256F4A)
+        ? AppTheme.resolve(context, const Color(0xFF256F4A))
         : context.messagesMuted;
 
     return Row(
@@ -3419,7 +3430,7 @@ class _SellerStatus extends StatelessWidget {
             height: 7,
             decoration: BoxDecoration(
               color: isOnline == true
-                  ? const Color(0xFF256F4A)
+                  ? AppTheme.resolve(context, const Color(0xFF256F4A), fill: true)
                   : context.messagesFaint,
               shape: BoxShape.circle,
             ),

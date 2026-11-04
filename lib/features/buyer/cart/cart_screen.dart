@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -825,15 +827,15 @@ class _CartScreenState extends State<CartScreen> {
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        backgroundColor: _surface,
+        backgroundColor: AppTheme.resolve(context, _surface, fill: true),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text(
+        title:  Text(
           'Remove selected items?',
-          style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+          style: TextStyle(color: AppTheme.resolve(context, _text), fontWeight: FontWeight.w800),
         ),
         content: Text(
           'Remove ${selected.length} selected ${selected.length == 1 ? 'item' : 'items'} from your cart?',
-          style: const TextStyle(color: _muted, fontSize: 13),
+          style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
         ),
         actions: [
           TextButton(
@@ -844,7 +846,7 @@ class _CartScreenState extends State<CartScreen> {
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
               elevation: 0,
-              backgroundColor: _danger,
+              backgroundColor: AppTheme.resolve(context, _danger, fill: true),
               foregroundColor: Colors.white,
             ),
             child: const Text('Remove'),
@@ -920,17 +922,17 @@ class _CartScreenState extends State<CartScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: _surface,
+          backgroundColor: AppTheme.resolve(context, _surface, fill: true),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
-          title: const Text(
+          title:  Text(
             'Remove item?',
-            style: TextStyle(color: _text, fontWeight: FontWeight.w800),
+            style: TextStyle(color: AppTheme.resolve(context, _text), fontWeight: FontWeight.w800),
           ),
           content: Text(
             'Remove ${item.name} from your cart?',
-            style: const TextStyle(color: _muted, fontSize: 13),
+            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
           ),
           actions: [
             TextButton(
@@ -945,7 +947,7 @@ class _CartScreenState extends State<CartScreen> {
               },
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: _danger,
+                backgroundColor: AppTheme.resolve(context, _danger, fill: true),
                 foregroundColor: Colors.white,
               ),
               child: const Text('Remove'),
@@ -1254,7 +1256,7 @@ class _CartScreenState extends State<CartScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? _danger : _maroonDark,
+          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -1277,7 +1279,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -1286,7 +1288,7 @@ class _CartScreenState extends State<CartScreen> {
 
             Expanded(
               child: RefreshIndicator(
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refresh,
                 child: _items.isEmpty ? _buildEmptyCart() : _buildCartContent(),
               ),
@@ -1304,7 +1306,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildTopBar() {
     return ColoredBox(
-      color: _surface,
+      color: AppTheme.resolve(context, _surface, fill: true),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
         child: Row(
@@ -1327,7 +1329,7 @@ class _CartScreenState extends State<CartScreen> {
                         child: Text(
                           _editMode ? 'EDIT CART' : 'YOUR SELECTION',
                           style: TextStyle(
-                            color: _maroon,
+                            color: AppTheme.resolve(context, _maroon),
                             fontSize: 10,
                             letterSpacing: 1.4,
                             fontWeight: FontWeight.w800,
@@ -1336,8 +1338,8 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                       Text(
                         '${_items.length} ${_items.length == 1 ? 'item' : 'items'}',
-                        style: const TextStyle(
-                          color: _brown,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _brown),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -1346,7 +1348,7 @@ class _CartScreenState extends State<CartScreen> {
                         TextButton(
                           onPressed: _removingSelected ? null : _toggleEditMode,
                           style: TextButton.styleFrom(
-                            foregroundColor: _maroon,
+                            foregroundColor: AppTheme.resolve(context, _maroon),
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             minimumSize: const Size(44, 32),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1359,7 +1361,7 @@ class _CartScreenState extends State<CartScreen> {
                   Text(
                     _editMode ? 'Edit Cart' : 'Your Cart',
                     style: TextStyle(
-                      color: _text,
+                      color: AppTheme.resolve(context, _text),
                       fontSize: 24,
                       height: 1.1,
                       letterSpacing: -0.5,
@@ -1373,7 +1375,7 @@ class _CartScreenState extends State<CartScreen> {
                         : _items.isEmpty
                         ? 'A few good finds, ready for you.'
                         : 'Choose which products you want to send to checkout.',
-                    style: TextStyle(color: _muted, fontSize: 12, height: 1.4),
+                    style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.4),
                   ),
                 ],
               ),
@@ -1395,14 +1397,14 @@ class _CartScreenState extends State<CartScreen> {
           child: Container(
             width: 82,
             height: 82,
-            decoration: const BoxDecoration(
-              color: ShopColors.accentSoft,
+            decoration:  BoxDecoration(
+              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            child:  Icon(
               Icons.shopping_cart_outlined,
-              color: _maroon,
+              color: AppTheme.resolve(context, _maroon),
               size: 36,
             ),
           ),
@@ -1410,11 +1412,11 @@ class _CartScreenState extends State<CartScreen> {
 
         const SizedBox(height: 22),
 
-        const Text(
+         Text(
           'Your cart is empty',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 24,
             fontWeight: FontWeight.w800,
           ),
@@ -1422,10 +1424,10 @@ class _CartScreenState extends State<CartScreen> {
 
         const SizedBox(height: 8),
 
-        const Text(
+         Text(
           'Browse the marketplace and add products you would like to purchase.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _muted, fontSize: 14, height: 1.55),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 14, height: 1.55),
         ),
 
         const SizedBox(height: 24),
@@ -1437,7 +1439,7 @@ class _CartScreenState extends State<CartScreen> {
               onPressed: widget.onContinueShopping,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: _maroon,
+                backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 shape: RoundedRectangleBorder(
@@ -1455,11 +1457,11 @@ class _CartScreenState extends State<CartScreen> {
 
         const SizedBox(height: 34),
 
-        const Text(
+         Text(
           'Items you add will appear here',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: _text,
+            color: AppTheme.resolve(context, _text),
             fontSize: 16,
             fontWeight: FontWeight.w800,
           ),
@@ -1467,10 +1469,10 @@ class _CartScreenState extends State<CartScreen> {
 
         const SizedBox(height: 6),
 
-        const Text(
+         Text(
           'Your selected product image, name, variant, seller, price, and quantity will be shown in this section.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: _muted, fontSize: 13, height: 1.5),
+          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.5),
         ),
 
         const SizedBox(height: 18),
@@ -1489,9 +1491,9 @@ class _CartScreenState extends State<CartScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _border),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1500,12 +1502,12 @@ class _CartScreenState extends State<CartScreen> {
             width: 86,
             height: 86,
             decoration: BoxDecoration(
-              color: _soft,
+              color: AppTheme.resolve(context, _soft, fill: true),
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: _border),
+              border: Border.all(color: AppTheme.resolve(context, _border)),
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.image_outlined, color: _muted, size: 32),
+            child:  Icon(Icons.image_outlined, color: AppTheme.resolve(context, _muted), size: 32),
           ),
 
           const SizedBox(width: 12),
@@ -1518,7 +1520,7 @@ class _CartScreenState extends State<CartScreen> {
                   height: 13,
                   width: 92,
                   decoration: BoxDecoration(
-                    color: _soft,
+                    color: AppTheme.resolve(context, _soft, fill: true),
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),
@@ -1529,7 +1531,7 @@ class _CartScreenState extends State<CartScreen> {
                   height: 16,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: _soft,
+                    color: AppTheme.resolve(context, _soft, fill: true),
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),
@@ -1540,7 +1542,7 @@ class _CartScreenState extends State<CartScreen> {
                   height: 13,
                   width: 150,
                   decoration: BoxDecoration(
-                    color: _soft,
+                    color: AppTheme.resolve(context, _soft, fill: true),
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),
@@ -1553,7 +1555,7 @@ class _CartScreenState extends State<CartScreen> {
                       height: 16,
                       width: 82,
                       decoration: BoxDecoration(
-                        color: _soft,
+                        color: AppTheme.resolve(context, _soft, fill: true),
                         borderRadius: BorderRadius.circular(100),
                       ),
                     ),
@@ -1564,9 +1566,9 @@ class _CartScreenState extends State<CartScreen> {
                       height: 32,
                       width: 92,
                       decoration: BoxDecoration(
-                        color: _soft,
+                        color: AppTheme.resolve(context, _soft, fill: true),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _border),
+                        border: Border.all(color: AppTheme.resolve(context, _border)),
                       ),
                     ),
                   ],
@@ -1638,8 +1640,8 @@ class _CartScreenState extends State<CartScreen> {
             margin: const EdgeInsets.only(bottom: 12),
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: _surface,
-              border: Border.all(color: _border),
+              color: AppTheme.resolve(context, _surface, fill: true),
+              border: Border.all(color: AppTheme.resolve(context, _border)),
               borderRadius: BorderRadius.circular(18),
             ),
             child: _buildSellerGroup(group),
@@ -1668,9 +1670,9 @@ class _CartScreenState extends State<CartScreen> {
       children: <Widget>[
         Container(
           padding: const EdgeInsets.fromLTRB(8, 6, 14, 6),
-          decoration: const BoxDecoration(
-            color: _soft,
-            border: Border(bottom: BorderSide(color: _border)),
+          decoration:  BoxDecoration(
+            color: AppTheme.resolve(context, _soft, fill: true),
+            border: Border(bottom: BorderSide(color: AppTheme.resolve(context, _border))),
           ),
           child: Row(
             children: <Widget>[
@@ -1681,7 +1683,7 @@ class _CartScreenState extends State<CartScreen> {
                     : groupPartiallySelected
                     ? null
                     : false,
-                activeColor: _maroon,
+                activeColor: AppTheme.resolve(context, _maroon),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(4),
                 ),
@@ -1696,8 +1698,8 @@ class _CartScreenState extends State<CartScreen> {
                   group.name.toUpperCase(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 12,
                     letterSpacing: 0.55,
                     fontWeight: FontWeight.w800,
@@ -1706,17 +1708,17 @@ class _CartScreenState extends State<CartScreen> {
               ),
               Text(
                 '${group.items.length} ${group.items.length == 1 ? 'item' : 'items'}',
-                style: const TextStyle(color: _muted, fontSize: 11.5),
+                style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
               ),
               if (canViewShop) ...<Widget>[
                 const SizedBox(width: 12),
                 InkWell(
                   onTap: () =>
                       widget.onSellerSelected!(group.name, group.sellerId),
-                  child: const Text(
+                  child:  Text(
                     'View Shop',
                     style: TextStyle(
-                      color: _maroon,
+                      color: AppTheme.resolve(context, _maroon),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1728,9 +1730,9 @@ class _CartScreenState extends State<CartScreen> {
         ),
         for (int index = 0; index < group.items.length; index++) ...<Widget>[
           if (index > 0)
-            const Padding(
+             Padding(
               padding: EdgeInsets.symmetric(horizontal: 10),
-              child: Divider(color: ShopColors.border, height: 1),
+              child: Divider(color: AppTheme.resolve(context, ShopColors.border), height: 1),
             ),
           _buildCartItem(group.items[index]),
         ],
@@ -1765,20 +1767,20 @@ class _CartScreenState extends State<CartScreen> {
         : 'Add shop voucher code';
 
     return Material(
-      color: _surface,
+      color: AppTheme.resolve(context, _surface, fill: true),
       child: InkWell(
         onTap: hasSelectedItems && sellerId != null ? _openVoucherPicker : null,
         child: Container(
           constraints: const BoxConstraints(minHeight: 52),
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _border)),
+          decoration:  BoxDecoration(
+            border: Border(top: BorderSide(color: AppTheme.resolve(context, _border))),
           ),
           child: Row(
             children: [
-              const Icon(
+               Icon(
                 Icons.confirmation_number_outlined,
-                color: ShopColors.accent,
+                color: AppTheme.resolve(context, ShopColors.accent),
                 size: 20,
               ),
               const SizedBox(width: 10),
@@ -1787,8 +1789,8 @@ class _CartScreenState extends State<CartScreen> {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _text,
+                  style:  TextStyle(
+                    color: AppTheme.resolve(context, _text),
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1801,7 +1803,7 @@ class _CartScreenState extends State<CartScreen> {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: ShopColors.accent,
+                    color: AppTheme.resolve(context, ShopColors.accent, fill: true),
                     borderRadius: BorderRadius.circular(5),
                   ),
                   child: const Text(
@@ -1815,9 +1817,9 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 const SizedBox(width: 6),
               ],
-              const Icon(
+               Icon(
                 Icons.chevron_right_rounded,
-                color: ShopColors.faint,
+                color: AppTheme.resolve(context, ShopColors.faint),
                 size: 19,
               ),
             ],
@@ -1859,22 +1861,22 @@ class _CartScreenState extends State<CartScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF4ED),
+        color: AppTheme.resolve(context, const Color(0xFFFFF4ED), fill: true),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0xFFF2D2BE)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF2D2BE))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded, color: _danger, size: 18),
+           Icon(Icons.info_outline_rounded, color: AppTheme.resolve(context, _danger), size: 18),
 
           const SizedBox(width: 9),
 
           Expanded(
             child: Text(
               '$_unavailableCount ${_unavailableCount == 1 ? 'item is' : 'items are'} unavailable or on seller vacation and cannot be selected for checkout.',
-              style: const TextStyle(
-                color: _brown,
+              style:  TextStyle(
+                color: AppTheme.resolve(context, _brown),
                 fontSize: 12.5,
                 height: 1.55,
               ),
@@ -1896,8 +1898,8 @@ class _CartScreenState extends State<CartScreen> {
         onPressed: widget.onChangeAddress,
         child: Text(
           address == null ? 'Add' : 'Change',
-          style: const TextStyle(
-            color: _maroon,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, _maroon),
             fontSize: 13,
             fontWeight: FontWeight.w800,
           ),
@@ -1908,13 +1910,13 @@ class _CartScreenState extends State<CartScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(15),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
+                color: AppTheme.resolve(context, const Color(0xFFFFF7ED), fill: true),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFF0D7B5)),
+                border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF0D7B5))),
               ),
-              child: const Row(
+              child:  Row(
                 children: [
-                  Icon(Icons.location_off_outlined, color: _maroon, size: 21),
+                  Icon(Icons.location_off_outlined, color: AppTheme.resolve(context, _maroon), size: 21),
 
                   SizedBox(width: 10),
 
@@ -1922,7 +1924,7 @@ class _CartScreenState extends State<CartScreen> {
                     child: Text(
                       'No default delivery address is saved. You can add or choose an address during checkout.',
                       style: TextStyle(
-                        color: _text,
+                        color: AppTheme.resolve(context, _text),
                         fontSize: 13,
                         height: 1.4,
                         fontWeight: FontWeight.w600,
@@ -1936,9 +1938,9 @@ class _CartScreenState extends State<CartScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7F3),
+                color: AppTheme.resolve(context, const Color(0xFFFFF7F3), fill: true),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE7C6B7)),
+                border: Border.all(color: AppTheme.resolve(context, const Color(0xFFE7C6B7))),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1946,14 +1948,14 @@ class _CartScreenState extends State<CartScreen> {
                   Container(
                     width: 40,
                     height: 40,
-                    decoration: const BoxDecoration(
-                      color: ShopColors.accentSoft,
+                    decoration:  BoxDecoration(
+                      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(
+                    child:  Icon(
                       Icons.location_on_outlined,
-                      color: _maroon,
+                      color: AppTheme.resolve(context, _maroon),
                       size: 20,
                     ),
                   ),
@@ -1971,8 +1973,8 @@ class _CartScreenState extends State<CartScreen> {
                           children: [
                             Text(
                               address.recipientName,
-                              style: const TextStyle(
-                                color: _text,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, _text),
                                 fontSize: 14,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1981,8 +1983,8 @@ class _CartScreenState extends State<CartScreen> {
                             if (address.contactNumber.trim().isNotEmpty)
                               Text(
                                 address.contactNumber,
-                                style: const TextStyle(
-                                  color: _muted,
+                                style:  TextStyle(
+                                  color: AppTheme.resolve(context, _muted),
                                   fontSize: 12.5,
                                 ),
                               ),
@@ -1994,13 +1996,13 @@ class _CartScreenState extends State<CartScreen> {
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: ShopColors.accentSoft,
+                                  color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
                                   borderRadius: BorderRadius.circular(100),
                                 ),
-                                child: const Text(
+                                child:  Text(
                                   'DEFAULT',
                                   style: TextStyle(
-                                    color: _maroon,
+                                    color: AppTheme.resolve(context, _maroon),
                                     fontSize: 11,
                                     letterSpacing: 0.5,
                                     fontWeight: FontWeight.w800,
@@ -2014,8 +2016,8 @@ class _CartScreenState extends State<CartScreen> {
 
                         Text(
                           address.formattedAddress,
-                          style: const TextStyle(
-                            color: _muted,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, _muted),
                             fontSize: 13,
                             height: 1.45,
                           ),
@@ -2094,7 +2096,7 @@ class _CartScreenState extends State<CartScreen> {
                       : (availability['message']?.toString() ??
                             'Delivery availability needs attention.'),
                   style: TextStyle(
-                    color: availability['available'] == true ? _muted : _danger,
+                    color: availability['available'] == true ? AppTheme.resolve(context, _muted) : AppTheme.resolve(context, _danger),
                     fontSize: 12,
                     height: 1.4,
                   ),
@@ -2103,7 +2105,7 @@ class _CartScreenState extends State<CartScreen> {
             ],
             const SizedBox(height: 12),
           ] else if (_loadingQuote) ...[
-            const Row(
+             Row(
               children: <Widget>[
                 SizedBox(
                   width: 15,
@@ -2113,7 +2115,7 @@ class _CartScreenState extends State<CartScreen> {
                 SizedBox(width: 9),
                 Text(
                   'Getting an updated total…',
-                  style: TextStyle(color: _muted, fontSize: 12),
+                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
                 ),
               ],
             ),
@@ -2128,11 +2130,11 @@ class _CartScreenState extends State<CartScreen> {
               ),
             ),
           ] else if (_selectedItems.isNotEmpty) ...[
-            const Align(
+             Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 'Choose or update a saved delivery address to see the delivery estimate and total.',
-                style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.5),
               ),
             ),
             const SizedBox(height: 12),
@@ -2142,12 +2144,12 @@ class _CartScreenState extends State<CartScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
-              color: _soft,
+              color: AppTheme.resolve(context, _soft, fill: true),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: const Text(
+            child:  Text(
               'This estimate comes from the server. Checkout refreshes stock, delivery, vouchers, and the final total before you place the order.',
-              style: TextStyle(color: _muted, fontSize: 12, height: 1.55),
+              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.55),
             ),
           ),
         ],
@@ -2165,8 +2167,8 @@ class _CartScreenState extends State<CartScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         decoration: BoxDecoration(
-          color: _surface,
-          border: const Border(top: BorderSide(color: _border)),
+          color: AppTheme.resolve(context, _surface, fill: true),
+          border:  Border(top: BorderSide(color: AppTheme.resolve(context, _border))),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
@@ -2184,7 +2186,7 @@ class _CartScreenState extends State<CartScreen> {
                   : someSelected
                   ? null
                   : false,
-              activeColor: _maroon,
+              activeColor: AppTheme.resolve(context, _maroon),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -2192,10 +2194,10 @@ class _CartScreenState extends State<CartScreen> {
             ),
             GestureDetector(
               onTap: _toggleAllForRemoval,
-              child: const Text(
+              child:  Text(
                 'All',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -2204,7 +2206,7 @@ class _CartScreenState extends State<CartScreen> {
             const SizedBox(width: 12),
             Text(
               '${_deleteSelectedIds.length} selected',
-              style: const TextStyle(color: _muted, fontSize: 12),
+              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
             ),
             const Spacer(),
             SizedBox(
@@ -2215,9 +2217,9 @@ class _CartScreenState extends State<CartScreen> {
                     : _removeEditSelectedItems,
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: _danger,
+                  backgroundColor: AppTheme.resolve(context, _danger, fill: true),
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFFD8D2CB),
+                  disabledBackgroundColor: AppTheme.resolve(context, const Color(0xFFD8D2CB), fill: true),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(13),
@@ -2255,8 +2257,8 @@ class _CartScreenState extends State<CartScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         decoration: BoxDecoration(
-          color: _surface,
-          border: const Border(top: BorderSide(color: _border)),
+          color: AppTheme.resolve(context, _surface, fill: true),
+          border:  Border(top: BorderSide(color: AppTheme.resolve(context, _border))),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.06),
@@ -2269,7 +2271,7 @@ class _CartScreenState extends State<CartScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildMarketplaceVoucherRow(),
-            const Divider(height: 1, color: _border),
+             Divider(height: 1, color: AppTheme.resolve(context, _border)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -2280,7 +2282,7 @@ class _CartScreenState extends State<CartScreen> {
                       : _someSelected
                       ? null
                       : false,
-                  activeColor: _maroon,
+                  activeColor: AppTheme.resolve(context, _maroon),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -2290,10 +2292,10 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 GestureDetector(
                   onTap: _availableItems.isEmpty ? null : _toggleSelectAll,
-                  child: const Text(
+                  child:  Text(
                     'All',
                     style: TextStyle(
-                      color: _text,
+                      color: AppTheme.resolve(context, _text),
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -2308,8 +2310,8 @@ class _CartScreenState extends State<CartScreen> {
                       Text(
                         'Voucher −${_formatCartAmount(_shopVoucherDiscount)}',
                         maxLines: 1,
-                        style: const TextStyle(
-                          color: Color(0xFF19734A),
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, Color(0xFF19734A)),
                           fontSize: 9.5,
                           fontWeight: FontWeight.w700,
                         ),
@@ -2321,8 +2323,8 @@ class _CartScreenState extends State<CartScreen> {
                             .toDouble(),
                       ),
                       maxLines: 1,
-                      style: const TextStyle(
-                        color: ShopColors.accent,
+                      style:  TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.accent),
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
@@ -2338,9 +2340,9 @@ class _CartScreenState extends State<CartScreen> {
                         : _openCheckout,
                     style: ElevatedButton.styleFrom(
                       elevation: 0,
-                      backgroundColor: _maroon,
+                      backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: const Color(0xFFD8D2CB),
+                      disabledBackgroundColor: AppTheme.resolve(context, const Color(0xFFD8D2CB), fill: true),
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(13),
@@ -2386,7 +2388,7 @@ class _CartScreenState extends State<CartScreen> {
         ? 'Select or enter a code'
         : '$selectedVoucherCount voucher${selectedVoucherCount == 1 ? '' : 's'} selected';
     return Material(
-      color: Colors.white,
+      color: AppTheme.resolve(context, Colors.white, fill: true),
       child: InkWell(
         onTap: _selectedItems.isEmpty || _openingVoucherPicker
             ? null
@@ -2395,28 +2397,28 @@ class _CartScreenState extends State<CartScreen> {
           height: 46,
           child: Row(
             children: [
-              const Icon(
+               Icon(
                 Icons.confirmation_number_outlined,
-                color: _maroon,
+                color: AppTheme.resolve(context, _maroon),
                 size: 21,
               ),
               const SizedBox(width: 10),
-              const Text(
+               Text(
                 'LIKHAE Vouchers',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               const Spacer(),
               if (_openingVoucherPicker)
-                const SizedBox(
+                 SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: _maroon,
+                    color: AppTheme.resolve(context, _maroon),
                   ),
                 )
               else
@@ -2426,13 +2428,13 @@ class _CartScreenState extends State<CartScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(color: _muted, fontSize: 12.5),
+                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
                   ),
                 ),
               const SizedBox(width: 4),
-              const Icon(
+               Icon(
                 Icons.chevron_right_rounded,
-                color: ShopColors.faint,
+                color: AppTheme.resolve(context, ShopColors.faint),
                 size: 19,
               ),
             ],
@@ -2482,7 +2484,7 @@ class _CartItemCard extends StatelessWidget {
       duration: const Duration(milliseconds: 160),
       child: Container(
         padding: const EdgeInsets.fromLTRB(8, 10, 10, 10),
-        color: unavailable ? const Color(0xFFFFFBF8) : ShopColors.surface,
+        color: unavailable ? AppTheme.resolve(context, const Color(0xFFFFFBF8), fill: true) : AppTheme.resolve(context, ShopColors.surface, fill: true),
         child: Column(
           children: [
             Row(
@@ -2490,7 +2492,7 @@ class _CartItemCard extends StatelessWidget {
               children: [
                 Checkbox(
                   value: selected,
-                  activeColor: ShopColors.accent,
+                  activeColor: AppTheme.resolve(context, ShopColors.accent),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -2510,9 +2512,9 @@ class _CartItemCard extends StatelessWidget {
                         height: 82,
                         clipBehavior: Clip.antiAlias,
                         decoration: BoxDecoration(
-                          color: ShopColors.soft,
+                          color: AppTheme.resolve(context, ShopColors.soft, fill: true),
                           borderRadius: BorderRadius.circular(13),
-                          border: Border.all(color: ShopColors.border),
+                          border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
                         ),
                         child: _CartProductImage(imageUrl: item.imageUrl),
                       ),
@@ -2563,8 +2565,8 @@ class _CartItemCard extends StatelessWidget {
                                       item.category.toUpperCase(),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: ShopColors.accent,
+                                      style:  TextStyle(
+                                        color: AppTheme.resolve(context, ShopColors.accent),
                                         fontSize: 10,
                                         letterSpacing: 0.7,
                                         fontWeight: FontWeight.w800,
@@ -2578,8 +2580,8 @@ class _CartItemCard extends StatelessWidget {
                                     item.name,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: ShopColors.text,
+                                    style:  TextStyle(
+                                      color: AppTheme.resolve(context, ShopColors.text),
                                       fontSize: 14,
                                       height: 1.25,
                                       fontWeight: FontWeight.w800,
@@ -2600,17 +2602,17 @@ class _CartItemCard extends StatelessWidget {
                                 tooltip: 'Remove item',
                                 onPressed: removing ? null : onRemove,
                                 icon: removing
-                                    ? const SizedBox(
+                                    ?  SizedBox(
                                         width: 16,
                                         height: 16,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Color(0xFFB42318),
+                                          color: AppTheme.resolve(context, Color(0xFFB42318)),
                                         ),
                                       )
-                                    : const Icon(
+                                    :  Icon(
                                         Icons.delete_outline_rounded,
-                                        color: Color(0xFFB42318),
+                                        color: AppTheme.resolve(context, Color(0xFFB42318)),
                                         size: 18,
                                       ),
                               ),
@@ -2626,8 +2628,8 @@ class _CartItemCard extends StatelessWidget {
                           'Variant: ${item.variant}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: ShopColors.faint,
+                          style:  TextStyle(
+                            color: AppTheme.resolve(context, ShopColors.faint),
                             fontSize: 12,
                           ),
                         ),
@@ -2636,10 +2638,10 @@ class _CartItemCard extends StatelessWidget {
                       if (unavailable) ...[
                         const SizedBox(height: 5),
 
-                        const Text(
+                         Text(
                           'Currently unavailable',
                           style: TextStyle(
-                            color: Color(0xFFB42318),
+                            color: AppTheme.resolve(context, Color(0xFFB42318)),
                             fontSize: 11.5,
                             fontWeight: FontWeight.w800,
                           ),
@@ -2665,8 +2667,8 @@ class _CartItemCard extends StatelessWidget {
                         children: [
                           Text(
                             _formatCartAmount(item.price),
-                            style: const TextStyle(
-                              color: ShopColors.accent,
+                            style:  TextStyle(
+                              color: AppTheme.resolve(context, ShopColors.accent),
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                             ),
@@ -2676,8 +2678,8 @@ class _CartItemCard extends StatelessWidget {
                               item.oldPrice! > item.price)
                             Text(
                               _formatCartAmount(item.oldPrice!),
-                              style: const TextStyle(
-                                color: ShopColors.faint,
+                              style:  TextStyle(
+                                color: AppTheme.resolve(context, ShopColors.faint),
                                 fontSize: 11.5,
                                 decoration: TextDecoration.lineThrough,
                               ),
@@ -2693,8 +2695,8 @@ class _CartItemCard extends StatelessWidget {
                             : '${item.stock} available',
                         style: TextStyle(
                           color: unavailable
-                              ? const Color(0xFFB42318)
-                              : ShopColors.faint,
+                              ? AppTheme.resolve(context, const Color(0xFFB42318))
+                              : AppTheme.resolve(context, ShopColors.faint),
                           fontSize: 11.5,
                           fontWeight: unavailable
                               ? FontWeight.w700
@@ -2721,8 +2723,8 @@ class _CartItemCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: ShopColors.text,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.text),
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
@@ -2777,14 +2779,14 @@ class _QuantityControl extends StatelessWidget {
     return Container(
       height: 36,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.resolve(context, Colors.white, fill: true),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFDBCEC1)),
+        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFDBCEC1))),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _quantityButton(
+          _quantityButton(context,
             icon: Icons.remove_rounded,
             enabled: canDecrease && !loading,
             onTap: onDecrease,
@@ -2793,32 +2795,32 @@ class _QuantityControl extends StatelessWidget {
           Container(
             width: 42,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(
+            decoration:  BoxDecoration(
               border: Border(
-                left: BorderSide(color: ShopColors.border),
-                right: BorderSide(color: ShopColors.border),
+                left: BorderSide(color: AppTheme.resolve(context, ShopColors.border)),
+                right: BorderSide(color: AppTheme.resolve(context, ShopColors.border)),
               ),
             ),
             child: loading
-                ? const SizedBox(
+                ?  SizedBox(
                     width: 15,
                     height: 15,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: ShopColors.accent,
+                      color: AppTheme.resolve(context, ShopColors.accent),
                     ),
                   )
                 : Text(
                     '$quantity',
-                    style: const TextStyle(
-                      color: ShopColors.text,
+                    style:  TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.text),
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
           ),
 
-          _quantityButton(
+          _quantityButton(context,
             icon: Icons.add_rounded,
             enabled: canIncrease && !loading,
             onTap: onIncrease,
@@ -2828,7 +2830,7 @@ class _QuantityControl extends StatelessWidget {
     );
   }
 
-  Widget _quantityButton({
+  Widget _quantityButton(BuildContext context, {
     required IconData icon,
     required bool enabled,
     required VoidCallback onTap,
@@ -2841,7 +2843,7 @@ class _QuantityControl extends StatelessWidget {
         child: Icon(
           icon,
           size: 15,
-          color: enabled ? ShopColors.accent : const Color(0xFFC9C2BA),
+          color: enabled ? AppTheme.resolve(context, ShopColors.accent) : AppTheme.resolve(context, const Color(0xFFC9C2BA)),
         ),
       ),
     );
@@ -2866,9 +2868,9 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: ShopColors.surface,
+        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ShopColors.border),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       ),
       child: Column(
         children: [
@@ -2882,8 +2884,8 @@ class _SectionCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: ShopColors.text,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.text),
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2893,8 +2895,8 @@ class _SectionCard extends StatelessWidget {
 
                       Text(
                         subtitle,
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 12.5,
                           height: 1.35,
                         ),
@@ -2908,7 +2910,7 @@ class _SectionCard extends StatelessWidget {
             ),
           ),
 
-          const Divider(color: ShopColors.border, height: 1),
+           Divider(color: AppTheme.resolve(context, ShopColors.border), height: 1),
 
           Padding(padding: const EdgeInsets.all(15), child: child),
         ],
@@ -2930,14 +2932,14 @@ class _SummaryRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(color: ShopColors.muted, fontSize: 13),
+            style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 13),
           ),
         ),
 
         Text(
           value,
-          style: const TextStyle(
-            color: ShopColors.text,
+          style:  TextStyle(
+            color: AppTheme.resolve(context, ShopColors.text),
             fontSize: 13,
             fontWeight: FontWeight.w700,
           ),
@@ -2954,8 +2956,8 @@ class _CartProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = imageUrl?.trim() ?? '';
     if (value.isEmpty)
-      return const Center(
-        child: Icon(Icons.image_outlined, color: ShopColors.faint, size: 31),
+      return  Center(
+        child: Icon(Icons.image_outlined, color: AppTheme.resolve(context, ShopColors.faint), size: 31),
       );
     return SizedNetworkImage(
       url: AppConfig.resolveMediaUrl(value),

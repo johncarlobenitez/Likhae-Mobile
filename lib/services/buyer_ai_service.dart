@@ -19,16 +19,18 @@ class BuyerAiService {
   static Future<BuyerAiResponse> chat({
     required String message,
     String page = 'buyer',
+    String workspace = 'buyer',
   }) async {
+    final String normalizedWorkspace = workspace == 'rider' ? 'rider' : 'buyer';
     if (!AppConfig.apiEnabled) {
       return const BuyerAiResponse(
         reply:
-            'The Buyer AI Assistant is ready. Enable the mobile API to connect it to your LIKHAE account.',
+            'The workspace assistant is ready. Enable the mobile API to connect it to your LIKHAE account.',
       );
     }
 
     final Response<dynamic> response = await ApiClient.post(
-      AppConfig.resolveApiUrl('buyer/ai/chat'),
+      AppConfig.resolveApiUrl('$normalizedWorkspace/ai/chat'),
       <String, dynamic>{'message': message.trim(), 'page': page},
     );
 
@@ -39,13 +41,13 @@ class BuyerAiService {
 
     final dynamic rawPayload = response.data;
     if (rawPayload is! Map) {
-      throw const FormatException('The Buyer AI returned an invalid response.');
+      throw const FormatException('The workspace assistant returned an invalid response.');
     }
 
     final Map<String, dynamic> payload = Map<String, dynamic>.from(rawPayload);
     final String reply = payload['reply']?.toString().trim() ?? '';
     if (reply.isEmpty) {
-      throw const FormatException('The Buyer AI returned an empty response.');
+      throw const FormatException('The workspace assistant returned an empty response.');
     }
 
     final dynamic rawOptions = payload['options'];
@@ -66,6 +68,6 @@ class BuyerAiService {
       return rawPayload['message'].toString();
     }
 
-    return 'Buyer AI request failed (HTTP $statusCode).';
+    return 'Assistant request failed (HTTP $statusCode).';
   }
 }

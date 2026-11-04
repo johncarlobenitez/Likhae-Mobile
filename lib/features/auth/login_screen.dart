@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/storage/remembered_login_storage.dart';
@@ -149,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? const Color(0xFFB42318) : _primaryDark,
+          backgroundColor: error ? AppTheme.resolve(context, const Color(0xFFB42318), fill: true) : AppTheme.resolve(context, _primaryDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -210,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final double heroHeight = compactHeight ? 175 : 205;
 
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: AppTheme.resolve(context, _background, fill: true),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         bottom: false,
@@ -273,11 +275,11 @@ class _LoginScreenState extends State<LoginScreen> {
         fit: StackFit.expand,
         children: [
           Container(
-            decoration: const BoxDecoration(
+            decoration:  BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFFFFFBF4), Color(0xFFF0E5D5)],
+                colors: [AppTheme.resolve(context, Color(0xFFFFFBF4), fill: true), AppTheme.resolve(context, Color(0xFFF0E5D5), fill: true)],
               ),
             ),
           ),
@@ -290,7 +292,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Icon(
                 Icons.local_florist_outlined,
                 size: compact ? 135 : 160,
-                color: _primary.withValues(alpha: 0.08),
+                color: AppTheme.resolve(context, _primary).withValues(alpha: 0.08),
               ),
             ),
           ),
@@ -302,9 +304,9 @@ class _LoginScreenState extends State<LoginScreen> {
               width: compact ? 66 : 78,
               height: compact ? 66 : 78,
               decoration: BoxDecoration(
-                color: _primary.withValues(alpha: 0.08),
+                color: AppTheme.resolve(context, _primary, fill: true).withValues(alpha: 0.08),
                 shape: BoxShape.circle,
-                border: Border.all(color: _primary.withValues(alpha: 0.10)),
+                border: Border.all(color: AppTheme.resolve(context, _primary).withValues(alpha: 0.10)),
               ),
             ),
           ),
@@ -321,25 +323,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: _surface.withValues(alpha: 0.86),
+                      color: AppTheme.resolve(context, _surface, fill: true).withValues(alpha: 0.86),
                       borderRadius: BorderRadius.circular(100),
                       border: Border.all(
-                        color: _primary.withValues(alpha: 0.22),
+                        color: AppTheme.resolve(context, _primary).withValues(alpha: 0.22),
                       ),
                     ),
-                    child: const Row(
+                    child:  Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           Icons.location_on_outlined,
                           size: 15,
-                          color: _primary,
+                          color: AppTheme.resolve(context, _primary),
                         ),
                         SizedBox(width: 6),
                         Text(
                           'Your Philippine marketplace',
                           style: TextStyle(
-                            color: _primary,
+                            color: AppTheme.resolve(context, _primary),
                             fontSize: 10.5,
                             fontWeight: FontWeight.w600,
                           ),
@@ -358,14 +360,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           text: 'reimagined.',
                           style: TextStyle(
                             fontStyle: FontStyle.italic,
-                            color: _primary,
+                            color: AppTheme.resolve(context, _primary),
                           ),
                         ),
                       ],
                     ),
                     maxLines: 2,
                     style: TextStyle(
-                      color: _text,
+                      color: AppTheme.resolve(context, _text),
                       fontSize: compact ? 24 : 27,
                       height: 1.05,
                       letterSpacing: -0.8,
@@ -379,7 +381,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     'Discover everyday essentials and local finds.',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: _secondaryText, fontSize: 11.5),
+                    style: TextStyle(color: AppTheme.resolve(context, _secondaryText), fontSize: 11.5),
                   ),
                 ],
               ),
@@ -403,12 +405,12 @@ class _LoginScreenState extends State<LoginScreen> {
         24,
       ),
       decoration: BoxDecoration(
-        color: _surface,
+        color: AppTheme.resolve(context, _surface, fill: true),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: _border.withValues(alpha: 0.85)),
+        border: Border.all(color: AppTheme.resolve(context, _border).withValues(alpha: 0.85)),
         boxShadow: [
           BoxShadow(
-            color: _primary.withValues(alpha: 0.08),
+            color: AppTheme.resolve(context, _primary).withValues(alpha: 0.08),
             blurRadius: 28,
             offset: const Offset(0, 12),
           ),
@@ -424,10 +426,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
               SizedBox(height: compactHeight ? 22 : 28),
 
-              const Text(
+               Text(
                 'Welcome back',
                 style: TextStyle(
-                  color: _text,
+                  color: AppTheme.resolve(context, _text),
                   fontSize: 27,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.7,
@@ -437,10 +439,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 7),
 
-              const Text(
+               Text(
                 'Sign in to continue shopping on LIKHAE.',
                 style: TextStyle(
-                  color: _secondaryText,
+                  color: AppTheme.resolve(context, _secondaryText),
                   fontSize: 13.5,
                   height: 1.4,
                 ),
@@ -507,10 +509,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: const Text(
+                    child:  Text(
                       'Forgot password?',
                       style: TextStyle(
-                        color: _primary,
+                        color: AppTheme.resolve(context, _primary),
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
                       ),
@@ -548,7 +550,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _obscurePassword
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined,
-                      color: _secondaryText,
+                      color: AppTheme.resolve(context, _secondaryText),
                       size: 20,
                     ),
                   ),
@@ -570,9 +572,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     scale: 0.90,
                     child: Checkbox(
                       value: _rememberMe,
-                      activeColor: _primary,
+                      activeColor: AppTheme.resolve(context, _primary),
                       checkColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFFB7A69B)),
+                      side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFB7A69B))),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -584,10 +586,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   GestureDetector(
                     onTap: () => _setRememberMe(!_rememberMe),
-                    child: const Text(
+                    child:  Text(
                       'Remember me',
                       style: TextStyle(
-                        color: _secondaryText,
+                        color: AppTheme.resolve(context, _secondaryText),
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -596,18 +598,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const Spacer(),
 
-                  const Icon(
+                   Icon(
                     Icons.lock_outline_rounded,
                     size: 13,
-                    color: _secondaryText,
+                    color: AppTheme.resolve(context, _secondaryText),
                   ),
 
                   const SizedBox(width: 4),
 
-                  const Text(
+                   Text(
                     'Secure login',
                     style: TextStyle(
-                      color: _secondaryText,
+                      color: AppTheme.resolve(context, _secondaryText),
                       fontSize: 10.5,
                       fontWeight: FontWeight.w500,
                     ),
@@ -627,9 +629,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     elevation: 0,
-                    backgroundColor: _primary,
+                    backgroundColor: AppTheme.resolve(context, _primary, fill: true),
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: _primary.withValues(alpha: 0.55),
+                    disabledBackgroundColor: AppTheme.resolve(context, _primary, fill: true).withValues(alpha: 0.55),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
@@ -679,17 +681,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 alignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Text(
+                   Text(
                     "Don't have an account? ",
-                    style: TextStyle(color: _secondaryText, fontSize: 12.5),
+                    style: TextStyle(color: AppTheme.resolve(context, _secondaryText), fontSize: 12.5),
                   ),
 
                   GestureDetector(
                     onTap: widget.onRegister,
-                    child: const Text(
+                    child:  Text(
                       'Create Account',
                       style: TextStyle(
-                        color: _primary,
+                        color: AppTheme.resolve(context, _primary),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w800,
                       ),
@@ -733,36 +735,36 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(
-        color: Color(0xFFB4A49A),
+      hintStyle:  TextStyle(
+        color: AppTheme.resolve(context, Color(0xFFB4A49A)),
         fontSize: 13.5,
         fontWeight: FontWeight.w400,
       ),
-      prefixIcon: Icon(prefixIcon, color: const Color(0xFF8B7669), size: 20),
+      prefixIcon: Icon(prefixIcon, color: AppTheme.resolve(context, const Color(0xFF8B7669)), size: 20),
       suffixIcon: suffix,
       filled: true,
-      fillColor: _fieldBackground,
+      fillColor: AppTheme.resolve(context, _fieldBackground, fill: true),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
       errorStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _border),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _primary, width: 1.4),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _primary), width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _accent),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _accent)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: _accent, width: 1.4),
+        borderSide:  BorderSide(color: AppTheme.resolve(context, _accent), width: 1.4),
       ),
     );
   }
@@ -775,10 +777,10 @@ class _LikhaeBrand extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Text(
+         Text(
           'LIKHAE',
           style: TextStyle(
-            color: Color(0xFF3B261F),
+            color: AppTheme.resolve(context, Color(0xFF3B261F)),
             fontSize: 21,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.2,
@@ -790,8 +792,8 @@ class _LikhaeBrand extends StatelessWidget {
         Container(
           width: 4,
           height: 4,
-          decoration: const BoxDecoration(
-            color: Color(0xFF9E171B),
+          decoration:  BoxDecoration(
+            color: AppTheme.resolve(context, Color(0xFF9E171B), fill: true),
             shape: BoxShape.circle,
           ),
         ),
@@ -801,7 +803,7 @@ class _LikhaeBrand extends StatelessWidget {
         Text(
           'Marketplace',
           style: TextStyle(
-            color: Color(0xFF8B7669),
+            color: AppTheme.resolve(context, Color(0xFF8B7669)),
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
           ),
@@ -820,8 +822,8 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
-        color: Color(0xFF3B261F),
+      style:  TextStyle(
+        color: AppTheme.resolve(context, Color(0xFF3B261F)),
         fontSize: 12.5,
         fontWeight: FontWeight.w700,
       ),
@@ -838,21 +840,21 @@ class _DividerLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Expanded(child: Divider(color: Color(0xFFE5D5C3), height: 1)),
+         Expanded(child: Divider(color: AppTheme.resolve(context, Color(0xFFE5D5C3)), height: 1)),
 
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
             text,
-            style: const TextStyle(
-              color: Color(0xFF9A8578),
+            style:  TextStyle(
+              color: AppTheme.resolve(context, Color(0xFF9A8578)),
               fontSize: 10.5,
               fontWeight: FontWeight.w500,
             ),
           ),
         ),
 
-        const Expanded(child: Divider(color: Color(0xFFE5D5C3), height: 1)),
+         Expanded(child: Divider(color: AppTheme.resolve(context, Color(0xFFE5D5C3)), height: 1)),
       ],
     );
   }
@@ -879,9 +881,9 @@ class _SocialButton extends StatelessWidget {
         onPressed: disabled ? null : onTap,
         style: OutlinedButton.styleFrom(
           elevation: 0,
-          backgroundColor: const Color(0xFFFFFCF8),
-          foregroundColor: const Color(0xFF3B261F),
-          side: const BorderSide(color: Color(0xFFE5D5C3)),
+          backgroundColor: AppTheme.resolve(context, const Color(0xFFFFFCF8), fill: true),
+          foregroundColor: AppTheme.resolve(context, const Color(0xFF3B261F)),
+          side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFE5D5C3))),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(13),
@@ -937,14 +939,14 @@ class _TrustBadge extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 12, color: const Color(0xFF8B7669)),
+        Icon(icon, size: 12, color: AppTheme.resolve(context, const Color(0xFF8B7669))),
 
         const SizedBox(width: 4),
 
         Text(
           label,
-          style: const TextStyle(
-            color: Color(0xFF8B7669),
+          style:  TextStyle(
+            color: AppTheme.resolve(context, Color(0xFF8B7669)),
             fontSize: 9.5,
             fontWeight: FontWeight.w600,
           ),

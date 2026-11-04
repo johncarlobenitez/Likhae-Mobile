@@ -28,8 +28,8 @@ class GlassSurface extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final highContrast = MediaQuery.highContrastOf(context);
     final surfaceOpacity = highContrast ? 1.0 : opacity ?? .97;
-    final tint = tintColor ??
-        (dark ? const Color(0xFF211E20) : const Color(0xFFFFFCF9));
+    final tint = tintColor ?? Theme.of(context).colorScheme.surface;
+    final surfaceColor = tint.withValues(alpha: surfaceOpacity);
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -45,7 +45,7 @@ class GlassSurface extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: tint.withValues(alpha: surfaceOpacity),
+              color: surfaceColor,
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color:
@@ -54,7 +54,15 @@ class GlassSurface extends StatelessWidget {
               ),
               gradient: highContrast ? null : LinearGradient(
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [Colors.white.withValues(alpha: dark ? .09 : .38), Colors.white.withValues(alpha: 0)],
+                // The gradient replaces the background paint, so each stop
+                // must include the surface tint rather than transparent white.
+                colors: [
+                  Color.alphaBlend(
+                    Colors.white.withValues(alpha: dark ? .09 : .38),
+                    surfaceColor,
+                  ),
+                  surfaceColor,
+                ],
               ),
             ),
             child: Padding(padding: padding, child: child),

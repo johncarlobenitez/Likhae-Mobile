@@ -53,7 +53,7 @@ class _RiderAvailabilityTrackerState extends State<RiderAvailabilityTracker>
     _requestInFlight = true;
     try {
       final profile = await RiderMobileService.fetchProfile();
-      if (!profile.isOnline || !profile.supportsAvailabilityStatus) return;
+      if (!profile.isOnline || !profile.isLocalBarangay) return;
       if (!await Geolocator.isLocationServiceEnabled()) return;
 
       final LocationPermission permission = await Geolocator.checkPermission();

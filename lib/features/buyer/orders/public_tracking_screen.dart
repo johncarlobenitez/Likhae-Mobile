@@ -1,3 +1,5 @@
+import 'package:likhae/core/theme/app_theme.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -274,14 +276,14 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
   }
 
   Color _mapMarkerColor(Map<String, dynamic> marker) {
-    if (marker['kind'] == 'rider') return const Color(0xFF1976D2);
+    if (marker['kind'] == 'rider') return AppTheme.resolve(context, const Color(0xFF1976D2));
     if (marker['target_kind'] == 'seller' || marker['kind'] == 'seller') {
-      return const Color(0xFFB56B32);
+      return AppTheme.resolve(context, const Color(0xFFB56B32));
     }
     if (marker['target_kind'] == 'buyer' || marker['kind'] == 'destination') {
-      return ShopColors.accent;
+      return AppTheme.resolve(context, ShopColors.accent);
     }
-    return const Color(0xFF27806E);
+    return AppTheme.resolve(context, const Color(0xFF27806E));
   }
 
   Future<void> _syncMapMarkers() async {
@@ -312,7 +314,7 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
             textAnchor: maplibre.TextAnchor.bottom,
             textOffset: <double?>[0, -0.7],
             textSize: 11,
-            textColor: const Color(0xFF342E2E).toARGB32(),
+            textColor: AppTheme.resolve(context, const Color(0xFF342E2E)).toARGB32(),
             textHaloColor: Colors.white.toARGB32(),
             textHaloWidth: 2,
           ),
@@ -459,7 +461,7 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
         _routeLine = await manager.create(
           maplibre.PolylineAnnotationOptions(
             geometry: routeLineGeometry,
-            lineColor: ShopColors.accent.toARGB32(),
+            lineColor: AppTheme.resolve(context, ShopColors.accent).toARGB32(),
             lineWidth: 4,
             lineOpacity: 0.85,
             lineBorderColor: Colors.white.toARGB32(),
@@ -468,7 +470,7 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
         );
       } else {
         previous.geometry = routeLineGeometry;
-        previous.lineColor = ShopColors.accent.toARGB32();
+        previous.lineColor = AppTheme.resolve(context, ShopColors.accent).toARGB32();
         previous.lineWidth = 4;
         previous.lineOpacity = 0.85;
         await manager.update(previous);
@@ -484,7 +486,7 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: ShopColors.canvas,
+      backgroundColor: AppTheme.resolve(context, ShopColors.canvas, fill: true),
       body: SafeArea(
         child: Column(
           children: <Widget>[
@@ -544,9 +546,9 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
                     if (_error != null) ...<Widget>[
                       const SizedBox(height: 12),
                       _infoCard(
-                        const Icon(
+                         Icon(
                           Icons.error_outline,
-                          color: Color(0xFFB42318),
+                          color: AppTheme.resolve(context, Color(0xFFB42318)),
                         ),
                         _error!,
                       ),
@@ -589,13 +591,13 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _infoCard(
-          const Icon(Icons.local_shipping_rounded, color: ShopColors.accent),
+           Icon(Icons.local_shipping_rounded, color: AppTheme.resolve(context, ShopColors.accent)),
           'Tracking ${tracking['tracking_number'] ?? _trackingNumber.text.trim()}\n${_status(tracking['current_status'])}${shipmentContext.isEmpty ? '' : '\n$shipmentContext'}',
         ),
         if ((tracking['guidance'] ?? '').toString().isNotEmpty) ...<Widget>[
           const SizedBox(height: 12),
           _infoCard(
-            const Icon(Icons.info_outline_rounded, color: ShopColors.accent),
+             Icon(Icons.info_outline_rounded, color: AppTheme.resolve(context, ShopColors.accent)),
             '${tracking['guidance']}\nNext update: ${tracking['next_actor'] ?? 'Logistics team'}',
           ),
         ],
@@ -605,10 +607,10 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
         _section(
           'Shipment updates',
           events.isEmpty
-              ? const <Widget>[
+              ?  <Widget>[
                   Text(
                     'No tracking updates yet.',
-                    style: TextStyle(color: ShopColors.muted),
+                    style: TextStyle(color: AppTheme.resolve(context, ShopColors.muted)),
                   ),
                 ]
               : events
@@ -649,8 +651,8 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
       height: 220,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: ShopColors.border),
+        color: AppTheme.resolve(context, Colors.white, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -678,8 +680,8 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
                                   .join('  →  ')
                             : 'Map points will appear when the parcel is routed through a logistics center.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: ShopColors.muted,
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 12,
                         ),
                       ),
@@ -699,11 +701,11 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
                     ),
                     onMapCreated: _onMapCreated,
                   )
-                : const Center(
+                :  Center(
                     child: Text(
                       'Map points will appear when the parcel is routed through a logistics center.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: ShopColors.muted, fontSize: 12),
+                      style: TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12),
                     ),
                   ),
           ),
@@ -715,8 +717,8 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
   Widget _section(String title, List<Widget> children) => Container(
     padding: const EdgeInsets.all(15),
     decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: ShopColors.border),
+      color: AppTheme.resolve(context, Colors.white, fill: true),
+      border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       borderRadius: BorderRadius.circular(16),
     ),
     child: Column(
@@ -734,9 +736,9 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Padding(
+         Padding(
           padding: EdgeInsets.only(top: 4),
-          child: Icon(Icons.circle, size: 8, color: ShopColors.accent),
+          child: Icon(Icons.circle, size: 8, color: AppTheme.resolve(context, ShopColors.accent)),
         ),
         const SizedBox(width: 9),
         Expanded(
@@ -747,12 +749,12 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
               if (notes.isNotEmpty)
                 Text(
                   notes,
-                  style: const TextStyle(color: ShopColors.muted, fontSize: 12),
+                  style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12),
                 ),
               if (time.isNotEmpty)
                 Text(
                   time,
-                  style: const TextStyle(color: ShopColors.muted, fontSize: 10),
+                  style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 10),
                 ),
             ],
           ),
@@ -764,8 +766,8 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
   Widget _infoCard(Widget icon, String text) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: Colors.white,
-      border: Border.all(color: ShopColors.border),
+      color: AppTheme.resolve(context, Colors.white, fill: true),
+      border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
       borderRadius: BorderRadius.circular(16),
     ),
     child: Row(
