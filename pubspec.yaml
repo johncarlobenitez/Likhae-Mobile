@@ -75,6 +75,8 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/opening/
+    - assets/icons/app_icon.jpg
     - assets/icons/likhae_ai_logo.png
     - assets/icons/google_g_logo.png
 
