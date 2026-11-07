@@ -1,0 +1,25 @@
+<?php
+
+namespace App\Policies;
+
+use App\Models\Logistics\LogisticsCenter;
+use App\Models\User;
+
+class LogisticsCenterPolicy
+{
+    public function before(User $user): ?bool
+    {
+        return $user->isAccountType(User::TYPE_ADMIN) ? true : null;
+    }
+
+    public function view(User $user, LogisticsCenter $center): bool
+    {
+        return $user->isAccountType(User::TYPE_LOGISTICS)
+            && $center->owner_user_id === $user->id;
+    }
+
+    public function update(User $user, LogisticsCenter $center): bool
+    {
+        return $this->view($user, $center);
+    }
+}

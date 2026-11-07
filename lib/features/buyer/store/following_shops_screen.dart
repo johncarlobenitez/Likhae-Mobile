@@ -30,6 +30,38 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
   late Future<List<StoreSellerData>> _shopsFuture;
   bool _wasCovered = false;
 
+  Widget _shopAvatar(BuildContext context, StoreSellerData shop) {
+    final String? imagePath = shop.avatarUrl?.trim();
+    final Widget initials = ColoredBox(
+      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
+      child: Center(
+        child: Text(
+          shop.initials,
+          style: TextStyle(
+            color: AppTheme.resolve(context, ShopColors.accent),
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+
+    return ClipOval(
+      child: SizedBox(
+        width: 58,
+        height: 58,
+        child: imagePath == null || imagePath.isEmpty
+            ? initials
+            : SizedNetworkImage(
+                url: AppConfig.resolveMediaUrl(imagePath),
+                fit: BoxFit.cover,
+                placeholder: initials,
+                errorBuilder: (context, error, stackTrace) => initials,
+              ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -73,125 +105,123 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
       ),
       body: FutureBuilder<List<StoreSellerData>>(
         future: _shopsFuture,
-        builder: (BuildContext context, AsyncSnapshot<List<StoreSellerData>> snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+        builder:
+            (
+              BuildContext context,
+              AsyncSnapshot<List<StoreSellerData>> snapshot,
+            ) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          if (snapshot.hasError) {
-            final String errorMessage = snapshot.error
-                .toString()
-                .replaceFirst('Exception: ', '');
-            final bool endpointMissing = errorMessage
-                .toLowerCase()
-                .contains('api endpoint not found');
-            return _FollowingShopsMessage(
-              icon: Icons.cloud_off_outlined,
-              title: endpointMissing
-                  ? 'Server update needed'
-                  : 'Could not load followed shops',
-              message: endpointMissing
-                  ? 'Update or restart the Laravel API, then try again.'
-                  : 'Check your connection and try again.',
-              actionLabel: 'Retry',
-              onAction: _refresh,
-            );
-          }
-
-          final List<StoreSellerData> shops =
-              snapshot.data ?? const <StoreSellerData>[];
-          if (shops.isEmpty) {
-            return _FollowingShopsMessage(
-              icon: Icons.storefront_outlined,
-              title: 'No followed shops yet',
-              message: 'Follow a shop to find it here.',
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: shops.length,
-              separatorBuilder: (BuildContext context, int index) =>
-                  const SizedBox(height: 10),
-              itemBuilder: (BuildContext context, int index) {
-                final StoreSellerData shop = shops[index];
-                return Material(
-                  color: AppTheme.resolve(context, ShopColors.surface, fill: true),
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => widget.onShopSelected(shop),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              width: 58,
-                              height: 58,
-                              child: shop.avatarUrl?.trim().isNotEmpty == true
-                                  ? SizedNetworkImage(
-                                      url: AppConfig.resolveMediaUrl(
-                                        shop.avatarUrl,
-                                      ),
-                                      iconSize: 24,
-                                    )
-                                  :  ColoredBox(
-                                      color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
-                                      child: Icon(
-                                        Icons.storefront_outlined,
-                                        color: AppTheme.resolve(context, ShopColors.accent),
-                                      ),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  shop.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style:  TextStyle(
-                                    color: AppTheme.resolve(context, ShopColors.text),
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                if (shop.location?.trim().isNotEmpty == true) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    shop.location!,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style:  TextStyle(
-                                      color: AppTheme.resolve(context, ShopColors.muted),
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                           Icon(
-                            Icons.chevron_right_rounded,
-                            color: AppTheme.resolve(context, ShopColors.muted),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+              if (snapshot.hasError) {
+                final String errorMessage = snapshot.error
+                    .toString()
+                    .replaceFirst('Exception: ', '');
+                final bool endpointMissing = errorMessage
+                    .toLowerCase()
+                    .contains('api endpoint not found');
+                return _FollowingShopsMessage(
+                  icon: Icons.cloud_off_outlined,
+                  title: endpointMissing
+                      ? 'Server update needed'
+                      : 'Could not load followed shops',
+                  message: endpointMissing
+                      ? 'Update or restart the Laravel API, then try again.'
+                      : 'Check your connection and try again.',
+                  actionLabel: 'Retry',
+                  onAction: _refresh,
                 );
-              },
-            ),
-          );
-        },
+              }
+
+              final List<StoreSellerData> shops =
+                  snapshot.data ?? const <StoreSellerData>[];
+              if (shops.isEmpty) {
+                return _FollowingShopsMessage(
+                  icon: Icons.storefront_outlined,
+                  title: 'No followed shops yet',
+                  message: 'Follow a shop to find it here.',
+                );
+              }
+
+              return RefreshIndicator(
+                onRefresh: _refresh,
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: shops.length,
+                  separatorBuilder: (BuildContext context, int index) =>
+                      const SizedBox(height: 10),
+                  itemBuilder: (BuildContext context, int index) {
+                    final StoreSellerData shop = shops[index];
+                    return Material(
+                      color: AppTheme.resolve(
+                        context,
+                        ShopColors.surface,
+                        fill: true,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () => widget.onShopSelected(shop),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              _shopAvatar(context, shop),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      shop.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: AppTheme.resolve(
+                                          context,
+                                          ShopColors.text,
+                                        ),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    if (shop.location?.trim().isNotEmpty ==
+                                        true) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        shop.location!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: AppTheme.resolve(
+                                            context,
+                                            ShopColors.muted,
+                                          ),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppTheme.resolve(
+                                  context,
+                                  ShopColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
       ),
     );
   }
@@ -220,12 +250,16 @@ class _FollowingShopsMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 46, color: AppTheme.resolve(context, ShopColors.accentLight)),
+            Icon(
+              icon,
+              size: 46,
+              color: AppTheme.resolve(context, ShopColors.accentLight),
+            ),
             const SizedBox(height: 14),
             Text(
               title,
               textAlign: TextAlign.center,
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, ShopColors.text),
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
@@ -235,7 +269,7 @@ class _FollowingShopsMessage extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, ShopColors.muted),
                 fontSize: 13,
                 height: 1.4,

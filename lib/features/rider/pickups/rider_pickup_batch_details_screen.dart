@@ -162,20 +162,53 @@ class _RiderPickupBatchDetailsScreenState
   }
 
   Future<void> _scanWithCamera() async {
-    final RiderParcelScanResult? scan = await Navigator.of(context)
-        .push<RiderParcelScanResult>(
-          MaterialPageRoute<RiderParcelScanResult>(
-            fullscreenDialog: true,
-            builder: (BuildContext context) =>
-                const RiderParcelScannerScreen(returnScanDetails: true),
-          ),
-        );
-    if (scan == null || scan.code.trim().isEmpty || !mounted) return;
-    await _run(
-      widget.onScan == null
-          ? null
-          : () => widget.onScan!(_batch.id, scan.code.trim(), scan.method),
-      'Parcel scanned and pickup recorded.',
+    if (_busy || _needsRefresh) return;
+    final Future<void> Function(int, String, String)? scanParcel =
+        widget.onScan;
+    if (scanParcel == null) {
+      _showMessage('Pickup batch API is not connected.');
+      return;
+    }
+
+    final int remainingCount = _batch.parcels
+        .where((RiderPickupBatchItemData parcel) => !parcel.isResolved)
+        .length;
+    if (remainingCount == 0) {
+      _showMessage('Every parcel in this batch is already resolved.');
+      return;
+    }
+
+    int scannedInSession = 0;
+    final int? scannerCount = await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        fullscreenDialog: true,
+        builder: (BuildContext context) => RiderParcelScannerScreen(
+          returnScanDetails: true,
+          expectedScanCount: remainingCount,
+          onContinuousScan: (RiderParcelScanResult scan) async {
+            await scanParcel(_batch.id, scan.code.trim(), scan.method);
+            scannedInSession++;
+            _changed = true;
+          },
+        ),
+      ),
+    );
+    if (!mounted) return;
+
+    final int scannedCount = scannerCount ?? scannedInSession;
+    if (scannedCount == 0) return;
+
+    await _refresh();
+    if (!mounted || _needsRefresh) return;
+
+    final int unresolvedCount = _batch.parcels
+        .where((RiderPickupBatchItemData parcel) => !parcel.isResolved)
+        .length;
+    final String parcelWord = scannedCount == 1 ? 'parcel' : 'parcels';
+    _showMessage(
+      unresolvedCount == 0
+          ? '$scannedCount $parcelWord scanned. The batch is ready for the next step.'
+          : '$scannedCount $parcelWord scanned. $unresolvedCount remaining.',
     );
   }
 
@@ -277,6 +310,7 @@ class _RiderPickupBatchDetailsScreenState
     final String progressStatusLabel = inProgress && allResolved
         ? 'Ready for hub'
         : _batch.statusLabel;
+    final Widget? primaryAction = _buildPrimaryAction(status, allResolved);
 
     return Scaffold(
       backgroundColor: AppTheme.resolve(context, _background, fill: true),
@@ -301,20 +335,22 @@ class _RiderPickupBatchDetailsScreenState
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: <Widget>[
             if (const {'LOADING', 'READY', 'IN_PROGRESS'}.contains(status)) ...[
               if (!inProgress)
                 _notice('Accept and start seller pickup to enable scanning.'),
               OutlinedButton.icon(
-                onPressed: inProgress && !_busy && !_needsRefresh
+                onPressed:
+                    inProgress && !allResolved && !_busy && !_needsRefresh
                     ? _scanWithCamera
                     : null,
                 icon: const Icon(Icons.qr_code_scanner_rounded),
-                label: const Text('Scan parcel barcode / QR'),
+                label: const Text('Scan all parcel barcodes'),
               ),
               TextButton.icon(
-                onPressed: inProgress && !_busy && !_needsRefresh
+                onPressed:
+                    inProgress && !allResolved && !_busy && !_needsRefresh
                     ? _scanManually
                     : null,
                 icon: const Icon(Icons.keyboard_alt_outlined),
@@ -351,61 +387,90 @@ class _RiderPickupBatchDetailsScreenState
               const SizedBox(height: 12),
             ],
             _buildParcelList(inProgress && !_needsRefresh),
-            const SizedBox(height: 16),
-            if (status == 'LOADING')
-              _actionButton(
-                label: 'Accept pickup batch',
-                icon: Icons.check_circle_outline_rounded,
-                onPressed: () => _run(
-                  widget.onAccept == null
-                      ? null
-                      : () => widget.onAccept!(_batch.id),
-                  'Pickup batch accepted.',
-                ),
-              )
-            else if (status == 'READY')
-              _actionButton(
-                label: 'Start seller pickup',
-                icon: Icons.play_arrow_rounded,
-                onPressed: () => _run(
-                  widget.onStart == null
-                      ? null
-                      : () => widget.onStart!(_batch.id),
-                  'Pickup started. Scan each waybill.',
-                ),
-              )
-            else if (inProgress) ...<Widget>[
-              _actionButton(
-                label: allResolved
-                    ? 'Finish pickup and go to hub'
-                    : 'Finish after resolving every parcel',
-                icon: Icons.local_shipping_outlined,
-                onPressed: allResolved && !_busy && !_needsRefresh
-                    ? () => _run(
-                        widget.onFinish == null
-                            ? null
-                            : () => widget.onFinish!(_batch.id),
-                        'Pickup batch finished. Head to the logistics center.',
-                      )
-                    : null,
-              ),
-            ] else if (status == 'EN_ROUTE_TO_HUB')
-              _notice(
-                'Pickup is complete. Deliver $collected collected parcel(s) to ${_batch.logisticsCenter.isEmpty ? 'the logistics center' : _batch.logisticsCenter}.',
-              )
-            else if (status == 'COMPLETED')
-              _notice('This pickup batch is completed.')
-            else
-              _notice(
-                'No pickup action is available for this status. Refresh for the latest update.',
-              ),
-            if (_busy) ...<Widget>[
+            if (status != 'LOADING' &&
+                status != 'READY' &&
+                status != 'IN_PROGRESS') ...<Widget>[
               const SizedBox(height: 14),
-               Center(child: CircularProgressIndicator(color: AppTheme.resolve(context, _maroon))),
+              _buildCompletionNotice(status, collected),
             ],
           ],
         ),
       ),
+      bottomNavigationBar: primaryAction == null
+          ? null
+          : Container(
+              color: AppTheme.resolve(context, _background, fill: true),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (_busy) ...<Widget>[
+                      LinearProgressIndicator(
+                        color: AppTheme.resolve(context, _maroon),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    primaryAction,
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget? _buildPrimaryAction(String status, bool allResolved) {
+    if (status == 'LOADING') {
+      return _actionButton(
+        label: 'Accept pickup batch',
+        icon: Icons.check_circle_outline_rounded,
+        onPressed: () => _run(
+          widget.onAccept == null ? null : () => widget.onAccept!(_batch.id),
+          'Pickup batch accepted.',
+        ),
+      );
+    }
+    if (status == 'READY') {
+      return _actionButton(
+        label: 'Start seller pickup',
+        icon: Icons.play_arrow_rounded,
+        onPressed: () => _run(
+          widget.onStart == null ? null : () => widget.onStart!(_batch.id),
+          'Pickup started. Scan all parcel waybills.',
+        ),
+      );
+    }
+    if (status == 'IN_PROGRESS') {
+      return _actionButton(
+        label: allResolved
+            ? 'Finish pickup and go to hub'
+            : 'Finish after resolving every parcel',
+        icon: Icons.local_shipping_outlined,
+        onPressed: allResolved && !_busy && !_needsRefresh
+            ? () => _run(
+                widget.onFinish == null
+                    ? null
+                    : () => widget.onFinish!(_batch.id),
+                'Pickup batch finished. Head to the logistics center.',
+              )
+            : null,
+      );
+    }
+    return null;
+  }
+
+  Widget _buildCompletionNotice(String status, int collected) {
+    if (status == 'EN_ROUTE_TO_HUB') {
+      return _notice(
+        'Pickup is complete. Deliver $collected collected parcel(s) to ${_batch.logisticsCenter.isEmpty ? 'the logistics center' : _batch.logisticsCenter}.',
+      );
+    }
+    if (status == 'COMPLETED') {
+      return _notice('This pickup batch is completed.');
+    }
+    return _notice(
+      'No pickup action is available for this status. Refresh for the latest update.',
     );
   }
 
@@ -422,7 +487,7 @@ class _RiderPickupBatchDetailsScreenState
         children: <Widget>[
           Text(
             _batch.sellerName.isEmpty ? 'Seller' : _batch.sellerName,
-            style:  TextStyle(
+            style: TextStyle(
               color: AppTheme.resolve(context, _text),
               fontSize: 20,
               fontWeight: FontWeight.w900,
@@ -432,7 +497,7 @@ class _RiderPickupBatchDetailsScreenState
           _infoRow(Icons.storefront_outlined, 'Pickup address', _batch.address),
           if (_batch.logisticsCenter.isNotEmpty ||
               _batch.destinationAddress.isNotEmpty) ...<Widget>[
-             Divider(height: 22, color: AppTheme.resolve(context, _border)),
+            Divider(height: 22, color: AppTheme.resolve(context, _border)),
             _infoRow(
               Icons.local_shipping_outlined,
               'Logistics center',
@@ -443,7 +508,7 @@ class _RiderPickupBatchDetailsScreenState
                 padding: const EdgeInsets.only(left: 29, top: 4),
                 child: Text(
                   _batch.destinationAddress,
-                  style:  TextStyle(
+                  style: TextStyle(
                     color: AppTheme.resolve(context, _muted),
                     fontSize: 12,
                     height: 1.4,
@@ -455,7 +520,7 @@ class _RiderPickupBatchDetailsScreenState
             const SizedBox(height: 12),
             Text(
               'Approved capacity: ${_batch.approvedCapacity} parcels',
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, _muted),
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -476,12 +541,18 @@ class _RiderPickupBatchDetailsScreenState
       ),
       child: Row(
         children: <Widget>[
-           Icon(Icons.inventory_2_outlined, color: AppTheme.resolve(context, _maroon)),
+          Icon(
+            Icons.inventory_2_outlined,
+            color: AppTheme.resolve(context, _maroon),
+          ),
           const SizedBox(width: 11),
           Expanded(
             child: Text(
               '$collected of ${_batch.parcels.length} parcels collected',
-              style:  TextStyle(color: AppTheme.resolve(context, _text), fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: AppTheme.resolve(context, _text),
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           _statusChip(statusLabel),
@@ -504,7 +575,7 @@ class _RiderPickupBatchDetailsScreenState
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Text(
               'Parcels (${_batch.parcels.length})',
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, _text),
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
@@ -512,7 +583,7 @@ class _RiderPickupBatchDetailsScreenState
             ),
           ),
           if (_batch.parcels.isEmpty)
-             Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(16, 4, 16, 18),
               child: Text(
                 'No parcels are attached to this batch.',
@@ -524,7 +595,11 @@ class _RiderPickupBatchDetailsScreenState
               final RiderPickupBatchItemData parcel = entry.value;
               return Column(
                 children: <Widget>[
-                  if (entry.key > 0)  Divider(height: 1, color: AppTheme.resolve(context, _border)),
+                  if (entry.key > 0)
+                    Divider(
+                      height: 1,
+                      color: AppTheme.resolve(context, _border),
+                    ),
                   Padding(
                     padding: const EdgeInsets.all(15),
                     child: Column(
@@ -546,7 +621,7 @@ class _RiderPickupBatchDetailsScreenState
                                     parcel.trackingCode.isEmpty
                                         ? 'Tracking unavailable'
                                         : parcel.trackingCode,
-                                    style:  TextStyle(
+                                    style: TextStyle(
                                       color: AppTheme.resolve(context, _text),
                                       fontWeight: FontWeight.w900,
                                     ),
@@ -557,8 +632,11 @@ class _RiderPickupBatchDetailsScreenState
                                     const SizedBox(height: 4),
                                     Text(
                                       'Order ${parcel.sellerOrderNumber}',
-                                      style:  TextStyle(
-                                        color: AppTheme.resolve(context, _muted),
+                                      style: TextStyle(
+                                        color: AppTheme.resolve(
+                                          context,
+                                          _muted,
+                                        ),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -569,8 +647,11 @@ class _RiderPickupBatchDetailsScreenState
                                       parcel.products.join(', '),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style:  TextStyle(
-                                        color: AppTheme.resolve(context, _muted),
+                                      style: TextStyle(
+                                        color: AppTheme.resolve(
+                                          context,
+                                          _muted,
+                                        ),
                                         fontSize: 12,
                                         height: 1.35,
                                       ),
@@ -588,7 +669,10 @@ class _RiderPickupBatchDetailsScreenState
                           const SizedBox(height: 8),
                           Text(
                             'Reason: ${parcel.notCollectedReason}',
-                            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, _muted),
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                         if (inProgress && !parcel.isResolved) ...<Widget>[
@@ -605,7 +689,10 @@ class _RiderPickupBatchDetailsScreenState
                               ),
                               label: const Text('Not collected'),
                               style: TextButton.styleFrom(
-                                foregroundColor: AppTheme.resolve(context, const Color(0xFF9E3328)),
+                                foregroundColor: AppTheme.resolve(
+                                  context,
+                                  const Color(0xFF9E3328),
+                                ),
                               ),
                             ),
                           ),
@@ -631,11 +718,17 @@ class _RiderPickupBatchDetailsScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(label, style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11)),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 11,
+                ),
+              ),
               const SizedBox(height: 3),
               Text(
                 value.isEmpty ? 'Address unavailable' : value,
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, _text),
                   fontSize: 13,
                   height: 1.4,
@@ -674,13 +767,17 @@ class _RiderPickupBatchDetailsScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: success ? AppTheme.resolve(context, const Color(0xFFEAF6EE), fill: true) : AppTheme.resolve(context, const Color(0xFFFFF3DC), fill: true),
+        color: success
+            ? AppTheme.resolve(context, const Color(0xFFEAF6EE), fill: true)
+            : AppTheme.resolve(context, const Color(0xFFFFF3DC), fill: true),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: success ? AppTheme.resolve(context, _green) : AppTheme.resolve(context, const Color(0xFF946514)),
+          color: success
+              ? AppTheme.resolve(context, _green)
+              : AppTheme.resolve(context, const Color(0xFF946514)),
           fontSize: 10,
           fontWeight: FontWeight.w800,
         ),
@@ -694,11 +791,16 @@ class _RiderPickupBatchDetailsScreenState
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, const Color(0xFFFFF1F0), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF1B7B2))),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFF1B7B2)),
+        ),
       ),
       child: Text(
         message,
-        style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF9E3328)), height: 1.4),
+        style: TextStyle(
+          color: AppTheme.resolve(context, Color(0xFF9E3328)),
+          height: 1.4,
+        ),
       ),
     );
   }
@@ -712,7 +814,7 @@ class _RiderPickupBatchDetailsScreenState
       ),
       child: Text(
         message,
-        style:  TextStyle(
+        style: TextStyle(
           color: AppTheme.resolve(context, _green),
           fontWeight: FontWeight.w700,
           height: 1.4,

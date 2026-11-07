@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'core/api/api_client.dart';
 import 'features/buyer/settings/buyer_system_settings_controller.dart';
+import 'services/location_permission_onboarding.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,5 +15,6 @@ Future<void> main() async {
   runApp(const LikhaeApp());
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(BuyerSystemSettingsController.instance.load());
+    unawaited(LocationPermissionOnboarding.requestIfFirstLaunch());
   });
 }

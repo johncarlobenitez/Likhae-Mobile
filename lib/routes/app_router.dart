@@ -41,6 +41,7 @@ import '../features/buyer/profile/account_screen.dart';
 import '../features/buyer/profile/review_history_screen.dart';
 import '../features/buyer/rewards/rewards_screen.dart';
 import '../features/buyer/rewards/seller_offers_screen.dart';
+import '../features/buyer/promotions/platform_events_screen.dart';
 import '../features/buyer/ai/buyer_ai_assistant.dart';
 import '../features/buyer/store/following_shops_screen.dart';
 import '../features/buyer/store/store_screen.dart';
@@ -1041,6 +1042,7 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
   }
 
   bool _loading = true;
+  bool _showOpening = false;
   String? _error;
 
   @override
@@ -1053,13 +1055,16 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
     if (mounted && !_loading) {
       setState(() {
         _loading = true;
+        _showOpening = false;
         _error = null;
       });
     }
 
     try {
       final String? token = await TokenStorage.readToken();
+      if (!mounted) return;
       if (token == null || token.trim().isEmpty) {
+        setState(() => _showOpening = true);
         await _openingDone.future;
         if (mounted) context.go('/login');
         return;
@@ -1067,7 +1072,6 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
 
       final AuthenticatedUserSession session =
           await AuthService.getCurrentSession();
-      await _openingDone.future;
       if (!mounted) return;
       if (session.pendingPolicies.isNotEmpty) {
         context.go(
@@ -1081,7 +1085,6 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
         _routeAuthenticatedUser(context, session.user);
       }
     } on AuthSessionExpiredException {
-      await _openingDone.future;
       if (mounted) context.go('/login');
     } catch (error) {
       if (!mounted) return;
@@ -1101,34 +1104,41 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return OpeningAnimationScreen(onFinished: _finishOpening);
+    if (_loading) {
+      if (_showOpening) {
+        return OpeningAnimationScreen(onFinished: _finishOpening);
+      }
+      return const Scaffold(
+        body: SafeArea(child: Center(child: Text('Checking your session…'))),
+      );
+    }
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      const Icon(Icons.cloud_off_outlined, size: 42),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Could not verify your saved session.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      if (_error != null) ...<Widget>[
-                        const SizedBox(height: 8),
-                        Text(_error!, textAlign: TextAlign.center),
-                      ],
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _restoreSession,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Try again'),
-                      ),
-                    ],
-                  ),
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.cloud_off_outlined, size: 42),
+                const SizedBox(height: 12),
+                const Text(
+                  'Could not verify your saved session.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                if (_error != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(_error!, textAlign: TextAlign.center),
+                ],
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _restoreSession,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Try again'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1185,13 +1195,20 @@ final GoRouter appRouter = GoRouter(
                   onMessages: () => _goBuyerTab(context, 2),
                   onProfile: () => _goBuyerTab(context, 3),
                   onVouchers: () => context.push('/buyer/rewards'),
+                  onViewSellerOffers: () =>
+                      context.push('/buyer/seller-offers'),
+                  onViewBundleDeals: () => context.push('/buyer/bundle-deals'),
+                  onViewFreeGifts: () => context.push('/buyer/free-gifts'),
+                  onViewPlatformEvents: () =>
+                      context.push('/buyer/platform-events'),
                   onViewAllCategories: () => context.push('/buyer/products'),
                   onCategorySelected: (String categorySlug) {
                     context.push(
                       '/buyer/products?category=${Uri.encodeComponent(categorySlug)}',
                     );
                   },
-                  onShopDeals: () => context.push('/buyer/products?deals=true'),
+                  onShopDeals: () => context.push('/buyer/discounts'),
+                  onViewFlashDeals: () => context.push('/buyer/flash-deals'),
                   onViewFeatured: () => context.push('/buyer/products'),
                   onViewRecommended: () => context.push('/buyer/products'),
                   onProductSelected: (BuyerHomeProduct product) {
@@ -1432,8 +1449,10 @@ final GoRouter appRouter = GoRouter(
                                 ? BuyerMobileService.confirmOrderReceived
                                 : null,
                             onConfirmShipmentReceived: AppConfig.apiEnabled
-                                ? (BuyerOrderData order,
-                                        BuyerOrderParcelData shipment) =>
+                                ? (
+                                    BuyerOrderData order,
+                                    BuyerOrderParcelData shipment,
+                                  ) =>
                                       BuyerMobileService.confirmShipmentReceived(
                                         orderId: order.id,
                                         shipmentId: shipment.id,
@@ -1757,6 +1776,14 @@ final GoRouter appRouter = GoRouter(
                                         confirmation: confirmation,
                                       )
                                 : null,
+                            onLoadRefundDestinations: AppConfig.apiEnabled
+                                ? BuyerMobileService
+                                      .fetchBuyerRefundDestinations
+                                : null,
+                            onMutateRefundDestination: AppConfig.apiEnabled
+                                ? BuyerMobileService
+                                      .mutateBuyerRefundDestination
+                                : null,
                             onReviewHistory: AppConfig.apiEnabled
                                 ? () => context.push('/buyer/reviews')
                                 : null,
@@ -1829,7 +1856,30 @@ final GoRouter appRouter = GoRouter(
       path: '/login',
       name: 'login',
       builder: (BuildContext context, GoRouterState state) {
-        return LoginScreen(onRegister: () => context.push('/register'), onForgotPassword: () => context.push('/forgot-password'), onSignIn: (String email, String password, bool rememberMe) async {await _handleLogin(context, email: email, password: password, rememberMe: rememberMe, onError: () {});}, onGoogleSignIn: () async {try {final Map<String, dynamic> payload = await AuthService.signInWithGoogle(); _routeAuthenticatedMobileUser(context, payload);} on GoogleRegistrationRequiredException catch (error) {if (context.mounted) {context.push('/register', extra: error.profile);}}});
+        return LoginScreen(
+          onRegister: () => context.push('/register'),
+          onForgotPassword: () => context.push('/forgot-password'),
+          onSignIn: (String email, String password, bool rememberMe) async {
+            await _handleLogin(
+              context,
+              email: email,
+              password: password,
+              rememberMe: rememberMe,
+              onError: () {},
+            );
+          },
+          onGoogleSignIn: () async {
+            try {
+              final Map<String, dynamic> payload =
+                  await AuthService.signInWithGoogle();
+              _routeAuthenticatedMobileUser(context, payload);
+            } on GoogleRegistrationRequiredException catch (error) {
+              if (context.mounted) {
+                context.push('/register', extra: error.profile);
+              }
+            }
+          },
+        );
       },
     ),
 
@@ -1840,7 +1890,33 @@ final GoRouter appRouter = GoRouter(
         final Map<String, dynamic>? googleProfile = state.extra is Map
             ? Map<String, dynamic>.from(state.extra as Map)
             : null;
-        return RegisterScreen(googleProfile: googleProfile, onSendEmailVerificationCode: AuthService.sendRegistrationEmailVerificationCode, onVerifyEmailVerificationCode: AuthService.verifyRegistrationEmailVerificationCode, onSubmit: (RegisterFormData data) async {final Map<String, dynamic> payload = await AuthService.register(data); if (!context.mounted) return; final dynamic message = payload['message']; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message?.toString() ?? 'Registration submitted.'))); context.go('/login');}, onPickDocument: _pickRegistrationDocument, loadRegions: PhilippineAddressService.fetchRegions, loadProvinces: PhilippineAddressService.fetchProvinces, loadMunicipalities: PhilippineAddressService.fetchMunicipalities, loadBarangays: PhilippineAddressService.fetchBarangays, loadPostalCode: PhilippineAddressService.fetchPostalCode, loadLogisticsCenters: AuthService.fetchLogisticsCenters);
+        return RegisterScreen(
+          googleProfile: googleProfile,
+          onSendEmailVerificationCode:
+              AuthService.sendRegistrationEmailVerificationCode,
+          onVerifyEmailVerificationCode:
+              AuthService.verifyRegistrationEmailVerificationCode,
+          onSubmit: (RegisterFormData data) async {
+            final Map<String, dynamic> payload = await AuthService.register(
+              data,
+            );
+            if (!context.mounted) return;
+            final dynamic message = payload['message'];
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message?.toString() ?? 'Registration submitted.'),
+              ),
+            );
+            context.go('/login');
+          },
+          onPickDocument: _pickRegistrationDocument,
+          loadRegions: PhilippineAddressService.fetchRegions,
+          loadProvinces: PhilippineAddressService.fetchProvinces,
+          loadMunicipalities: PhilippineAddressService.fetchMunicipalities,
+          loadBarangays: PhilippineAddressService.fetchBarangays,
+          loadPostalCode: PhilippineAddressService.fetchPostalCode,
+          loadLogisticsCenters: AuthService.fetchLogisticsCenters,
+        );
       },
     ),
 
@@ -1879,8 +1955,10 @@ final GoRouter appRouter = GoRouter(
               ) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const RouteLoadingPage(title: 'Product details',
-                      layout: LoadingLayout.productDetails);
+                  return const RouteLoadingPage(
+                    title: 'Product details',
+                    layout: LoadingLayout.productDetails,
+                  );
                 }
                 if (snapshot.hasError || !snapshot.hasData) {
                   return Scaffold(
@@ -1923,6 +2001,7 @@ final GoRouter appRouter = GoRouter(
           child: ProductsScreen(
             initialCategorySlug: state.uri.queryParameters['category'],
             dealsOnly: state.uri.queryParameters['deals'] == 'true',
+            flashDealsOnly: state.uri.queryParameters['flash'] == 'true',
             searchOnOpen: state.uri.queryParameters['search'] == '1',
             onBack: () => safeBack(context, fallback: '/buyer/home'),
             onCart: () => context.push('/buyer/cart'),
@@ -2032,8 +2111,10 @@ final GoRouter appRouter = GoRouter(
           builder: (BuildContext context, AsyncSnapshot<StorePageData> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
-              return const RouteLoadingPage(title: 'Store',
-                  layout: LoadingLayout.products);
+              return const RouteLoadingPage(
+                title: 'Store',
+                layout: LoadingLayout.products,
+              );
             }
 
             if (snapshot.hasError || !snapshot.hasData) {
@@ -2191,8 +2272,10 @@ final GoRouter appRouter = GoRouter(
               ) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const RouteLoadingPage(title: 'Wishlist',
-                      layout: LoadingLayout.products);
+                  return const RouteLoadingPage(
+                    title: 'Wishlist',
+                    layout: LoadingLayout.products,
+                  );
                 }
                 if (snapshot.hasError) {
                   return Scaffold(
@@ -2647,6 +2730,7 @@ final GoRouter appRouter = GoRouter(
                           rewardPoints: request.rewardPoints,
                           checkoutAttemptKey: request.checkoutAttemptKey,
                           priceSnapshot: request.priceSnapshot,
+                          shippingQuoteToken: request.shippingQuoteToken,
                         );
                     AppNotificationCenter.showOrderPlaced();
                     if (context.mounted) {
@@ -2919,6 +3003,53 @@ final GoRouter appRouter = GoRouter(
     ),
 
     GoRoute(
+      path: '/buyer/bundle-deals',
+      name: 'buyer-bundle-deals',
+      builder: (BuildContext context, GoRouterState state) =>
+          _buyerNavigationFrame(
+            context,
+            currentIndex: 0,
+            child: const SellerOffersScreen(offerType: 'BUNDLE'),
+          ),
+    ),
+
+    GoRoute(
+      path: '/buyer/free-gifts',
+      name: 'buyer-free-gifts',
+      builder: (BuildContext context, GoRouterState state) =>
+          _buyerNavigationFrame(
+            context,
+            currentIndex: 0,
+            child: const SellerOffersScreen(offerType: 'BUY_X_GET_Y'),
+          ),
+    ),
+
+    GoRoute(
+      path: '/buyer/platform-events',
+      name: 'buyer-platform-events',
+      builder: (BuildContext context, GoRouterState state) =>
+          _buyerNavigationFrame(
+            context,
+            currentIndex: 0,
+            child: const PlatformEventsScreen(),
+          ),
+    ),
+
+    GoRoute(
+      path: '/buyer/discounts',
+      name: 'buyer-discounts',
+      redirect: (BuildContext context, GoRouterState state) =>
+          '/buyer/products?deals=true',
+    ),
+
+    GoRoute(
+      path: '/buyer/flash-deals',
+      name: 'buyer-flash-deals',
+      redirect: (BuildContext context, GoRouterState state) =>
+          '/buyer/products?flash=true',
+    ),
+
+    GoRoute(
       path: '/buyer/public-tracking',
       name: 'buyer-public-tracking',
       builder: (BuildContext context, GoRouterState state) =>
@@ -3008,7 +3139,7 @@ final GoRouter appRouter = GoRouter(
       builder: (BuildContext context, GoRouterState state) =>
           _riderNavigationFrame(
             context,
-            currentIndex: 2,
+            currentIndex: 3,
             requiredRole: _RiderOperationalRole.localBarangay,
             child: const RiderReturnsScreen(),
           ),
@@ -3020,7 +3151,7 @@ final GoRouter appRouter = GoRouter(
       builder: (BuildContext context, GoRouterState state) =>
           _riderNavigationFrame(
             context,
-            currentIndex: 2,
+            currentIndex: 3,
             requiredRole: _RiderOperationalRole.localBarangay,
             child: const RiderTripsScreen(),
           ),
@@ -3211,6 +3342,27 @@ final GoRouter appRouter = GoRouter(
                         statusMessage: error?.toString(),
                         showPreviewWhenEmpty: false,
                         onRefresh: refresh,
+                        onAcceptAll: (List<RiderDeliveryData> assigned) async {
+                          final failures = <String>[];
+                          for (final delivery in assigned) {
+                            try {
+                              await RiderMobileService.transitionDelivery(
+                                RiderDeliveryTransitionRequest(
+                                  delivery: delivery,
+                                  status: 'accepted',
+                                ),
+                              );
+                            } catch (error) {
+                              failures.add('${delivery.trackingCode}: $error');
+                            }
+                          }
+                          await refresh();
+                          if (failures.isNotEmpty) {
+                            throw Exception(
+                              'Some orders were not accepted. ${failures.join(' | ')}',
+                            );
+                          }
+                        },
                         onBack: () =>
                             safeBack(context, fallback: '/rider/dashboard'),
                         onViewDelivery: (RiderDeliveryData delivery) {
@@ -3403,6 +3555,9 @@ final GoRouter appRouter = GoRouter(
       path: '/rider/messages',
       name: 'rider-messages',
       builder: (BuildContext context, GoRouterState state) {
+        final initialConversation = state.extra is RiderConversationData
+            ? state.extra as RiderConversationData
+            : null;
         return _riderNavigationFrame(
           context,
           currentIndex: 6,
@@ -3425,12 +3580,14 @@ final GoRouter appRouter = GoRouter(
                             RiderMobileService.touchMessagePresence,
                         onRefreshConversationPresence:
                             RiderMobileService.refreshConversationPresence,
+                        initialConversation: initialConversation,
                         statusMessage: error?.toString(),
                         onBack: () =>
                             safeBack(context, fallback: '/rider/dashboard'),
                       ),
                 )
               : RiderMessagesScreen(
+                  initialConversation: initialConversation,
                   onBack: () => safeBack(context, fallback: '/rider/dashboard'),
                 ),
         );
@@ -3611,6 +3768,20 @@ final GoRouter appRouter = GoRouter(
             showPreviewWhenNull: !AppConfig.apiEnabled,
             onTransition: AppConfig.apiEnabled
                 ? RiderMobileService.transitionDelivery
+                : null,
+            onMessageBuyer: AppConfig.apiEnabled
+                ? (RiderDeliveryData selectedDelivery) async {
+                    final conversation =
+                        await RiderMobileService.startDeliveryConversation(
+                          selectedDelivery.id,
+                        );
+                    if (context.mounted) {
+                      await context.push(
+                        '/rider/messages',
+                        extra: conversation,
+                      );
+                    }
+                  }
                 : null,
             onBackToDeliveries: () {
               if (context.canPop()) {

@@ -10,6 +10,9 @@ import '../data/async_cache.dart';
 class ApiClient {
   ApiClient._();
 
+  static const String _mapGeocodeFallbackUrl =
+      'https://likhae.online/api/v1/maps/geocode';
+
   static final _reads = AsyncCache<String, Response<dynamic>>();
   static bool _initialized = false;
   static int _sessionRevision = -1;
@@ -23,7 +26,9 @@ class ApiClient {
 
   static final Dio _dio = Dio(
     BaseOptions(
-      baseUrl: AppConfig.apiBaseUrl,
+      // Dio joins a relative request path by appending it to baseUrl, so keep
+      // exactly one trailing slash after /api/v1.
+      baseUrl: '${AppConfig.apiBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/',
       connectTimeout: const Duration(seconds: 20),
       receiveTimeout: const Duration(seconds: 25),
       sendTimeout: const Duration(seconds: 25),
@@ -118,6 +123,31 @@ class ApiClient {
       lifetime: cacheFor,
       refresh: refresh,
     );
+  }
+
+  /// Retries public address searches against the production map route when a
+  /// configured API host has not registered that route.
+  static Future<Response<dynamic>> getMapGeocode(String text) async {
+    final Map<String, dynamic> queryParameters = <String, dynamic>{
+      'text': text,
+    };
+    final Response<dynamic> response = await get(
+      'maps/geocode',
+      queryParameters: queryParameters,
+      refresh: true,
+    );
+    final dynamic payload = response.data;
+    final String? message = payload is Map
+        ? payload['message']?.toString().trim().toLowerCase()
+        : null;
+    if (response.statusCode == 404 && message == 'api endpoint not found.') {
+      return get(
+        _mapGeocodeFallbackUrl,
+        queryParameters: queryParameters,
+        refresh: true,
+      );
+    }
+    return response;
   }
 
   static Future<Response<dynamic>> post(

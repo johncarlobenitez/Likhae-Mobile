@@ -966,7 +966,15 @@ class _RiderPickupDetailsScreenState extends State<RiderPickupDetailsScreen> {
 
 class RiderParcelScannerScreen extends StatefulWidget {
   final bool returnScanDetails;
-  const RiderParcelScannerScreen({super.key, this.returnScanDetails = false});
+  final Future<void> Function(RiderParcelScanResult scan)? onContinuousScan;
+  final int? expectedScanCount;
+
+  const RiderParcelScannerScreen({
+    super.key,
+    this.returnScanDetails = false,
+    this.onContinuousScan,
+    this.expectedScanCount,
+  });
 
   @override
   State<RiderParcelScannerScreen> createState() {
@@ -980,6 +988,11 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
   );
 
   bool _handled = false;
+  bool _processing = false;
+  bool _closing = false;
+  final Set<String> _successfulCodes = <String>{};
+  String? _feedback;
+  bool _feedbackIsError = false;
 
   @override
   void dispose() {
@@ -987,8 +1000,9 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
     super.dispose();
   }
 
-  void _onDetect(BarcodeCapture capture) {
-    if (_handled) {
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    final bool continuous = widget.onContinuousScan != null;
+    if (_closing || _processing || (!continuous && _handled)) {
       return;
     }
 
@@ -999,35 +1013,137 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
         continue;
       }
 
-      _handled = true;
-
-      Navigator.of(context).pop(
-        widget.returnScanDetails
-            ? RiderParcelScanResult(
-                code: value,
-                method: barcode.format == BarcodeFormat.qrCode
-                    ? 'QR'
-                    : 'BARCODE',
-              )
-            : value,
+      final RiderParcelScanResult scan = RiderParcelScanResult(
+        code: value,
+        method: barcode.format == BarcodeFormat.qrCode ? 'QR' : 'BARCODE',
       );
 
+      if (continuous) {
+        await _recordContinuousScan(scan);
+      } else {
+        _handled = true;
+        Navigator.of(context).pop(
+          widget.returnScanDetails ? scan : value,
+        );
+      }
       return;
     }
   }
 
+  Future<void> _recordContinuousScan(RiderParcelScanResult scan) async {
+    if (_processing || _closing) return;
+    final String codeKey = scan.code.trim();
+    if (_successfulCodes.contains(codeKey)) {
+      if (!mounted) return;
+      setState(() {
+        _feedback = 'This parcel was already scanned in this session.';
+        _feedbackIsError = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _processing = true;
+      _feedback = 'Recording parcel scan…';
+      _feedbackIsError = false;
+    });
+    try {
+      await _scannerController.stop();
+    } catch (_) {
+      // Continue with the scan callback if the camera was already paused.
+    }
+
+    try {
+      await widget.onContinuousScan!(scan);
+      if (!mounted) return;
+      _successfulCodes.add(codeKey);
+      setState(() {
+        _feedback =
+            'Parcel ${_successfulCodes.length} recorded. Scan the next one.';
+        _feedbackIsError = false;
+      });
+
+      final int? expected = widget.expectedScanCount;
+      if (expected != null &&
+          expected > 0 &&
+          _successfulCodes.length >= expected) {
+        _closeContinuousSession(afterFinalScan: true);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _feedback = error
+              .toString()
+              .replaceFirst(RegExp(r'^(Exception|StateError):\s*'), '')
+              .trim();
+          _feedbackIsError = true;
+        });
+      }
+    } finally {
+      if (mounted && !_closing) {
+        await Future<void>.delayed(const Duration(milliseconds: 650));
+        if (mounted && !_closing) {
+          setState(() => _processing = false);
+          try {
+            await _scannerController.start();
+          } catch (error) {
+            if (mounted) {
+              setState(() {
+                _feedback = 'Camera paused. Tap Try Again to resume scanning.';
+                _feedbackIsError = true;
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  void _closeContinuousSession({bool afterFinalScan = false}) {
+    if (_closing || (_processing && !afterFinalScan)) return;
+    setState(() => _closing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop(_successfulCodes.length);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: widget.onContinuousScan == null || !_processing || _closing,
+      child: Scaffold(
       backgroundColor: AppTheme.resolve(context, Colors.black, fill: true),
       appBar: AppBar(
         backgroundColor: AppTheme.resolve(context, Colors.black, fill: true),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Scan parcel',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        leading: IconButton(
+          tooltip: widget.onContinuousScan == null
+              ? 'Back'
+              : 'Finish scanning',
+          onPressed: widget.onContinuousScan == null
+              ? () => Navigator.of(context).pop()
+              : (_processing ? null : _closeContinuousSession),
+          icon: const Icon(Icons.arrow_back_rounded),
         ),
+        title: Text(
+          widget.onContinuousScan == null ? 'Scan parcel' : 'Scan parcels',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        actions: widget.onContinuousScan == null
+            ? null
+            : <Widget>[
+                TextButton(
+                  onPressed: _processing ? null : _closeContinuousSession,
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
       ),
       body: Stack(
         children: <Widget>[
@@ -1054,8 +1170,42 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
             ),
           ),
 
-          Positioned.fill(child: AppScanBeam(active: !_handled,
-            frameSize: const Size(260, 180))),
+          Positioned.fill(
+            child: AppScanBeam(
+              active: widget.onContinuousScan == null
+                  ? !_handled
+                  : !_processing && !_closing,
+              frameSize: const Size(260, 180),
+            ),
+          ),
+          if (widget.onContinuousScan != null)
+            Positioned(
+              top: 18,
+              left: 18,
+              right: 18,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Text(
+                    widget.expectedScanCount == null
+                        ? '${_successfulCodes.length} parcels recorded'
+                        : '${_successfulCodes.length} of ${widget.expectedScanCount} parcels scanned',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             left: 18,
             right: 18,
@@ -1066,7 +1216,7 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
                 color: Colors.black.withValues(alpha: 0.72),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Column(
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Icon(
@@ -1078,20 +1228,49 @@ class _RiderParcelScannerScreenState extends State<RiderParcelScannerScreen> {
                   SizedBox(height: 8),
 
                   Text(
-                    'Point the camera at the parcel waybill QR code or barcode.',
+                    widget.onContinuousScan == null
+                        ? 'Point the camera at the parcel waybill QR code or barcode.'
+                        : 'Scan each remaining parcel barcode. The camera stays open until all are scanned or you tap Done.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
                       height: 1.4,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  if (_processing) ...<Widget>[
+                    const SizedBox(height: 12),
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                  if (_feedback != null) ...<Widget>[
+                    const SizedBox(height: 10),
+                    Text(
+                      _feedback!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _feedbackIsError
+                            ? const Color(0xFFFFB4AB)
+                            : const Color(0xFFB7F7CB),
+                        fontSize: 12,
+                        height: 1.35,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
         ],
+      ),
       ),
     );
   }

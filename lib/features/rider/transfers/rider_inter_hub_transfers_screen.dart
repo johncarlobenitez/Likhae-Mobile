@@ -1,9 +1,6 @@
 import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
-import '../pickups/rider_pickup_details_screen.dart'
-    show RiderParcelScannerScreen;
-import '../scanner/rider_parcel_scan_result.dart';
 
 class RiderInterHubTransferItem {
   final int id;
@@ -190,18 +187,7 @@ class RiderInterHubTransferData {
 typedef RiderTransferAccept = Future<void> Function(int manifestId);
 typedef RiderTransferDecline =
     Future<void> Function(int manifestId, String reason);
-typedef RiderTransferStart =
-    Future<void> Function(
-      int manifestId,
-      Map<int, String> scannedCodes, {
-      String scanMethod,
-    });
-
-class _TransferParcelScans {
-  final Map<int, String> codes;
-  final String method;
-  const _TransferParcelScans(this.codes, this.method);
-}
+typedef RiderTransferStart = Future<void> Function(int manifestId);
 
 class RiderInterHubTransfersScreen extends StatefulWidget {
   final List<RiderInterHubTransferData> transfers;
@@ -212,7 +198,6 @@ class RiderInterHubTransfersScreen extends StatefulWidget {
   final RiderTransferStart? onStart;
   final Future<RiderInterHubTransferData> Function(int manifestId)?
   onLoadTransfer;
-  final Future<RiderParcelScanResult?> Function()? onScanParcel;
 
   const RiderInterHubTransfersScreen({
     super.key,
@@ -223,7 +208,6 @@ class RiderInterHubTransfersScreen extends StatefulWidget {
     this.onDecline,
     this.onStart,
     this.onLoadTransfer,
-    this.onScanParcel,
   });
 
   @override
@@ -257,8 +241,8 @@ class _RiderInterHubTransfersScreenState
             padding: const EdgeInsets.fromLTRB(18, 16, 18, 112),
             children: <Widget>[
               _brandHeader(),
-              const SizedBox(height: 28),
-               Text(
+              const SizedBox(height: 22),
+              Text(
                 'Inter-hub transfers',
                 style: TextStyle(
                   color: AppTheme.resolve(context, _text),
@@ -268,11 +252,15 @@ class _RiderInterHubTransfersScreenState
                 ),
               ),
               const SizedBox(height: 8),
-               Text(
-                'Review your assigned manifest, accept it before the origin hub '
-                'releases the parcels, then scan every parcel to start the trip. '
-                'The destination hub records receipt on arrival.',
-                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.55),
+              Text(
+                'Review and accept your assigned manifest. The origin hub scans '
+                'and releases the parcels; then start transport in the app. '
+                'The destination hub scans them on arrival.',
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 13,
+                  height: 1.55,
+                ),
               ),
               if (widget.statusMessage?.trim().isNotEmpty == true) ...<Widget>[
                 const SizedBox(height: 16),
@@ -307,7 +295,7 @@ class _RiderInterHubTransfersScreenState
           child: const Icon(Icons.local_shipping_rounded, color: Colors.white),
         ),
         const SizedBox(width: 11),
-         Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
@@ -322,7 +310,10 @@ class _RiderInterHubTransfersScreenState
             SizedBox(height: 2),
             Text(
               'Inter-logistics workspace',
-              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
+              style: TextStyle(
+                color: AppTheme.resolve(context, _muted),
+                fontSize: 11,
+              ),
             ),
           ],
         ),
@@ -340,7 +331,7 @@ class _RiderInterHubTransfersScreenState
       ),
       child: Text(
         message,
-        style:  TextStyle(
+        style: TextStyle(
           color: AppTheme.resolve(context, Color(0xFFB42318)),
           fontSize: 12,
           height: 1.5,
@@ -357,14 +348,26 @@ class _RiderInterHubTransfersScreenState
         ? AppTheme.resolve(context, const Color(0xFF8A3E34))
         : AppTheme.resolve(context, _muted);
     final bool busy = _busyManifestIds.contains(transfer.id);
+    final String origin = _hubLabel(transfer.originHub, 'Origin hub');
+    final String destination = _hubLabel(
+      transfer.destinationHub,
+      'Destination hub',
+    );
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, _surface, fill: true),
         border: Border.all(color: AppTheme.resolve(context, _border)),
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,49 +381,122 @@ class _RiderInterHubTransfersScreenState
                   children: <Widget>[
                     Text(
                       transfer.displayManifestNumber,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:  TextStyle(
+                      style: TextStyle(
                         color: AppTheme.resolve(context, _text),
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 7),
-                    Text(
-                      '$transfer.originHub  →  $transfer.destinationHub',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style:  TextStyle(
-                        color: AppTheme.resolve(context, _muted),
-                        fontSize: 12,
-                        height: 1.45,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '$parcelCount parcels',
-                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
-                    ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 child: Text(
                   transfer.displayStatus,
-                  textAlign: TextAlign.right,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: statusColor,
-                    fontSize: 10.5,
-                    letterSpacing: 1.2,
+                    fontSize: 9,
+                    letterSpacing: 0.6,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+            decoration: BoxDecoration(
+              color: AppTheme.resolve(
+                context,
+                const Color(0xFFF7F1EA),
+                fill: true,
+              ),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: AppTheme.resolve(
+                  context,
+                  _border,
+                ).withValues(alpha: 0.7),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Icon(
+                      Icons.route_rounded,
+                      size: 14,
+                      color: AppTheme.resolve(context, _maroon),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'DELIVERY ROUTE',
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Expanded(child: _routeEndpoint('ORIGIN', origin)),
+                    Container(
+                      width: 30,
+                      height: 30,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.resolve(context, _maroon, fill: true),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Expanded(child: _routeEndpoint('DESTINATION', destination)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 15,
+                color: AppTheme.resolve(context, _muted),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$parcelCount ${parcelCount == '1' ? 'parcel' : 'parcels'}',
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _transferProgress(transfer),
           if (transfer.driverAccepted &&
               transfer.status.toUpperCase() == 'SEALED') ...<Widget>[
             const SizedBox(height: 10),
@@ -435,7 +511,23 @@ class _RiderInterHubTransfersScreenState
             const _TransferNote(
               icon: Icons.qr_code_scanner_rounded,
               text:
-                  'Released by the origin hub. Scan every parcel to start transport.',
+                  'Released by the origin hub. Start transport when you are ready; no rider parcel scan is needed.',
+            ),
+          ],
+          if (transfer.status.toUpperCase() == 'IN_TRANSIT') ...<Widget>[
+            const SizedBox(height: 10),
+            const _TransferNote(
+              icon: Icons.local_shipping_outlined,
+              text:
+                  'Transport is in progress. The destination hub will scan and confirm the parcels on arrival.',
+            ),
+          ],
+          if (transfer.isReceived) ...<Widget>[
+            const SizedBox(height: 10),
+            const _TransferNote(
+              icon: Icons.task_alt_rounded,
+              text:
+                  'The destination hub received the manifest. This transfer is complete.',
             ),
           ],
           if (transfer.canAccept ||
@@ -451,7 +543,13 @@ class _RiderInterHubTransfersScreenState
                     onPressed: busy ? null : () => _accept(transfer),
                     icon: const Icon(Icons.check_rounded, size: 18),
                     label: const Text('Accept'),
-                    style: FilledButton.styleFrom(backgroundColor: AppTheme.resolve(context, _maroon, fill: true)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.resolve(
+                        context,
+                        _maroon,
+                        fill: true,
+                      ),
+                    ),
                   ),
                 if (transfer.canDecline && widget.onDecline != null)
                   OutlinedButton.icon(
@@ -466,16 +564,163 @@ class _RiderInterHubTransfersScreenState
                         : () => _start(transfer),
                     icon: const Icon(Icons.route_rounded, size: 18),
                     label: const Text('Start transport'),
-                    style: FilledButton.styleFrom(backgroundColor: AppTheme.resolve(context, _maroon, fill: true)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.resolve(
+                        context,
+                        _maroon,
+                        fill: true,
+                      ),
+                    ),
                   ),
               ],
             ),
             if (busy) ...<Widget>[
               const SizedBox(height: 10),
-               LinearProgressIndicator(color: AppTheme.resolve(context, _maroon)),
+              LinearProgressIndicator(
+                color: AppTheme.resolve(context, _maroon),
+              ),
             ],
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _routeEndpoint(String label, String hub) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: TextStyle(
+            color: AppTheme.resolve(context, _muted),
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.9,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          hub,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppTheme.resolve(context, _text),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            height: 1.25,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _hubLabel(String value, String fallback) {
+    final String clean = value.trim();
+    if (clean.isEmpty || clean.startsWith('Instance of ')) return fallback;
+    return clean;
+  }
+
+  Widget _transferProgress(RiderInterHubTransferData transfer) {
+    final String status = transfer.status.toUpperCase();
+    final bool prepared = status != 'DRAFT' && status != 'CANCELLED';
+    final bool released = <String>{
+      'RELEASED',
+      'IN_TRANSIT',
+      'RECEIVED',
+    }.contains(status);
+    final bool inTransit = <String>{'IN_TRANSIT', 'RECEIVED'}.contains(status);
+    final List<(String, bool)> steps = <(String, bool)>[
+      ('Prepared', prepared),
+      ('Accepted', transfer.driverAccepted),
+      ('Released', released),
+      ('In transit', inTransit),
+      ('Received', transfer.isReceived),
+    ];
+
+    return Semantics(
+      label:
+          'Transfer progress: ${steps.map((step) => '${step.$1} ${step.$2 ? 'complete' : 'pending'}').join(', ')}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'TRANSFER PROGRESS',
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: <Widget>[
+              for (int i = 0; i < steps.length; i++) ...<Widget>[
+                _progressNode(steps[i].$2),
+                if (i < steps.length - 1)
+                  Expanded(
+                    child: Container(
+                      height: 2,
+                      color: AppTheme.resolve(
+                        context,
+                        steps[i].$2 && steps[i + 1].$2
+                            ? const Color(0xFF398357)
+                            : const Color(0xFFD9D0C7),
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 7),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              for (final (String label, bool done) in steps)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, done ? _text : _muted),
+                        fontSize: 9,
+                        height: 1.15,
+                        fontWeight: done ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _progressNode(bool done) {
+    final Color color = AppTheme.resolve(
+      context,
+      done ? const Color(0xFF398357) : const Color(0xFFB9ADA2),
+    );
+    return Container(
+      width: 20,
+      height: 20,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: done
+            ? AppTheme.resolve(context, const Color(0xFF398357), fill: true)
+            : AppTheme.resolve(context, _surface, fill: true),
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: Icon(
+        done ? Icons.check_rounded : Icons.circle,
+        size: done ? 12 : 5,
+        color: done ? Colors.white : color,
       ),
     );
   }
@@ -523,11 +768,9 @@ class _RiderInterHubTransfersScreenState
         }
         return;
       }
-      final scans = await _askForParcelScans(latest);
-      if (scans == null || !mounted) return;
       await _perform(
         latest,
-        () => action(latest.id, scans.codes, scanMethod: scans.method),
+        () => action(latest.id),
         'Transport started. The destination hub can now receive the parcels.',
       );
     } catch (error) {
@@ -607,172 +850,15 @@ class _RiderInterHubTransfersScreenState
     );
   }
 
-  Future<_TransferParcelScans?> _askForParcelScans(
-    RiderInterHubTransferData transfer,
-  ) async {
-    final List<RiderInterHubTransferItem> items = transfer.items;
-    if (items.isEmpty ||
-        items.any((RiderInterHubTransferItem item) => item.id <= 0)) {
-      _showMessage(
-        'This manifest is missing parcel scan details. Refresh or contact Logistics.',
-        isError: true,
-      );
-      return null;
-    }
-
-    final Map<int, TextEditingController> controllers =
-        <int, TextEditingController>{
-          for (final RiderInterHubTransferItem item in items)
-            item.id: TextEditingController(),
-        };
-    String? formError;
-    final methods = <int, String>{};
-    bool scanning = false;
-    final route = DialogRoute<_TransferParcelScans>(
-      context: context,
-      builder: (BuildContext dialogContext) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setDialogState) {
-          return AlertDialog(
-            title: const Text('Scan manifest parcels'),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const Text(
-                      'Enter or scan the barcode from each parcel. Every code must match the sealed manifest.',
-                    ),
-                    const SizedBox(height: 12),
-                    for (
-                      int index = 0;
-                      index < items.length;
-                      index++
-                    ) ...<Widget>[
-                      TextField(
-                        controller: controllers[items[index].id],
-                        onChanged: (_) => methods[items[index].id] = 'MANUAL',
-                        textCapitalization: TextCapitalization.characters,
-                        autocorrect: false,
-                        decoration: InputDecoration(
-                          labelText: _parcelLabel(index + 1),
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            tooltip: 'Scan parcel ${index + 1}',
-                            icon: const Icon(Icons.qr_code_scanner_rounded),
-                            onPressed: scanning
-                                ? null
-                                : () async {
-                                    setDialogState(() => scanning = true);
-                                    try {
-                                      final scan = widget.onScanParcel != null
-                                          ? await widget.onScanParcel!()
-                                          : await Navigator.of(
-                                              dialogContext,
-                                            ).push<RiderParcelScanResult>(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const RiderParcelScannerScreen(
-                                                      returnScanDetails: true,
-                                                    ),
-                                              ),
-                                            );
-                                      if (!dialogContext.mounted ||
-                                          scan == null) {
-                                        return;
-                                      }
-                                      controllers[items[index].id]!.text = scan
-                                          .code
-                                          .trim();
-                                      methods[items[index].id] = scan.method;
-                                    } catch (error) {
-                                      if (dialogContext.mounted) {
-                                        setDialogState(
-                                          () => formError =
-                                              'Could not scan parcel: $error',
-                                        );
-                                      }
-                                    } finally {
-                                      if (dialogContext.mounted) {
-                                        setDialogState(() => scanning = false);
-                                      }
-                                    }
-                                  },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    if (formError != null)
-                      Text(
-                        formError!,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final bool hasMissingCode = controllers.values.any(
-                    (TextEditingController controller) =>
-                        controller.text.trim().isEmpty,
-                  );
-                  if (hasMissingCode) {
-                    setDialogState(
-                      () => formError = 'Scan every parcel before starting.',
-                    );
-                    return;
-                  }
-                  final codes = <int, String>{
-                    for (final MapEntry<int, TextEditingController> entry
-                        in controllers.entries)
-                      entry.key: entry.value.text.trim(),
-                  };
-                  final usedMethods = codes.keys
-                      .map((id) => methods[id] ?? 'MANUAL')
-                      .toSet();
-                  // Laravel records one method for the whole manifest.
-                  final method = usedMethods.length == 1
-                      ? usedMethods.single
-                      : 'MANUAL';
-                  Navigator.pop(
-                    dialogContext,
-                    _TransferParcelScans(codes, method),
-                  );
-                },
-                child: const Text('Start transport'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    try {
-      return await Navigator.of(context).push(route);
-    } finally {
-      await route.completed;
-      for (final TextEditingController controller in controllers.values) {
-        controller.dispose();
-      }
-    }
-  }
-
-  String _parcelLabel(int number) => 'Parcel $number barcode';
-
   void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: isError ? AppTheme.resolve(context, const Color(0xFF8A3E34), fill: true) : AppTheme.resolve(context, _maroon, fill: true),
+          backgroundColor: isError
+              ? AppTheme.resolve(context, const Color(0xFF8A3E34), fill: true)
+              : AppTheme.resolve(context, _maroon, fill: true),
         ),
       );
   }
@@ -786,9 +872,13 @@ class _RiderInterHubTransfersScreenState
         border: Border.all(color: AppTheme.resolve(context, _border)),
         borderRadius: BorderRadius.circular(18),
       ),
-      child:  Column(
+      child: Column(
         children: <Widget>[
-          Icon(Icons.swap_horiz_rounded, size: 34, color: AppTheme.resolve(context, _muted)),
+          Icon(
+            Icons.swap_horiz_rounded,
+            size: 34,
+            color: AppTheme.resolve(context, _muted),
+          ),
           SizedBox(height: 12),
           Text(
             'No inter-hub transfers assigned',
@@ -803,7 +893,11 @@ class _RiderInterHubTransfersScreenState
           Text(
             'Assigned manifests will appear here.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.5),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 12,
+              height: 1.5,
+            ),
           ),
         ],
       ),
@@ -822,12 +916,16 @@ class _TransferNote extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(icon, size: 17, color: AppTheme.resolve(context, const Color(0xFF237A44))),
+        Icon(
+          icon,
+          size: 17,
+          color: AppTheme.resolve(context, const Color(0xFF237A44)),
+        ),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
             text,
-            style:  TextStyle(
+            style: TextStyle(
               color: AppTheme.resolve(context, Color(0xFF60473E)),
               fontSize: 11,
               height: 1.4,

@@ -84,6 +84,7 @@ class RiderMessagesScreen extends StatefulWidget {
   final RiderConversationMessageStream? messageStreamBuilder;
   final RiderMessagePresenceHeartbeat? onPresenceHeartbeat;
   final RiderConversationPresenceRefresh? onRefreshConversationPresence;
+  final RiderConversationData? initialConversation;
   final VoidCallback? onBack;
   final String? statusMessage;
 
@@ -96,6 +97,7 @@ class RiderMessagesScreen extends StatefulWidget {
     this.messageStreamBuilder,
     this.onPresenceHeartbeat,
     this.onRefreshConversationPresence,
+    this.initialConversation,
     this.onBack,
     this.statusMessage,
   });
@@ -128,6 +130,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
   bool _sendingMessage = false;
   bool _refreshingConversations = false;
   String? _error;
+  String? _initialConversationOpenedId;
 
   @override
   void initState() {
@@ -136,6 +139,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
     _error = widget.statusMessage;
     WidgetsBinding.instance.addObserver(this);
     _startPresenceTracking();
+    _openInitialConversationIfNeeded();
   }
 
   @override
@@ -147,6 +151,22 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
     if (oldWidget.statusMessage != widget.statusMessage) {
       _error = widget.statusMessage;
     }
+    _openInitialConversationIfNeeded();
+  }
+
+  void _openInitialConversationIfNeeded() {
+    final conversation = widget.initialConversation;
+    if (conversation == null ||
+        conversation.id.isEmpty ||
+        _initialConversationOpenedId == conversation.id) {
+      return;
+    }
+    _initialConversationOpenedId = conversation.id;
+    _conversations.removeWhere((item) => item.id == conversation.id);
+    _conversations.insert(0, conversation);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openConversation(conversation);
+    });
   }
 
   @override

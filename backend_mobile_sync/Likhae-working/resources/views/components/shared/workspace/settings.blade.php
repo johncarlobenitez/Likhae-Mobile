@@ -1,0 +1,34 @@
+@props(['config', 'preferences', 'showHeading' => true])
+@php $value = fn (string $key) => data_get($preferences, $key); @endphp
+@if(session('status'))<div class="ws-settings-notice" role="status">{{ session('status') }}</div>@endif
+@if(isset($errors) && $errors->any())<div class="ws-settings-notice is-error" role="alert">{{ $errors->first() }}</div>@endif
+<div class="ws-settings-page">
+    @if($showHeading)
+        <header class="ws-settings-hero"><div><span>{{ $config['center'] }}</span><h1>System Settings</h1><p>{{ $config['description'] }}</p></div><a href="{{ route($config['account_route']) }}">My Account</a></header>
+    @endif
+    <form method="POST" action="{{ route($config['update_route']) }}" data-workspace-settings>@csrf @method('PUT')
+        <div class="ws-settings-grid">
+            <section class="ws-settings-card is-wide"><header><b aria-hidden="true">●</b><div><h2>Account Visibility</h2><p>Choose whether other users can see when you are online in Messages.</p></div></header><div class="ws-settings-list"><label class="ws-settings-row"><span><strong>Show Online Status</strong><small>When off, you appear offline to everyone while you continue using LIKHAE.</small></span><span class="ws-switch"><input type="hidden" name="show_online_status" value="0"><input type="checkbox" name="show_online_status" value="1" @checked((bool)$value('show_online_status'))><i></i></span></label></div></section>
+            @if(!empty($config['notifications']))
+            <section class="ws-settings-card is-wide"><header><b>⌁</b><div><h2>Notifications</h2><p>Choose which {{ $config['center'] }} updates you want to receive.</p></div></header><div class="ws-settings-list">
+                @foreach($config['notifications'] as $notification)
+                    @php
+                        $key = $notification[0];
+                        $label = $notification[1];
+                        $description = $notification[2];
+                        $enabled = $notification[3] ?? true;
+                    @endphp
+                    <div class="ws-settings-row"><span><strong>{{ $label }}</strong><small>{{ $description }}</small></span><span class="ws-settings-row-actions">@if($enabled)<button type="button" class="ws-sound-preview" data-notification-preview="{{ $key }}" aria-label="Preview {{ $label }} sound"&#9654; Preview</button><label class="ws-switch"><input type="checkbox" name="{{ $key }}" value="1" @checked((bool)$value($key))><i></i></label>@else<span class="ws-coming-soon" aria-disabled="true">Coming soon</span>@endif</span></div>
+                @endforeach
+            </div></section>
+            @endif
+            @if($config['show_ai'])<section class="ws-settings-card"><header><b>✦</b><div><h2>LIKHAE AI Assistant</h2><p>Control the optional assistant for this workspace.</p></div></header><div class="ws-settings-list"><label class="ws-settings-row"><span><strong>Show AI Assistant</strong><small>Display the floating AI chat head on {{ $config['center'] }} pages.</small></span><span class="ws-switch"><input type="checkbox" name="{{ $config['ai_key'] }}" value="1" @checked((bool)$value($config['ai_key']))><i></i></span></label><label class="ws-settings-row"><span><strong>AI Response Sound</strong><small>Play a subtle sound after an assistant reply.</small></span><span class="ws-switch"><input type="checkbox" name="{{ $config['ai_sound_key'] }}" value="1" @checked((bool)$value($config['ai_sound_key']))><i></i></span></label></div></section>@endif
+            <section class="ws-settings-card"><header><b>♪</b><div><h2>Sounds</h2><p>Manage interface sound cues.</p></div></header><div class="ws-settings-list"><label class="ws-settings-row"><span><strong>Notification Sounds</strong><small>Play sounds for supported operational notifications.</small></span><span class="ws-settings-row-actions"><button type="button" class="ws-sound-preview" data-notification-preview="general_updates" aria-label="Preview notification sound">▶ Preview</button><span class="ws-switch"><input type="checkbox" name="{{ $config['sound_key'] }}" value="1" data-notification-sound-toggle @checked((bool)$value($config['sound_key']))><i></i></span></span></label></div></section>
+            <section class="ws-settings-card"><header><b>◐</b><div><h2>Appearance</h2><p>Apply your preferred LIKHAE theme.</p></div></header><div class="ws-theme-options">@foreach(['light'=>['☀','Light'],'dark'=>['◐','Dark'],'system'=>['◌','System']] as $key=>[$icon,$label])<label><input type="radio" name="theme" value="{{ $key }}" @checked($value('theme')===$key)><span><em>{{ $icon }}</em>{{ $label }}</span></label>@endforeach</div></section>
+            @if($config['show_language'] ?? true)
+                <section class="ws-settings-card"><header><b>A</b><div><h2>Language</h2><p>More languages will appear when translations are ready.</p></div></header><label class="ws-select">Display language<input type="text" value="English (coming soon)" disabled aria-disabled="true"></label></section>
+            @endif
+        </div><footer class="ws-settings-save"><p>Your online visibility setting applies across LIKHAE.</p><button type="submit">Save Settings</button></footer>
+    </form>
+</div>
+@push('scripts')<script>(()=>{const f=document.querySelector('[data-workspace-settings]');if(!f)return;const apply=v=>{if(v==='system')localStorage.removeItem('likhae-theme');else localStorage.setItem('likhae-theme',v);document.documentElement.classList.toggle('dark',v==='dark'||(v==='system'&&matchMedia('(prefers-color-scheme: dark)').matches))};f.querySelectorAll('input[name="theme"]').forEach(i=>i.addEventListener('change',()=>apply(i.value)));f.addEventListener('submit',()=>{apply(f.querySelector('input[name="theme"]:checked')?.value||'system');if(f.querySelector('[data-notification-sound-toggle]')?.checked)window.likhaeEnableNotificationSounds?.()})})();</script>@endpush

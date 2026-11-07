@@ -237,6 +237,21 @@ class ProductReviewData {
   }
 }
 
+class ProductDescriptionBlock {
+  final String? text;
+  final String? imageUrl;
+  final String altText;
+
+  const ProductDescriptionBlock.text(this.text)
+    : imageUrl = null,
+      altText = '';
+
+  const ProductDescriptionBlock.image({
+    required this.imageUrl,
+    this.altText = 'Product description image',
+  }) : text = null;
+}
+
 class ProductDetailData {
   final int id;
 
@@ -259,6 +274,7 @@ class ProductDetailData {
   final int soldCount;
 
   final String? description;
+  final List<ProductDescriptionBlock> descriptionBlocks;
 
   final String? sellerName;
   final String? sellerSlug;
@@ -300,6 +316,7 @@ class ProductDetailData {
     this.reviewCount = 0,
     this.soldCount = 0,
     this.description,
+    this.descriptionBlocks = const <ProductDescriptionBlock>[],
     this.sellerName,
     this.sellerSlug,
     this.sellerUserId,
@@ -381,6 +398,7 @@ class ProductDetailData {
 
   factory ProductDetailData.fromApi(Map<String, dynamic> json) {
     final dynamic rawId = json['id'] ?? json['db_id'];
+    final int productId = int.tryParse(rawId?.toString() ?? '') ?? 0;
     final dynamic rawPrice = json['price'] ?? json['min_price'];
     final dynamic rawPrimaryImage = json['primary_image'];
     final Map<String, dynamic>? primaryImage = rawPrimaryImage is Map
@@ -691,7 +709,15 @@ class ProductDetailData {
       }
     }
 
+    final dynamic rawSeller = json['seller'];
+    final Map<String, dynamic>? seller = rawSeller is Map
+        ? Map<String, dynamic>.from(rawSeller)
+        : null;
     final String? rawSellerAvatar =
+        seller?['avatar_path']?.toString() ??
+        seller?['avatar_url']?.toString() ??
+        seller?['profile_photo_url']?.toString() ??
+        seller?['avatar']?.toString() ??
         json['seller_avatar']?.toString() ??
         json['seller_avatar_url']?.toString();
 
@@ -730,17 +756,18 @@ class ProductDetailData {
           parsedReviews.length;
     }
 
-    final dynamic rawSeller = json['seller'];
-    final Map<String, dynamic>? seller = rawSeller is Map
-        ? Map<String, dynamic>.from(rawSeller)
-        : null;
+    final int? sellerProfileId = int.tryParse(
+      (seller?['id'] ?? json['seller_profile_id'] ?? json['seller_id'] ?? '')
+          .toString(),
+    );
+    final String? description = json['description']?.toString();
     final dynamic rawCategory = json['category'];
     final Map<String, dynamic>? category = rawCategory is Map
         ? Map<String, dynamic>.from(rawCategory)
         : null;
 
     return ProductDetailData(
-      id: int.tryParse(rawId?.toString() ?? '') ?? 0,
+      id: productId,
       name: (json['name'] ?? 'Product').toString(),
       slug: json['slug']?.toString(),
       category:
@@ -767,12 +794,25 @@ class ProductDetailData {
             json['sold']?.toString() ?? json['sold_count']?.toString() ?? '0',
           ) ??
           0,
-      description: json['description']?.toString(),
+      description: description,
+      descriptionBlocks: _parseDescriptionBlocks(
+        json['description_blocks'],
+        description,
+        rawImages: gallery,
+        productId: productId,
+        sellerProfileId: sellerProfileId,
+      ),
       sellerName:
           seller?['business_name']?.toString() ??
           json['seller_name']?.toString() ??
           (rawSeller is String ? rawSeller : null),
-      sellerSlug: json['seller_slug']?.toString(),
+      sellerSlug:
+          seller?['slug']?.toString() ??
+          seller?['store_slug']?.toString() ??
+          seller?['id']?.toString() ??
+          json['seller_slug']?.toString() ??
+          json['seller_profile_id']?.toString() ??
+          json['seller_id']?.toString(),
       sellerUserId: int.tryParse(
         (seller?['user_id'] ?? json['seller_user_id'] ?? '').toString(),
       ),
@@ -859,6 +899,109 @@ class ProductDetailData {
         .toList(growable: false);
   }
 
+  static List<ProductDescriptionBlock> _parseDescriptionBlocks(
+    dynamic rawBlocks,
+    String? description, {
+    required dynamic rawImages,
+    required int productId,
+    required int? sellerProfileId,
+  }) {
+    final List<ProductDescriptionBlock> parsedBlocks =
+        <ProductDescriptionBlock>[];
+    if (rawBlocks is List) {
+      for (final dynamic rawBlock in rawBlocks) {
+        if (rawBlock is! Map) continue;
+        final Map<String, dynamic> block = Map<String, dynamic>.from(rawBlock);
+        final String type = (block['type'] ?? '').toString().toLowerCase();
+        if (type == 'text') {
+          final String text = (block['text'] ?? '').toString();
+          if (text.isNotEmpty) parsedBlocks.add(ProductDescriptionBlock.text(text));
+        } else if (type == 'image') {
+          final String url = (
+            block['url'] ?? block['image_url'] ?? block['src'] ?? block['path'] ?? ''
+          ).toString().trim();
+          if (url.isNotEmpty) {
+            parsedBlocks.add(
+              ProductDescriptionBlock.image(
+                imageUrl: AppConfig.resolveMediaUrl(url),
+                altText: (
+                  block['alt'] ??
+                      block['alt_text'] ??
+                      'Product description image'
+                ).toString(),
+              ),
+            );
+          }
+        }
+      }
+    }
+    if (parsedBlocks.isNotEmpty) return parsedBlocks;
+
+    final String source = description ?? '';
+    if (source.isEmpty) return const <ProductDescriptionBlock>[];
+
+    final Map<String, String> imageUrlsById = <String, String>{};
+    final dynamic imageRows = rawImages is Map
+        ? rawImages['data'] ?? rawImages['images']
+        : rawImages;
+    if (imageRows is List) {
+      for (final dynamic rawImage in imageRows) {
+        if (rawImage is! Map) continue;
+        final String imageId = (rawImage['id'] ?? rawImage['media_id'] ?? '')
+            .toString();
+        final String imageUrl = (
+          rawImage['url'] ?? rawImage['image_url'] ?? rawImage['path'] ?? rawImage['file_path'] ?? ''
+        ).toString().trim();
+        if (imageId.isNotEmpty && imageUrl.isNotEmpty) {
+          imageUrlsById[imageId] = AppConfig.resolveMediaUrl(imageUrl);
+        }
+      }
+    }
+
+    final RegExp tokenPattern = RegExp(
+      r'\[\[(?:image|description-image):[^\]]+\]\]',
+      caseSensitive: false,
+    );
+    final RegExp storedImagePattern = RegExp(
+      r'^\[\[description-image:stored:([A-Za-z0-9._-]+\.(?:jpg|jpeg|png|webp))\]\]$',
+      caseSensitive: false,
+    );
+    final RegExp mediaImagePattern = RegExp(
+      r'^\[\[image:image:(\d+)\]\]$',
+      caseSensitive: false,
+    );
+    int offset = 0;
+    for (final RegExpMatch match in tokenPattern.allMatches(source)) {
+      final String text = source.substring(offset, match.start);
+      if (text.isNotEmpty) parsedBlocks.add(ProductDescriptionBlock.text(text));
+
+      final String token = match.group(0)!;
+      String? imageUrl = imageUrlsById[mediaImagePattern.firstMatch(token)?.group(1)];
+      final String? filename = storedImagePattern.firstMatch(token)?.group(1);
+      if (imageUrl == null && filename != null && sellerProfileId != null) {
+        imageUrl = AppConfig.resolveMediaUrl(
+          '/storage/sellers/$sellerProfileId/products/$productId/descriptions/$filename',
+        );
+      }
+      if (imageUrl != null) {
+        parsedBlocks.add(ProductDescriptionBlock.image(imageUrl: imageUrl));
+      }
+      offset = match.end;
+    }
+
+    final String remainingText = source.substring(offset);
+    if (remainingText.isNotEmpty) {
+      parsedBlocks.add(ProductDescriptionBlock.text(remainingText));
+    }
+    if (parsedBlocks.isEmpty) {
+      final String cleanSource = source.replaceAll(tokenPattern, '').trim();
+      if (cleanSource.isNotEmpty) {
+        parsedBlocks.add(ProductDescriptionBlock.text(cleanSource));
+      }
+    }
+    return parsedBlocks;
+  }
+
   ProductDetailData copyWith({bool? wishlisted}) {
     return ProductDetailData(
       id: id,
@@ -875,6 +1018,7 @@ class ProductDetailData {
       reviewCount: reviewCount,
       soldCount: soldCount,
       description: description,
+      descriptionBlocks: descriptionBlocks,
       sellerName: sellerName,
       sellerSlug: sellerSlug,
       sellerUserId: sellerUserId,
@@ -2783,40 +2927,65 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
           const SizedBox(height: 8),
 
-          Row(
-            children: [
-              Icon(
-                _outOfStock
-                    ? Icons.cancel_outlined
-                    : Icons.check_circle_outline_rounded,
-                color: _outOfStock ? AppTheme.resolve(context, _danger) : AppTheme.resolve(context, _success),
-                size: 14,
-              ),
-
-              const SizedBox(width: 5),
-
-              Flexible(
-                child: Text(
-                  _availabilityLabel,
-                  style: TextStyle(
-                    color: _outOfStock ? AppTheme.resolve(context, _danger) : AppTheme.resolve(context, _success),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final Widget availability = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _outOfStock
+                        ? Icons.cancel_outlined
+                        : Icons.check_circle_outline_rounded,
+                    color: _outOfStock
+                        ? AppTheme.resolve(context, _danger)
+                        : AppTheme.resolve(context, _success),
+                    size: 14,
                   ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      _availabilityLabel,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _outOfStock
+                            ? AppTheme.resolve(context, _danger)
+                            : AppTheme.resolve(context, _success),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+              final Widget deliveryNote = Text(
+                'Price shown before delivery fee',
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 9.5,
                 ),
-              ),
+              );
 
-              const SizedBox(width: 8),
+              if (constraints.maxWidth < 350) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    availability,
+                    const SizedBox(height: 3),
+                    deliveryNote,
+                  ],
+                );
+              }
 
-               Expanded(
-                flex: 2,
-                child: Text(
-                  'Price shown before delivery fee',
-                  textAlign: TextAlign.end,
-                  style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 9.5),
-                ),
-              ),
-            ],
+              return Row(
+                children: [
+                  Flexible(child: availability),
+                  const SizedBox(width: 8),
+                  Expanded(child: deliveryNote),
+                ],
+              );
+            },
           ),
           if (widget.onVouchers != null) ...[
             const SizedBox(height: 6),
@@ -3433,7 +3602,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildDescriptionAndSpecifications({required bool wide}) {
-    final bool hasDescription = _product.description?.trim().isNotEmpty == true;
+    final bool hasDescription =
+        _product.description?.trim().isNotEmpty == true ||
+        _product.descriptionBlocks.isNotEmpty;
 
     final bool hasSpecifications = _product.specifications.isNotEmpty;
 
@@ -3470,9 +3641,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildDescriptionCard() {
-    final String description = _product.description!.trim();
-
-    final bool longDescription = description.length > 360;
+    final List<ProductDescriptionBlock> blocks =
+        _product.descriptionBlocks.isNotEmpty
+        ? _product.descriptionBlocks
+        : <ProductDescriptionBlock>[
+            ProductDescriptionBlock.text(_product.description?.trim() ?? ''),
+          ];
+    final String textContent = blocks
+        .map((ProductDescriptionBlock block) => block.text ?? '')
+        .join();
+    final bool longDescription = textContent.length > 360;
 
     return _EditorialCard(
       eyebrow: 'PRODUCT STORY',
@@ -3485,23 +3663,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             crossFadeState: _descriptionExpanded || !longDescription
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
-            firstChild: Text(
-              description,
-              maxLines: 6,
-              overflow: TextOverflow.ellipsis,
-              style:  TextStyle(
-                color: AppTheme.resolve(context, _brown),
-                fontSize: 11.5,
-                height: 1.65,
+            firstChild: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _descriptionBlockWidgets(
+                _truncateDescriptionBlocks(blocks, 360),
               ),
             ),
-            secondChild: Text(
-              description,
-              style:  TextStyle(
-                color: AppTheme.resolve(context, _brown),
-                fontSize: 11.5,
-                height: 1.65,
-              ),
+            secondChild: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _descriptionBlockWidgets(blocks),
             ),
           ),
 
@@ -3532,6 +3702,73 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         ],
       ),
     );
+  }
+
+  List<ProductDescriptionBlock> _truncateDescriptionBlocks(
+    List<ProductDescriptionBlock> blocks,
+    int maximumTextLength,
+  ) {
+    int remaining = maximumTextLength;
+    final List<ProductDescriptionBlock> visible = <ProductDescriptionBlock>[];
+    for (final ProductDescriptionBlock block in blocks) {
+      final String? text = block.text;
+      if (text == null) {
+        if (remaining > 0) visible.add(block);
+        continue;
+      }
+      if (remaining <= 0) break;
+      if (text.length <= remaining) {
+        visible.add(block);
+        remaining -= text.length;
+      } else {
+        visible.add(
+          ProductDescriptionBlock.text('${text.substring(0, remaining).trimRight()}…'),
+        );
+        break;
+      }
+    }
+    return visible;
+  }
+
+  List<Widget> _descriptionBlockWidgets(
+    List<ProductDescriptionBlock> blocks,
+  ) {
+    final TextStyle textStyle = TextStyle(
+      color: AppTheme.resolve(context, _brown),
+      fontSize: 11.5,
+      height: 1.65,
+    );
+    return blocks.map((ProductDescriptionBlock block) {
+      final String? text = block.text;
+      if (text != null) return Text(text, style: textStyle);
+
+      final String? imageUrl = block.imageUrl;
+      if (imageUrl == null || imageUrl.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 420),
+            color: AppTheme.resolve(context, ShopColors.soft, fill: true),
+            alignment: Alignment.center,
+            child: SizedNetworkImage(
+              url: imageUrl,
+              fit: BoxFit.contain,
+              iconSize: 28,
+              semanticLabel: block.altText,
+              placeholder: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.resolve(context, _maroon),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList(growable: false);
   }
 
   Widget _buildSpecificationsCard() {
@@ -4547,7 +4784,7 @@ class _ProductImage extends StatelessWidget {
     }
     return SizedNetworkImage(
       url: AppConfig.resolveMediaUrl(value),
-      fit: BoxFit.cover,
+      fit: BoxFit.contain,
       iconSize: 38,
     );
   }

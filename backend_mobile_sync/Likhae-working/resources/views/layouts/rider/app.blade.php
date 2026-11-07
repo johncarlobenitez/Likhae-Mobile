@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <x-shared.likhae-favicon />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap"
+        rel="stylesheet"
+    >
+
+    <title>@yield('title', 'LIKHAE Rider Panel')</title>
+
+    <script>
+        (function () {
+            const savedTheme =
+                localStorage.getItem('likhae-theme');
+
+            document.documentElement.classList.toggle(
+                'dark',
+                savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
+            );
+        })();
+    </script>
+
+    @vite([
+        'resources/css/logistic/app.css',
+        'resources/css/shared/status-guidance.css',
+        'resources/css/shared/modal-refresh.css',
+        'resources/css/shared/announcement-popup.css',
+        'resources/css/shared/likhae-workspace-ai.css',
+        'resources/css/shared/workspace-sidebar.css',
+        'resources/js/rider/app.js',
+        'resources/js/shared/likhae-workspace-ai.js'
+    ])
+    @stack('head')
+
+    <style>
+        :root {
+            --ra-page: #FBF7F2;
+            --ra-page-soft: #F6EFE7;
+            --ra-card: #FFFDF9;
+            --ra-card-soft: #FFF9F3;
+
+            --ra-line: #EADCCC;
+            --ra-line-strong: #DBCEC1;
+
+            --ra-maroon: #561C17;
+            --ra-maroon-hover: #642920;
+            --ra-maroon-dark: #3E130F;
+            --ra-active: #F3E4DE;
+
+            --ra-text: #3B211B;
+            --ra-text-deep: #1C160F;
+            --ra-muted: #987865;
+            --ra-muted-light: #A99386;
+            --ra-brown: #6C4936;
+
+            --ra-success: #256F4A;
+            --ra-success-soft: #EAF7EF;
+
+            --ra-shadow: 0 14px 38px rgba(74, 35, 27, .06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            min-height: 100%;
+        }
+
+        body.rider-shell {
+            margin: 0;
+            background: var(--ra-page);
+            color: var(--ra-text);
+            font-family: "DM Sans", system-ui, sans-serif;
+        }
+
+        .rider-layout {
+            min-height: 100vh;
+            background:
+                radial-gradient(circle at 80% -10%, rgba(193, 151, 113, .08), transparent 27%),
+                var(--ra-page);
+        }
+
+        .rider-sidebar {
+            position: fixed;
+            inset: 0 auto 0 0;
+            z-index: 60;
+            display: flex;
+            width: 248px;
+            height: 100vh;
+            flex-direction: column;
+            overflow: hidden;
+            border-right: 1px solid var(--ra-line);
+            background: rgba(255, 253, 249, .97);
+            box-shadow: 8px 0 26px rgba(74, 35, 27, .035);
+            backdrop-filter: blur(18px);
+            transition: transform .25s ease;
+        }
+
+        .rider-brand {
+            display: flex;
+            min-height: 62px;
+            align-items: center;
+            gap: 11px;
+            padding: 0 18px;
+            border-bottom: 1px solid var(--ra-line);
+        }
+
+        .rider-brand-mark {
+            display: grid;
+            width: 34px;
+            height: 34px;
+            place-items: center;
+            border-radius: 10px;
+            background: var(--ra-maroon);
+            color: #FFFFFF;
+            font-family: "Instrument Serif", Georgia, serif;
+            font-size: 20px;
+            line-height: 1;
+            box-shadow: 0 8px 18px rgba(86, 28, 23, .16);
+        }
+
+        .rider-brand-copy strong {
+            display: block;
+            color: var(--ra-text-deep);
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: -.04em;
+        }
+
+        .rider-brand-copy span {
+            display: block;
+            margin-top: 1px;
+            color: var(--ra-muted);
+            font-size: 7px;
+            font-weight: 900;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+        }
+
+        .rider-profile-card {
+            margin: 14px 12px 6px;
+            padding: 12px;
+            border: 1px solid var(--ra-line);
+            border-radius: 15px;
+            background:
+                radial-gradient(circle at 92% 10%, rgba(193,151,113,.13), transparent 32%),
+                var(--ra-page-soft);
+        }
+
+        .rider-profile-top {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .rider-avatar {
+            display: grid;
+            width: 40px;
+            height: 40px;
+            flex: 0 0 40px;
+            place-items: center;
+            border-radius: 999px;
+            background: var(--ra-maroon);
+            color: #FFFFFF;
+            font-size: 10px;
+            font-weight: 900;
+            box-shadow: 0 8px 18px rgba(86, 28, 23, .13);
+        }
+
+        .rider-profile-copy {
+            min-width: 0;
+        }
+
+        .rider-profile-copy strong {
+            display: block;
+            overflow: hidden;
+            color: var(--ra-text);
+            font-size: 10px;
+            font-weight: 900;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .rider-profile-copy span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 3px;
+            color: var(--ra-success);
+            font-size: 7px;
+            font-weight: 850;
+        }
+
+        .rider-profile-copy span::before {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: var(--ra-success);
+            content: "";
+        }
+
+        .rider-nav {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            padding: 12px 10px 18px;
+        }
+
+        .rider-nav-label {
+            display: block;
+            padding: 5px 10px 8px;
+            color: var(--ra-muted-light);
+            font-size: 7px;
+            font-weight: 900;
+            letter-spacing: .13em;
+            text-transform: uppercase;
+        }
+
+        .rider-nav-list {
+            display: grid;
+            gap: 3px;
+        }
+
+        .rider-nav-link {
+            position: relative;
+            display: flex;
+            min-height: 42px;
+            align-items: center;
+            gap: 10px;
+            padding: 0 11px;
+            border-radius: 11px;
+            color: var(--ra-brown);
+            font-size: 9px;
+            font-weight: 800;
+            text-decoration: none;
+            transition: .14s ease;
+        }
+
+        .rider-nav-link:hover {
+            background: var(--ra-page-soft);
+            color: var(--ra-maroon);
+        }
+
+        .rider-nav-link.is-active {
+            background: var(--ra-active);
+            color: var(--ra-maroon);
+        }
+
+        .rider-nav-link.is-active::before {
+            position: absolute;
+            top: 9px;
+            bottom: 9px;
+            left: 0;
+            width: 3px;
+            border-radius: 0 5px 5px 0;
+            background: var(--ra-maroon);
+            content: "";
+        }
+
+        .rider-nav-icon {
+            display: grid;
+            width: 26px;
+            height: 26px;
+            flex: 0 0 26px;
+            place-items: center;
+            color: currentColor;
+        }
+
+        .rider-nav-icon svg {
+            width: 17px;
+            height: 17px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.7;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .rider-sidebar-footer {
+            display: grid;
+            flex: 0 0 auto;
+            gap: 7px;
+            padding: 11px 10px max(13px, env(safe-area-inset-bottom));
+            border-top: 1px solid var(--ra-line);
+        }
+
+        .rider-footer-btn {
+            display: flex;
+            min-height: 42px;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 0 11px;
+            border: 1px solid transparent;
+            border-radius: 11px;
+            background: transparent;
+            color: var(--ra-brown);
+            font: inherit;
+            cursor: pointer;
+            transition: .14s ease;
+        }
+
+        .rider-footer-btn:hover {
+            border-color: var(--ra-line);
+            background: var(--ra-page-soft);
+            color: var(--ra-maroon);
+        }
+
+        .rider-footer-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .rider-footer-left svg {
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.6;
+        }
+
+        .rider-appearance-text {
+            display: grid;
+            text-align: left;
+        }
+
+        .rider-appearance-text strong {
+            color: inherit;
+            font-size: 10.5px;
+            font-weight: 500;
+            line-height: 1.1;
+        }
+
+        .rider-appearance-text small {
+            display: block;
+            margin-top: 2px;
+            color: currentColor;
+            opacity: 0.5;
+            font-size: 8px;
+            line-height: 1.1;
+            font-weight: inherit;
+        }
+
+        .rider-theme-badge {
+            display: inline-flex;
+            min-height: 23px;
+            align-items: center;
+            padding: 0 7px;
+            border: 1px solid var(--ra-line);
+            border-radius: 999px;
+            background: var(--ra-card);
+            color: var(--ra-muted);
+            font-size: 7px;
+            font-weight: 900;
+        }
+
+        .rider-logout-form {
+            margin: 0;
+        }
+
+        .rider-logout-btn {
+            justify-content: flex-start;
+            color: var(--ra-muted);
+        }
+
+        .rider-main {
+            min-height: 100vh;
+            margin-left: 248px;
+        }
+
+        .rider-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            display: grid;
+            grid-template-columns: minmax(180px, .85fr) minmax(260px, 480px) minmax(330px, 1fr);
+            min-height: 64px;
+            align-items: center;
+            gap: clamp(10px, 1.4vw, 20px);
+            padding: 8px 24px;
+            border-bottom: 1px solid var(--ra-line);
+            background: rgba(251, 247, 242, .88);
+            backdrop-filter: blur(18px);
+            overflow: visible;
+            isolation: isolate;
+        }
+
+        .rider-topbar-heading {
+            min-width: 0;
+        }
+
+        .rider-topbar-heading strong {
+            display: block;
+            color: var(--ra-text-deep);
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: -.035em;
+        }
+
+        .rider-topbar-heading strong {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .rider-topbar-heading span {
+            display: block;
+            margin-top: 3px;
+            color: var(--ra-muted);
+            font-size: 9px;
+        }
+
+        .rider-topbar-actions {
+            display: flex;
+            min-width: 0;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .rider-header-action {
+            position: relative;
+            display: grid;
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            place-items: center;
+            border: 1px solid var(--ra-line);
+            border-radius: 10px;
+            background: var(--ra-card);
+            color: var(--ra-maroon);
+            text-decoration: none;
+            box-shadow: 0 3px 10px rgba(74, 35, 27, .035);
+            transition: border-color .16s ease, background .16s ease, transform .16s ease;
+        }
+
+        .rider-header-action:hover {
+            border-color: var(--ra-line-strong);
+            background: var(--ra-page-soft);
+            transform: translateY(-1px);
+        }
+
+        .rider-header-action svg {
+            width: 17px;
+            height: 17px;
+            fill: none;
+            stroke: currentColor;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-width: 1.8;
+        }
+
+        .rider-search-wrap {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .rider-topbar-availability {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0;
+            padding-left: 14px;
+            border-left: 1px solid var(--ra-line);
+        }
+
+        .rider-topbar-availability-copy {
+            display: grid;
+            gap: 3px;
+            min-width: 150px;
+        }
+
+        .rider-topbar-availability-copy strong {
+            color: var(--ra-text);
+            font-size: 8px;
+            font-weight: 900;
+            letter-spacing: .08em;
+        }
+
+        .rider-topbar-availability-copy span {
+            color: var(--ra-muted);
+            font-size: 9px;
+        }
+
+        .rider-topbar-status {
+            display: inline-flex;
+            min-height: 36px;
+            align-items: center;
+            gap: 7px;
+            padding: 0 12px;
+            border: 1px solid #CFE8DA;
+            border-radius: 11px;
+            background: var(--ra-success-soft);
+            color: var(--ra-success);
+            font-family: inherit;
+            font-size: 9px;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .rider-topbar-status::before {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: currentColor;
+            content: "";
+        }
+
+        .rider-availability-error {
+            margin: 12px 24px 0;
+            padding: 10px 14px;
+            border: 1px solid #e9b8ae;
+            border-radius: 10px;
+            background: #fff2ef;
+            color: #8a3026;
+            font-size: 12px;
+        }
+
+        .rider-content {
+            width: 100%;
+            padding: 24px 24px 34px;
+        }
+
+        .rider-mobile-bar {
+            display: none;
+        }
+
+        .rider-mobile-menu-btn {
+            display: grid;
+            width: 38px;
+            height: 38px;
+            place-items: center;
+            border: 1px solid var(--ra-line);
+            border-radius: 11px;
+            background: var(--ra-card);
+            color: var(--ra-maroon);
+            cursor: pointer;
+            box-shadow: 0 3px 10px rgba(74, 35, 27, .035);
+            transition: border-color .16s ease, background .16s ease, transform .16s ease;
+        }
+
+        .rider-mobile-menu-btn:hover {
+            border-color: var(--ra-line-strong);
+            background: var(--ra-page-soft);
+            transform: translateY(-1px);
+        }
+
+        .rider-notification-trigger {
+            position: relative;
+        }
+
+        .rider-notification-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            display: grid;
+            min-width: 16px;
+            height: 16px;
+            place-items: center;
+            padding: 0 3px;
+            border: 2px solid var(--ra-card);
+            border-radius: 999px;
+            background: #b42318;
+            color: #fff;
+            font-size: 8px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .rider-mobile-menu-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.8;
+        }
+
+        .rider-sidebar-overlay {
+            visibility: hidden;
+            position: fixed;
+            inset: 0;
+            z-index: 55;
+            background: rgba(28, 22, 15, .42);
+            opacity: 0;
+            backdrop-filter: blur(3px);
+            transition: opacity .2s ease, visibility .2s ease;
+        }
+
+        .rider-sidebar-overlay.is-visible {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        @media (max-width: 1023px) {
+            .rider-sidebar {
+                height: 100dvh;
+                max-height: 100dvh;
+                transform: translateX(-100%);
+            }
+
+            .rider-sidebar.is-open {
+                transform: translateX(0);
+            }
+
+            .rider-main {
+                margin-left: 0;
+            }
+
+            .rider-topbar {
+                display: none;
+            }
+
+            .rider-mobile-bar {
+                position: sticky;
+                top: 0;
+                z-index: 45;
+                display: flex;
+                flex-wrap: wrap;
+                min-height: 66px;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 9px 16px;
+                border-bottom: 1px solid var(--ra-line);
+                background: rgba(251, 247, 242, .92);
+                box-shadow: 0 5px 18px rgba(74, 35, 27, .035);
+                backdrop-filter: blur(18px);
+            }
+
+            .rider-mobile-status-row {
+                display: flex;
+                flex: 1 0 100%;
+                min-width: 0;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                margin-top: 3px;
+                padding: 11px 0 2px;
+                border-top: 1px solid var(--ra-line);
+            }
+
+            .rider-mobile-status-copy {
+                display: grid;
+                min-width: 0;
+                gap: 2px;
+                color: var(--ra-text);
+                font-size: 10px;
+            }
+
+            .rider-mobile-status-copy strong {
+                color: var(--ra-text);
+                font-size: 10px;
+                letter-spacing: .06em;
+            }
+
+            .rider-mobile-status-copy small {
+                color: var(--ra-muted);
+                font-size: 8px;
+                font-weight: 800;
+                letter-spacing: .12em;
+            }
+
+            .rider-mobile-status-copy span {
+                color: var(--ra-muted);
+                font-size: 10px;
+            }
+
+            .rider-mobile-status-row form {
+                flex: 0 0 auto;
+                margin-left: auto;
+            }
+
+            .rider-mobile-status-toggle {
+                min-height: 40px;
+                padding: 0 13px;
+                font-size: 11px;
+            }
+
+            .rider-mobile-brand {
+                display: flex;
+                min-width: 0;
+                flex: 1 1 auto;
+                align-items: center;
+                gap: 9px;
+            }
+
+            .rider-mobile-brand .sl-logistics-logo {
+                width: 118px;
+                flex-basis: 118px;
+            }
+
+            body.workspace-sidebar-open .rider-mobile-brand {
+                visibility: hidden;
+            }
+
+            .rider-mobile-brand .rider-brand-mark {
+                width: 31px;
+                height: 31px;
+                border-radius: 9px;
+                font-size: 18px;
+            }
+
+            .rider-mobile-brand strong {
+                overflow: hidden;
+                color: var(--ra-text-deep);
+                font-size: 13px;
+                font-weight: 900;
+                letter-spacing: -.04em;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .rider-content {
+                padding: 20px 14px 28px;
+            }
+        }
+
+        @media (min-width: 1024px) and (max-width: 1279px) {
+            .rider-topbar {
+                grid-template-columns: minmax(135px, .75fr) minmax(190px, 1fr) auto;
+                gap: 10px;
+                padding-inline: 16px;
+            }
+
+            .rider-topbar-heading strong {
+                font-size: 13px;
+            }
+
+            .rider-topbar-availability-copy {
+                display: none;
+            }
+
+            .rider-topbar-availability {
+                gap: 6px;
+                padding-left: 8px;
+            }
+
+            .rider-topbar-actions {
+                gap: 5px;
+            }
+
+            .rider-topbar-actions .workspace-account__copy {
+                display: none;
+            }
+        }
+
+        html.dark {
+            color-scheme: dark;
+        }
+
+        html.dark body.rider-shell,
+        html.dark .rider-layout {
+            background: #130F0E;
+            color: #F5EFE8;
+        }
+
+        html.dark .rider-sidebar {
+            border-color: #30231F;
+            background: rgba(19, 15, 14, .98);
+            box-shadow: none;
+        }
+
+        html.dark .rider-brand,
+        html.dark .rider-sidebar-footer,
+        html.dark .rider-topbar,
+        html.dark .rider-mobile-bar {
+            border-color: #30231F;
+        }
+
+        html.dark .rider-brand-copy strong,
+        html.dark .rider-topbar-heading strong,
+        html.dark .rider-topbar-availability-copy strong,
+        html.dark .rider-mobile-brand strong {
+            color: #F5EFE8;
+        }
+
+        html.dark .rider-brand-copy span,
+        html.dark .rider-topbar-heading span,
+        html.dark .rider-topbar-availability-copy span,
+        html.dark .rider-nav-label {
+            color: #8F817A;
+        }
+
+        html.dark .rider-profile-card {
+            border-color: #30231F;
+            background:
+                radial-gradient(circle at 92% 10%, rgba(168,69,56,.10), transparent 32%),
+                #1B1513;
+        }
+
+        html.dark .rider-profile-copy strong {
+            color: #F5EFE8;
+        }
+
+        html.dark .rider-nav-link,
+        html.dark .rider-footer-btn {
+            color: #B8AAA1;
+        }
+
+        html.dark .rider-footer-btn .rider-appearance-text small {
+            color: currentColor;
+            opacity: 0.5;
+        }
+
+        html.dark .rider-nav-link:hover,
+        html.dark .rider-footer-btn:hover {
+            border-color: #3B2E27;
+            background: #211B17;
+            color: #F3C6BA;
+        }
+
+        html.dark .rider-nav-link.is-active {
+            background: #3A1111;
+            color: #F3C6BA;
+        }
+
+        html.dark .rider-nav-link.is-active::before {
+            background: #A84538;
+        }
+
+        html.dark .rider-theme-badge,
+        html.dark .rider-mobile-menu-btn {
+            border-color: #3B2E27;
+            background: #211B17;
+            color: #EBA99D;
+        }
+
+        html.dark .rider-topbar,
+        html.dark .rider-mobile-bar {
+            background: rgba(19, 15, 14, .88);
+        }
+
+        html.dark .rider-topbar-status {
+            border-color: #28543D;
+            background: #16291F;
+            color: #79C79D;
+        }
+
+        html.dark .rider-header-action {
+            border-color: #3B2E27;
+            background: #211B17;
+            color: #EAC2B7;
+        }
+    </style>
+</head>
+
+@php
+    $riderUser = auth()->user();
+    $riderName = $riderUser?->name ?? 'Rider';
+    $riderInitials = collect(explode(' ', trim($riderName)))
+        ->filter()
+        ->take(2)
+        ->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))
+        ->implode('') ?: 'R';
+    $riderStatus = \Illuminate\Support\Str::headline($riderUser?->status ?? 'active');
+@endphp
+
+<body class="rider-shell">
+    <div class="rider-layout">
+        <x-rider.sidebar :sidebar-counts="$sidebarCounts ?? []" :notification-count="$workspaceNotificationCount ?? 0" />
+        <div class="sl-overlay" data-sl-overlay aria-hidden="true"></div>
+
+        <main class="rider-main" data-sidebar-content>
+
+            @php
+                $riderHeaderTitle = trim(\Illuminate\Support\Str::before(trim($__env->yieldContent('title')), ' - LIKHAE')) ?: 'Dashboard';
+            @endphp
+            <x-rider.header :title="$riderHeaderTitle" subtitle="Manage your pickups, deliveries, and rider account." :notification-count="$workspaceNotificationCount ?? 0" :message-count="$sidebarCounts['messages'] ?? 0" />
+
+            <div class="rider-content" data-workspace-search-content>
+                @yield('content')
+            </div>
+
+            <x-rider.live-location />
+
+        </main>
+
+    </div>
+
+    <x-shared.announcement-popup />
+    <x-shared.notification-popover />
+    @include('components.shared.confirm-action-modal')
+    @php
+        $workspaceAiPage = request()->route()?->getName() ?: 'rider.dashboard';
+        $workspaceAiTitle = trim($__env->yieldContent('title')) ?: 'Rider';
+    @endphp
+    @if(data_get(auth()->user()?->notification_preferences, 'rider_ai_assistant_enabled', true))
+        <x-shared.workspace.ai-assistant workspace="rider" :page="$workspaceAiPage" :page-title="$workspaceAiTitle" />
+    @endif
+    <x-shared.feedback-region workspace="rider" />
+    @stack('scripts')
+    @php($availabilityRider = auth()->user()?->riderProfile)
+    @if($availabilityRider && $availabilityRider->is_online && \App\Support\RiderVehicleType::isLocalBarangay($availabilityRider->vehicle_type))
+        <script>
+            (() => {
+                const showLocationStatus = (message) => {
+                    document.querySelectorAll('[data-rider-location-status]').forEach((element) => { element.textContent = message; });
+                };
+                if (!navigator.geolocation) {
+                    showLocationStatus('Location is unavailable. Enable location for nearby assignments.');
+                    return;
+                }
+                const endpoint = @json(route('rider.availability.location.update'));
+                const token = document.querySelector('meta[name="csrf-token"]')?.content;
+                let lastSentAt = 0;
+                let sending = false;
+                navigator.geolocation.watchPosition((position) => {
+                    if (sending || Date.now() - lastSentAt < 60000) return;
+                    sending = true;
+                    fetch(endpoint, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token},
+                        body: JSON.stringify({latitude: position.coords.latitude, longitude: position.coords.longitude}),
+                        credentials: 'same-origin',
+                    }).then((response) => {
+                        if (!response.ok) throw new Error('Location update failed');
+                        lastSentAt = Date.now();
+                        document.querySelectorAll('[data-rider-availability-summary]').forEach((element) => { element.textContent = 'Available for new jobs'; });
+                        showLocationStatus('');
+                    }).catch(() => {
+                        showLocationStatus('Location could not be updated. Check your connection and try again.');
+                    }).finally(() => { sending = false; });
+                }, () => {
+                    showLocationStatus('Location was not shared. Enable location for nearby assignments.');
+                }, {enableHighAccuracy: true, maximumAge: 30000, timeout: 15000});
+            })();
+        </script>
+    @endif
+</body>
+
+</html>

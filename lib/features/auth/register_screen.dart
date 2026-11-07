@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
@@ -126,7 +128,6 @@ typedef ChildAddressLoader =
 typedef PostalCodeLoader =
     Future<String?> Function({
       required String municipalityCode,
-      required String barangayCode,
       required String provinceCode,
       required String provinceName,
       required String municipalityName,
@@ -555,7 +556,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _onMunicipalityChanged(AddressOption? municipality) async {
-    _postalLookupGeneration++;
+    final int postalLookupGeneration = ++_postalLookupGeneration;
     setState(() {
       _municipality = municipality;
       _targetLogisticsCenter = null;
@@ -567,6 +568,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (municipality == null) {
       return;
     }
+
+    unawaited(
+      _loadPostalCodeForMunicipality(municipality, postalLookupGeneration),
+    );
 
     if (widget.loadBarangays == null) return;
 
@@ -599,25 +604,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() {
       _barangay = barangay;
     });
-
-    if (barangay == null || _municipality == null) return;
-
-    await _loadPostalCodeForCurrentLocation(barangayCode: barangay.code);
   }
 
-  Future<void> _loadPostalCodeForCurrentLocation({
-    required String barangayCode,
-  }) async {
-    final AddressOption? municipality = _municipality;
+  Future<void> _loadPostalCodeForMunicipality(
+    AddressOption municipality,
+    int lookupGeneration,
+  ) async {
     final PostalCodeLoader? loadPostalCode = widget.loadPostalCode;
-    if (municipality == null || loadPostalCode == null) return;
-
-    final int lookupGeneration = ++_postalLookupGeneration;
+    if (loadPostalCode == null) return;
 
     try {
       final String? postal = await loadPostalCode(
         municipalityCode: municipality.code,
-        barangayCode: barangayCode,
         provinceCode: _province?.code ?? '',
         provinceName: _province?.name ?? '',
         municipalityName: municipality.name,
@@ -625,17 +623,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted ||
           lookupGeneration != _postalLookupGeneration ||
-          _municipality?.code != municipality.code) return;
+          _municipality?.code != municipality.code) {
+        return;
+      }
 
-      if (postal != null && postal.trim().isNotEmpty) {
+      if (_postalController.text.trim().isEmpty &&
+          postal != null &&
+          postal.trim().isNotEmpty) {
         _postalController.text = postal.trim();
       }
     } catch (_) {
-      if (mounted &&
-          lookupGeneration == _postalLookupGeneration &&
-          _postalController.text.trim().isEmpty) {
-        _showMessage('Postal code could not be loaded.', error: true);
-      }
+      // Postal codes are optional to look up; the user can enter one manually.
     }
   }
 
@@ -2032,9 +2030,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           TextFormField(
             controller: _postalController,
-            readOnly: true,
             decoration: _inputDecoration(
-              hintText: 'Auto-filled after barangay',
+              hintText: 'Auto-filled after municipality; enter if needed',
               prefixIcon: Icons.markunread_mailbox_outlined,
             ),
             validator: (String? value) =>

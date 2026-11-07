@@ -1,0 +1,1862 @@
+/* =========================================================
+   LIKHAE LOGISTICS
+   GLOBAL TAILWIND CSS
+   Tailwind CSS v4
+
+   Revised palette:
+   - Light mode: warm cream / almost white
+   - Accent: deep LIKHAE maroon
+   - Text/icons: warm brown
+   - Dark mode: near-black brown with muted maroon accents
+========================================================= */
+
+@import "tailwindcss";
+@import "../shared/feedback.css";
+@import "../shared/payout-destination.css";
+@import "../shared/wallet-pages.css";
+@import "./dashboard.css";
+
+
+/* =========================================================
+   TAILWIND SOURCE SCANNING
+========================================================= */
+
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
+@source "../../storage/framework/views/*.php";
+@source "../views/**/*.blade.php";
+@source "../js/**/*.js";
+
+
+/* =========================================================
+   MANUAL DARK MODE
+========================================================= */
+
+/*
+|--------------------------------------------------------------------------
+| Dark mode only activates when <html class="dark"> is present.
+| Default remains LIGHT.
+|--------------------------------------------------------------------------
+*/
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+
+/* =========================================================
+   GLOBAL SCALE
+========================================================= */
+
+html {
+    font-size: 14px;
+}
+
+body {
+    font-size: 0.875rem;
+}
+
+
+/* =========================================================
+   LIKHAE LIGHT THEME VARIABLES
+========================================================= */
+
+:root {
+    /* -----------------------------------------------------
+       Main page
+    ----------------------------------------------------- */
+    --lk-page: #FBF7F2;
+    --lk-page-secondary: #F6EFE7;
+
+    /* -----------------------------------------------------
+       Surfaces / cards
+    ----------------------------------------------------- */
+    --lk-surface: #FFFDF9;
+    --lk-surface-secondary: #F8F1EA;
+    --lk-surface-hover: #F3E4DE;
+
+    /* -----------------------------------------------------
+       Text
+    ----------------------------------------------------- */
+    --lk-text: #3B211B;
+    --lk-text-secondary: #6C4936;
+    --lk-muted: #987865;
+    --lk-muted-light: #A99386;
+
+    /* -----------------------------------------------------
+       Borders
+    ----------------------------------------------------- */
+    --lk-border: #EADCCC;
+    --lk-border-strong: #DBCEC1;
+
+    /* -----------------------------------------------------
+       Main LIKHAE maroon brand
+    ----------------------------------------------------- */
+    --lk-primary: #561C17;
+    --lk-primary-hover: #642920;
+    --lk-primary-active: #3E130F;
+    --lk-primary-soft: #F3E4DE;
+    --lk-primary-soft-strong: #E6C7BE;
+
+    /* -----------------------------------------------------
+       Sidebar — LIGHT by default
+    ----------------------------------------------------- */
+    --lk-sidebar: #FFFDF9;
+    --lk-sidebar-secondary: #F6EFE7;
+    --lk-sidebar-hover: #F6EFE7;
+    --lk-sidebar-border: #EADCCC;
+    --lk-sidebar-text: #765443;
+    --lk-sidebar-muted: #987865;
+
+    /* -----------------------------------------------------
+       Status colors
+    ----------------------------------------------------- */
+    --lk-success: #256F4A;
+    --lk-success-bg: #EAF7EF;
+
+    --lk-warning: #9A5B11;
+    --lk-warning-bg: #FFF6DE;
+
+    --lk-danger: #B42318;
+    --lk-danger-bg: #FCEBE9;
+
+    /*
+     * Info intentionally stays warm/maroon instead of blue
+     * to preserve LIKHAE's visual language.
+     */
+    --lk-info: #6C4936;
+    --lk-info-bg: #F3E4DE;
+
+    /* -----------------------------------------------------
+       Misc
+    ----------------------------------------------------- */
+    --lk-overlay: rgba(28, 22, 15, 0.45);
+
+    --lk-shadow:
+        0 10px 35px rgba(86, 28, 23, 0.055);
+
+    --lk-shadow-lg:
+        0 18px 50px rgba(86, 28, 23, 0.10);
+}
+
+
+/* =========================================================
+   DARK THEME VARIABLES
+========================================================= */
+
+.dark {
+    /* -----------------------------------------------------
+       Main page
+    ----------------------------------------------------- */
+    --lk-page: #130F0E;
+    --lk-page-secondary: #171210;
+
+    /* -----------------------------------------------------
+       Surfaces / cards
+    ----------------------------------------------------- */
+    --lk-surface: #1B1513;
+    --lk-surface-secondary: #211B17;
+    --lk-surface-hover: #241817;
+
+    /* -----------------------------------------------------
+       Text
+    ----------------------------------------------------- */
+    --lk-text: #F5EFE8;
+    --lk-text-secondary: #D0C4BD;
+    --lk-muted: #AFA19A;
+    --lk-muted-light: #887C76;
+
+    /* -----------------------------------------------------
+       Borders
+    ----------------------------------------------------- */
+    --lk-border: #30231F;
+    --lk-border-strong: #3B2E27;
+
+    /* -----------------------------------------------------
+       Main LIKHAE maroon brand
+    ----------------------------------------------------- */
+    --lk-primary: #A84538;
+    --lk-primary-hover: #B84B43;
+    --lk-primary-active: #8A3A2F;
+    --lk-primary-soft: #351817;
+    --lk-primary-soft-strong: #48201D;
+
+    /* -----------------------------------------------------
+       Sidebar
+    ----------------------------------------------------- */
+    --lk-sidebar: #130F0E;
+    --lk-sidebar-secondary: #1B1513;
+    --lk-sidebar-hover: #241817;
+    --lk-sidebar-border: #30231F;
+    --lk-sidebar-text: #D0C4BD;
+    --lk-sidebar-muted: #AFA19A;
+
+    /* -----------------------------------------------------
+       Status colors
+    ----------------------------------------------------- */
+    --lk-success: #6FC18F;
+    --lk-success-bg: #183024;
+
+    --lk-warning: #D5A15A;
+    --lk-warning-bg: #342719;
+
+    --lk-danger: #F07870;
+    --lk-danger-bg: #351817;
+
+    --lk-info: #E0B1A4;
+    --lk-info-bg: #2D1816;
+
+    /* -----------------------------------------------------
+       Misc
+    ----------------------------------------------------- */
+    --lk-overlay: rgba(0, 0, 0, 0.60);
+
+    --lk-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.18);
+
+    --lk-shadow-lg:
+        0 20px 60px rgba(0, 0, 0, 0.28);
+}
+
+
+/* =========================================================
+   TAILWIND THEME TOKENS
+========================================================= */
+
+@theme inline {
+    /* Backgrounds */
+    --color-page: var(--lk-page);
+    --color-page-secondary: var(--lk-page-secondary);
+    --color-surface: var(--lk-surface);
+    --color-surface-secondary: var(--lk-surface-secondary);
+    --color-surface-hover: var(--lk-surface-hover);
+
+    /* Typography */
+    --color-ink: var(--lk-text);
+    --color-ink-secondary: var(--lk-text-secondary);
+    --color-muted: var(--lk-muted);
+    --color-muted-light: var(--lk-muted-light);
+
+    /* Borders */
+    --color-line: var(--lk-border);
+    --color-line-strong: var(--lk-border-strong);
+
+    /* Brand */
+    --color-primary: var(--lk-primary);
+    --color-primary-hover: var(--lk-primary-hover);
+    --color-primary-active: var(--lk-primary-active);
+    --color-primary-soft: var(--lk-primary-soft);
+    --color-primary-soft-strong: var(--lk-primary-soft-strong);
+
+    /* Sidebar */
+    --color-sidebar: var(--lk-sidebar);
+    --color-sidebar-secondary: var(--lk-sidebar-secondary);
+    --color-sidebar-text: var(--lk-sidebar-text);
+    --color-sidebar-muted: var(--lk-sidebar-muted);
+
+    /* Success */
+    --color-success: var(--lk-success);
+    --color-success-soft: var(--lk-success-bg);
+
+    /* Warning */
+    --color-warning: var(--lk-warning);
+    --color-warning-soft: var(--lk-warning-bg);
+
+    /* Danger */
+    --color-danger: var(--lk-danger);
+    --color-danger-soft: var(--lk-danger-bg);
+
+    /* Information */
+    --color-info: var(--lk-info);
+    --color-info-soft: var(--lk-info-bg);
+
+    /* Fonts */
+    --font-sans:
+        "DM Sans",
+        Poppins,
+        "Segoe UI",
+        Arial,
+        Helvetica,
+        sans-serif;
+
+    --font-display:
+        "Instrument Serif",
+        Georgia,
+        "Times New Roman",
+        serif;
+
+    /* Radius */
+    --radius-likhae-sm: 0.5rem;
+    --radius-likhae: 0.75rem;
+    --radius-likhae-lg: 1rem;
+    --radius-likhae-xl: 1.25rem;
+}
+
+
+/* =========================================================
+   RIDER CONTENT SCALE
+========================================================= */
+
+.rider-shell .rounded-3xl {
+    border-radius: 1rem;
+}
+
+.rider-shell .p-6 {
+    padding: 1.25rem;
+}
+
+.rider-shell .gap-8 {
+    gap: 1.5rem;
+}
+
+.rider-shell aside {
+    width: 245px;
+    border-color: var(--lk-sidebar-border);
+    box-shadow: 10px 0 35px rgba(86, 28, 23, 0.06);
+}
+
+.rider-shell aside > div:first-child {
+    min-height: 78px;
+    height: auto;
+    gap: 0.75rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+}
+
+.rider-shell aside > div:first-child > div:first-child {
+    height: 2.25rem;
+    width: 2.25rem;
+    border-radius: 10px;
+    font-size: 15px;
+}
+
+.rider-shell aside > div:first-child h1 {
+    font-size: 17px;
+}
+
+.rider-shell aside > div:first-child p {
+    font-size: 8px;
+}
+
+.rider-shell aside nav {
+    gap: 0;
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+}
+
+.rider-shell aside nav a {
+    min-height: 40px;
+    gap: 0.75rem;
+    border-radius: 10px;
+    padding: 0 0.75rem;
+    font-size: 12px;
+}
+
+.rider-shell aside nav a svg {
+    height: 1rem;
+    width: 1rem;
+}
+
+.rider-shell main {
+    margin-left: 0;
+}
+
+@media (min-width: 1024px) {
+    .rider-shell main {
+        margin-left: 245px;
+    }
+}
+
+.rider-shell main > header {
+    height: 4rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
+
+.rider-shell main > header h2 {
+    font-size: 14px;
+}
+
+.rider-shell main > header p {
+    font-size: 9px;
+}
+
+.rider-shell aside h3 {
+    font-size: 12px;
+}
+
+.rider-shell aside h3 + p {
+    font-size: 10px;
+}
+
+.logistics-shell #logisticsSidebar nav a,
+.logistics-shell #logisticsSidebar > nav > div > button {
+    font-size: 11px;
+}
+
+.logistics-shell #logisticsSidebar nav p {
+    font-size: 7px;
+}
+
+.logistics-shell #logisticsSidebar strong {
+    font-size: 11px;
+}
+
+.logistics-shell #logisticsSidebar small {
+    font-size: 9px;
+}
+
+
+/* =========================================================
+   GLOBAL BASE STYLES
+========================================================= */
+
+@layer base {
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
+    html {
+        min-height: 100%;
+        background: var(--lk-page);
+        color-scheme: light;
+        scroll-behavior: smooth;
+    }
+
+    html.dark {
+        color-scheme: dark;
+    }
+
+    body {
+        min-height: 100vh;
+        margin: 0;
+        overflow-x: hidden;
+
+        background: var(--lk-page);
+        color: var(--lk-text);
+
+        font-family:
+            "DM Sans",
+            Poppins,
+            "Segoe UI",
+            Arial,
+            Helvetica,
+            sans-serif;
+
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+
+        transition:
+            background-color 250ms ease,
+            color 250ms ease;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+        font: inherit;
+    }
+
+    button {
+        cursor: pointer;
+    }
+
+    button:disabled {
+        cursor: not-allowed;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    img,
+    svg {
+        display: block;
+    }
+
+    img {
+        max-width: 100%;
+    }
+
+    ::selection {
+        background: var(--lk-primary);
+        color: #FFFFFF;
+    }
+}
+
+
+/* =========================================================
+   FORM COLOR SCHEME
+========================================================= */
+
+@layer base {
+    input,
+    textarea,
+    select {
+        color: var(--lk-text);
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+        color: var(--lk-muted-light);
+    }
+
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+        -webkit-text-fill-color: var(--lk-text);
+        transition: background-color 9999s ease-in-out 0s;
+    }
+}
+
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+@layer base {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--lk-border-strong) transparent;
+    }
+
+    *::-webkit-scrollbar {
+        width: 7px;
+        height: 7px;
+    }
+
+    *::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    *::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: var(--lk-border-strong);
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+        background: var(--lk-muted);
+    }
+}
+
+
+/* =========================================================
+   OPTIONAL REUSABLE COMPONENTS
+========================================================= */
+
+@layer components {
+    .likhae-card {
+        @apply rounded-xl border border-line bg-surface;
+    }
+
+    .likhae-card-elevated {
+        border: 1px solid var(--lk-border);
+        border-radius: 0.75rem;
+        background: var(--lk-surface);
+        box-shadow: var(--lk-shadow);
+    }
+
+    .likhae-btn-primary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition;
+    }
+
+    .likhae-btn-primary:hover {
+        background: var(--lk-primary-hover);
+    }
+
+    .likhae-btn-secondary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink transition;
+    }
+
+    .likhae-btn-secondary:hover {
+        background: var(--lk-surface-hover);
+    }
+
+    .likhae-input {
+        @apply w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition;
+    }
+
+    .likhae-input::placeholder {
+        color: var(--lk-muted-light);
+    }
+
+    .likhae-input:focus {
+        border-color: var(--lk-primary);
+        box-shadow:
+            0 0 0 3px
+            color-mix(
+                in srgb,
+                var(--lk-primary) 12%,
+                transparent
+            );
+    }
+
+    .likhae-badge-success {
+        @apply inline-flex items-center rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success;
+    }
+
+    .likhae-badge-warning {
+        @apply inline-flex items-center rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning;
+    }
+
+    .likhae-badge-danger {
+        @apply inline-flex items-center rounded-full bg-danger-soft px-2.5 py-1 text-xs font-semibold text-danger;
+    }
+
+    .likhae-badge-info {
+        @apply inline-flex items-center rounded-full bg-info-soft px-2.5 py-1 text-xs font-semibold text-info;
+    }
+}
+
+
+/* =========================================================
+   UTILITY HELPERS
+========================================================= */
+
+@layer utilities {
+    .shadow-likhae {
+        box-shadow: var(--lk-shadow);
+    }
+
+    .shadow-likhae-lg {
+        box-shadow: var(--lk-shadow-lg);
+    }
+
+    .bg-sidebar-hover {
+        background: var(--lk-sidebar-hover);
+    }
+
+    .border-sidebar {
+        border-color: var(--lk-sidebar-border);
+    }
+
+    .bg-likhae-overlay {
+        background: var(--lk-overlay);
+    }
+}
+
+
+/* =========================================================
+   LOGISTICS SIDEBAR — FINAL PALETTE + VISIBILITY OVERRIDES
+   Keep this block at the END of the file.
+========================================================= */
+
+/* ---------------------------------------------------------
+   LIGHT MODE
+--------------------------------------------------------- */
+
+html:not(.dark) #logisticsSidebar {
+    background: #FFFDF9 !important;
+    border-right: 1px solid #EADCCC !important;
+    color: #3B211B !important;
+    box-shadow: none !important;
+}
+
+/* Header */
+html:not(.dark) #logisticsSidebar .lg-side-head,
+html:not(.dark) #logisticsSidebar .logi-sidebar-head,
+html:not(.dark) #logisticsSidebar .logi-brand {
+    background: #FFFDF9 !important;
+    border-color: #EADCCC !important;
+    color: #3B211B !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-menu,
+html:not(.dark) #logisticsSidebar .logi-menu-btn,
+html:not(.dark) #logisticsSidebar .logi-side-toggle,
+html:not(.dark) #logisticsSidebar .logi-mobile-close {
+    background: #FBF7F2 !important;
+    border-color: #EADCCC !important;
+    color: #561C17 !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-menu:hover,
+html:not(.dark) #logisticsSidebar .logi-menu-btn:hover,
+html:not(.dark) #logisticsSidebar .logi-side-toggle:hover,
+html:not(.dark) #logisticsSidebar .logi-mobile-close:hover {
+    background: #F3E4DE !important;
+    border-color: #C19771 !important;
+    color: #561C17 !important;
+}
+
+/* Real LIKHAE logo */
+html:not(.dark) #logisticsSidebar .likhae-logo__image--light {
+    display: block !important;
+}
+
+html:not(.dark) #logisticsSidebar .likhae-logo__image--dark {
+    display: none !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-brand,
+html:not(.dark) #logisticsSidebar .logi-brand-link,
+html:not(.dark) #logisticsSidebar .logi-brand {
+    color: #3B211B !important;
+}
+
+/* Profile */
+html:not(.dark) #logisticsSidebar .lg-side-profile,
+html:not(.dark) #logisticsSidebar .logi-user-card {
+    background:
+        radial-gradient(
+            circle at 92% 8%,
+            rgba(193, 151, 113, 0.14),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #FFFDF9 0%,
+            #F6EFE7 100%
+        ) !important;
+
+    border-color: #EADCCC !important;
+    color: #3B211B !important;
+
+    box-shadow:
+        0 8px 22px rgba(86, 28, 23, 0.05) !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-avatar,
+html:not(.dark) #logisticsSidebar .logi-user-avatar {
+    background: #561C17 !important;
+    color: #FFFFFF !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-verified,
+html:not(.dark) #logisticsSidebar .logi-user-check {
+    background: #561C17 !important;
+    color: #FFFFFF !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-profile-copy,
+html:not(.dark) #logisticsSidebar .lg-side-profile-copy strong,
+html:not(.dark) #logisticsSidebar .logi-user-copy,
+html:not(.dark) #logisticsSidebar .logi-user-copy strong,
+html:not(.dark) #logisticsSidebar .logi-brand-text strong {
+    color: #3B211B !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-profile-copy small,
+html:not(.dark) #logisticsSidebar .logi-user-copy small,
+html:not(.dark) #logisticsSidebar .logi-user-copy span,
+html:not(.dark) #logisticsSidebar .logi-brand-text small {
+    color: #987865 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Navigation headings */
+html:not(.dark) #logisticsSidebar .lg-side-heading,
+html:not(.dark) #logisticsSidebar .logi-nav-title {
+    color: #A48372 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Navigation items */
+html:not(.dark) #logisticsSidebar .lg-side-link,
+html:not(.dark) #logisticsSidebar .logi-nav-link {
+    background: transparent !important;
+    color: #765443 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-label,
+html:not(.dark) #logisticsSidebar .logi-nav-label {
+    color: inherit !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-icon,
+html:not(.dark) #logisticsSidebar .logi-nav-icon,
+html:not(.dark) #logisticsSidebar .lg-side-theme .lg-side-icon,
+html:not(.dark) #logisticsSidebar .logi-theme-toggle .logi-theme-icon {
+    color: #8C6652 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-icon svg,
+html:not(.dark) #logisticsSidebar .logi-nav-icon svg,
+html:not(.dark) #logisticsSidebar .lg-side-theme svg,
+html:not(.dark) #logisticsSidebar .logi-theme-toggle svg {
+    fill: none !important;
+    stroke: currentColor !important;
+}
+
+/* Hover */
+html:not(.dark) #logisticsSidebar .lg-side-link:hover,
+html:not(.dark) #logisticsSidebar .logi-nav-link:hover,
+html:not(.dark) #logisticsSidebar .lg-side-theme:hover,
+html:not(.dark) #logisticsSidebar .logi-theme-toggle:hover {
+    background: #F6EFE7 !important;
+    color: #561C17 !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-link:hover .lg-side-icon,
+html:not(.dark) #logisticsSidebar .logi-nav-link:hover .logi-nav-icon {
+    color: #561C17 !important;
+}
+
+/* Active */
+html:not(.dark) #logisticsSidebar .lg-side-link.is-active,
+html:not(.dark) #logisticsSidebar .logi-nav-link.is-active {
+    background: #F3E4DE !important;
+    border-color: transparent !important;
+    color: #561C17 !important;
+    font-weight: 900 !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-link.is-active::before,
+html:not(.dark) #logisticsSidebar .logi-nav-link.is-active::before {
+    background: #561C17 !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-link.is-active .lg-side-icon,
+html:not(.dark) #logisticsSidebar .logi-nav-link.is-active .logi-nav-icon {
+    color: #561C17 !important;
+}
+
+/* Badges */
+html:not(.dark) #logisticsSidebar .lg-side-badge,
+html:not(.dark) #logisticsSidebar .logi-badge {
+    background: #69251F !important;
+    color: #FFFFFF !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Bottom area */
+html:not(.dark) #logisticsSidebar .lg-side-bottom,
+html:not(.dark) #logisticsSidebar .logi-sidebar-foot,
+html:not(.dark) #logisticsSidebar .logi-footer-group {
+    background: #FFFDF9 !important;
+    border-color: #EADCCC !important;
+}
+
+/* Appearance */
+html:not(.dark) #logisticsSidebar .lg-side-theme,
+html:not(.dark) #logisticsSidebar .logi-theme-toggle {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: #765443 !important;
+    opacity: 1 !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-theme-copy,
+html:not(.dark) #logisticsSidebar .logi-theme-copy {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-theme-copy strong,
+html:not(.dark) #logisticsSidebar .lg-side-theme-title,
+html:not(.dark) #logisticsSidebar .logi-theme-copy strong,
+html:not(.dark) #logisticsSidebar .logi-theme-title {
+    color: #765443 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-theme-copy small,
+html:not(.dark) #logisticsSidebar .lg-side-theme-subtitle,
+html:not(.dark) #logisticsSidebar .logi-theme-copy small,
+html:not(.dark) #logisticsSidebar .logi-theme-subtitle {
+    color: #A98775 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-theme-state,
+html:not(.dark) #logisticsSidebar .logi-theme-state {
+    background: #E7E4E1 !important;
+    color: #3B332E !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Logout */
+html:not(.dark) #logisticsSidebar .lg-side-logout,
+html:not(.dark) #logisticsSidebar .logi-logout {
+    background: transparent !important;
+    color: #D92D2F !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-logout .lg-side-label,
+html:not(.dark) #logisticsSidebar .lg-side-logout .lg-side-icon,
+html:not(.dark) #logisticsSidebar .logi-logout .logi-nav-label,
+html:not(.dark) #logisticsSidebar .logi-logout .logi-nav-icon {
+    color: #D92D2F !important;
+}
+
+html:not(.dark) #logisticsSidebar .lg-side-logout:hover,
+html:not(.dark) #logisticsSidebar .logi-logout:hover {
+    background: #FCEBE9 !important;
+    color: #D92D2F !important;
+}
+
+/*
+ * Compatibility for any old Tailwind white-text classes still inside
+ * the Logistics sidebar.
+ */
+html:not(.dark) #logisticsSidebar .text-white,
+html:not(.dark) #logisticsSidebar .text-white\/90,
+html:not(.dark) #logisticsSidebar .text-white\/80,
+html:not(.dark) #logisticsSidebar .text-white\/75,
+html:not(.dark) #logisticsSidebar .text-white\/70,
+html:not(.dark) #logisticsSidebar .text-white\/65,
+html:not(.dark) #logisticsSidebar .text-white\/60,
+html:not(.dark) #logisticsSidebar .text-white\/55,
+html:not(.dark) #logisticsSidebar .text-white\/50,
+html:not(.dark) #logisticsSidebar .text-white\/45,
+html:not(.dark) #logisticsSidebar .text-white\/40,
+html:not(.dark) #logisticsSidebar .text-white\/30 {
+    color: #765443 !important;
+}
+
+/* Keep intentionally white pills/avatars white */
+html:not(.dark) #logisticsSidebar .lg-side-avatar,
+html:not(.dark) #logisticsSidebar .lg-side-verified,
+html:not(.dark) #logisticsSidebar .lg-side-badge,
+html:not(.dark) #logisticsSidebar .logi-user-avatar,
+html:not(.dark) #logisticsSidebar .logi-user-check,
+html:not(.dark) #logisticsSidebar .logi-badge {
+    color: #FFFFFF !important;
+}
+
+
+/* ---------------------------------------------------------
+   DARK MODE
+--------------------------------------------------------- */
+
+html.dark #logisticsSidebar {
+    background: #130F0E !important;
+    border-right-color: #30231F !important;
+    color: #F5EFE8 !important;
+    box-shadow: none !important;
+}
+
+html.dark #logisticsSidebar .lg-side-head,
+html.dark #logisticsSidebar .lg-side-bottom,
+html.dark #logisticsSidebar .logi-sidebar-head,
+html.dark #logisticsSidebar .logi-sidebar-foot,
+html.dark #logisticsSidebar .logi-footer-group {
+    background: #130F0E !important;
+    border-color: #30231F !important;
+}
+
+html.dark #logisticsSidebar .lg-side-menu,
+html.dark #logisticsSidebar .logi-menu-btn,
+html.dark #logisticsSidebar .logi-side-toggle,
+html.dark #logisticsSidebar .logi-mobile-close {
+    background: #1D1715 !important;
+    border-color: #3B2E27 !important;
+    color: #D9CCC4 !important;
+}
+
+html.dark #logisticsSidebar .lg-side-profile,
+html.dark #logisticsSidebar .logi-user-card {
+    background:
+        radial-gradient(
+            circle at 92% 8%,
+            rgba(193, 151, 113, 0.09),
+            transparent 28%
+        ),
+        linear-gradient(
+            180deg,
+            #211B17 0%,
+            #1A1412 100%
+        ) !important;
+
+    border-color: #3B2E27 !important;
+    color: #F5EFE8 !important;
+    box-shadow: none !important;
+}
+
+html.dark #logisticsSidebar .lg-side-avatar,
+html.dark #logisticsSidebar .lg-side-verified,
+html.dark #logisticsSidebar .logi-user-avatar,
+html.dark #logisticsSidebar .logi-user-check {
+    background: #A84538 !important;
+    color: #FFFFFF !important;
+}
+
+html.dark #logisticsSidebar .lg-side-profile-copy strong,
+html.dark #logisticsSidebar .logi-user-copy strong,
+html.dark #logisticsSidebar .logi-brand-text strong {
+    color: #F5EFE8 !important;
+}
+
+html.dark #logisticsSidebar .lg-side-profile-copy small,
+html.dark #logisticsSidebar .logi-user-copy small,
+html.dark #logisticsSidebar .logi-user-copy span,
+html.dark #logisticsSidebar .lg-side-heading,
+html.dark #logisticsSidebar .logi-nav-title,
+html.dark #logisticsSidebar .logi-brand-text small {
+    color: #AFA19A !important;
+}
+
+html.dark #logisticsSidebar .lg-side-link,
+html.dark #logisticsSidebar .logi-nav-link,
+html.dark #logisticsSidebar .lg-side-theme,
+html.dark #logisticsSidebar .logi-theme-toggle {
+    color: #D0C4BD !important;
+}
+
+html.dark #logisticsSidebar .lg-side-icon,
+html.dark #logisticsSidebar .logi-nav-icon,
+html.dark #logisticsSidebar .lg-side-theme .lg-side-icon,
+html.dark #logisticsSidebar .logi-theme-toggle .logi-theme-icon {
+    color: #C9BCB5 !important;
+}
+
+html.dark #logisticsSidebar .lg-side-link:hover,
+html.dark #logisticsSidebar .logi-nav-link:hover,
+html.dark #logisticsSidebar .lg-side-theme:hover,
+html.dark #logisticsSidebar .logi-theme-toggle:hover {
+    background: #241817 !important;
+    color: #F2D6CB !important;
+}
+
+html.dark #logisticsSidebar .lg-side-link.is-active,
+html.dark #logisticsSidebar .logi-nav-link.is-active {
+    background: #3A1111 !important;
+    color: #F3C6BA !important;
+}
+
+html.dark #logisticsSidebar .lg-side-link.is-active::before,
+html.dark #logisticsSidebar .logi-nav-link.is-active::before {
+    background: #B84B43 !important;
+}
+
+html.dark #logisticsSidebar .lg-side-link.is-active .lg-side-icon,
+html.dark #logisticsSidebar .logi-nav-link.is-active .logi-nav-icon {
+    color: #F3C6BA !important;
+}
+
+html.dark #logisticsSidebar .lg-side-badge,
+html.dark #logisticsSidebar .logi-badge {
+    background: #A98976 !important;
+    color: #FFFFFF !important;
+}
+
+html.dark #logisticsSidebar .lg-side-theme-copy strong,
+html.dark #logisticsSidebar .logi-theme-copy strong,
+html.dark #logisticsSidebar .lg-side-theme-title,
+html.dark #logisticsSidebar .logi-theme-title {
+    color: #D0C4BD !important;
+}
+
+html.dark #logisticsSidebar .lg-side-theme-copy small,
+html.dark #logisticsSidebar .logi-theme-copy small,
+html.dark #logisticsSidebar .lg-side-theme-subtitle,
+html.dark #logisticsSidebar .logi-theme-subtitle {
+    color: #A89C95 !important;
+}
+
+html.dark #logisticsSidebar .lg-side-theme-state,
+html.dark #logisticsSidebar .logi-theme-state {
+    background: #E53D3D !important;
+    color: #FFFFFF !important;
+}
+
+html.dark #logisticsSidebar .lg-side-logout,
+html.dark #logisticsSidebar .logi-logout,
+html.dark #logisticsSidebar .lg-side-logout .lg-side-label,
+html.dark #logisticsSidebar .lg-side-logout .lg-side-icon {
+    color: #F2A49A !important;
+}
+
+html.dark #logisticsSidebar .lg-side-logout:hover,
+html.dark #logisticsSidebar .logi-logout:hover {
+    background: #351010 !important;
+    color: #F2A49A !important;
+}
+
+/* Real LIKHAE logo switching */
+html.dark #logisticsSidebar .likhae-logo__image--light {
+    display: none !important;
+}
+
+html.dark #logisticsSidebar .likhae-logo__image--dark {
+    display: block !important;
+}
+
+/* Logistics wallet page */
+.lk-logistics-wallet .lk-wallet-metric {
+    min-height: 142px;
+    align-content: start;
+    gap: 8px;
+    padding: 19px 20px;
+}
+
+.lk-logistics-wallet .lk-wallet-metric--available {
+    border-color: #561C17;
+    background: linear-gradient(145deg, #561C17, #79332B);
+    box-shadow: 0 10px 24px rgba(86, 28, 23, .16);
+}
+
+.lk-logistics-wallet .lk-wallet-metric--available .lk-wallet-metric__label,
+.lk-logistics-wallet .lk-wallet-metric--available .lk-wallet-metric__value,
+.lk-logistics-wallet .lk-wallet-metric--available .lk-logistics-wallet__metric-detail {
+    color: #FFF8F2;
+}
+
+.lk-logistics-wallet .lk-wallet-metric--available .lk-wallet-metric__label,
+.lk-logistics-wallet__metric-detail {
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.lk-logistics-wallet .lk-wallet-metric--available .lk-wallet-metric__value {
+    font-size: clamp(24px, 2.3vw, 30px);
+}
+
+.lk-logistics-wallet .lk-wallet-metric--available .lk-logistics-wallet__metric-detail {
+    opacity: .8;
+}
+
+.lk-logistics-wallet__header-actions { justify-content: flex-end; }
+.lk-logistics-wallet__header-link,
+.lk-logistics-wallet__edit-destination {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    border: 1px solid var(--lk-wallet-border);
+    border-radius: 10px;
+    color: var(--lk-wallet-ink);
+    background: var(--lk-wallet-surface);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: center;
+    text-decoration: none;
+    transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+
+.lk-logistics-wallet__header-link:hover,
+.lk-logistics-wallet__edit-destination:hover {
+    border-color: #C6A99C;
+    background: var(--lk-wallet-soft);
+    transform: translateY(-1px);
+}
+
+.lk-logistics-wallet__header-link:focus-visible,
+.lk-logistics-wallet__edit-destination:focus-visible,
+.lk-logistics-wallet__proof-link:focus-visible,
+.lk-logistics-wallet__share-action button:focus-visible,
+.lk-logistics-wallet__acknowledge button:focus-visible,
+.lk-logistics-wallet__report-issue button:focus-visible {
+    outline: 3px solid rgba(169, 111, 94, .45);
+    outline-offset: 2px;
+}
+
+.lk-logistics-wallet__destination-notice {
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid #E9D2B2;
+    border-radius: 10px;
+    color: #70491F;
+    background: #FFF7EA;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.lk-logistics-wallet__section-kicker,
+.lk-logistics-wallet__record-kicker {
+    display: block;
+    color: var(--lk-wallet-accent);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    line-height: 1.4;
+    text-transform: uppercase;
+}
+
+.lk-logistics-wallet .lk-wallet-panel__head h2 { margin-top: 4px; }
+
+.lk-logistics-wallet__share {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    padding: 19px 20px;
+}
+
+.lk-logistics-wallet .lk-wallet-record > .lk-logistics-wallet__share-copy,
+.lk-logistics-wallet__receipt-identity {
+    min-width: 0;
+    display: grid;
+    justify-items: start;
+    gap: 5px;
+}
+
+.lk-logistics-wallet .lk-wallet-record .lk-logistics-wallet__tracking,
+.lk-logistics-wallet__receipt-identity > strong {
+    color: var(--lk-wallet-ink);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.lk-logistics-wallet__order {
+    color: var(--lk-wallet-muted);
+    font-size: 11px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.lk-logistics-wallet .lk-wallet-record .lk-logistics-wallet__share-amount {
+    margin-top: 8px;
+    color: var(--lk-wallet-ink);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+}
+
+.lk-logistics-wallet__share-action {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.lk-logistics-wallet__status {
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 750;
+    line-height: 1.25;
+    letter-spacing: 0;
+    text-align: center;
+    text-transform: none;
+}
+
+.lk-logistics-wallet__status--pending {
+    border-color: #E9D2B2;
+    color: #70491F;
+    background: #FFF7EA;
+}
+
+.lk-logistics-wallet__status--waiting {
+    border-color: #E9D2B2;
+    color: #70491F;
+    background: #FFF7EA;
+}
+
+.lk-logistics-wallet__status--paid {
+    border-color: #C9E2D1;
+    color: #286244;
+    background: #EAF4ED;
+}
+
+.lk-logistics-wallet__share-action form button,
+.lk-logistics-wallet__acknowledge button {
+    min-height: 42px;
+    padding: 10px 15px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.35;
+    cursor: pointer;
+    transition: background-color .15s ease, transform .15s ease;
+}
+
+.lk-logistics-wallet__share-action form button:hover,
+.lk-logistics-wallet__acknowledge button:hover { transform: translateY(-1px); }
+
+.lk-logistics-wallet__save-reminder {
+    max-width: 230px;
+    color: #8A5A21;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.5;
+    text-align: right;
+}
+
+.lk-logistics-wallet__empty {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 19px;
+    border: 1px dashed var(--lk-wallet-border);
+    border-radius: 13px;
+    background: var(--lk-wallet-soft);
+}
+
+.lk-logistics-wallet__empty-icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--lk-wallet-accent);
+    background: var(--lk-wallet-surface);
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.lk-logistics-wallet__empty strong {
+    color: var(--lk-wallet-ink);
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.lk-logistics-wallet__empty p {
+    margin: 4px 0 0;
+    color: var(--lk-wallet-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.lk-logistics-wallet__receipt { display: grid; gap: 15px; padding: 20px; }
+
+.lk-logistics-wallet__receipt-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.lk-logistics-wallet__receipt-total {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+    text-align: right;
+}
+
+.lk-logistics-wallet__receipt-total > strong {
+    color: var(--lk-wallet-ink);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+}
+
+.lk-logistics-wallet__receipt-details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 13px;
+    border: 1px solid var(--lk-wallet-border);
+    border-radius: 11px;
+    background: var(--lk-wallet-soft);
+}
+
+.lk-logistics-wallet__receipt-details > div { min-width: 0; }
+.lk-logistics-wallet__receipt-details dt { color: var(--lk-wallet-muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.lk-logistics-wallet__receipt-details dd { margin: 4px 0 0; color: var(--lk-wallet-ink); font-size: 12px; font-weight: 650; line-height: 1.45; overflow-wrap: anywhere; }
+
+.lk-logistics-wallet__proof-link {
+    width: fit-content;
+    color: var(--lk-wallet-accent);
+    font-size: 12px;
+    font-weight: 750;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.lk-logistics-wallet__acknowledge {
+    display: grid;
+    grid-template-columns: minmax(150px, .4fr) minmax(180px, 1fr) auto;
+    align-items: end;
+    gap: 12px;
+    padding-top: 3px;
+}
+
+.lk-logistics-wallet__acknowledge label {
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+    color: var(--lk-wallet-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.lk-logistics-wallet__acknowledge input {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid var(--lk-wallet-border);
+    border-radius: 9px;
+    color: var(--lk-wallet-ink);
+    background: var(--lk-wallet-surface);
+    font-size: 13px;
+}
+
+.lk-logistics-wallet__acknowledge input:focus-visible {
+    outline: 3px solid rgba(169, 111, 94, .3);
+    outline-offset: 1px;
+}
+
+.lk-logistics-wallet__report-issue button {
+    min-height: 38px;
+    padding: 8px 11px;
+    border: 1px solid var(--lk-wallet-border);
+    border-radius: 9px;
+    color: var(--lk-wallet-ink);
+    background: var(--lk-wallet-surface);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.lk-logistics-wallet__report-issue button:hover { background: var(--lk-wallet-soft); }
+.lk-logistics-wallet__legacy-note,
+.lk-logistics-wallet__confirmed-note { margin: 0; font-size: 12px; line-height: 1.55; }
+.lk-logistics-wallet__legacy-note { color: #8A5A21; font-weight: 700; }
+.lk-logistics-wallet__confirmed-note { color: #286244; }
+
+html.dark .lk-logistics-wallet .lk-wallet-metric--available {
+    border-color: #6A302A;
+    background: linear-gradient(145deg, #48201B, #321612);
+    box-shadow: none;
+}
+
+html.dark .lk-logistics-wallet__destination-notice,
+html.dark .lk-logistics-wallet__status--pending,
+html.dark .lk-logistics-wallet__status--waiting {
+    border-color: #604A2A;
+    color: #F1D4A6;
+    background: #2A2117;
+}
+
+html.dark .lk-logistics-wallet__status--paid {
+    border-color: #3C6049;
+    color: #B5E0C3;
+    background: #1B2C21;
+}
+
+html.dark .lk-logistics-wallet__save-reminder,
+html.dark .lk-logistics-wallet__legacy-note { color: #F1D4A6; }
+html.dark .lk-logistics-wallet__confirmed-note { color: #B5E0C3; }
+
+@media (max-width: 760px) {
+    .lk-logistics-wallet__header-actions { justify-content: flex-start; }
+    .lk-logistics-wallet__share { align-items: flex-start; }
+    .lk-logistics-wallet__receipt-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+    .lk-logistics-wallet .lk-wallet-metric { min-height: 120px; }
+    .lk-logistics-wallet__share { flex-direction: column; align-items: stretch; gap: 16px; }
+    .lk-logistics-wallet__share-action { align-items: stretch; }
+    .lk-logistics-wallet__share-action form button { width: 100%; }
+    .lk-logistics-wallet__save-reminder { max-width: none; text-align: left; }
+    .lk-logistics-wallet__receipt-head { flex-direction: column; }
+    .lk-logistics-wallet__receipt-total { justify-items: start; text-align: left; }
+    .lk-logistics-wallet__receipt-details { grid-template-columns: 1fr; }
+    .lk-logistics-wallet__acknowledge { grid-template-columns: 1fr; }
+    .lk-logistics-wallet__acknowledge button { width: 100%; }
+}
+
+/* Logistics rider directory: mirror the Admin user-management visual system. */
+.rider-directory {
+    --rider-dir-border: var(--lk-border, #EADCCC);
+    --rider-dir-text: var(--lk-text, #3B211B);
+    --rider-dir-muted: var(--lk-muted, #987865);
+    --rider-dir-brown: var(--lk-text-secondary, #6C4936);
+    --rider-dir-surface: var(--lk-surface, #FFFDF9);
+    --rider-dir-soft: var(--lk-page-secondary, #F6EFE7);
+    --rider-dir-maroon: var(--lk-primary, #561C17);
+    --rider-dir-shadow: 0 8px 24px rgba(86, 28, 23, .055);
+    width: 100%;
+    min-width: 0;
+    gap: 18px;
+    color: var(--rider-dir-text);
+}
+
+.rider-directory__hero {
+    min-width: 0;
+    padding: clamp(24px, 3vw, 36px);
+    border-color: var(--rider-dir-border);
+    border-radius: 26px;
+    background:
+        radial-gradient(circle at 94% 12%, rgba(193, 151, 113, .24), transparent 28%),
+        radial-gradient(circle at 8% 18%, rgba(86, 28, 23, .06), transparent 30%),
+        linear-gradient(135deg, #FFFDF9 0%, #F6EFE7 58%, #EFE7DE 100%);
+    box-shadow: var(--rider-dir-shadow);
+}
+
+.rider-directory__overline {
+    color: var(--rider-dir-maroon);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .2em;
+}
+
+.rider-directory__title {
+    margin-top: 10px;
+    color: var(--rider-dir-text);
+    font-family: "Instrument Serif", Georgia, serif;
+    font-size: clamp(40px, 4.5vw, 62px);
+    font-weight: 400;
+    line-height: .96;
+    letter-spacing: -.055em;
+}
+
+.rider-directory__subtitle {
+    max-width: 660px;
+    margin-top: 13px;
+    color: var(--rider-dir-muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.rider-directory__applications {
+    min-height: 42px;
+    border-radius: 11px;
+    background: var(--rider-dir-maroon);
+    box-shadow: 0 10px 22px rgba(86, 28, 23, .16);
+}
+
+.rider-directory__applications:hover { background: var(--lk-primary-active, #3E130F); }
+
+.rider-directory__stats {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 14px;
+}
+
+.rider-directory__stat {
+    min-width: 0;
+    padding: 17px 18px;
+    border-color: var(--rider-dir-border);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 92% 8%, rgba(193, 151, 113, .15), transparent 28%),
+        linear-gradient(180deg, var(--rider-dir-surface) 0%, #FFF9F2 100%);
+    box-shadow: var(--rider-dir-shadow);
+}
+
+.rider-directory__stat > span {
+    color: var(--rider-dir-muted);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+
+.rider-directory__stat > strong {
+    margin-top: 8px;
+    color: var(--rider-dir-maroon);
+    font-size: 30px;
+    font-weight: 850;
+    line-height: 1;
+    letter-spacing: -.045em;
+}
+
+.rider-directory__stat > small {
+    display: block;
+    margin-top: 8px;
+    color: var(--rider-dir-muted);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.rider-directory__notice {
+    align-items: center;
+    margin: -2px 0 0;
+    padding: 11px 14px;
+    border: 1px solid var(--rider-dir-border);
+    border-radius: 12px;
+    background: var(--rider-dir-surface);
+    color: var(--rider-dir-muted);
+    font-size: 10px;
+    line-height: 1.55;
+}
+
+.rider-directory__notice svg { color: var(--rider-dir-maroon); }
+
+.rider-directory__tabs {
+    gap: 6px;
+    padding: 6px;
+    border-color: var(--rider-dir-border);
+    border-radius: 16px;
+    background: var(--rider-dir-surface);
+    box-shadow: var(--rider-dir-shadow);
+    scrollbar-width: none;
+}
+
+.rider-directory__tabs::-webkit-scrollbar { display: none; }
+
+.rider-directory__tab {
+    min-height: 40px;
+    padding-inline: 15px;
+    border-radius: 11px;
+    color: var(--rider-dir-brown);
+    font-size: 11px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.rider-directory__tab:hover { background: var(--rider-dir-soft); color: var(--rider-dir-maroon); }
+
+.rider-directory__tab.is-active {
+    background: var(--lk-primary-soft, #F3E4DE);
+    color: var(--rider-dir-maroon);
+    box-shadow: inset 0 0 0 1px rgba(86, 28, 23, .06);
+}
+
+.rider-directory__tab-count {
+    min-width: 20px;
+    text-align: center;
+}
+
+.rider-directory__card {
+    min-width: 0;
+    border-color: var(--rider-dir-border);
+    border-radius: 22px;
+    background: var(--rider-dir-surface);
+    box-shadow: var(--rider-dir-shadow);
+}
+
+.rider-directory__card-heading {
+    min-width: 0;
+    padding: 19px 22px;
+    border-color: var(--rider-dir-border);
+    background:
+        radial-gradient(circle at 96% 6%, rgba(193, 151, 113, .12), transparent 30%),
+        linear-gradient(135deg, var(--rider-dir-surface) 0%, #F8F0E8 100%);
+}
+
+.rider-directory__card-heading h2 {
+    color: var(--rider-dir-text);
+    font-size: 16px;
+    letter-spacing: -.015em;
+}
+
+.rider-directory__result-count {
+    min-height: 32px;
+    border-color: var(--rider-dir-border);
+    background: var(--rider-dir-surface);
+    color: var(--rider-dir-muted);
+    font-size: 10px;
+}
+
+.rider-directory__result-count strong { color: var(--rider-dir-text); }
+
+.rider-directory__search-form {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+    border-color: var(--rider-dir-border);
+    background: linear-gradient(135deg, var(--rider-dir-surface) 0%, #F8F0E8 100%);
+}
+
+.rider-directory__search-field { flex: 1 1 340px; max-width: 460px; }
+.rider-directory__search-control { display: block; }
+
+.rider-directory__search-control svg {
+    left: 14px;
+    width: 16px;
+    height: 16px;
+    color: var(--rider-dir-muted);
+}
+
+.rider-directory__search-input {
+    min-height: 42px;
+    height: 42px;
+    padding: 0 14px 0 42px;
+    border-color: var(--rider-dir-border);
+    border-radius: 12px;
+    background: var(--rider-dir-soft);
+    color: var(--rider-dir-text);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.rider-directory__search-input:focus {
+    border-color: #C19771;
+    background: var(--rider-dir-surface);
+    box-shadow: 0 0 0 3px rgba(86, 28, 23, .08);
+}
+
+.rider-directory__search-input::placeholder { color: var(--lk-muted-light, #A99386); }
+.rider-directory__search-actions { flex: 0 0 auto; }
+
+.rider-directory__search-button,
+.rider-directory__clear-button {
+    min-height: 40px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.rider-directory__search-button { background: var(--rider-dir-maroon); }
+.rider-directory__search-button:hover { background: var(--lk-primary-active, #3E130F); }
+.rider-directory__search-button:focus-visible,
+.rider-directory__clear-button:focus-visible,
+.rider-directory__tab:focus-visible,
+.rider-directory__applications:focus-visible,
+.rider-directory__view:focus-visible,
+.rider-directory__suspend:focus-visible,
+.rider-directory__bulk-button:focus-visible {
+    outline: 3px solid rgba(193, 151, 113, .5);
+    outline-offset: 2px;
+}
+
+.rider-directory__clear-button {
+    border-color: var(--rider-dir-border);
+    background: var(--rider-dir-surface);
+    color: var(--rider-dir-brown);
+}
+
+.rider-directory__clear-button:hover { border-color: #C19771; background: var(--rider-dir-soft); }
+
+.rider-directory__bulk-actions {
+    min-height: 54px;
+    padding: 10px 18px;
+}
+
+.rider-directory__bulk-actions > span { color: var(--rider-dir-muted); font-size: 11px; }
+.rider-directory__bulk-actions > span strong { color: var(--rider-dir-text); }
+
+.rider-directory__bulk-button {
+    min-height: 36px;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.rider-directory__table { min-width: 1040px; }
+.rider-directory__table thead { background: var(--rider-dir-soft); }
+
+.rider-directory__table th {
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--rider-dir-border);
+    color: var(--rider-dir-muted);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .075em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.rider-directory__table td {
+    padding-top: 14px;
+    padding-bottom: 14px;
+    color: var(--rider-dir-brown);
+    font-size: 10px;
+    vertical-align: middle;
+}
+
+.rider-directory__row:hover { background: var(--rider-dir-soft); }
+.rider-directory__table td strong { color: var(--rider-dir-text); font-size: 11px; }
+.rider-directory__table td span { line-height: 1.5; }
+
+.rider-directory__avatar {
+    width: 40px;
+    height: 40px;
+    border-color: var(--rider-dir-border);
+    border-radius: 13px;
+    background: #F1E4D7;
+    color: var(--rider-dir-maroon);
+    font-size: 11px;
+}
+
+.rider-directory__status {
+    min-height: 25px;
+    align-items: center;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.rider-directory__view,
+.rider-directory__suspend {
+    min-height: 34px;
+    border-radius: 9px;
+    padding-inline: 12px;
+    font-size: 9px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.rider-directory__view { border-color: var(--rider-dir-border); }
+.rider-directory__view:hover { border-color: #C19771; background: var(--rider-dir-soft); }
+
+.rider-directory__pagination {
+    min-width: 0;
+    padding: 14px 18px;
+    border-color: var(--rider-dir-border);
+    background: var(--rider-dir-surface);
+    color: var(--rider-dir-muted);
+    font-size: 10px;
+}
+
+html.dark .rider-directory__hero,
+html.dark .rider-directory__stat,
+html.dark .rider-directory__card-heading,
+html.dark .rider-directory__search-form {
+    background: linear-gradient(135deg, var(--rider-dir-surface), var(--rider-dir-soft));
+}
+
+html.dark .rider-directory__stat,
+html.dark .rider-directory__notice,
+html.dark .rider-directory__tabs,
+html.dark .rider-directory__card,
+html.dark .rider-directory__clear-button { border-color: var(--rider-dir-border); }
+
+html.dark .rider-directory__title,
+html.dark .rider-directory__card-heading h2 { color: var(--rider-dir-text); }
+
+html.dark .rider-directory__subtitle,
+html.dark .rider-directory__stat > small,
+html.dark .rider-directory__notice { color: var(--rider-dir-muted); }
+
+html.dark .rider-directory__search-input,
+html.dark .rider-directory__clear-button,
+html.dark .rider-directory__view { background: var(--rider-dir-surface); color: var(--rider-dir-text); }
+
+html.dark .rider-directory__table thead { background: var(--rider-dir-soft); }
+html.dark .rider-directory__table th,
+html.dark .rider-directory__table td { border-color: var(--rider-dir-border); color: var(--rider-dir-muted); }
+html.dark .rider-directory__table td strong { color: var(--rider-dir-text); }
+html.dark .rider-directory__row:hover { background: var(--rider-dir-soft); }
+
+@media (max-width: 760px) {
+    .rider-directory__hero { padding: 24px 22px; }
+    .rider-directory__hero > div { align-items: flex-start; flex-direction: column; }
+    .rider-directory__applications { width: fit-content; }
+    .rider-directory__search-form { align-items: stretch; flex-direction: column; }
+    .rider-directory__search-field { max-width: none; }
+    .rider-directory__search-actions { width: 100%; justify-content: flex-end; }
+}
+
+@media (max-width: 460px) {
+    .rider-directory { gap: 14px; }
+    .rider-directory__stats { grid-template-columns: 1fr; }
+    .rider-directory__tabs { width: 100%; }
+    .rider-directory__tab { padding-inline: 12px; }
+    .rider-directory__card-heading { padding: 16px; }
+    .rider-directory__search-form { padding: 12px; }
+    .rider-directory__search-actions { display: flex; }
+    .rider-directory__search-button,
+    .rider-directory__clear-button { width: 100%; flex: 1 1 0; }
+    .rider-directory__bulk-actions { align-items: stretch; }
+    .rider-directory__bulk-button { width: 100%; justify-content: center; }
+    .rider-directory__applications { width: 100%; }
+}

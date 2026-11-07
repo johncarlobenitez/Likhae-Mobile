@@ -104,7 +104,6 @@ class _RiderDeliveryTrackingScreenState
 
   final ImagePicker _imagePicker = ImagePicker();
 
-  final TextEditingController _receiverController = TextEditingController();
   RiderParcelScanResult? _deliveryScan;
   final TextEditingController _collectionController = TextEditingController();
 
@@ -131,6 +130,10 @@ class _RiderDeliveryTrackingScreenState
   bool _locationSyncEnabled = false;
   LatLng? _lastRouteOrigin;
   LatLng? _lastRouteDestination;
+  LatLng? _lastGuidelineOrigin;
+  LatLng? _lastGuidelineDestination;
+  DateTime? _lastRouteRequestAt;
+  bool _hasRoadRoute = false;
 
   StreamSubscription<Position>? _positionSubscription;
   bool _routeRequestInProgress = false;
@@ -268,7 +271,6 @@ class _RiderDeliveryTrackingScreenState
     if (oldWidget.delivery?.id != widget.delivery?.id) {
       _deliveryScan = null;
       _proofPhoto = null;
-      _receiverController.clear();
       _collectionController.clear();
     }
 
@@ -292,6 +294,10 @@ class _RiderDeliveryTrackingScreenState
       _geocodedBuyerLocation = null;
       _buyerLocationError = null;
       _lastRouteDestination = null;
+      _lastGuidelineOrigin = null;
+      _lastGuidelineDestination = null;
+      _lastRouteRequestAt = null;
+      _hasRoadRoute = false;
       _resolveBuyerLocation();
     }
     if (destinationChanged ||
@@ -475,10 +481,8 @@ class _RiderDeliveryTrackingScreenState
     try {
       LatLng? location;
       for (final String query in queries) {
-        final Response<dynamic> response = await ApiClient.get(
-          'maps/geocode',
-          queryParameters: <String, dynamic>{'text': query},
-          refresh: true,
+        final Response<dynamic> response = await ApiClient.getMapGeocode(
+          query,
         );
         final String? errorMessage =
             PhilippineAddressGeocoding.errorMessageForResponse(
@@ -724,6 +728,12 @@ class _RiderDeliveryTrackingScreenState
 
     if (rider == null || destination == null) {
       await manager.deleteAll();
+      _lastRouteOrigin = null;
+      _lastRouteDestination = null;
+      _lastGuidelineOrigin = null;
+      _lastGuidelineDestination = null;
+      _lastRouteRequestAt = null;
+      _hasRoadRoute = false;
       return;
     }
 
@@ -746,11 +756,62 @@ class _RiderDeliveryTrackingScreenState
             ) <
             5;
 
-    if (_routeRequestInProgress || (originUnchanged && destinationUnchanged)) {
+    if (_hasRoadRoute && originUnchanged && destinationUnchanged) {
+      return;
+    }
+
+    if (!originUnchanged || !destinationUnchanged) {
+      _hasRoadRoute = false;
+    }
+
+    if (!_hasRoadRoute) {
+      final bool guidelineOriginUnchanged =
+          _lastGuidelineOrigin != null &&
+          Geolocator.distanceBetween(
+                _lastGuidelineOrigin!.latitude,
+                _lastGuidelineOrigin!.longitude,
+                rider.latitude,
+                rider.longitude,
+              ) <
+              5;
+      final bool guidelineDestinationUnchanged =
+          _lastGuidelineDestination != null &&
+          Geolocator.distanceBetween(
+                _lastGuidelineDestination!.latitude,
+                _lastGuidelineDestination!.longitude,
+                destination.latitude,
+                destination.longitude,
+              ) <
+              5;
+      if (!guidelineOriginUnchanged || !guidelineDestinationUnchanged) {
+        await _drawRouteLine(<maplibre.Position>[
+          maplibre.Position(rider.longitude, rider.latitude),
+          maplibre.Position(destination.longitude, destination.latitude),
+        ]);
+        _lastGuidelineOrigin = rider;
+        _lastGuidelineDestination = destination;
+      }
+    }
+
+    if (_routeRequestInProgress) {
+      return;
+    }
+
+    final DateTime now = DateTime.now();
+    final DateTime? lastRequestAt = _lastRouteRequestAt;
+    final bool shouldRetryRoute =
+        lastRequestAt == null ||
+        !originUnchanged ||
+        !destinationUnchanged ||
+        now.difference(lastRequestAt) >= const Duration(minutes: 1);
+    if (!shouldRetryRoute) {
       return;
     }
 
     _routeRequestInProgress = true;
+    _lastRouteOrigin = rider;
+    _lastRouteDestination = destination;
+    _lastRouteRequestAt = now;
     try {
       final String coordinates =
           '${rider.longitude},${rider.latitude};'
@@ -763,7 +824,6 @@ class _RiderDeliveryTrackingScreenState
       final List<dynamic> routes =
           response.data?['routes'] as List<dynamic>? ?? <dynamic>[];
       if (routes.isEmpty) {
-        await manager.deleteAll();
         return;
       }
 
@@ -789,24 +849,42 @@ class _RiderDeliveryTrackingScreenState
         return;
       }
 
-      await manager.deleteAll();
-      await manager.create(
-        maplibre.PolylineAnnotationOptions(
-          geometry: maplibre.LineString(coordinates: positions),
-          lineColor: AppTheme.resolve(context, _routeColor).toARGB32(),
-          lineWidth: 5,
-          lineOpacity: 0.85,
-          lineBorderColor: Colors.white.toARGB32(),
-          lineBorderWidth: 1.5,
-        ),
-      );
-      _lastRouteOrigin = rider;
-      _lastRouteDestination = destination;
+      await _drawRouteLine(positions);
+      _hasRoadRoute = true;
     } catch (_) {
-      // Keep the markers visible when the routing service is unavailable.
+      // Keep the straight guide line visible when routing is unavailable.
     } finally {
       _routeRequestInProgress = false;
     }
+  }
+
+  Future<void> _drawRouteLine(List<maplibre.Position> positions) async {
+    final maplibre.PolylineAnnotationManager? manager = _routeLines;
+    if (manager == null || positions.length < 2) {
+      return;
+    }
+
+    final int routeColor = AppTheme.resolve(context, _routeColor).toARGB32();
+    final maplibre.LineString geometry = maplibre.LineString(
+      coordinates: positions,
+    );
+    await manager.deleteAll();
+    await manager.create(
+      maplibre.PolylineAnnotationOptions(
+        geometry: geometry,
+        lineColor: Colors.white.toARGB32(),
+        lineWidth: 8,
+        lineOpacity: 0.95,
+      ),
+    );
+    await manager.create(
+      maplibre.PolylineAnnotationOptions(
+        geometry: geometry,
+        lineColor: routeColor,
+        lineWidth: 4.5,
+        lineOpacity: 0.95,
+      ),
+    );
   }
 
   maplibre.Point _toMapLibrePoint(LatLng point) {
@@ -898,6 +976,10 @@ class _RiderDeliveryTrackingScreenState
       await _startRiderLocationTracking();
       await _getNavigationOrigin();
       _lastRouteOrigin = null;
+      _lastRouteRequestAt = null;
+      _hasRoadRoute = false;
+      _lastGuidelineOrigin = null;
+      _lastGuidelineDestination = null;
       await _syncMapLibreMarkers();
       _showMessage('Live rider GPS and road route updated.');
     } catch (error) {
@@ -913,7 +995,6 @@ class _RiderDeliveryTrackingScreenState
   @override
   void dispose() {
     _positionSubscription?.cancel();
-    _receiverController.dispose();
     _collectionController.dispose();
     _failedReasonController.dispose();
 
@@ -1029,14 +1110,6 @@ class _RiderDeliveryTrackingScreenState
       );
       return;
     }
-    final String receiverName = _receiverController.text.trim();
-
-    if (receiverName.isEmpty) {
-      _showMessage('Enter the receiver name.');
-
-      return;
-    }
-
     if (_proofPhoto == null) {
       _showMessage('Take a proof of delivery photo first.');
 
@@ -1047,7 +1120,6 @@ class _RiderDeliveryTrackingScreenState
         RiderDeliveryTransitionRequest(
           delivery: delivery,
           status: 'delivered',
-          receiverName: receiverName,
           proofPath: _proofPhoto!.path,
           collectedAmount: _collectionController.text.trim(),
           scannedCode: _deliveryScan?.code,
@@ -1556,6 +1628,11 @@ class _RiderDeliveryTrackingScreenState
                       ? 'Current rider location'
                       : 'Rider GPS unavailable',
                 ),
+                if (hasDestination && hasRider)
+                  _MapLegendRoute(
+                    color: AppTheme.resolve(context, _routeColor),
+                    label: 'Route guide',
+                  ),
               ],
             ),
           ),
@@ -1775,18 +1852,6 @@ class _RiderDeliveryTrackingScreenState
               onChanged: (scan) => _deliveryScan = scan,
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _receiverController,
-              enabled: !_submitting,
-              textInputAction: TextInputAction.next,
-              decoration: _inputDecoration(
-                hintText: 'Receiver name',
-                prefixIcon: Icons.person_outline_rounded,
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
             RiderCollectionField(
               controller: _collectionController,
               enabled: !_submitting,
@@ -2455,6 +2520,46 @@ class _MapLegendRider extends StatelessWidget {
         Text(
           label,
           style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF766C65)), fontSize: 11),
+        ),
+      ],
+    );
+  }
+}
+
+class _MapLegendRoute extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _MapLegendRoute({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 19,
+          height: 7,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Container(
+            height: 3,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: TextStyle(
+            color: AppTheme.resolve(context, const Color(0xFF766C65)),
+            fontSize: 11,
+          ),
         ),
       ],
     );

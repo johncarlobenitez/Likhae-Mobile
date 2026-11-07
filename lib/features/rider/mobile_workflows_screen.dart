@@ -1,8 +1,9 @@
-import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../../services/workspace_mobile_service.dart';
 import '../../shared/widgets/workflow_ui.dart';
+import 'attendance/rider_attendance_qr_image.dart';
 import 'scanner/rider_scanner_screen.dart';
 
 class RiderReturnsScreen extends StatelessWidget {
@@ -387,23 +388,64 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
     'rider/attendance',
   );
   Map<String, dynamic>? _qr;
+  Map<String, dynamic>? _todayAttendance;
   String? _message, _error;
   bool _busy = false;
+  bool _loadingQr = false;
+  Timer? _qrExpiryTimer;
+  int _qrSecondsRemaining = 0;
+
+  @override
+  void dispose() {
+    _qrExpiryTimer?.cancel();
+    super.dispose();
+  }
+
   void _reload() =>
       setState(() => _future = WorkspaceMobileService.rows('rider/attendance'));
+
+  void _startQrExpiry(int seconds) {
+    _qrExpiryTimer?.cancel();
+    setState(() => _qrSecondsRemaining = seconds);
+    _qrExpiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+      } else if (_qrSecondsRemaining <= 1) {
+        timer.cancel();
+        _timeInOut();
+      } else {
+        setState(() => _qrSecondsRemaining--);
+      }
+    });
+  }
+
   Future<void> _timeInOut() async {
+    if (_loadingQr) return;
+    _qrExpiryTimer?.cancel();
     setState(() {
-      _busy = true;
+      _loadingQr = true;
       _error = null;
-      _message = null;
     });
     try {
       final body = await WorkspaceMobileService.get('rider/attendance/qr');
-      setState(() => _qr = body);
+      if (!mounted) return;
+      setState(() {
+        _qr = body;
+        _todayAttendance = body['today_attendance'] is Map
+            ? Map<String, dynamic>.from(body['today_attendance'] as Map)
+            : null;
+      });
+      _startQrExpiry(int.tryParse('${body['expires_in_seconds'] ?? 20}') ?? 20);
     } catch (e) {
-      setState(() => _error = workflowError(e));
+      if (mounted) {
+        setState(() {
+          _error = workflowError(e);
+          _qr = null;
+          _qrSecondsRemaining = 0;
+        });
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _loadingQr = false);
     }
   }
 
@@ -411,13 +453,17 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
     final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
-        builder: (_) => const RiderScannerScreen(
+        builder: (_) => RiderScannerScreen(
           returnScanDetails: true,
           showSignOut: false,
+          attendanceMode: true,
+          onLoadRiderQr: () =>
+              WorkspaceMobileService.get('rider/attendance/qr'),
         ),
       ),
     );
-    if (!mounted || result == null) return;
+    if (!mounted) return;
+    if (result == null) return;
     final token = result is Map
         ? result['scanned_code']?.toString()
         : result.toString();
@@ -431,10 +477,12 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
       final body = await WorkspaceMobileService.send('rider/attendance/scan', {
         'token': token,
       });
+      _qrExpiryTimer?.cancel();
+      if (!mounted) return;
       setState(() => _message = body['message']?.toString());
       _reload();
     } catch (e) {
-      setState(() => _error = workflowError(e));
+      if (mounted) setState(() => _error = workflowError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -442,23 +490,27 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Attendance & payroll')),
+    appBar: AppBar(title: const Text('Inter-hub attendance')),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: _future,
       builder: (context, snapshot) => ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 136),
         children: [
+          const Text(
+            'Record attendance either way: scan the Logistics QR, or display your rider QR for Logistics to scan.',
+          ),
+          const SizedBox(height: 12),
           if (snapshot.hasError) Text(workflowError(snapshot.error!)),
           Wrap(
             spacing: 8,
             children: [
               FilledButton(
-                onPressed: _busy ? null : _timeInOut,
-                child: Text(_busy ? 'Loading…' : 'Show time in/out QR'),
+                onPressed: _loadingQr ? null : _timeInOut,
+                child: Text(_loadingQr ? 'Refreshing QR…' : 'Show my rider QR'),
               ),
               OutlinedButton(
                 onPressed: _busy ? null : _scan,
-                child: const Text('Scan center QR'),
+                child: const Text('Scan Logistics QR'),
               ),
             ],
           ),
@@ -469,18 +521,70 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
                 child: Column(
                   children: [
                     Text(
-                      'Scan for ${_qr!['action'] ?? 'attendance'} · expires in ${_qr!['expires_in_seconds'] ?? 20}s',
+                      '${_qr!['action'] == 'TIME_OUT' ? 'Time Out' : 'Time In'} QR',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Show this code to Logistics to record your ${_qr!['action'] == 'TIME_OUT' ? 'Time Out' : 'Time In'}.',
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
-                    if (_qr!['qr_data_uri'] is String)
-                      Image.memory(
-                        base64Decode('${_qr!['qr_data_uri']}'.split(',').last),
-                        width: 230,
-                        height: 230,
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
                       ),
+                      child: _qr!['qr_data_uri'] is String
+                          ? RiderAttendanceQrImage(
+                              dataUri: '${_qr!['qr_data_uri']}',
+                              size: 230,
+                            )
+                          : const SizedBox(
+                              width: 230,
+                              height: 230,
+                              child: Center(
+                                child: Text('QR code unavailable.'),
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Refreshes in $_qrSecondsRemaining ${_qrSecondsRemaining == 1 ? 'second' : 'seconds'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (_todayAttendance != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              "Today's attendance · ${_todayAttendance!['status'] ?? 'UNKNOWN'}",
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              "${_todayAttendance!['hours'] ?? '0.00'}h / 8h · estimated PHP ${_todayAttendance!['pay_estimate'] ?? '0.00'}",
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     TextButton(
-                      onPressed: _timeInOut,
-                      child: const Text('Refresh QR'),
+                      onPressed: _loadingQr ? null : _timeInOut,
+                      child: Text(_loadingQr ? 'Refreshing…' : 'Refresh QR'),
                     ),
                   ],
                 ),

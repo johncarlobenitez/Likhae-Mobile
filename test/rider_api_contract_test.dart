@@ -212,17 +212,12 @@ void main() {
         );
       });
       test(
-        'transfer decline and start submit reason and scanned item map',
+        'transfer decline submits a reason and rider start needs no parcel scans',
         () async {
           await RiderMobileService.declineInterHubTransfer(9, ' unavailable ');
           expect(getBody(), {'reason': 'unavailable'});
-          await RiderMobileService.startInterHubTransfer(9, {
-            21: ' TRK-1 ',
-          }, scanMethod: 'BARCODE');
-          expect(getBody(), {
-            'scanned_codes': {'21': 'TRK-1'},
-            'scan_method': 'BARCODE',
-          });
+          await RiderMobileService.startInterHubTransfer(9);
+          expect(getBody(), isEmpty);
         },
       );
       test(

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/motion_effects.dart';
+import '../attendance/rider_attendance_qr_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -32,6 +35,12 @@ class RiderScannerScreen extends StatefulWidget {
 
   final bool showSignOut;
 
+  /// Presents the scanner for inter-hub attendance QR codes instead of parcels.
+  final bool attendanceMode;
+
+  /// Loads the rider's time-in/time-out QR while attendance scanning is open.
+  final Future<Map<String, dynamic>> Function()? onLoadRiderQr;
+
   const RiderScannerScreen({
     super.key,
     this.onScanned,
@@ -39,6 +48,8 @@ class RiderScannerScreen extends StatefulWidget {
     this.expectedTrackingCode,
     this.returnScanDetails = false,
     this.showSignOut = true,
+    this.attendanceMode = false,
+    this.onLoadRiderQr,
   });
 
   @override
@@ -72,6 +83,11 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
   bool _handlingScan = false;
   bool _scannerPaused = false;
   bool _signingOut = false;
+  bool _loadingAttendanceQr = false;
+  int _attendanceQrSecondsRemaining = 0;
+  Timer? _attendanceQrTimer;
+  Timer? _attendanceQrRefreshTimer;
+  Map<String, dynamic>? _attendanceQr;
 
   String? _scannedCode;
   String? _errorMessage;
@@ -80,6 +96,8 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
   void dispose() {
     _manualCodeController.dispose();
     _scannerController.dispose();
+    _attendanceQrTimer?.cancel();
+    _attendanceQrRefreshTimer?.cancel();
 
     super.dispose();
   }
@@ -123,7 +141,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
     if (code.isEmpty) {
       setState(() {
-        _errorMessage = 'Enter or scan a valid tracking code.';
+        _errorMessage = widget.attendanceMode
+            ? 'Enter or scan a valid Logistics attendance QR.'
+            : 'Enter or scan a valid tracking code.';
       });
 
       return;
@@ -198,7 +218,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       }
 
       setState(() {
-        _errorMessage = 'Unable to process parcel: $error';
+        _errorMessage = widget.attendanceMode
+            ? 'Unable to process attendance QR: $error'
+            : 'Unable to process parcel: $error';
       });
     } finally {
       if (mounted) {
@@ -214,13 +236,67 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
     if (code.isEmpty) {
       setState(() {
-        _errorMessage = 'Enter the parcel tracking code.';
+        _errorMessage = widget.attendanceMode
+            ? 'Enter the Logistics attendance token.'
+            : 'Enter the parcel tracking code.';
       });
 
       return;
     }
 
     await _processTrackingCode(code);
+  }
+
+  Future<void> _loadRiderAttendanceQr() async {
+    final loader = widget.onLoadRiderQr;
+    if (loader == null || _loadingAttendanceQr) return;
+    setState(() {
+      _loadingAttendanceQr = true;
+      _errorMessage = null;
+      _scannerPaused = true;
+    });
+    try {
+      await _scannerController.stop();
+      final qr = await loader();
+      if (!mounted) return;
+      final seconds = int.tryParse('${qr['expires_in_seconds'] ?? 20}') ?? 20;
+      setState(() {
+        _attendanceQr = qr;
+        _attendanceQrSecondsRemaining = seconds;
+      });
+      _attendanceQrTimer?.cancel();
+      _attendanceQrTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+        } else if (_attendanceQrSecondsRemaining <= 1) {
+          timer.cancel();
+          setState(() {
+            _attendanceQr = null;
+            _attendanceQrSecondsRemaining = 0;
+          });
+        } else {
+          setState(() => _attendanceQrSecondsRemaining--);
+        }
+      });
+      _attendanceQrRefreshTimer?.cancel();
+      _attendanceQrRefreshTimer = Timer.periodic(const Duration(seconds: 19), (
+        timer,
+      ) {
+        if (!mounted || _attendanceQr == null) {
+          timer.cancel();
+        } else if (!_loadingAttendanceQr) {
+          _loadRiderAttendanceQr();
+        }
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _errorMessage = 'Could not load your attendance QR: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingAttendanceQr = false);
+    }
   }
 
   Future<void> _scanAgain() async {
@@ -320,8 +396,8 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
         foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
-        title:  Text(
-          'Parcel Scanner',
+        title: Text(
+          widget.attendanceMode ? 'Attendance Scanner' : 'Parcel Scanner',
           style: TextStyle(
             color: AppTheme.resolve(context, _text),
             fontSize: 18,
@@ -333,7 +409,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
             TextButton.icon(
               onPressed: _signingOut ? null : _signOut,
               icon: _signingOut
-                  ?  SizedBox(
+                  ? SizedBox(
                       width: 17,
                       height: 17,
                       child: CircularProgressIndicator(
@@ -343,7 +419,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                     )
                   : const Icon(Icons.logout_rounded, size: 18),
               label: Text(_signingOut ? 'Signing Out' : 'Sign Out'),
-              style: TextButton.styleFrom(foregroundColor: AppTheme.resolve(context, _primary)),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.resolve(context, _primary),
+              ),
             ),
         ],
       ),
@@ -384,8 +462,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-         Text(
-          'PARCEL VERIFICATION',
+        Text(
+          widget.attendanceMode
+              ? 'INTER-HUB ATTENDANCE'
+              : 'PARCEL VERIFICATION',
           style: TextStyle(
             color: AppTheme.resolve(context, _primary),
             fontSize: 10.5,
@@ -396,8 +476,8 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
         const SizedBox(height: 7),
 
-         Text(
-          'Scan Waybill',
+        Text(
+          widget.attendanceMode ? 'Scan Logistics QR' : 'Scan Waybill',
           style: TextStyle(
             color: AppTheme.resolve(context, _text),
             fontSize: 28,
@@ -408,9 +488,15 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
         const SizedBox(height: 8),
 
-         Text(
-          'Scan the QR code or barcode printed on the seller\'s parcel waybill.',
-          style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.5),
+        Text(
+          widget.attendanceMode
+              ? 'Scan the QR code displayed by Logistics to record your Time In or Time Out.'
+              : 'Scan the QR code or barcode printed on the seller\'s parcel waybill.',
+          style: TextStyle(
+            color: AppTheme.resolve(context, _muted),
+            fontSize: 13,
+            height: 1.5,
+          ),
         ),
 
         if (expected != null && expected.isNotEmpty) ...<Widget>[
@@ -424,7 +510,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
             ),
             child: Text(
               'Expected: $expected',
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, _primary),
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
@@ -463,8 +549,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                     child: CustomPaint(painter: _ScannerOverlayPainter()),
                   ),
                 ),
-                Positioned.fill(child: AppScanBeam(
-                  active: !_scannerPaused && !_handlingScan)),
+                Positioned.fill(
+                  child: AppScanBeam(active: !_scannerPaused && !_handlingScan),
+                ),
 
                 Positioned(
                   top: 16,
@@ -487,12 +574,14 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                   ),
                 ),
 
-                 Positioned(
+                Positioned(
                   left: 24,
                   right: 24,
                   bottom: 22,
                   child: Text(
-                    'Place the QR code or barcode inside the frame.',
+                    widget.attendanceMode
+                        ? 'Place the Logistics attendance QR inside the frame.'
+                        : 'Place the QR code or barcode inside the frame.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
@@ -500,7 +589,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                       height: 1.4,
                       fontWeight: FontWeight.w700,
                       shadows: <Shadow>[
-                        Shadow(color: AppTheme.resolve(context, Colors.black), blurRadius: 6),
+                        Shadow(
+                          color: AppTheme.resolve(context, Colors.black),
+                          blurRadius: 6,
+                        ),
                       ],
                     ),
                   ),
@@ -511,13 +603,15 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                     child: Container(
                       color: const Color(0x66000000),
                       alignment: Alignment.center,
-                      child: const Column(
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           CircularProgressIndicator(color: Colors.white),
                           SizedBox(height: 12),
                           Text(
-                            'Processing parcel...',
+                            widget.attendanceMode
+                                ? 'Recording attendance...'
+                                : 'Processing parcel...',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w800,
@@ -539,8 +633,12 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    _scannerPaused ? 'Scanner paused' : 'Camera scanner active',
-                    style:  TextStyle(
+                    _scannerPaused
+                        ? 'Scanner paused'
+                        : widget.attendanceMode
+                        ? 'Attendance scanner active'
+                        : 'Camera scanner active',
+                    style: TextStyle(
                       color: AppTheme.resolve(context, _muted),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -553,7 +651,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                     onPressed: _scanAgain,
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('Scan Again'),
-                    style: TextButton.styleFrom(foregroundColor: AppTheme.resolve(context, _primary)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.resolve(context, _primary),
+                    ),
                   ),
               ],
             ),
@@ -618,8 +718,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Text(
-            'Manual Tracking Code',
+          Text(
+            widget.attendanceMode
+                ? 'Enter Attendance QR Token'
+                : 'Manual Tracking Code',
             style: TextStyle(
               color: AppTheme.resolve(context, _text),
               fontSize: 16,
@@ -629,12 +731,112 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
           const SizedBox(height: 5),
 
-           Text(
-            'If the camera cannot read the waybill, enter the parcel tracking code manually.',
-            style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.5),
+          Text(
+            widget.attendanceMode
+                ? 'If the camera cannot read the QR, enter the token shown by Logistics.'
+                : 'If the camera cannot read the waybill, enter the parcel tracking code manually.',
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 12,
+              height: 1.5,
+            ),
           ),
 
           const SizedBox(height: 14),
+
+          if (widget.attendanceMode && widget.onLoadRiderQr != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _loadingAttendanceQr ? null : _loadRiderAttendanceQr,
+                icon: const Icon(Icons.qr_code_2_rounded),
+                label: Text(
+                  _loadingAttendanceQr
+                      ? 'Loading rider QR...'
+                      : 'Show my rider QR for Logistics',
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(46),
+                  backgroundColor: AppTheme.resolve(
+                    context,
+                    _primary,
+                    fill: true,
+                  ),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            if (_attendanceQr != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      '${_attendanceQr!['action'] == 'TIME_OUT' ? 'Time Out' : 'Time In'} QR',
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _text),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_attendanceQr!['qr_data_uri'] is String)
+                      RiderAttendanceQrImage(
+                        dataUri: '${_attendanceQr!['qr_data_uri']}',
+                        size: 210,
+                      )
+                    else
+                      const SizedBox(
+                        width: 210,
+                        height: 210,
+                        child: Center(child: Text('QR code unavailable.')),
+                      ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Let Logistics scan this code to record your ${_attendanceQr!['action'] == 'TIME_OUT' ? 'Time Out' : 'Time In'}. It expires in $_attendanceQrSecondsRemaining seconds.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 11,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (_attendanceQr!['today_attendance'] is Map) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        "Today's status: ${(_attendanceQr!['today_attendance'] as Map)['status'] ?? 'UNKNOWN'} · ${(_attendanceQr!['today_attendance'] as Map)['hours'] ?? '0.00'}h / 8h",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _muted),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Center(
+              child: Text(
+                'The QR is personal and can only be used once.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           TextField(
             controller: _manualCodeController,
@@ -646,8 +848,14 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               _submitManualCode();
             },
             decoration: InputDecoration(
-              hintText: 'Enter tracking code',
-              prefixIcon: const Icon(Icons.confirmation_number_outlined),
+              hintText: widget.attendanceMode
+                  ? 'Enter attendance token'
+                  : 'Enter tracking code',
+              prefixIcon: Icon(
+                widget.attendanceMode
+                    ? Icons.fingerprint_rounded
+                    : Icons.confirmation_number_outlined,
+              ),
               filled: true,
               fillColor: AppTheme.resolve(context, Colors.white, fill: true),
               contentPadding: const EdgeInsets.symmetric(
@@ -656,11 +864,16 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, _border),
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide:  BorderSide(color: AppTheme.resolve(context, _primary), width: 1.4),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, _primary),
+                  width: 1.4,
+                ),
               ),
             ),
           ),
@@ -674,15 +887,21 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               onPressed: _handlingScan ? null : _submitManualCode,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                backgroundColor: AppTheme.resolve(context, _primary, fill: true),
+                backgroundColor: AppTheme.resolve(
+                  context,
+                  _primary,
+                  fill: true,
+                ),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
               icon: const Icon(Icons.verified_outlined),
-              label: const Text(
-                'Use Tracking Code',
+              label: Text(
+                widget.attendanceMode
+                    ? 'Submit Attendance QR'
+                    : 'Use Tracking Code',
                 style: TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
@@ -699,12 +918,18 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, _successSoft, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFB7DFC5))),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFB7DFC5)),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Icon(Icons.check_circle_rounded, color: AppTheme.resolve(context, _success), size: 22),
+          Icon(
+            Icons.check_circle_rounded,
+            color: AppTheme.resolve(context, _success),
+            size: 22,
+          ),
 
           const SizedBox(width: 9),
 
@@ -712,8 +937,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                 Text(
-                  'Parcel code scanned',
+                Text(
+                  widget.attendanceMode
+                      ? 'Attendance QR scanned'
+                      : 'Parcel code scanned',
                   style: TextStyle(
                     color: AppTheme.resolve(context, _success),
                     fontSize: 12.5,
@@ -725,7 +952,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
                 Text(
                   _scannedCode ?? '',
-                  style:  TextStyle(
+                  style: TextStyle(
                     color: AppTheme.resolve(context, _success),
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -738,7 +965,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           IconButton(
             tooltip: 'Scan Again',
             onPressed: _scanAgain,
-            icon:  Icon(Icons.refresh_rounded, color: AppTheme.resolve(context, _success)),
+            icon: Icon(
+              Icons.refresh_rounded,
+              color: AppTheme.resolve(context, _success),
+            ),
           ),
         ],
       ),
@@ -752,19 +982,25 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, _dangerSoft, fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF4C3BE))),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFF4C3BE)),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Icon(Icons.error_outline_rounded, color: AppTheme.resolve(context, _danger), size: 22),
+          Icon(
+            Icons.error_outline_rounded,
+            color: AppTheme.resolve(context, _danger),
+            size: 22,
+          ),
 
           const SizedBox(width: 9),
 
           Expanded(
             child: Text(
               _errorMessage!,
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, _danger),
                 fontSize: 12.5,
                 height: 1.45,
@@ -776,7 +1012,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           IconButton(
             tooltip: 'Scan Again',
             onPressed: _scanAgain,
-            icon:  Icon(Icons.refresh_rounded, color: AppTheme.resolve(context, _danger)),
+            icon: Icon(
+              Icons.refresh_rounded,
+              color: AppTheme.resolve(context, _danger),
+            ),
           ),
         ],
       ),

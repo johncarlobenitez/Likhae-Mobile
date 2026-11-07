@@ -9,7 +9,6 @@ import 'package:likhae/features/buyer/wishlist/wishlist_screen.dart';
 import 'package:likhae/features/buyer/cart/cart_screen.dart';
 import 'package:likhae/features/buyer/orders/order_success_screen.dart';
 import 'package:likhae/features/buyer/orders/order_tracking_screen.dart';
-import 'package:likhae/features/rider/deliveries/rider_delivery_details_screen.dart';
 import 'package:likhae/services/wishlist_service.dart';
 
 class _NoNetwork extends HttpOverrides {
@@ -22,6 +21,40 @@ class _NoNetwork extends HttpOverrides {
 }
 
 void main() {
+  for (final size in [const Size(320, 568), const Size(640, 360)]) {
+    testWidgets('opening fits a $size viewport with large text', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              padding: const EdgeInsets.only(top: 24, bottom: 20),
+              viewPadding: const EdgeInsets.only(top: 24, bottom: 20),
+              textScaler: TextScaler.linear(2),
+            ),
+            child: OpeningAnimationScreen(onFinished: () {}),
+          ),
+        ),
+      );
+      for (var tick = 0; tick < 30; tick++) {
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(tester.takeException(), isNull);
+        final fit = find.byType(FittedBox).first;
+        final bounds = tester.getRect(fit);
+        expect(bounds.left, greaterThanOrEqualTo(0));
+        expect(bounds.right, lessThanOrEqualTo(size.width));
+        expect(bounds.bottom, lessThanOrEqualTo(size.height - 20));
+      }
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('deadline completes even when the animation clock is paused', (
     tester,
   ) async {
@@ -30,7 +63,7 @@ void main() {
       MaterialApp(home: OpeningAnimationScreen(onFinished: () => completed++)),
     );
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await tester.pump(const Duration(seconds: 8));
+    await tester.pump(const Duration(seconds: 16));
     expect(completed, 1);
     expect(tester.binding.transientCallbackCount, 0);
     await tester.pumpWidget(const SizedBox());
@@ -61,10 +94,9 @@ void main() {
         (650, CartScreen),
         (700, OrderSuccessScreen),
         (1000, OrderTrackingScreen),
-        (1100, RiderDeliveryDetailsScreen),
-        (650, AppOpeningContent),
+        (1250, AppOpeningContent),
       ]) {
-        await tester.pump(Duration(milliseconds: phase.$1));
+        await tester.pump(Duration(milliseconds: phase.$1 * 2));
         await tester.pump(const Duration(milliseconds: 20));
         expect(find.byType(phase.$2), findsOneWidget);
         expect(tester.takeException(), isNull, reason: "Phase: ${phase.$2}");

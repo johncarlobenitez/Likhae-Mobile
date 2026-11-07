@@ -21,6 +21,7 @@ class RiderDeliveryDetailsScreen extends StatefulWidget {
   final RiderDeliveryTransitionCallback? onTransition;
   final RiderProofPickerCallback? onChooseProof;
   final RiderDeliveryCallback? onViewTracking;
+  final Future<void> Function(RiderDeliveryData delivery)? onMessageBuyer;
   final VoidCallback? onBackToDeliveries;
 
   const RiderDeliveryDetailsScreen({
@@ -32,6 +33,7 @@ class RiderDeliveryDetailsScreen extends StatefulWidget {
     this.onTransition,
     this.onChooseProof,
     this.onViewTracking,
+    this.onMessageBuyer,
     this.onBackToDeliveries,
   });
 
@@ -67,7 +69,6 @@ class _RiderDeliveryDetailsScreenState
   );
 
   late RiderDeliveryData _delivery;
-  final TextEditingController _receiverController = TextEditingController();
   final TextEditingController _collectionController = TextEditingController();
   final TextEditingController _failureController = TextEditingController();
 
@@ -76,6 +77,7 @@ class _RiderDeliveryDetailsScreenState
   RiderParcelScanResult? _deliveryScan;
   bool _submitting = false;
   bool _takingProof = false;
+  bool _openingBuyerChat = false;
 
   bool get _usingPreview =>
       widget.delivery == null && widget.showPreviewWhenNull;
@@ -92,7 +94,6 @@ class _RiderDeliveryDetailsScreenState
     if (oldWidget.delivery?.id != widget.delivery?.id) {
       _deliveryScan = null;
       _proofPath = null;
-      _receiverController.clear();
       _collectionController.clear();
     }
     if (oldWidget.delivery != widget.delivery && widget.delivery != null) {
@@ -102,7 +103,6 @@ class _RiderDeliveryDetailsScreenState
 
   @override
   void dispose() {
-    _receiverController.dispose();
     _collectionController.dispose();
     _failureController.dispose();
     super.dispose();
@@ -191,7 +191,6 @@ class _RiderDeliveryDetailsScreenState
   Future<void> _transition(
     String status, {
     String? note,
-    String? receiverName,
     String? proofPath,
     String? attemptStatus,
     DateTime? nextAttemptAt,
@@ -221,7 +220,6 @@ class _RiderDeliveryDetailsScreenState
             delivery: _delivery,
             status: status,
             note: note,
-            receiverName: receiverName,
             proofPath: proofPath,
             scannedCode: _deliveryScan?.code,
             scanMethod: _deliveryScan?.method ?? 'MANUAL',
@@ -286,13 +284,6 @@ class _RiderDeliveryDetailsScreenState
       );
       return;
     }
-    final String receiver = _receiverController.text.trim();
-
-    if (receiver.isEmpty) {
-      _showMessage('Enter the receiver name.', error: true);
-      return;
-    }
-
     if (_proofPath == null || _proofPath!.trim().isEmpty) {
       _showMessage('Add a proof of delivery image.', error: true);
       return;
@@ -300,9 +291,24 @@ class _RiderDeliveryDetailsScreenState
 
     await _transition(
       'delivered',
-      receiverName: receiver,
       proofPath: _proofPath,
     );
+  }
+
+  Future<void> _messageBuyer() async {
+    final callback = widget.onMessageBuyer;
+    if (callback == null || _openingBuyerChat) return;
+    setState(() => _openingBuyerChat = true);
+    try {
+      await callback(_delivery);
+    } catch (error) {
+      _showMessage(
+        'Unable to open the buyer chat: ${error.toString().replaceFirst('Exception: ', '')}',
+        error: true,
+      );
+    } finally {
+      if (mounted) setState(() => _openingBuyerChat = false);
+    }
   }
 
   Future<void> _submitFailed() async {
@@ -534,6 +540,22 @@ class _RiderDeliveryDetailsScreenState
             compact: true,
             valueWeight: FontWeight.w700,
           ),
+          if (widget.onMessageBuyer != null) ...<Widget>[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: _openingBuyerChat ? null : _messageBuyer,
+              icon: _openingBuyerChat
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.message_outlined),
+              label: Text(
+                _openingBuyerChat ? 'Opening chat...' : 'Message Buyer',
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -594,13 +616,6 @@ class _RiderDeliveryDetailsScreenState
               ),
             ),
             const SizedBox(height: 8),
-            TextField(
-              controller: _receiverController,
-              enabled: !_submitting,
-              textCapitalization: TextCapitalization.words,
-              decoration: _inputDecoration('Receiver name'),
-            ),
-            const SizedBox(height: 10),
             RiderCollectionField(
               controller: _collectionController,
               enabled: !_submitting,

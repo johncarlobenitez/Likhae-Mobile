@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+  <rect width="800" height="800" fill="#f6efe7"/>
+  <rect x="210" y="235" width="380" height="330" rx="28" fill="#fffdf9" stroke="#eadccc" stroke-width="12"/>
+  <path d="M280 430l85-90 70 70 45-45 90 105H280z" fill="#c19771" opacity=".65"/>
+  <circle cx="500" cy="325" r="36" fill="#561c17" opacity=".75"/>
+  <text x="400" y="650" text-anchor="middle" font-family="Arial,sans-serif" font-size="42" font-weight="700" fill="#561c17">LIKHAE</text>
+</svg>

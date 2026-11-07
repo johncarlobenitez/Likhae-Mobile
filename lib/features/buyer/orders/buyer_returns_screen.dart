@@ -3,6 +3,9 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../../services/buyer_mobile_service.dart';
 import '../../../shared/widgets/shop_ui.dart';
@@ -150,9 +153,12 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                     ? 'Enter at least 10 characters.'
                     : null,
               ),
-               Text(
+              Text(
                 'Support will review the case and contact you through your account.',
-                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -183,6 +189,54 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
     }
     reason.dispose();
     explanation.dispose();
+  }
+
+  Future<void> _createReturnWaybill(String sellerCaseId) async {
+    if (_mutating) return;
+    setState(() => _mutating = true);
+    try {
+      final Map<String, dynamic> waybill =
+          await BuyerMobileService.createReturnWaybill(sellerCaseId);
+      final String? requestId = _selectedId;
+      if (requestId != null) await _load(detailId: requestId);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => BuyerReturnWaybillPreviewScreen(waybill: waybill),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text('Could not create return waybill: $error')),
+          );
+      }
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Future<void> _viewReturnWaybill(String sellerCaseId) async {
+    try {
+      final Map<String, dynamic> waybill =
+          await BuyerMobileService.fetchReturnWaybill(sellerCaseId);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => BuyerReturnWaybillPreviewScreen(waybill: waybill),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text('Could not open return waybill: $error')),
+          );
+      }
+    }
   }
 
   Future<void> _mutate(Future<void> Function() action) async {
@@ -311,14 +365,21 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
   Widget _buildList() {
     if (_requests.isEmpty) {
       return ListView(
-        children:  <Widget>[
+        children: <Widget>[
           SizedBox(height: 110),
-          Icon(Icons.assignment_return_outlined, size: 54, color: AppTheme.resolve(context, _muted)),
+          Icon(
+            Icons.assignment_return_outlined,
+            size: 54,
+            color: AppTheme.resolve(context, _muted),
+          ),
           SizedBox(height: 12),
           Center(
             child: Text(
               'No return or refund requests yet',
-              style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: AppTheme.resolve(context, _ink),
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -337,7 +398,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
           color: AppTheme.resolve(context, Colors.white, fill: true),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            side:  BorderSide(color: AppTheme.resolve(context, _border)),
+            side: BorderSide(color: AppTheme.resolve(context, _border)),
             borderRadius: BorderRadius.circular(16),
           ),
           child: InkWell(
@@ -354,7 +415,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                         child: Text(
                           (row['request_number'] ?? 'Return request')
                               .toString(),
-                          style:  TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, _ink),
                             fontWeight: FontWeight.w800,
                           ),
@@ -366,20 +427,26 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   const SizedBox(height: 7),
                   Text(
                     'Order ${row['order_number'] ?? row['order_id'] ?? '—'} · ${(row['issue_category'] ?? '').toString().replaceAll('_', ' ')}',
-                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _muted),
+                      fontSize: 12,
+                    ),
                   ),
                   if (updatedAt.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 5),
                     Text(
                       'Last updated $updatedAt',
-                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                   if (cases.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 10),
                     Text(
                       '${cases.length} seller case${cases.length == 1 ? '' : 's'}',
-                      style:  TextStyle(
+                      style: TextStyle(
                         color: AppTheme.resolve(context, _accent),
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -423,7 +490,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   Expanded(
                     child: Text(
                       (detail['request_number'] ?? 'Return request').toString(),
-                      style:  TextStyle(
+                      style: TextStyle(
                         color: AppTheme.resolve(context, _ink),
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -436,12 +503,12 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
               const SizedBox(height: 8),
               Text(
                 'Order ${order['order_number'] ?? order['id'] ?? '—'}',
-                style:  TextStyle(color: AppTheme.resolve(context, _muted)),
+                style: TextStyle(color: AppTheme.resolve(context, _muted)),
               ),
               const SizedBox(height: 8),
               Text(
                 '${detail['issue_category'] ?? ''} · ${detail['issue_reason'] ?? ''}',
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, _ink),
                   fontWeight: FontWeight.w600,
                 ),
@@ -452,13 +519,16 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                 const SizedBox(height: 8),
                 Text(
                   detail['description'].toString(),
-                  style:  TextStyle(color: AppTheme.resolve(context, _muted), height: 1.4),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _muted),
+                    height: 1.4,
+                  ),
                 ),
               ],
               const SizedBox(height: 10),
               Text(
                 'Refund amount requested: ₱${detail['refundable_amount'] ?? 0}',
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, _ink),
                   fontWeight: FontWeight.w700,
                 ),
@@ -466,9 +536,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             ],
           ),
         ),
-        if ((detail['refund_method'] ??
-                detail['requested_refund_method'] ??
-                '')
+        if ((detail['refund_method'] ?? detail['requested_refund_method'] ?? '')
             .toString()
             .trim()
             .isNotEmpty) ...<Widget>[
@@ -476,7 +544,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
           _sectionCard(
             Text(
               'Refund method: ${(detail['refund_method'] ?? detail['requested_refund_method']).toString().replaceAll('_', ' ')}',
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, _ink),
                 fontWeight: FontWeight.w700,
               ),
@@ -489,16 +557,22 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                 Text(
+                Text(
                   'Affected items',
-                  style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _ink),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 for (final Map<String, dynamic> item in items)
                   Padding(
                     padding: const EdgeInsets.only(top: 9),
                     child: Text(
                       '${item['quantity'] ?? 0} × ${item['product_name'] ?? 'Item'} · ₱${item['amount'] ?? 0}',
-                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 13,
+                      ),
                     ),
                   ),
               ],
@@ -511,9 +585,12 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                 Text(
+                Text(
                   'Submitted evidence',
-                  style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _ink),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -552,12 +629,15 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-               Text(
+              Text(
                 'Request timeline',
-                style: TextStyle(color: AppTheme.resolve(context, _ink), fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _ink),
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               if (events.isEmpty)
-                 Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
                     'No updates yet.',
@@ -570,7 +650,11 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                       Icon(Icons.circle, size: 8, color: AppTheme.resolve(context, _accent)),
+                      Icon(
+                        Icons.circle,
+                        size: 8,
+                        color: AppTheme.resolve(context, _accent),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
@@ -581,7 +665,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                                 '_',
                                 ' ',
                               ),
-                              style:  TextStyle(
+                              style: TextStyle(
                                 color: AppTheme.resolve(context, _ink),
                                 fontWeight: FontWeight.w700,
                               ),
@@ -589,14 +673,14 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                             if ((event['note'] ?? '').toString().isNotEmpty)
                               Text(
                                 event['note'].toString(),
-                                style:  TextStyle(
+                                style: TextStyle(
                                   color: AppTheme.resolve(context, _muted),
                                   fontSize: 12,
                                 ),
                               ),
                             Text(
                               (event['created_at'] ?? '').toString(),
-                              style:  TextStyle(
+                              style: TextStyle(
                                 color: AppTheme.resolve(context, _muted),
                                 fontSize: 10,
                               ),
@@ -621,6 +705,13 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
 
   Widget _buildSellerCase(Map<String, dynamic> sellerCase) {
     final String id = (sellerCase['id'] ?? '').toString();
+    final Map<String, dynamic>? waybill = sellerCase['return_waybill'] is Map
+        ? Map<String, dynamic>.from(sellerCase['return_waybill'] as Map)
+        : null;
+    final String waybillTracking = (waybill?['tracking_number'] ?? '')
+        .toString();
+    final bool canCreateWaybill =
+        sellerCase['can_create_return_waybill'] == true;
     final List<Map<String, dynamic>> caseEvents = _maps(sellerCase['events']);
     final List<Map<String, dynamic>> payouts = _maps(sellerCase['payouts']);
     final List<Map<String, dynamic>> caseEvidence = _maps(
@@ -637,7 +728,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                 Expanded(
                   child: Text(
                     (sellerCase['seller_name'] ?? 'Seller').toString(),
-                    style:  TextStyle(
+                    style: TextStyle(
                       color: AppTheme.resolve(context, _ink),
                       fontWeight: FontWeight.w800,
                     ),
@@ -649,11 +740,85 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             const SizedBox(height: 7),
             Text(
               'Requested ₱${sellerCase['requested_amount'] ?? 0} · Approved ₱${sellerCase['approved_amount'] ?? '—'}',
-              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+              style: TextStyle(
+                color: AppTheme.resolve(context, _muted),
+                fontSize: 12,
+              ),
             ),
+            if (canCreateWaybill || waybillTracking.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.resolve(
+                    context,
+                    const Color(0xFFFFF8F0),
+                    fill: true,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Return waybill',
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _ink),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (waybillTracking.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 5),
+                      Text(
+                        waybillTracking,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _accent),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.7,
+                        ),
+                      ),
+                      if ((waybill?['dropoff_center_name'] ?? '')
+                          .toString()
+                          .trim()
+                          .isNotEmpty)
+                        Text(
+                          'Drop off at ${waybill!['dropoff_center_name']}',
+                          style: TextStyle(
+                            color: AppTheme.resolve(context, _muted),
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: <Widget>[
+                        if (canCreateWaybill)
+                          OutlinedButton.icon(
+                            onPressed: _mutating || id.isEmpty
+                                ? null
+                                : () => _createReturnWaybill(id),
+                            icon: const Icon(Icons.add_box_outlined),
+                            label: const Text('Create waybill'),
+                          ),
+                        if (waybillTracking.isNotEmpty)
+                          FilledButton.icon(
+                            onPressed: _mutating || id.isEmpty
+                                ? null
+                                : () => _viewReturnWaybill(id),
+                            icon: const Icon(Icons.local_print_shop_outlined),
+                            label: const Text('View / print'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (caseEvidence.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-               Text(
+              Text(
                 'Seller evidence',
                 style: TextStyle(
                   color: AppTheme.resolve(context, _ink),
@@ -684,7 +849,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             ],
             if (caseEvents.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-               Text(
+              Text(
                 'Seller case updates',
                 style: TextStyle(
                   color: AppTheme.resolve(context, _ink),
@@ -697,7 +862,10 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   padding: const EdgeInsets.only(top: 5),
                   child: Text(
                     '${(event['event'] ?? '').toString().replaceAll('_', ' ')}${(event['note'] ?? '').toString().isEmpty ? '' : ': ${event['note']}'}',
-                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _muted),
+                      fontSize: 11,
+                    ),
                   ),
                 ),
             ],
@@ -783,7 +951,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
       ),
       child: Text(
         status,
-        style:  TextStyle(
+        style: TextStyle(
           color: AppTheme.resolve(context, _accent),
           fontSize: 9,
           fontWeight: FontWeight.w800,
@@ -798,4 +966,243 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             .map((Map row) => Map<String, dynamic>.from(row))
             .toList(growable: false)
       : <Map<String, dynamic>>[];
+}
+
+class BuyerReturnWaybillPreviewScreen extends StatelessWidget {
+  final Map<String, dynamic> waybill;
+
+  const BuyerReturnWaybillPreviewScreen({super.key, required this.waybill});
+
+  @override
+  Widget build(BuildContext context) {
+    final String trackingNumber =
+        (waybill['tracking_number'] ?? 'return-waybill').toString();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Return waybill')),
+      body: PdfPreview(
+        build: (PdfPageFormat format) =>
+            _buildBuyerReturnWaybillPdf(waybill, format),
+        pdfFileName: '$trackingNumber.pdf',
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        pageFormats: const <String, PdfPageFormat>{'A4': PdfPageFormat.a4},
+        onError: (BuildContext context, Object error) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text('Unable to prepare this waybill: $error'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<Uint8List> _buildBuyerReturnWaybillPdf(
+  Map<String, dynamic> waybill,
+  PdfPageFormat format,
+) async {
+  final pw.Document document = pw.Document();
+  final String tracking = (waybill['tracking_number'] ?? '').toString();
+  final String sellerOrder = (waybill['seller_order_number'] ?? '').toString();
+  final Map<String, dynamic> returnFrom = waybill['return_from'] is Map
+      ? Map<String, dynamic>.from(waybill['return_from'] as Map)
+      : <String, dynamic>{};
+  final Map<String, dynamic> returnTo = waybill['return_to'] is Map
+      ? Map<String, dynamic>.from(waybill['return_to'] as Map)
+      : <String, dynamic>{};
+  final Map<String, dynamic> dropoff = waybill['dropoff_center'] is Map
+      ? Map<String, dynamic>.from(waybill['dropoff_center'] as Map)
+      : <String, dynamic>{};
+  final List<Map<String, dynamic>> items = waybill['items'] is List
+      ? (waybill['items'] as List)
+            .whereType<Map>()
+            .map((Map row) => Map<String, dynamic>.from(row))
+            .toList(growable: false)
+      : <Map<String, dynamic>>[];
+
+  String value(Map<String, dynamic> data, String key) {
+    final String text = (data[key] ?? '').toString().trim();
+    return text.isEmpty ? 'Not provided' : text;
+  }
+
+  pw.Widget addressPanel(String title, String name, String address) =>
+      pw.Container(
+        padding: const pw.EdgeInsets.all(12),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey500),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: <pw.Widget>[
+            pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 6),
+            pw.Text(name),
+            pw.SizedBox(height: 3),
+            pw.Text(address, style: const pw.TextStyle(fontSize: 9)),
+          ],
+        ),
+      );
+
+  document.addPage(
+    pw.Page(
+      pageFormat: format,
+      margin: const pw.EdgeInsets.all(28),
+      build: (pw.Context context) => pw.Container(
+        padding: const pw.EdgeInsets.all(18),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey800, width: 1.5),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: <pw.Widget>[
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: <pw.Widget>[
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: <pw.Widget>[
+                    pw.Text(
+                      'LIKHAE',
+                      style: pw.TextStyle(
+                        fontSize: 22,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.Text('Buyer Return Waybill'),
+                  ],
+                ),
+                if (sellerOrder.isNotEmpty)
+                  pw.Text('Order $sellerOrder', textAlign: pw.TextAlign.right),
+              ],
+            ),
+            pw.SizedBox(height: 18),
+            pw.Center(
+              child: pw.BarcodeWidget(
+                barcode: pw.Barcode.code128(),
+                data: tracking,
+                width: format.availableWidth * 0.72,
+                height: 54,
+                drawText: false,
+              ),
+            ),
+            pw.SizedBox(height: 5),
+            pw.Center(
+              child: pw.Text(
+                tracking,
+                style: pw.TextStyle(
+                  fontSize: 17,
+                  fontWeight: pw.FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 18),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: <pw.Widget>[
+                pw.Expanded(
+                  child: addressPanel(
+                    'RETURN FROM',
+                    value(returnFrom, 'name'),
+                    value(returnFrom, 'address'),
+                  ),
+                ),
+                pw.SizedBox(width: 10),
+                pw.Expanded(
+                  child: addressPanel(
+                    'RETURN TO SELLER',
+                    '${value(returnTo, 'seller_name')}\n${value(returnTo, 'center_name')}',
+                    value(returnTo, 'address'),
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 12),
+            addressPanel(
+              'DROP-OFF CENTER',
+              value(dropoff, 'name'),
+              value(dropoff, 'address'),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Text(
+              'RETURN ITEMS',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey500),
+              columnWidths: const <int, pw.TableColumnWidth>{
+                0: pw.FlexColumnWidth(3),
+                1: pw.FlexColumnWidth(2),
+                2: pw.FlexColumnWidth(1),
+              },
+              children: <pw.TableRow>[
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                  children: <pw.Widget>[
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(7),
+                      child: pw.Text(
+                        'Item',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(7),
+                      child: pw.Text(
+                        'Variant / SKU',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(7),
+                      child: pw.Text(
+                        'Qty',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                ...items.map(
+                  (Map<String, dynamic> item) => pw.TableRow(
+                    children: <pw.Widget>[
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(7),
+                        child: pw.Text(value(item, 'product_name')),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(7),
+                        child: pw.Text(
+                          '${value(item, 'variant')}\nSKU: ${value(item, 'sku')}',
+                        ),
+                      ),
+                      pw.Padding(
+                        padding: const pw.EdgeInsets.all(7),
+                        child: pw.Text((item['quantity'] ?? 0).toString()),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            pw.Spacer(),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.orange50,
+                border: pw.Border.all(color: PdfColors.orange200),
+              ),
+              child: pw.Text(
+                (waybill['instructions'] ?? '').toString(),
+                style: const pw.TextStyle(fontSize: 9),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  return document.save();
 }

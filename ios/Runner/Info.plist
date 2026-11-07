@@ -38,7 +38,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Likhae uses your location to guide riders and add GPS coordinates to delivery proof photos.</string>
+	<string>Likhae uses your location for delivery navigation, nearby rider coordination, and GPS-tagged delivery proof.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Likhae uses the camera to scan parcel QR codes and barcodes and capture proof of delivery.</string>
 	<key>UIBackgroundModes</key>

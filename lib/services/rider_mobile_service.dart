@@ -291,20 +291,10 @@ class RiderMobileService {
     );
   }
 
-  static Future<void> startInterHubTransfer(
-    int manifestId,
-    Map<int, String> scannedCodes, {
-    String scanMethod = 'MANUAL',
-  }) {
+  static Future<void> startInterHubTransfer(int manifestId) {
     return _postTransferAction(
       'rider/transfers/$manifestId/start',
-      <String, dynamic>{
-        'scanned_codes': <String, String>{
-          for (final MapEntry<int, String> scan in scannedCodes.entries)
-            scan.key.toString(): scan.value.trim(),
-        },
-        'scan_method': scanMethod,
-      },
+      const <String, dynamic>{},
     );
   }
 
@@ -630,6 +620,29 @@ class RiderMobileService {
         })
         .where((RiderConversationData item) => item.id.isNotEmpty)
         .toList(growable: false);
+  }
+
+  static Future<RiderConversationData> startDeliveryConversation(
+    int assignmentId,
+  ) async {
+    if (assignmentId <= 0) {
+      throw const FormatException('The delivery assignment is invalid.');
+    }
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('rider/assignments/$assignmentId/conversation'),
+      <String, dynamic>{},
+    );
+    final Map<String, dynamic> row = _map(
+      _requirePayload(response)['data'],
+      'delivery conversation',
+    );
+    return RiderConversationData(
+      id: (row['id'] ?? row['conversation_id'] ?? '').toString(),
+      buyerId: (row['buyer_id'] ?? '').toString(),
+      buyerName: (row['buyer_name'] ?? 'Buyer').toString(),
+      orderId: row['order_id']?.toString(),
+      trackingCode: row['tracking_code']?.toString(),
+    );
   }
 
   static Future<void> touchMessagePresence() async {

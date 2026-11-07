@@ -514,6 +514,7 @@ class BuyerMobileService {
     int rewardPoints = 0,
     String? checkoutAttemptKey,
     Map<String, dynamic>? priceSnapshot,
+    String? shippingQuoteToken,
   }) async {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('buyer/checkout'),
@@ -526,6 +527,8 @@ class BuyerMobileService {
         'checkout_attempt_key': checkoutAttemptKey,
         if (logisticsCenterId != null) 'logistics_center_id': logisticsCenterId,
         if (priceSnapshot != null) 'expected_price_snapshot': priceSnapshot,
+        if (shippingQuoteToken?.trim().isNotEmpty == true)
+          'shipping_quote_token': shippingQuoteToken!.trim(),
         if (rewardPoints > 0) 'reward_points': rewardPoints,
         if (sellerNotes.isNotEmpty)
           'seller_notes': sellerNotes.map(
@@ -809,7 +812,10 @@ class BuyerMobileService {
       form.files.add(
         MapEntry<String, MultipartFile>(
           'images[]',
-          MultipartFile.fromBytes(await file.readAsBytes(), filename: file.name),
+          MultipartFile.fromBytes(
+            await file.readAsBytes(),
+            filename: file.name,
+          ),
         ),
       );
     }
@@ -942,6 +948,70 @@ class BuyerMobileService {
       profile: results[0] as BuyerProfileData,
       addresses: results[1] as List<BuyerAddressData>,
     );
+  }
+
+  static Future<List<BuyerRefundDestination>>
+  fetchBuyerRefundDestinations() async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl('buyer/wallet/destinations'),
+    );
+    return _refundDestinationsFromPayload(_requirePayload(response));
+  }
+
+  static Future<List<BuyerRefundDestination>> mutateBuyerRefundDestination(
+    BuyerRefundDestinationMutation mutation,
+  ) async {
+    final Map<String, dynamic> data = <String, dynamic>{
+      'action': mutation.action,
+      'make_default': mutation.makeDefault,
+      if (mutation.destinationId != null)
+        'destination_id': mutation.destinationId,
+      if (mutation.method != null) 'payout_method': mutation.method,
+      if (mutation.bankName != null) 'payout_bank_name': mutation.bankName,
+      if (mutation.accountName != null)
+        'payout_account_name': mutation.accountName,
+      if (mutation.accountType != null)
+        'payout_account_type': mutation.accountType,
+      if (mutation.accountNumber != null)
+        'payout_account_number': mutation.accountNumber,
+    };
+    final Response<dynamic> response = await ApiClient.put(
+      AppConfig.resolveApiUrl('buyer/wallet/destinations'),
+      data,
+    );
+    return _refundDestinationsFromPayload(_requirePayload(response));
+  }
+
+  static List<BuyerRefundDestination> _refundDestinationsFromPayload(
+    Map<String, dynamic> payload,
+  ) {
+    final dynamic data = payload['data'];
+    final dynamic rows = data is Map ? data['destinations'] : null;
+    if (rows is! List) {
+      throw const FormatException(
+        'Refund destinations were not returned by the server.',
+      );
+    }
+    return rows
+        .whereType<Map>()
+        .map((Map row) {
+          final Map<String, dynamic> destination = Map<String, dynamic>.from(
+            row,
+          );
+          return BuyerRefundDestination(
+            id: destination['id']?.toString() ?? '',
+            method: destination['payout_method']?.toString() ?? '',
+            bankName: destination['payout_bank_name']?.toString(),
+            accountName: destination['payout_account_name']?.toString() ?? '',
+            accountType:
+                destination['payout_account_type']?.toString() ??
+                'ACCOUNT_NUMBER',
+            accountNumber:
+                destination['payout_account_number']?.toString() ?? '',
+            isDefault: destination['is_default'] == true,
+          );
+        })
+        .toList(growable: false);
   }
 
   static Future<BuyerProfileData> updateProfile(
@@ -1322,7 +1392,7 @@ class BuyerMobileService {
                 ? null
                 : AppConfig.resolveMediaUrl(avatarUrl),
             lastMessage: (row['last_message'] ?? '').toString(),
-            time: _displayTime(row['time']),
+            time: _displayTime(row['time_label'] ?? row['time']),
             unread: int.tryParse((row['unread'] ?? 0).toString()) ?? 0,
             orderContext: orderContext,
             isOnline:
@@ -1424,10 +1494,7 @@ class BuyerMobileService {
   ) async {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl(_messageSendEndpoint(conversation)),
-      <String, dynamic>{
-        ..._messageSendFields(conversation),
-        'body': body,
-      },
+      <String, dynamic>{..._messageSendFields(conversation), 'body': body},
     );
     final dynamic rawMessage = _requirePayload(response)['data'];
     if (rawMessage is! Map) {
@@ -1826,6 +1893,16 @@ class BuyerMobileService {
     return Map<String, dynamic>.from(data);
   }
 
+  static Future<Map<String, dynamic>> fetchShipmentMap(
+    String trackingNumber,
+  ) async {
+    final Response<dynamic> response = await ApiClient.get(
+      'buyer/tracking/${Uri.encodeComponent(trackingNumber)}/map',
+      refresh: true,
+    );
+    return _requirePayload(response);
+  }
+
   static Future<List<Map<String, dynamic>>> fetchReturnRequests() async =>
       (await _getRows('buyer/returns'))
           .whereType<Map>()
@@ -1839,6 +1916,38 @@ class BuyerMobileService {
     final dynamic data = _requirePayload(response)['data'];
     if (data is! Map)
       throw const FormatException('Return/refund case was not returned.');
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<Map<String, dynamic>> createReturnWaybill(
+    String sellerCaseId,
+  ) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl(
+        'buyer/returns/seller-cases/${Uri.encodeComponent(sellerCaseId)}/waybill',
+      ),
+      <String, dynamic>{},
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map) {
+      throw const FormatException('Return waybill data was not returned.');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<Map<String, dynamic>> fetchReturnWaybill(
+    String sellerCaseId,
+  ) async {
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(
+        'buyer/returns/seller-cases/${Uri.encodeComponent(sellerCaseId)}/waybill',
+      ),
+      refresh: true,
+    );
+    final dynamic data = _requirePayload(response)['data'];
+    if (data is! Map) {
+      throw const FormatException('Return waybill data was not returned.');
+    }
     return Map<String, dynamic>.from(data);
   }
 

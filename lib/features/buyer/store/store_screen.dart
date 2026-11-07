@@ -70,8 +70,7 @@ class StoreVoucherData {
           ? null
           : double.tryParse(json['maximum_discount_amount'].toString()),
       expires: (json['expires'] ?? '').toString(),
-      isCollected:
-          json['is_collected'] == true || json['collected'] == true,
+      isCollected: json['is_collected'] == true || json['collected'] == true,
     );
   }
 
@@ -143,6 +142,16 @@ class StoreSellerData {
   });
 
   factory StoreSellerData.fromApi(Map<String, dynamic> json) {
+    final Map<String, dynamic>? seller = json['seller'] is Map
+        ? Map<String, dynamic>.from(json['seller'] as Map)
+        : json['seller_profile'] is Map
+        ? Map<String, dynamic>.from(json['seller_profile'] as Map)
+        : null;
+    final Map<String, dynamic>? owner = json['user'] is Map
+        ? Map<String, dynamic>.from(json['user'] as Map)
+        : seller?['user'] is Map
+        ? Map<String, dynamic>.from(seller!['user'] as Map)
+        : null;
     final double? parsedRating = double.tryParse(
       (json['rating'] ?? json['average_rating'])?.toString() ?? '',
     );
@@ -166,7 +175,14 @@ class StoreSellerData {
         json['avatar_url'] ??
             json['logo_url'] ??
             json['avatar_path'] ??
-            json['seller_avatar'],
+            json['seller_avatar'] ??
+            json['profile_photo_url'] ??
+            json['profile_photo_path'] ??
+            seller?['avatar_url'] ??
+            seller?['logo_url'] ??
+            seller?['avatar_path'] ??
+            owner?['profile_photo_url'] ??
+            owner?['profile_photo_path'],
       ),
       coverImageUrl: _mediaValue(
         json['cover_image_url'] ??
@@ -1044,7 +1060,9 @@ class _StoreScreenState extends State<StoreScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-          backgroundColor: error ? AppTheme.resolve(context, _danger, fill: true) : AppTheme.resolve(context, _maroonDark, fill: true),
+          backgroundColor: error
+              ? AppTheme.resolve(context, _danger, fill: true)
+              : AppTheme.resolve(context, _maroonDark, fill: true),
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -1155,16 +1173,26 @@ class _StoreScreenState extends State<StoreScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppTheme.resolve(context, const Color(0xFFFFF4ED), fill: true),
+                              color: AppTheme.resolve(
+                                context,
+                                const Color(0xFFFFF4ED),
+                                fill: true,
+                              ),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: AppTheme.resolve(context, const Color(0xFFF2D2BE)),
+                                color: AppTheme.resolve(
+                                  context,
+                                  const Color(0xFFF2D2BE),
+                                ),
                               ),
                             ),
-                            child:  Text(
+                            child: Text(
                               'This seller is on vacation and cannot accept orders right now.',
                               style: TextStyle(
-                                color: AppTheme.resolve(context, ShopColors.secondaryText),
+                                color: AppTheme.resolve(
+                                  context,
+                                  ShopColors.secondaryText,
+                                ),
                                 fontSize: 11,
                                 height: 1.4,
                                 fontWeight: FontWeight.w600,
@@ -1325,8 +1353,11 @@ class _StoreScreenState extends State<StoreScreen> {
                     },
                     decoration: InputDecoration(
                       hintText: 'Search in shop',
-                      hintStyle:  TextStyle(color: AppTheme.resolve(context, _muted2), fontSize: 13),
-                      prefixIcon:  Icon(
+                      hintStyle: TextStyle(
+                        color: AppTheme.resolve(context, _muted2),
+                        fontSize: 13,
+                      ),
+                      prefixIcon: Icon(
                         Icons.search_rounded,
                         color: AppTheme.resolve(context, _muted),
                         size: 20,
@@ -1336,29 +1367,40 @@ class _StoreScreenState extends State<StoreScreen> {
                           : IconButton(
                               tooltip: 'Clear search',
                               onPressed: _clearSearch,
-                              icon:  Icon(
+                              icon: Icon(
                                 Icons.close_rounded,
                                 size: 18,
                                 color: AppTheme.resolve(context, _muted),
                               ),
                             ),
                       filled: true,
-                      fillColor: AppTheme.resolve(context, _surface, fill: true),
+                      fillColor: AppTheme.resolve(
+                        context,
+                        _surface,
+                        fill: true,
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 13,
                         vertical: 11,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(15),
-                        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+                        borderSide: BorderSide(
+                          color: AppTheme.resolve(context, _border),
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(15),
-                        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+                        borderSide: BorderSide(
+                          color: AppTheme.resolve(context, _border),
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(15),
-                        borderSide:  BorderSide(color: AppTheme.resolve(context, _tan), width: 1.3),
+                        borderSide: BorderSide(
+                          color: AppTheme.resolve(context, _tan),
+                          width: 1.3,
+                        ),
                       ),
                     ),
                   ),
@@ -1366,7 +1408,7 @@ class _StoreScreenState extends State<StoreScreen> {
               ),
               if (_refreshing) ...[
                 const SizedBox(width: 9),
-                 SizedBox.square(
+                SizedBox.square(
                   dimension: 19,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
@@ -1398,7 +1440,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       in _searchSuggestions)
                     ListTile(
                       dense: true,
-                      leading:  Icon(
+                      leading: Icon(
                         Icons.search_rounded,
                         color: AppTheme.resolve(context, _maroon),
                         size: 19,
@@ -1407,7 +1449,7 @@ class _StoreScreenState extends State<StoreScreen> {
                         suggestion.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style:  TextStyle(
+                        style: TextStyle(
                           color: AppTheme.resolve(context, _text),
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -1437,7 +1479,7 @@ class _StoreScreenState extends State<StoreScreen> {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.resolve(context, _maroon),
           backgroundColor: AppTheme.resolve(context, _surface, fill: true),
-          side:  BorderSide(color: AppTheme.resolve(context, _border)),
+          side: BorderSide(color: AppTheme.resolve(context, _border)),
           padding: const EdgeInsets.symmetric(horizontal: 15),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
@@ -1547,10 +1589,14 @@ class _StoreScreenState extends State<StoreScreen> {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(23),
-        gradient:  LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[AppTheme.resolve(context, _maroon, fill: true), AppTheme.resolve(context, _maroon2, fill: true), AppTheme.resolve(context, _maroonDark, fill: true)],
+          colors: <Color>[
+            AppTheme.resolve(context, _maroon, fill: true),
+            AppTheme.resolve(context, _maroon2, fill: true),
+            AppTheme.resolve(context, _maroonDark, fill: true),
+          ],
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -1578,9 +1624,21 @@ class _StoreScreenState extends State<StoreScreen> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: <Color>[
-                      AppTheme.resolve(context, _maroon, fill: true).withValues(alpha: 0.50),
-                      AppTheme.resolve(context, _maroon2, fill: true).withValues(alpha: 0.60),
-                      AppTheme.resolve(context, _maroonDark, fill: true).withValues(alpha: 0.72),
+                      AppTheme.resolve(
+                        context,
+                        _maroon,
+                        fill: true,
+                      ).withValues(alpha: 0.50),
+                      AppTheme.resolve(
+                        context,
+                        _maroon2,
+                        fill: true,
+                      ).withValues(alpha: 0.60),
+                      AppTheme.resolve(
+                        context,
+                        _maroonDark,
+                        fill: true,
+                      ).withValues(alpha: 0.72),
                     ],
                   ),
                 ),
@@ -1608,7 +1666,11 @@ class _StoreScreenState extends State<StoreScreen> {
               height: 190,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppTheme.resolve(context, _tan, fill: true).withValues(alpha: 0.12),
+                color: AppTheme.resolve(
+                  context,
+                  _tan,
+                  fill: true,
+                ).withValues(alpha: 0.12),
               ),
             ),
           ),
@@ -1629,10 +1691,13 @@ class _StoreScreenState extends State<StoreScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                           Text(
+                          Text(
                             'LIKHAE SELLER',
                             style: TextStyle(
-                              color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
+                              color: AppTheme.resolve(
+                                context,
+                                Color(0xFFE8C8B2),
+                              ),
                               fontSize: 10,
                               letterSpacing: 1.4,
                               fontWeight: FontWeight.w800,
@@ -1668,12 +1733,15 @@ class _StoreScreenState extends State<StoreScreen> {
                                   color: Colors.white.withValues(alpha: 0.3),
                                 ),
                               ),
-                              child:  Row(
+                              child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.verified_rounded,
-                                    color: AppTheme.resolve(context, Color(0xFFF0D9C6)),
+                                    color: AppTheme.resolve(
+                                      context,
+                                      Color(0xFFF0D9C6),
+                                    ),
                                     size: 13,
                                   ),
                                   SizedBox(width: 4),
@@ -1697,11 +1765,14 @@ class _StoreScreenState extends State<StoreScreen> {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                 Padding(
+                                Padding(
                                   padding: EdgeInsets.only(top: 1),
                                   child: Icon(
                                     Icons.location_on_outlined,
-                                    color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
+                                    color: AppTheme.resolve(
+                                      context,
+                                      Color(0xFFE8C8B2),
+                                    ),
                                     size: 14,
                                   ),
                                 ),
@@ -1713,8 +1784,11 @@ class _StoreScreenState extends State<StoreScreen> {
                                     widget.seller.location!,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style:  TextStyle(
-                                      color: AppTheme.resolve(context, Color(0xFFF4DED4)),
+                                    style: TextStyle(
+                                      color: AppTheme.resolve(
+                                        context,
+                                        Color(0xFFF4DED4),
+                                      ),
                                       fontSize: 11.5,
                                       height: 1.35,
                                     ),
@@ -1736,7 +1810,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     widget.seller.description!,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style:  TextStyle(
+                    style: TextStyle(
                       color: AppTheme.resolve(context, Color(0xFFF4DED4)),
                       fontSize: 12,
                       height: 1.55,
@@ -1848,7 +1922,7 @@ class _StoreScreenState extends State<StoreScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Text(
+          Text(
             'Seller details',
             style: TextStyle(
               color: AppTheme.resolve(context, ShopColors.text),
@@ -1934,14 +2008,14 @@ class _StoreScreenState extends State<StoreScreen> {
                 color: AppTheme.resolve(context, _softStrong, fill: true),
                 borderRadius: BorderRadius.circular(11),
               ),
-              child:  Icon(
+              child: Icon(
                 Icons.confirmation_number_outlined,
                 color: AppTheme.resolve(context, _maroon),
                 size: 18,
               ),
             ),
             const SizedBox(width: 9),
-             Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1956,7 +2030,10 @@ class _StoreScreenState extends State<StoreScreen> {
                   SizedBox(height: 2),
                   Text(
                     'Claim a discount or use one you have collected',
-                    style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10.5),
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _muted),
+                      fontSize: 10.5,
+                    ),
                   ),
                 ],
               ),
@@ -1986,10 +2063,17 @@ class _StoreScreenState extends State<StoreScreen> {
                 width: 286,
                 padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
-                  gradient:  LinearGradient(
+                  gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: <Color>[AppTheme.resolve(context, ShopColors.surface, fill: true), AppTheme.resolve(context, ShopColors.accentSoft, fill: true)],
+                    colors: <Color>[
+                      AppTheme.resolve(context, ShopColors.surface, fill: true),
+                      AppTheme.resolve(
+                        context,
+                        ShopColors.accentSoft,
+                        fill: true,
+                      ),
+                    ],
                   ),
                   borderRadius: BorderRadius.circular(17),
                   border: Border.all(color: AppTheme.resolve(context, _border)),
@@ -2003,7 +2087,7 @@ class _StoreScreenState extends State<StoreScreen> {
                         children: [
                           Text(
                             voucher.benefitLabel,
-                            style:  TextStyle(
+                            style: TextStyle(
                               color: AppTheme.resolve(context, _maroon),
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -2017,7 +2101,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                 : voucher.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:  TextStyle(
+                            style: TextStyle(
                               color: AppTheme.resolve(context, _text),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -2028,7 +2112,10 @@ class _StoreScreenState extends State<StoreScreen> {
                             conditions,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10),
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, _muted),
+                              fontSize: 10,
+                            ),
                           ),
                         ],
                       ),
@@ -2049,7 +2136,11 @@ class _StoreScreenState extends State<StoreScreen> {
                                   }
                                 },
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
+                            backgroundColor: AppTheme.resolve(
+                              context,
+                              _maroon,
+                              fill: true,
+                            ),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 13),
                             shape: RoundedRectangleBorder(
@@ -2097,7 +2188,7 @@ class _StoreScreenState extends State<StoreScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-               Text(
+              Text(
                 'PRODUCTS FROM THIS STORE',
                 style: TextStyle(
                   color: AppTheme.resolve(context, _maroon),
@@ -2109,7 +2200,7 @@ class _StoreScreenState extends State<StoreScreen> {
 
               const SizedBox(height: 5),
 
-               Text(
+              Text(
                 'Browse Products',
                 style: TextStyle(
                   color: AppTheme.resolve(context, _text),
@@ -2126,7 +2217,10 @@ class _StoreScreenState extends State<StoreScreen> {
                 filtering
                     ? '$visibleCount of ${_products.where((StoreProductData p) => p.isActive && !p.isDraft && !p.isDeleted).length} products'
                     : '${_products.where((StoreProductData p) => p.isActive && !p.isDraft && !p.isDeleted).length} products from this seller',
-                style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -2149,7 +2243,7 @@ class _StoreScreenState extends State<StoreScreen> {
             initialValue: _sort,
             isExpanded: true,
             decoration: InputDecoration(
-              prefixIcon:  Icon(
+              prefixIcon: Icon(
                 Icons.sort_rounded,
                 color: AppTheme.resolve(context, _muted),
                 size: 19,
@@ -2162,15 +2256,19 @@ class _StoreScreenState extends State<StoreScreen> {
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, _border),
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+                borderSide: BorderSide(
+                  color: AppTheme.resolve(context, _border),
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide:  BorderSide(color: AppTheme.resolve(context, _tan)),
+                borderSide: BorderSide(color: AppTheme.resolve(context, _tan)),
               ),
             ),
             items: StoreProductSort.values.map((StoreProductSort sort) {
@@ -2178,7 +2276,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 value: sort,
                 child: Text(
                   sort.label,
-                  style:  TextStyle(
+                  style: TextStyle(
                     color: AppTheme.resolve(context, _text),
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
@@ -2228,14 +2326,16 @@ class _StoreScreenState extends State<StoreScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.resolve(context, _surface, fill: true),
                     borderRadius: BorderRadius.circular(17),
-                    border: Border.all(color: AppTheme.resolve(context, _border)),
+                    border: Border.all(
+                      color: AppTheme.resolve(context, _border),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
                         children: [
-                           Expanded(
+                          Expanded(
                             child: Text(
                               'Refine products',
                               style: TextStyle(
@@ -2280,14 +2380,22 @@ class _StoreScreenState extends State<StoreScreen> {
                           prefixIcon: const Icon(Icons.star_outline_rounded),
                           isDense: true,
                           filled: true,
-                          fillColor: AppTheme.resolve(context, ShopColors.canvas, fill: true),
+                          fillColor: AppTheme.resolve(
+                            context,
+                            ShopColors.canvas,
+                            fill: true,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+                            borderSide: BorderSide(
+                              color: AppTheme.resolve(context, _border),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+                            borderSide: BorderSide(
+                              color: AppTheme.resolve(context, _border),
+                            ),
                           ),
                         ),
                         items: const <DropdownMenuItem<String>>[
@@ -2336,7 +2444,7 @@ class _StoreScreenState extends State<StoreScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-             Text(
+            Text(
               'Categories',
               style: TextStyle(
                 color: AppTheme.resolve(context, _text),
@@ -2370,11 +2478,17 @@ class _StoreScreenState extends State<StoreScreen> {
         selected: selected,
         showCheckmark: false,
         visualDensity: VisualDensity.compact,
-        side: BorderSide(color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border)),
+        side: BorderSide(
+          color: selected
+              ? AppTheme.resolve(context, _maroon)
+              : AppTheme.resolve(context, _border),
+        ),
         backgroundColor: AppTheme.resolve(context, _surface, fill: true),
         selectedColor: AppTheme.resolve(context, ShopColors.accentSoft),
         labelStyle: TextStyle(
-          color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _muted),
+          color: selected
+              ? AppTheme.resolve(context, _maroon)
+              : AppTheme.resolve(context, _muted),
           fontSize: 11.5,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
         ),
@@ -2405,7 +2519,10 @@ class _StoreScreenState extends State<StoreScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
               'Page ${_pageIndex + 1} of $pageCount',
-              style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10),
+              style: TextStyle(
+                color: AppTheme.resolve(context, _muted),
+                fontSize: 10,
+              ),
             ),
           ),
           OutlinedButton.icon(
@@ -2449,7 +2566,7 @@ class _StoreScreenState extends State<StoreScreen> {
           Container(
             width: 62,
             height: 62,
-            decoration:  BoxDecoration(
+            decoration: BoxDecoration(
               color: AppTheme.resolve(context, _softStrong, fill: true),
               shape: BoxShape.circle,
             ),
@@ -2466,7 +2583,7 @@ class _StoreScreenState extends State<StoreScreen> {
           Text(
             filtering ? 'No matching products' : 'No products available',
             textAlign: TextAlign.center,
-            style:  TextStyle(
+            style: TextStyle(
               color: AppTheme.resolve(context, _text),
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -2480,7 +2597,11 @@ class _StoreScreenState extends State<StoreScreen> {
                 ? 'Try another search or adjust your category and filters.'
                 : 'This seller does not have products available in this store right now.',
             textAlign: TextAlign.center,
-            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 10, height: 1.45),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 10,
+              height: 1.45,
+            ),
           ),
 
           if (suggestion != null) ...[
@@ -2504,7 +2625,7 @@ class _StoreScreenState extends State<StoreScreen> {
               onPressed: _clearProductFilters,
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.resolve(context, _maroon),
-                side:  BorderSide(color: AppTheme.resolve(context, _tan)),
+                side: BorderSide(color: AppTheme.resolve(context, _tan)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(11),
                 ),
@@ -2542,7 +2663,10 @@ class _SellerAvatar extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 2),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: AppTheme.resolve(context, ShopColors.accentDark).withValues(alpha: 0.16),
+            color: AppTheme.resolve(
+              context,
+              ShopColors.accentDark,
+            ).withValues(alpha: 0.16),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),
@@ -2553,7 +2677,7 @@ class _SellerAvatar extends StatelessWidget {
           : SizedNetworkImage(
               url: AppConfig.resolveMediaUrl(url),
               fit: BoxFit.cover,
-              placeholder:  Center(
+              placeholder: Center(
                 child: SizedBox(
                   width: 18,
                   height: 18,
@@ -2584,7 +2708,7 @@ class _SellerInitials extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         initials,
-        style:  TextStyle(
+        style: TextStyle(
           color: AppTheme.resolve(context, ShopColors.accent),
           fontSize: 18,
           fontWeight: FontWeight.w800,
@@ -2637,7 +2761,7 @@ class _SellerStatCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style:  TextStyle(
+            style: TextStyle(
               color: AppTheme.resolve(context, ShopColors.text),
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
@@ -2651,7 +2775,10 @@ class _SellerStatCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 10),
+            style: TextStyle(
+              color: AppTheme.resolve(context, ShopColors.muted),
+              fontSize: 10,
+            ),
           ),
         ],
       ),
@@ -2684,7 +2811,11 @@ class _SellerInfoRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
           alignment: Alignment.center,
-          child: Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 16),
+          child: Icon(
+            icon,
+            color: AppTheme.resolve(context, ShopColors.accent),
+            size: 16,
+          ),
         ),
 
         const SizedBox(width: 9),
@@ -2695,7 +2826,7 @@ class _SellerInfoRow extends StatelessWidget {
             children: [
               Text(
                 label,
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, ShopColors.muted),
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
@@ -2706,7 +2837,7 @@ class _SellerInfoRow extends StatelessWidget {
 
               Text(
                 value,
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, ShopColors.text),
                   fontSize: 12.5,
                   height: 1.35,
@@ -2752,7 +2883,9 @@ class _StoreProductCard extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
+            border: Border.all(
+              color: AppTheme.resolve(context, ShopColors.border),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2762,7 +2895,11 @@ class _StoreProductCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     Container(
-                      color: AppTheme.resolve(context, ShopColors.soft, fill: true),
+                      color: AppTheme.resolve(
+                        context,
+                        ShopColors.soft,
+                        fill: true,
+                      ),
                       child: _StoreProductImage(url: product.imageUrl),
                     ),
 
@@ -2776,7 +2913,11 @@ class _StoreProductCard extends StatelessWidget {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.resolve(context, ShopColors.accent, fill: true),
+                            color: AppTheme.resolve(
+                              context,
+                              ShopColors.accent,
+                              fill: true,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -2803,11 +2944,14 @@ class _StoreProductCard extends StatelessWidget {
                             width: 42,
                             height: 42,
                             child: wishlistLoading
-                                ?  Padding(
+                                ? Padding(
                                     padding: EdgeInsets.all(9),
                                     child: CircularProgressIndicator(
                                       strokeWidth: 1.8,
-                                      color: AppTheme.resolve(context, ShopColors.accent),
+                                      color: AppTheme.resolve(
+                                        context,
+                                        ShopColors.accent,
+                                      ),
                                     ),
                                   )
                                 : Icon(
@@ -2815,7 +2959,10 @@ class _StoreProductCard extends StatelessWidget {
                                         ? Icons.favorite_rounded
                                         : Icons.favorite_border_rounded,
                                     size: 18,
-                                    color: AppTheme.resolve(context, ShopColors.accent),
+                                    color: AppTheme.resolve(
+                                      context,
+                                      ShopColors.accent,
+                                    ),
                                   ),
                           ),
                         ),
@@ -2868,8 +3015,11 @@ class _StoreProductCard extends StatelessWidget {
                         product.category!.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style:  TextStyle(
-                          color: AppTheme.resolve(context, ShopColors.secondaryText),
+                        style: TextStyle(
+                          color: AppTheme.resolve(
+                            context,
+                            ShopColors.secondaryText,
+                          ),
                           fontSize: 10,
                           letterSpacing: 0.7,
                           fontWeight: FontWeight.w800,
@@ -2883,7 +3033,7 @@ class _StoreProductCard extends StatelessWidget {
                       product.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style:  TextStyle(
+                      style: TextStyle(
                         color: AppTheme.resolve(context, ShopColors.text),
                         fontSize: 14,
                         height: 1.3,
@@ -2900,7 +3050,7 @@ class _StoreProductCard extends StatelessWidget {
                       children: [
                         Text(
                           _formatPrice(product.price),
-                          style:  TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, ShopColors.accent),
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -2911,8 +3061,11 @@ class _StoreProductCard extends StatelessWidget {
                             product.originalPrice! > product.price)
                           Text(
                             _formatPrice(product.originalPrice!),
-                            style:  TextStyle(
-                              color: AppTheme.resolve(context, ShopColors.faint),
+                            style: TextStyle(
+                              color: AppTheme.resolve(
+                                context,
+                                ShopColors.faint,
+                              ),
                               fontSize: 9.5,
                               decoration: TextDecoration.lineThrough,
                             ),
@@ -2925,7 +3078,7 @@ class _StoreProductCard extends StatelessWidget {
                     Row(
                       children: [
                         if (product.rating != null) ...[
-                           Icon(
+                          Icon(
                             Icons.star_rounded,
                             color: AppTheme.resolve(context, Color(0xFFC88418)),
                             size: 14,
@@ -2935,7 +3088,7 @@ class _StoreProductCard extends StatelessWidget {
 
                           Text(
                             product.rating!.toStringAsFixed(1),
-                            style:  TextStyle(
+                            style: TextStyle(
                               color: AppTheme.resolve(context, ShopColors.text),
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
@@ -2950,8 +3103,11 @@ class _StoreProductCard extends StatelessWidget {
                             '${product.soldCount} sold',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:  TextStyle(
-                              color: AppTheme.resolve(context, ShopColors.muted),
+                            style: TextStyle(
+                              color: AppTheme.resolve(
+                                context,
+                                ShopColors.muted,
+                              ),
                               fontSize: 10.5,
                             ),
                           ),
@@ -2960,8 +3116,11 @@ class _StoreProductCard extends StatelessWidget {
                         if (product.stock != null && product.stock! > 0)
                           Text(
                             '${product.stock} left',
-                            style:  TextStyle(
-                              color: AppTheme.resolve(context, ShopColors.muted),
+                            style: TextStyle(
+                              color: AppTheme.resolve(
+                                context,
+                                ShopColors.muted,
+                              ),
                               fontSize: 10,
                             ),
                           ),
@@ -2989,7 +3148,7 @@ class _StoreProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = url?.trim() ?? '';
     if (value.isEmpty)
-      return  Center(
+      return Center(
         child: Icon(
           Icons.inventory_2_outlined,
           color: AppTheme.resolve(context, ShopColors.faint),
@@ -2998,6 +3157,7 @@ class _StoreProductImage extends StatelessWidget {
       );
     return SizedNetworkImage(
       url: AppConfig.resolveMediaUrl(value),
+      fit: BoxFit.cover,
       iconSize: 34,
     );
   }

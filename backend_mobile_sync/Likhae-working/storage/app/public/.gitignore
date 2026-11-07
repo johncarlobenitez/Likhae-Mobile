@@ -1,0 +1,7 @@
+*
+!.gitignore
+!products/
+products/*
+!products/mock/
+products/mock/*
+!products/mock/*.png

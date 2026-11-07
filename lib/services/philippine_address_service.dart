@@ -10,6 +10,8 @@ class PhilippineAddressService {
   static final _options = AsyncCache<String, List<AddressOption>>(
     maximumEntries: 64,
   );
+  static const Map<String, String> _knownMunicipalityPostalCodes =
+      <String, String>{'laguna|pila': '4010'};
 
   static void clearCache() => _options.clear();
 
@@ -50,7 +52,6 @@ class PhilippineAddressService {
 
   static Future<String?> fetchPostalCode({
     required String municipalityCode,
-    required String barangayCode,
     required String provinceCode,
     required String provinceName,
     required String municipalityName,
@@ -61,18 +62,28 @@ class PhilippineAddressService {
       'province_name': provinceName,
       'municipality_name': municipalityName,
     };
-    queryParameters['barangay'] = barangayCode;
-
-    final Response<dynamic> response = await _dio.get(
-      '/postal-code',
-      queryParameters: queryParameters,
-    );
-    final dynamic data = response.data;
-    if (data is Map && data['postal_code'] != null) {
-      return data['postal_code'].toString();
+    try {
+      final Response<dynamic> response = await _dio.get(
+        '/postal-code',
+        queryParameters: queryParameters,
+      );
+      final dynamic data = response.data;
+      final String postalCode =
+          (data is Map ? data['postal_code']?.toString() : null) ?? '';
+      if (postalCode.trim().isNotEmpty) return postalCode.trim();
+    } catch (_) {
+      // Use a known municipality code when the service has no entry.
     }
-    return null;
+
+    final String province = _normalizePostalName(provinceName);
+    final String municipality = _normalizePostalName(municipalityName);
+    return _knownMunicipalityPostalCodes['$province|$municipality'];
   }
+
+  static String _normalizePostalName(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .trim();
 
   static Future<List<AddressOption>> _fetchOptions(String path) =>
       _options.load(

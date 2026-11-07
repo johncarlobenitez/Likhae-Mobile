@@ -391,10 +391,15 @@ class BuyerHomeScreen extends StatefulWidget {
   final VoidCallback? onMessages;
   final VoidCallback? onProfile;
   final VoidCallback? onVouchers;
+  final VoidCallback? onViewSellerOffers;
+  final VoidCallback? onViewBundleDeals;
+  final VoidCallback? onViewFreeGifts;
+  final VoidCallback? onViewPlatformEvents;
   final VoidCallback? onViewAllCategories;
   final BuyerHomeCategoryCallback? onCategorySelected;
   final VoidCallback? onViewFeatured;
   final VoidCallback? onShopDeals;
+  final VoidCallback? onViewFlashDeals;
   final VoidCallback? onViewRecommended;
   final BuyerHomeProductCallback? onProductSelected;
   final BuyerHomeProductCallback? onSellerSelected;
@@ -423,10 +428,15 @@ class BuyerHomeScreen extends StatefulWidget {
     this.onMessages,
     this.onProfile,
     this.onVouchers,
+    this.onViewSellerOffers,
+    this.onViewBundleDeals,
+    this.onViewFreeGifts,
+    this.onViewPlatformEvents,
     this.onViewAllCategories,
     this.onCategorySelected,
     this.onViewFeatured,
     this.onShopDeals,
+    this.onViewFlashDeals,
     this.onViewRecommended,
     this.onProductSelected,
     this.onSellerSelected,
@@ -445,6 +455,9 @@ class BuyerHomeScreen extends StatefulWidget {
 
 class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     with WidgetsBindingObserver {
+  static const Duration _heroAutoAdvanceInterval = Duration(seconds: 6);
+  static const Duration _heroTransitionDuration = Duration(milliseconds: 550);
+
   static const List<BuyerHomeCategory> _featuredCategories =
       <BuyerHomeCategory>[
         BuyerHomeCategory(
@@ -515,14 +528,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   List<Map<String, dynamic>> _platformEvents = <Map<String, dynamic>>[];
   final Set<int> _claimedPlatformEvents = <int>{};
   final Set<int> _claimingPlatformEvents = <int>{};
+  final PageController _heroPageController = PageController();
+  Timer? _heroAdvanceTimer;
+  int _heroPage = 0;
   List<BuyerHomeProduct>? _featuredProductsCache;
   List<BuyerHomeProduct>? _recommendedProductsCache;
-  BuyerHomeProduct? _heroProductCache;
-  bool _heroProductCacheReady = false;
   Future<void>? _productsRequest;
   bool _loadingProducts = false;
   bool _loadingDeals = false;
-  bool _loadingEvents = false;
   bool _visible = true;
   DateTime? _loadedAt;
   int _loadedRevision = -1;
@@ -531,6 +544,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scheduleHeroAdvance();
     _syncWishlistState();
     if (widget.localPreview) {
       _invalidateProductCaches();
@@ -556,6 +570,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _heroAdvanceTimer?.cancel();
+    _heroPageController.dispose();
     WishlistService.productIds.removeListener(_onWishlistChanged);
     super.dispose();
   }
@@ -568,12 +584,46 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         ModalRoute.of(context)?.isCurrent != false;
     final activated = visible && !_visible;
     _visible = visible;
+    if (visible) {
+      _scheduleHeroAdvance();
+    } else {
+      _heroAdvanceTimer?.cancel();
+    }
     if (activated) _refreshIfStale();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _visible) _refreshIfStale();
+    if (state == AppLifecycleState.resumed) {
+      if (_visible) {
+        _refreshIfStale();
+        _scheduleHeroAdvance();
+      }
+    } else {
+      _heroAdvanceTimer?.cancel();
+    }
+  }
+
+  void _scheduleHeroAdvance() {
+    _heroAdvanceTimer?.cancel();
+    if (!mounted || !_visible) return;
+    _heroAdvanceTimer = Timer(_heroAutoAdvanceInterval, () {
+      if (!mounted || !_visible || !_heroPageController.hasClients) return;
+      final int nextPage = (_heroPage + 1) % 2;
+      _heroPageController.animateToPage(
+        nextPage,
+        duration: _heroTransitionDuration,
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  Map<String, dynamic>? get _heroEvent {
+    for (final Map<String, dynamic> event in _platformEvents) {
+      final String status = _platformEventStatus(event);
+      if (status == 'active' || status == 'upcoming') return event;
+    }
+    return null;
   }
 
   void _refreshIfStale() {
@@ -589,8 +639,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   void _invalidateProductCaches() {
     _featuredProductsCache = null;
     _recommendedProductsCache = null;
-    _heroProductCache = null;
-    _heroProductCacheReady = false;
   }
 
   Future<void> _loadProducts() {
@@ -605,7 +653,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     setState(() {
       _loadingProducts = true;
       _loadingDeals = true;
-      _loadingEvents = true;
     });
     Future<void> products() async {
       try {
@@ -635,8 +682,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         if (!mounted) return;
         setState(() {
           _bestSellingProducts = fetched;
-          _heroProductCache = null;
-          _heroProductCacheReady = false;
         });
         _syncWishlistState();
       } catch (_) {
@@ -661,8 +706,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         if (mounted) setState(() => _platformEvents = fetched);
       } catch (_) {
         // Events must not block the catalog or clear existing content.
-      } finally {
-        if (mounted) setState(() => _loadingEvents = false);
       }
     }
 
@@ -860,26 +903,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     return _recommendedProductsCache = result;
   }
 
-  BuyerHomeProduct? get _heroProduct {
-    if (_heroProductCacheReady) return _heroProductCache;
-
-    if (widget.heroProduct?.isVisibleInCatalog == true) {
-      _heroProductCache = widget.heroProduct;
-      _heroProductCacheReady = true;
-      return _heroProductCache;
-    }
-    if (_bestSellingProducts.isNotEmpty) {
-      _heroProductCache = _bestSellingProducts.first;
-    } else {
-      final List<BuyerHomeProduct> base = widget.products.isNotEmpty
-          ? widget.products
-          : _loadedProducts;
-      _heroProductCache = base.isEmpty ? null : base.first;
-    }
-    _heroProductCacheReady = true;
-    return _heroProductCache;
-  }
-
   Future<void> _toggleWishlist(BuyerHomeProduct product) async {
     if (widget.localPreview) return;
     if (_wishlistLoading.contains(product.id)) return;
@@ -994,7 +1017,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                         const SizedBox(height: 3),
                         Text(
                           'Shop smart with LIKHAE',
-                          style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 11.5),
+                          style: TextStyle(
+                            color: AppTheme.resolve(context, muted),
+                            fontSize: 11.5,
+                          ),
                         ),
                       ],
                     ),
@@ -1060,12 +1086,19 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.search_rounded, size: 22, color: AppTheme.resolve(context, maroon)),
+                        Icon(
+                          Icons.search_rounded,
+                          size: 22,
+                          color: AppTheme.resolve(context, maroon),
+                        ),
                         const SizedBox(width: 11),
                         Expanded(
                           child: Text(
                             'Search products, categories, local sellers...',
-                            style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 13),
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, muted),
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ],
@@ -1096,7 +1129,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         .toList(growable: false);
     final sections = <Widget>[
       if (_loadingProducts) const AppLoadingLine(),
-      _buildHero(_heroProduct),
+      _buildHero(),
       const SizedBox(height: 22),
       _buildQuickActions(),
       const SizedBox(height: 30),
@@ -1134,7 +1167,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         'Flash Sale',
         'Shop available products at their current discounted variant prices.',
         'See All',
-        widget.onShopDeals,
+        widget.onViewFlashDeals ?? widget.onShopDeals,
       ),
       const SizedBox(height: 12),
       if (currentDealProducts.isNotEmpty)
@@ -1153,8 +1186,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           title: 'No discounted products are available right now',
           description: 'Check back later for current seller discounts.',
         ),
-      const SizedBox(height: 30),
-      _buildPlatformEvents(),
       const SizedBox(height: 30),
       _buildHeaderRow(
         'For You',
@@ -1216,7 +1247,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       ),
       child: Column(
         children: [
-          Icon(Icons.storefront_outlined, color: AppTheme.resolve(context, maroonLight), size: 30),
+          Icon(
+            Icons.storefront_outlined,
+            color: AppTheme.resolve(context, maroonLight),
+            size: 30,
+          ),
           const SizedBox(height: 12),
           Text(
             title,
@@ -1231,7 +1266,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           Text(
             description,
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 11, height: 1.4),
+            style: TextStyle(
+              color: AppTheme.resolve(context, muted),
+              fontSize: 11,
+              height: 1.4,
+            ),
           ),
           if (actionLabel != null) ...[
             const SizedBox(height: 14),
@@ -1267,7 +1306,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient:  LinearGradient(
+        gradient: LinearGradient(
           colors: <Color>[
             AppTheme.resolve(context, ShopColors.accentDark, fill: true),
             AppTheme.resolve(context, ShopColors.accent, fill: true),
@@ -1279,7 +1318,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: AppTheme.resolve(context, ShopColors.accentDark).withValues(alpha: .14),
+            color: AppTheme.resolve(
+              context,
+              ShopColors.accentDark,
+            ).withValues(alpha: .14),
             blurRadius: 20,
             offset: const Offset(0, 9),
           ),
@@ -1301,7 +1343,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                 Text(
+                Text(
                   'CURRENT DISCOUNTS',
                   style: TextStyle(
                     color: AppTheme.resolve(context, Color(0xFFE9C7A5)),
@@ -1322,7 +1364,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                   ),
                 ),
                 const SizedBox(height: 6),
-                 Text(
+                Text(
                   'Browse products with current seller discounts.',
                   style: TextStyle(
                     color: AppTheme.resolve(context, Color(0xFFF4DED4)),
@@ -1336,8 +1378,15 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                   icon: const Icon(Icons.arrow_forward_rounded, size: 15),
                   label: const Text('Shop Deals'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.resolve(context, const Color(0xFFFFF7EF), fill: true),
-                    foregroundColor: AppTheme.resolve(context, ShopColors.accentDark),
+                    backgroundColor: AppTheme.resolve(
+                      context,
+                      const Color(0xFFFFF7EF),
+                      fill: true,
+                    ),
+                    foregroundColor: AppTheme.resolve(
+                      context,
+                      ShopColors.accentDark,
+                    ),
                     minimumSize: const Size(0, 38),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     shape: RoundedRectangleBorder(
@@ -1354,36 +1403,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPlatformEvents() {
-    final List<Map<String, dynamic>> events = _platformEvents
-        .take(4)
-        .toList(growable: false);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildHeaderRow(
-          'LIKHAE Marketplace',
-          'Platform Events',
-          'Marketplace-wide campaigns and events.',
-          'View Offers',
-          widget.onShopDeals,
-        ),
-        const SizedBox(height: 12),
-        if (events.isEmpty)
-          _buildHomeEmptyState(
-            title: _loadingEvents
-                ? 'Loading events...'
-                : 'No scheduled events right now',
-            description: _loadingEvents
-                ? 'Marketplace-wide campaigns and events.'
-                : 'When a marketplace-wide event is scheduled, its dates and details will appear here.',
-          )
-        else
-          ...events.map(_buildPlatformEventCard),
-      ],
     );
   }
 
@@ -1527,234 +1546,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     return int.tryParse((value ?? '').toString());
   }
 
-  Widget _buildPlatformEventCard(Map<String, dynamic> event) {
-    final String status = _platformEventStatus(event);
-    final Color statusBackground = switch (status) {
-      'upcoming' => AppTheme.resolve(context, const Color(0xFFF8EDD9)),
-      'active' => AppTheme.resolve(context, const Color(0xFFE8F3EA)),
-      'expired' || 'inactive' => AppTheme.resolve(context, const Color(0xFFF2E5E3)),
-      _ => AppTheme.resolve(context, const Color(0xFFEDE8E3)),
-    };
-    final Color statusForeground = switch (status) {
-      'upcoming' => AppTheme.resolve(context, const Color(0xFF8A5A12)),
-      'active' => AppTheme.resolve(context, const Color(0xFF256F4A)),
-      'expired' || 'inactive' => AppTheme.resolve(context, const Color(0xFF8B3B35)),
-      _ => AppTheme.resolve(context, const Color(0xFF685E57)),
-    };
-    final String title = (event['title'] ?? 'Platform event').toString();
-    final double discountValue =
-        double.tryParse(
-          (_platformEventField(event, 'discount_value') ?? 0).toString(),
-        ) ??
-        0;
-    final bool isPercent =
-        (_platformEventField(event, 'discount_type') ?? '')
-            .toString()
-            .toUpperCase() ==
-        'PERCENT';
-    final String discount = isPercent
-        ? '${discountValue.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '')}%'
-        : '${String.fromCharCode(0x20B1)}${discountValue.toStringAsFixed(2)}';
-    final double minimumSpend =
-        double.tryParse(
-          (_platformEventField(event, 'minimum_order_amount') ?? 0).toString(),
-        ) ??
-        0;
-    final dynamic rawMaximumSavings = _platformEventField(
-      event,
-      'maximum_discount_amount',
-    );
-    final DateTime? startsAt = DateTime.tryParse(
-      (_platformEventField(event, 'starts_at') ?? '').toString(),
-    );
-    final DateTime? endsAt = DateTime.tryParse(
-      (_platformEventField(event, 'ends_at') ?? '').toString(),
-    );
-    final String validity =
-        '${startsAt == null ? 'Start time not provided' : _formatCampaignDate(startsAt)} – ${endsAt == null ? 'No end date' : _formatCampaignDate(endsAt)}';
-
-    Widget detail(String label, String value) => Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              color: Color(0xFFE9C7A5),
-              fontSize: 8,
-              letterSpacing: 1,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Color(0xFFFFF8F2),
-              fontSize: 11,
-              height: 1.35,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient:  LinearGradient(
-          colors: <Color>[AppTheme.resolve(context, ShopColors.accentDark, fill: true), AppTheme.resolve(context, ShopColors.accent, fill: true)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: AppTheme.resolve(context, ShopColors.accentDark).withValues(alpha: .12),
-            blurRadius: 16,
-            offset: const Offset(0, 7),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  color: statusBackground,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status == 'unknown' ? 'STATUS UNKNOWN' : status.toUpperCase(),
-                  style: TextStyle(
-                    color: statusForeground,
-                    fontSize: 8,
-                    letterSpacing: .7,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 9),
-               Expanded(
-                child: Text(
-                  'LIKHAE PLATFORM EVENT',
-                  style: TextStyle(
-                    color: AppTheme.resolve(context, Color(0xFFE9C7A5)),
-                    fontSize: 8,
-                    letterSpacing: 1.1,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style:  TextStyle(
-                    color: AppTheme.resolve(context, Color(0xFFFFF8F2)),
-                    fontSize: 23,
-                    height: 1.05,
-                    letterSpacing: -.4,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                constraints: const BoxConstraints(minWidth: 78),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .10),
-                  border: Border.all(color: const Color(0x80E9C7A5)),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Column(
-                  children: <Widget>[
-                    Text(
-                      discount,
-                      maxLines: 1,
-                      style:  TextStyle(
-                        color: AppTheme.resolve(context, Color(0xFFFFF8F2)),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                     Text(
-                      'OFF',
-                      style: TextStyle(
-                        color: AppTheme.resolve(context, Color(0xFFE9C7A5)),
-                        fontSize: 8,
-                        letterSpacing: 1.5,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 13),
-          Container(height: 1, color: Colors.white.withValues(alpha: .18)),
-          detail(
-            'Minimum spend',
-            minimumSpend > 0
-                ? '${String.fromCharCode(0x20B1)}${minimumSpend.toStringAsFixed(2)}'
-                : 'No minimum spend',
-          ),
-          detail(
-            'Max savings',
-            rawMaximumSavings == null
-                ? 'No discount cap'
-                : '${String.fromCharCode(0x20B1)}${(double.tryParse(rawMaximumSavings.toString()) ?? 0).toStringAsFixed(2)}',
-          ),
-          detail('Valid period', validity),
-          detail('Eligibility', _platformEventEligibility(event)),
-          if (_platformEventDestination(event).isNotEmpty)
-            detail('Reward destination', _platformEventDestination(event)),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => _showPlatformEventDetails(event),
-              icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-              label: const Text('View Event'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppTheme.resolve(context, ShopColors.accentDark),
-                backgroundColor: AppTheme.resolve(context, const Color(0xFFE9C7A5), fill: true),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 8,
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatCampaignDate(DateTime date) {
     const List<String> months = <String>[
       'Jan',
@@ -1817,7 +1608,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     final Color statusColor = switch (status) {
       'active' => AppTheme.resolve(context, const Color(0xFF256F4A)),
       'upcoming' => AppTheme.resolve(context, const Color(0xFF8A5A12)),
-      'expired' || 'inactive' => AppTheme.resolve(context, const Color(0xFF8B3B35)),
+      'expired' ||
+      'inactive' => AppTheme.resolve(context, const Color(0xFF8B3B35)),
       _ => AppTheme.resolve(context, muted),
     };
     final String validPeriod =
@@ -1908,9 +1700,15 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppTheme.resolve(context, backgroundSoft, fill: true).withValues(alpha: .55),
+                      color: AppTheme.resolve(
+                        context,
+                        backgroundSoft,
+                        fill: true,
+                      ).withValues(alpha: .55),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.resolve(context, border)),
+                      border: Border.all(
+                        color: AppTheme.resolve(context, border),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1938,10 +1736,17 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppTheme.resolve(context, maroon, fill: true).withValues(alpha: .07),
+                        color: AppTheme.resolve(
+                          context,
+                          maroon,
+                          fill: true,
+                        ).withValues(alpha: .07),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: AppTheme.resolve(context, maroon).withValues(alpha: .18),
+                          color: AppTheme.resolve(
+                            context,
+                            maroon,
+                          ).withValues(alpha: .18),
                         ),
                       ),
                       child: Column(
@@ -2075,7 +1880,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 116,
+          height: 122,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: categories.length,
@@ -2084,7 +1889,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
             itemBuilder: (BuildContext context, int index) {
               final BuyerHomeCategory category = categories[index];
               return SizedBox(
-                width: 88,
+                width: 92,
                 child: _BuyerCategoryCard(
                   category: category,
                   onTap: category.slug == 'all'
@@ -2104,6 +1909,18 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   Widget _buildQuickActions() {
     final List<_BuyerQuickAction> actions = <_BuyerQuickAction>[
       _BuyerQuickAction(
+        label: 'Free Gifts',
+        description: 'Buy and get rewards',
+        icon: Icons.card_giftcard_outlined,
+        onTap: widget.onViewFreeGifts ?? widget.onViewSellerOffers,
+      ),
+      _BuyerQuickAction(
+        label: 'Bundle Deals',
+        description: 'Save when you shop together',
+        icon: Icons.layers_outlined,
+        onTap: widget.onViewBundleDeals ?? widget.onViewSellerOffers,
+      ),
+      _BuyerQuickAction(
         label: 'Wishlist',
         description: 'Saved products',
         icon: Icons.favorite_border_rounded,
@@ -2116,36 +1933,32 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         onTap: widget.onFollowingShops,
       ),
       _BuyerQuickAction(
-        label: 'Messages',
-        description: 'Chat with sellers',
-        icon: Icons.chat_bubble_outline_rounded,
-        onTap: widget.onMessages,
-      ),
-      _BuyerQuickAction(
         label: 'Vouchers',
         description: 'Available vouchers',
         icon: Icons.card_giftcard_outlined,
         onTap: widget.onVouchers,
       ),
+      _BuyerQuickAction(
+        label: 'Discounts',
+        description: 'Shop lower prices',
+        icon: Icons.local_offer_outlined,
+        onTap: widget.onShopDeals,
+      ),
     ];
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        if (constraints.maxWidth >= 680) {
-          return Row(
-            children: <Widget>[
-              for (int index = 0; index < actions.length; index++) ...<Widget>[
-                if (index > 0) const SizedBox(width: 14),
-                Expanded(child: _BuyerQuickActionCard(action: actions[index])),
-              ],
-            ],
-          );
-        }
-
-        final double cardWidth = (constraints.maxWidth - 10) / 2;
+        final int columns = constraints.maxWidth >= 1180
+            ? actions.length
+            : constraints.maxWidth >= 680
+            ? 3
+            : 2;
+        final double spacing = constraints.maxWidth >= 680 ? 14 : 10;
+        final double cardWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
         return Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: spacing,
+          runSpacing: spacing,
           children: actions
               .map(
                 (_BuyerQuickAction action) => SizedBox(
@@ -2159,310 +1972,353 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     );
   }
 
-  Widget _buildHero(BuyerHomeProduct? product) {
-    Widget buildCopy({required bool compact}) => Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: compact ? 20 : 28,
-              height: 1,
-              color: ShopColors.accentLight,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'WELCOME TO LIKHAE',
-              style: TextStyle(
-                color: ShopColors.accentLight,
-                fontSize: 9,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: compact ? 8 : 13),
-        Text.rich(
-          const TextSpan(
-            children: [
-              TextSpan(text: 'Everything you need,\n'),
-              TextSpan(
-                text: 'in one place.',
-                style: TextStyle(color: Color(0xFFFFD9CC)),
+  Widget _buildHero() {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double width = constraints.maxWidth;
+        final bool compact = width < 620;
+        final bool narrow = width < 360;
+        final bool dark = Theme.of(context).brightness == Brightness.dark;
+        final double heroHeight = compact
+            ? (width * 0.94).clamp(320.0, 370.0).toDouble()
+            : (width * 0.38).clamp(350.0, 430.0).toDouble();
+        final Map<String, dynamic>? event = _heroEvent;
+
+        return Container(
+          height: heroHeight,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: dark ? const Color(0xFF171210) : const Color(0xFFF5E8DA),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? 0.20 : 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: compact ? 25 : 30,
-            letterSpacing: compact ? -0.6 : -0.8,
-            height: 1.08,
-            fontWeight: FontWeight.w700,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                PageView(
+                  controller: _heroPageController,
+                  onPageChanged: (int page) {
+                    if (_heroPage != page && mounted) {
+                      setState(() => _heroPage = page);
+                    }
+                    _scheduleHeroAdvance();
+                  },
+                  children: <Widget>[
+                    _buildHeroSlide(
+                      width: width,
+                      compact: compact,
+                      narrow: narrow,
+                      dark: dark,
+                      event: null,
+                      campaignSlide: false,
+                    ),
+                    _buildHeroSlide(
+                      width: width,
+                      compact: compact,
+                      narrow: narrow,
+                      dark: dark,
+                      event: event,
+                      campaignSlide: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-        SizedBox(height: compact ? 8 : 12),
-        Text(
-          'Shop across a wide range of categories from trusted sellers. Compare options and find everything you need for everyday living.',
-          style: TextStyle(
-            color: const Color(0xFFEEDBD4),
-            fontSize: compact ? 11 : 12,
-            height: compact ? 1.4 : 1.5,
-          ),
-        ),
-      ],
+        );
+      },
     );
+  }
 
-    final Widget copy = buildCopy(compact: false);
+  Widget _buildHeroSlide({
+    required double width,
+    required bool compact,
+    required bool narrow,
+    required bool dark,
+    required Map<String, dynamic>? event,
+    required bool campaignSlide,
+  }) {
+    final bool isEvent = campaignSlide && event != null;
+    final double titleSize = compact
+        ? (narrow ? 42.0 : 46.0)
+        : (width < 900 ? 62.0 : 68.0);
+    final Color titleColor = dark
+        ? const Color(0xFFF5ECE7)
+        : const Color(0xFF171311);
+    final Color accentColor = dark
+        ? const Color(0xFFE0A89E)
+        : const Color(0xFF561C17);
+    final Color descriptionColor = dark
+        ? const Color(0xFFD1B09D)
+        : const Color(0xFF561C17);
+    final Color buttonColor = dark
+        ? const Color(0xFF8E5048)
+        : const Color(0xFF561C17);
+    final List<Color> overlayColors = dark
+        ? <Color>[
+            const Color(0xFF171210).withValues(alpha: 0.96),
+            const Color(0xFF171210).withValues(alpha: 0.91),
+            const Color(0xFF171210).withValues(alpha: 0.76),
+            const Color(0xFF171210).withValues(alpha: 0.45),
+            const Color(0xFF171210).withValues(alpha: 0.12),
+            Colors.transparent,
+          ]
+        : <Color>[
+            const Color(0xFFFFFBF6).withValues(alpha: 0.99),
+            const Color(0xFFFFFBF6).withValues(alpha: 0.96),
+            const Color(0xFFFFFBF6).withValues(alpha: 0.88),
+            const Color(0xFFFFFBF6).withValues(alpha: 0.66),
+            const Color(0xFFFFFBF6).withValues(alpha: 0.30),
+            Colors.transparent,
+          ];
+    final Map<String, dynamic> activeEvent = event ?? <String, dynamic>{};
+    final String campaignTitle = isEvent
+        ? (activeEvent['title'] ?? 'Marketplace event').toString().trim()
+        : 'Find your\nnext favorite.';
+    final String campaignDescription = isEvent
+        ? _heroEventDescription(activeEvent)
+        : 'Meet thoughtful finds from local sellers, made for the everyday.';
+    final String campaignButtonLabel = isEvent
+        ? 'View Event'
+        : 'Explore featured finds';
+    final VoidCallback? onTap = isEvent
+        ? () => _showPlatformEventDetails(activeEvent)
+        : campaignSlide
+        ? (widget.onViewFeatured ?? widget.onBrowseProducts)
+        : widget.onBrowseProducts;
+    final String watermarkText =
+        isEvent && campaignTitle.toLowerCase().contains('11:11')
+        ? '11:11\nSALE'
+        : isEvent
+        ? campaignTitle.toUpperCase()
+        : 'FINDS';
 
-    final Widget photo = product == null
-        ? Container(
-            width: double.infinity,
-            height: 190,
-            alignment: Alignment.center,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppTheme.resolve(context, ShopColors.accentDark, fill: true).withValues(alpha: .35),
-              borderRadius: BorderRadius.circular(20),
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        Image.asset(
+          campaignSlide
+              ? 'assets/home/hero_campaign_event.png'
+              : 'assets/home/hero_editorial.jpg',
+          fit: BoxFit.cover,
+          alignment: compact ? const Alignment(0.76, 0) : Alignment.centerRight,
+          filterQuality: FilterQuality.medium,
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: overlayColors,
+              stops: const <double>[0, 0.22, 0.40, 0.60, 0.82, 1],
             ),
-            child:  Text(
-              'Products will appear here when available.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppTheme.resolve(context, Color(0xFFEEDBD4)), fontSize: 12),
+          ),
+        ),
+        if (campaignSlide)
+          Positioned(
+            left: compact ? width * 0.12 : width * 0.11,
+            top: compact ? 10 : 4,
+            child: IgnorePointer(
+              child: Text(
+                watermarkText,
+                maxLines: 2,
+                overflow: TextOverflow.fade,
+                style: TextStyle(
+                  color: accentColor.withValues(alpha: dark ? 0.10 : 0.07),
+                  fontFamily: 'serif',
+                  fontSize: compact
+                      ? (narrow ? 72 : 82)
+                      : (width < 900 ? 118 : 148),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -5,
+                  height: 0.78,
+                ),
+              ),
             ),
-          )
-        : Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: widget.onProductSelected == null
-                  ? null
-                  : () => widget.onProductSelected!(product),
-              child: Column(
-                children: [
-                  Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: AspectRatio(
-                          aspectRatio: 4 / 3,
-                          child: _ProductGallery(images: product.galleryImages),
+          ),
+        if (isEvent)
+          Positioned(
+            top: compact ? 7 : 0,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              child: Text(
+                'LIKHAE',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: accentColor.withValues(alpha: dark ? 0.10 : 0.07),
+                  fontSize: compact ? 17 : 36,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: compact ? 4 : 7,
+                ),
+              ),
+            ),
+          ),
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 22 : 38,
+            vertical: compact ? 24 : 34,
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: width * (compact ? 0.82 : 0.48),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if (campaignSlide) ...<Widget>[
+                      Text(
+                        isEvent
+                            ? 'LIKHAE MARKETPLACE EVENT'
+                            : 'LOCAL FINDS FOR EVERYDAY',
+                        style: TextStyle(
+                          color: accentColor,
+                          fontSize: compact ? 9 : 10,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-                      Positioned(
-                        top: 10,
-                        left: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 7,
+                      SizedBox(height: compact ? 8 : 12),
+                      Text(
+                        campaignTitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: accentColor,
+                          fontFamily: 'serif',
+                          fontSize: titleSize,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: -1.6,
+                          height: 0.98,
+                        ),
+                      ),
+                    ] else
+                      Text.rich(
+                        TextSpan(
+                          children: <InlineSpan>[
+                            const TextSpan(text: 'Everything\nfor your\n'),
+                            TextSpan(
+                              text: 'everyday.',
+                              style: TextStyle(color: accentColor),
+                            ),
+                          ],
+                        ),
+                        style: TextStyle(
+                          color: titleColor,
+                          fontFamily: 'serif',
+                          fontSize: titleSize,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: -1.6,
+                          height: 0.94,
+                        ),
+                      ),
+                    SizedBox(height: compact ? 12 : 16),
+                    Text(
+                      campaignSlide
+                          ? campaignDescription
+                          : 'Browse the things you need, and a few things you\'ll love.',
+                      maxLines: compact ? 3 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: descriptionColor,
+                        fontSize: compact ? 12 : 14,
+                        height: 1.55,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 16 : 20),
+                    Material(
+                      color: buttonColor,
+                      borderRadius: BorderRadius.circular(7),
+                      child: InkWell(
+                        onTap: onTap,
+                        borderRadius: BorderRadius.circular(7),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compact ? 17 : 22,
+                            vertical: compact ? 12 : 14,
                           ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child:  Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.star_rounded,
-                                color: AppTheme.resolve(context, ShopColors.tan),
-                                size: 12,
-                              ),
-                              SizedBox(width: 4),
+                            children: <Widget>[
                               Text(
-                                'Best Seller',
+                                campaignSlide
+                                    ? campaignButtonLabel
+                                    : 'Shop all products',
                                 style: TextStyle(
-                                  color: AppTheme.resolve(context, ShopColors.accentDark),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  fontSize: compact ? 12 : 13,
+                                  fontWeight: FontWeight.w700,
                                 ),
+                              ),
+                              const SizedBox(width: 15),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.white,
+                                size: 17,
                               ),
                             ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      height: 1.3,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    String.fromCharCode(0x20B1) +
-                        product.price.toStringAsFixed(2) +
-                        (product.category?.trim().isNotEmpty == true
-                            ? '  |  ' + product.category!
-                            : ''),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:  TextStyle(
-                      color: AppTheme.resolve(context, Color(0xFFEEDBD4)),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool compact =
-            constraints.maxWidth < 620 ||
-            MediaQuery.textScalerOf(context).scale(14) > 22;
-
-        Widget compactProductPreview() {
-          if (product == null) {
-            return Container(
-              height: 90,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .12),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Text(
-                'Products will appear here when available.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFFEEDBD4), fontSize: 11),
-              ),
-            );
-          }
-
-          return Material(
-            color: Colors.white.withValues(alpha: .96),
-            borderRadius: BorderRadius.circular(17),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: widget.onProductSelected == null
-                  ? null
-                  : () => widget.onProductSelected!(product),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 108,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(11),
-                        child: AspectRatio(
-                          aspectRatio: 4 / 3,
-                          child: _ProductGallery(images: product.galleryImages),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'FEATURED PICK',
-                            style: TextStyle(
-                              color: ShopColors.accentLight,
-                              fontSize: 8,
-                              letterSpacing: 1,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            product.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: ShopColors.text,
-                              fontSize: 12,
-                              height: 1.2,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            String.fromCharCode(0x20B1) +
-                                product.price.toStringAsFixed(2),
-                            style: const TextStyle(
-                              color: ShopColors.accent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (product.category?.trim().isNotEmpty == true) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              product.category!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: ShopColors.muted,
-                                fontSize: 9,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
                     ),
                   ],
                 ),
               ),
             ),
-          );
-        }
-
-        return Container(
-          padding: EdgeInsets.all(compact ? 16 : 22),
-          decoration: BoxDecoration(
-            gradient:  LinearGradient(
-              colors: [
-                AppTheme.resolve(context, ShopColors.accentDark, fill: true),
-                AppTheme.resolve(context, ShopColors.accent, fill: true),
-                AppTheme.resolve(context, ShopColors.accentLight, fill: true),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(compact ? 23 : 28),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.resolve(context, ShopColors.accent).withValues(alpha: .1),
-                blurRadius: compact ? 18 : 26,
-                offset: Offset(0, compact ? 7.0 : 10.0),
-              ),
-            ],
           ),
-          child: compact
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    buildCopy(compact: true),
-                    const SizedBox(height: 13),
-                    compactProductPreview(),
-                  ],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(flex: 3, child: copy),
-                    const SizedBox(width: 22),
-                    Expanded(flex: 2, child: photo),
-                  ],
-                ),
-        );
-      },
+        ),
+      ],
     );
+  }
+
+  String _heroEventDescription(Map<String, dynamic> event) {
+    final double? discount = double.tryParse(
+      (_platformEventField(event, 'discount_value') ?? '').toString(),
+    );
+    final String discountType =
+        (_platformEventField(event, 'discount_type') ?? '')
+            .toString()
+            .toUpperCase();
+    if (discount != null && discount > 0) {
+      String amountLabel(double amount) => amount == amount.roundToDouble()
+          ? amount.toStringAsFixed(0)
+          : amount.toStringAsFixed(2);
+      final bool percentage = discountType == 'PERCENT';
+      final String benefit = percentage
+          ? '${amountLabel(discount)}% off'
+          : '₱${amountLabel(discount)} off';
+      final double? minimumSpend = double.tryParse(
+        (_platformEventField(event, 'minimum_order_amount') ?? '').toString(),
+      );
+      final double? maximumSavings = double.tryParse(
+        (_platformEventField(event, 'maximum_discount_amount') ?? '')
+            .toString(),
+      );
+      final String minimumText = minimumSpend != null && minimumSpend > 0
+          ? ' with a ₱${amountLabel(minimumSpend)} minimum spend'
+          : '';
+      final String maximumText = maximumSavings != null && maximumSavings > 0
+          ? ' Save up to ₱${amountLabel(maximumSavings)}.'
+          : '';
+      return '$benefit$minimumText.$maximumText';
+    }
+    for (final String key in <String>['description', 'body', 'summary']) {
+      final String value = (event[key] ?? '').toString().trim();
+      if (value.isNotEmpty) return value;
+    }
+    return 'Explore the event details, offers, and eligibility.';
   }
 
   Widget _buildHeaderRow(
@@ -2502,7 +2358,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
               const SizedBox(height: 5),
               Text(
                 subtitle,
-                style: TextStyle(color: AppTheme.resolve(context, muted), fontSize: 11, height: 1.4),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, muted),
+                  fontSize: 11,
+                  height: 1.4,
+                ),
               ),
             ],
           ),
@@ -2626,7 +2486,8 @@ class _ProductCard extends StatelessWidget {
     return ShopProductCard(
       key: ValueKey(product.id),
       image: _ProductGallery(images: product.galleryImages),
-      imageAspectRatio: 4.0 / 3.0,
+      imageAspectRatio: 1.0,
+      imageBadge: product.isFeatured ? 'Likhae Pick' : null,
       name: product.name,
       category: product.category,
       seller: product.sellerName,
@@ -2723,8 +2584,16 @@ class _ProductGalleryState extends State<_ProductGallery> {
                   height: 5,
                   decoration: BoxDecoration(
                     color: active
-                        ? AppTheme.resolve(context, _BuyerHomeScreenState.maroon, fill: true)
-                        : AppTheme.resolve(context, _BuyerHomeScreenState.muted2, fill: true).withValues(alpha: 0.55),
+                        ? AppTheme.resolve(
+                            context,
+                            _BuyerHomeScreenState.maroon,
+                            fill: true,
+                          )
+                        : AppTheme.resolve(
+                            context,
+                            _BuyerHomeScreenState.muted2,
+                            fill: true,
+                          ).withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 );
@@ -2744,7 +2613,7 @@ class _ProductImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = url?.trim() ?? '';
     if (value.isEmpty) {
-      return  Center(
+      return Center(
         child: Icon(
           Icons.inventory_2_outlined,
           color: AppTheme.resolve(context, ShopColors.faint),
@@ -2754,7 +2623,7 @@ class _ProductImage extends StatelessWidget {
     }
     return SizedNetworkImage(
       url: AppConfig.resolveMediaUrl(value),
-      fit: BoxFit.contain,
+      fit: BoxFit.cover,
       iconSize: 34,
     );
   }
@@ -2774,32 +2643,45 @@ class _BuyerCategoryCard extends StatelessWidget {
       button: true,
       label: 'Explore ${category.name}',
       child: Material(
-        color: AppTheme.resolve(context, _BuyerHomeScreenState.card, fill: true),
+        color: AppTheme.resolve(
+          context,
+          _BuyerHomeScreenState.card,
+          fill: true,
+        ),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
-            height: 110,
+            height: 116,
             padding: const EdgeInsets.fromLTRB(6, 8, 6, 6),
             decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.resolve(context, _BuyerHomeScreenState.border)),
+              border: Border.all(
+                color: AppTheme.resolve(context, _BuyerHomeScreenState.border),
+              ),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: AppTheme.resolve(context, _BuyerHomeScreenState.backgroundSoft, fill: true),
+                    color: AppTheme.resolve(
+                      context,
+                      _BuyerHomeScreenState.backgroundSoft,
+                      fill: true,
+                    ),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     icon,
-                    size: 21,
-                    color: AppTheme.resolve(context, _BuyerHomeScreenState.maroonLight),
+                    size: 22,
+                    color: AppTheme.resolve(
+                      context,
+                      _BuyerHomeScreenState.maroonLight,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -2809,8 +2691,11 @@ class _BuyerCategoryCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AppTheme.resolve(context, _BuyerHomeScreenState.text),
-                    fontSize: 9,
+                    color: AppTheme.resolve(
+                      context,
+                      _BuyerHomeScreenState.text,
+                    ),
+                    fontSize: 10,
                     fontWeight: FontWeight.w700,
                     height: 1.1,
                   ),
@@ -2819,8 +2704,11 @@ class _BuyerCategoryCard extends StatelessWidget {
                 Text(
                   'Explore',
                   style: TextStyle(
-                    color: AppTheme.resolve(context, _BuyerHomeScreenState.muted),
-                    fontSize: 8,
+                    color: AppTheme.resolve(
+                      context,
+                      _BuyerHomeScreenState.muted,
+                    ),
+                    fontSize: 9,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -2858,7 +2746,11 @@ class _BuyerQuickActionCard extends StatelessWidget {
       button: true,
       label: '${action.label}, ${action.description}',
       child: Material(
-        color: AppTheme.resolve(context, _BuyerHomeScreenState.card, fill: true),
+        color: AppTheme.resolve(
+          context,
+          _BuyerHomeScreenState.card,
+          fill: true,
+        ),
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
           onTap: action.onTap,
@@ -2867,7 +2759,9 @@ class _BuyerQuickActionCard extends StatelessWidget {
             height: 92,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.resolve(context, _BuyerHomeScreenState.border)),
+              border: Border.all(
+                color: AppTheme.resolve(context, _BuyerHomeScreenState.border),
+              ),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -2876,13 +2770,20 @@ class _BuyerQuickActionCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: AppTheme.resolve(context, _BuyerHomeScreenState.backgroundSoft, fill: true),
+                    color: AppTheme.resolve(
+                      context,
+                      _BuyerHomeScreenState.backgroundSoft,
+                      fill: true,
+                    ),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     action.icon,
                     size: 22,
-                    color: AppTheme.resolve(context, _BuyerHomeScreenState.maroon),
+                    color: AppTheme.resolve(
+                      context,
+                      _BuyerHomeScreenState.maroon,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -2896,7 +2797,10 @@ class _BuyerQuickActionCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AppTheme.resolve(context, _BuyerHomeScreenState.text),
+                          color: AppTheme.resolve(
+                            context,
+                            _BuyerHomeScreenState.text,
+                          ),
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2907,7 +2811,10 @@ class _BuyerQuickActionCard extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AppTheme.resolve(context, _BuyerHomeScreenState.muted),
+                          color: AppTheme.resolve(
+                            context,
+                            _BuyerHomeScreenState.muted,
+                          ),
                           fontSize: 10.5,
                           height: 1.25,
                         ),

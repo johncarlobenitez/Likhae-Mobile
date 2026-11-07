@@ -1,0 +1,1892 @@
+/* Shared workspace sidebar styles (Admin, Buyer, Seller, Logistics, Rider) */
+:root {
+        --admin-side-width: 252px;
+        --admin-side-collapsed: 76px;
+
+        --admin-bg: #FFFDF9;
+        --admin-page: #FBF7F2;
+        --admin-soft: #FAF3EC;
+        --admin-active: #F3E4DE;
+
+        --admin-line: #E8D8C8;
+        --admin-line-strong: #DCC8B8;
+
+        --admin-primary: #641F19;
+        --admin-primary-dark: #4D1712;
+
+        --admin-text: #694737;
+        --admin-text-strong: #311E18;
+        --admin-muted: #A27F6C;
+        --admin-muted-light: #A88B7B;
+    }
+
+    #adminSidebar,
+    #adminSidebar * {
+        box-sizing: border-box;
+    }
+
+    #adminSidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 60;
+
+        display: flex;
+        width: var(--admin-side-width);
+        height: 100vh;
+        flex-direction: column;
+
+        overflow: hidden;
+
+        border-right: 1px solid var(--admin-line);
+        background: var(--admin-bg);
+        color: var(--admin-text);
+
+        font-family:
+            "DM Sans",
+            system-ui,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+
+        transition:
+            width .22s ease,
+            transform .22s ease;
+    }
+
+    /* HEADER */
+
+    .ad-side-head {
+        display: flex;
+        height: 62px;
+        min-height: 62px;
+        flex: 0 0 62px;
+        box-sizing: border-box;
+        align-items: center;
+        gap: 11px;
+
+        padding: 0 11px;
+
+        border-bottom: 1px solid var(--admin-line);
+    }
+
+    .ad-side-menu {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px;
+        place-items: center;
+
+        border: 1px solid var(--admin-line);
+        border-radius: 10px;
+
+        background: var(--admin-soft);
+        color: #6C4936;
+
+        cursor: pointer;
+
+        transition: .15s ease;
+    }
+
+    .ad-side-menu:hover {
+        border-color: var(--admin-line-strong);
+        background: var(--admin-active);
+        color: var(--admin-primary);
+    }
+
+    .ad-side-menu svg {
+        width: 18px;
+        height: 18px;
+
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .ad-side-brand {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .ad-side-brand .likhae-logo--sidebar {
+        width: auto;
+        max-width: 151px;
+        max-height: 40px;
+    }
+
+    .likhae-logo__image--light {
+        display: block;
+    }
+
+    .likhae-logo__image--dark {
+        display: none;
+    }
+
+    html.dark .likhae-logo__image--light {
+        display: none;
+    }
+
+    html.dark .likhae-logo__image--dark {
+        display: block;
+    }
+
+    /* PROFILE */
+
+    .ad-side-profile {
+        display: grid;
+        grid-template-columns: auto minmax(0,1fr) auto;
+        min-height: 61px;
+        align-items: center;
+        gap: 10px;
+
+        margin: 13px 10px 8px;
+        padding: 10px;
+
+        border: 1px solid var(--admin-line);
+        border-radius: 13px;
+
+        background:
+            radial-gradient(
+                circle at 94% 9%,
+                rgba(193,151,113,.12),
+                transparent 34%
+            ),
+            var(--admin-soft);
+    }
+
+    .ad-side-avatar {
+        display: grid;
+        width: 39px;
+        height: 39px;
+        flex: 0 0 39px;
+        place-items: center;
+        overflow: hidden;
+
+        border-radius: 10px;
+
+        background: var(--admin-primary);
+        color: #FFFFFF;
+
+        font-size: 10px;
+        font-weight: 900;
+    }
+
+    .ad-side-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .ad-side-profile-copy {
+        min-width: 0;
+    }
+
+    .ad-side-profile-copy strong {
+        display: block;
+        overflow: hidden;
+
+        color: var(--admin-text-strong);
+
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1.2;
+
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ad-side-profile-copy small {
+        display: block;
+        margin-top: 3px;
+
+        color: var(--admin-muted);
+
+        font-size: 7px;
+        font-weight: 500;
+        line-height: 1.15;
+    }
+
+    .ad-side-verified {
+        display: grid;
+        width: 19px;
+        height: 19px;
+        flex: 0 0 19px;
+        place-items: center;
+
+        border-radius: 999px;
+
+        background: var(--admin-primary);
+        color: #FFFFFF;
+
+        font-size: 9px;
+        font-weight: 900;
+    }
+
+    /* SCROLL */
+
+    .ad-side-scroll {
+        min-height: 0;
+        flex: 1;
+
+        overflow-x: hidden;
+        overflow-y: auto;
+
+        padding: 4px 8px 14px;
+
+        scrollbar-width: thin;
+        scrollbar-color: #D8C2B1 transparent;
+    }
+
+    .ad-side-scroll::-webkit-scrollbar {
+        width: 5px;
+    }
+
+    .ad-side-scroll::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: #D8C2B1;
+    }
+
+    /* NAV */
+
+    .ad-side-group {
+        margin-top: 5px;
+    }
+
+    .ad-side-heading {
+        display: block;
+
+        margin: 0;
+        padding: 14px 11px 6px;
+
+        color: var(--admin-muted-light);
+
+        font-size: 7px;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: .13em;
+        text-transform: uppercase;
+    }
+
+    .ad-side-list {
+        display: grid;
+        gap: 2px;
+    }
+
+    .ad-side-link {
+        position: relative;
+
+        display: flex;
+        width: 100%;
+        min-height: 41px;
+        align-items: center;
+        gap: 10px;
+
+        padding: 0 11px;
+
+        border: 0;
+        border-radius: 9px;
+
+        background: transparent;
+        color: #72503F;
+
+        font-size: 10.5px;
+        font-weight: 500;
+        line-height: 1;
+
+        text-decoration: none;
+
+        transition: .14s ease;
+    }
+
+    .ad-side-link:hover {
+        background: var(--admin-soft);
+        color: var(--admin-primary);
+    }
+
+    .ad-side-link.is-active {
+        background: var(--admin-active);
+        color: var(--admin-primary);
+        font-weight: 700;
+    }
+
+    .ad-side-link.is-active::before {
+        position: absolute;
+        top: 8px;
+        bottom: 8px;
+        left: 0;
+
+        width: 3px;
+
+        border-radius: 0 6px 6px 0;
+
+        background: var(--admin-primary);
+
+        content: "";
+    }
+
+    .ad-side-icon {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        flex: 0 0 26px;
+        place-items: center;
+
+        color: currentColor;
+    }
+
+    .ad-side-icon svg {
+        width: 18px;
+        height: 18px;
+
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .ad-side-label {
+        min-width: 0;
+        flex: 1;
+
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ad-side-badge {
+        display: inline-flex;
+        min-width: 20px;
+        height: 20px;
+        align-items: center;
+        justify-content: center;
+
+        margin-left: auto;
+
+        padding: 0 6px;
+
+        border-radius: 999px;
+
+        background: #9E7D68;
+        color: #FFFFFF;
+
+        font-size: 8px;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    /* FOOTER */
+
+    .ad-side-bottom {
+        display: grid;
+        gap: 2px;
+
+        padding: 7px 8px 9px;
+
+        border-top: 1px solid var(--admin-line);
+
+        background: var(--admin-bg);
+    }
+
+    .ad-side-bottom form {
+        margin: 0;
+    }
+
+    .ad-side-theme,
+    .ad-side-logout {
+        display: flex;
+        width: 100%;
+        min-height: 43px;
+        align-items: center;
+        gap: 10px;
+
+        padding: 0 11px;
+
+        border: 0;
+        border-radius: 9px;
+
+        background: transparent;
+        color: #72503F;
+
+        font-family: inherit;
+        font-size: 10.5px;
+        font-weight: 500;
+        text-align: left;
+
+        cursor: pointer;
+
+        transition: .14s ease;
+    }
+
+    .ad-side-theme {
+        justify-content: space-between;
+    }
+
+    .ad-side-theme:hover,
+    .ad-side-logout:hover {
+        background: var(--admin-soft);
+        color: var(--admin-primary);
+    }
+
+    .ad-side-theme-copy {
+        display: grid;
+        min-width: 0;
+        flex: 1;
+        gap: 2px;
+    }
+
+    .ad-side-theme-copy strong {
+        color: inherit;
+
+        font-size: 10.5px;
+        font-weight: 500;
+        line-height: 1.1;
+    }
+
+    .ad-side-theme-copy small {
+        color: var(--admin-muted);
+
+        font-size: 8px;
+        font-weight: 500;
+        line-height: 1.1;
+    }
+
+    .ad-side-theme-state {
+        display: inline-flex;
+        min-width: 40px;
+        min-height: 21px;
+        align-items: center;
+        justify-content: center;
+
+        margin-left: auto;
+        padding: 0 9px;
+
+        border-radius: 999px;
+
+        background: #E3E3E2;
+        color: #494644;
+
+        font-size: 7px;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    .ad-side-logout {
+        justify-content: flex-start;
+    }
+
+    /* COLLAPSED */
+
+    #adminSidebar.is-collapsed {
+        width: var(--admin-side-collapsed);
+    }
+
+    #adminSidebar.is-collapsed .ad-side-brand,
+    #adminSidebar.is-collapsed .ad-side-profile-copy,
+    #adminSidebar.is-collapsed .ad-side-verified,
+    #adminSidebar.is-collapsed .ad-side-heading,
+    #adminSidebar.is-collapsed .ad-side-label,
+    #adminSidebar.is-collapsed .ad-side-badge,
+    #adminSidebar.is-collapsed .ad-side-theme-copy,
+    #adminSidebar.is-collapsed .ad-side-theme-state {
+        display: none !important;
+    }
+
+    #adminSidebar.is-collapsed .ad-side-head {
+        justify-content: center;
+        padding-inline: 0;
+    }
+
+    #adminSidebar.is-collapsed .ad-side-profile {
+        display: flex;
+        min-height: auto;
+        justify-content: center;
+
+        margin-inline: 8px;
+        padding: 8px 0;
+    }
+
+    #adminSidebar.is-collapsed .ad-side-link,
+    #adminSidebar.is-collapsed .ad-side-theme,
+    #adminSidebar.is-collapsed .ad-side-logout {
+        justify-content: center;
+        padding-inline: 0;
+    }
+
+    /* DARK */
+
+    html.dark #adminSidebar,
+    html.dark .ad-side-bottom {
+        border-color: #30231F;
+        background: #130F0E;
+        color: #F5EFE8;
+    }
+
+    html.dark .ad-side-head,
+    html.dark .ad-side-bottom {
+        border-color: #30231F;
+    }
+
+    html.dark .ad-side-menu {
+        border-color: #3B2E27;
+        background: #211B17;
+        color: #EBA99D;
+    }
+
+    html.dark .ad-side-profile {
+        border-color: #30231F;
+        background: #1B1513;
+    }
+
+    html.dark .ad-side-profile-copy strong {
+        color: #F5EFE8;
+    }
+
+    html.dark .ad-side-profile-copy small,
+    html.dark .ad-side-heading,
+    html.dark .ad-side-theme-copy small {
+        color: #8F817A;
+    }
+
+    html.dark .ad-side-link,
+    html.dark .ad-side-theme,
+    html.dark .ad-side-logout {
+        color: #B8AAA1;
+    }
+
+    html.dark .ad-side-link:hover,
+    html.dark .ad-side-theme:hover,
+    html.dark .ad-side-logout:hover {
+        background: #211B17;
+        color: #F3C6BA;
+    }
+
+    html.dark .ad-side-link.is-active {
+        background: #3A1111;
+        color: #F3C6BA;
+    }
+
+    html.dark .ad-side-link.is-active::before {
+        background: #A84538;
+    }
+
+    html.dark .ad-side-badge {
+        background: #8E7363;
+        color: #FFFFFF;
+    }
+
+    html.dark .ad-side-theme-state {
+        background: #A84538;
+        color: #FFFFFF;
+    }
+
+    html.dark .ad-side-avatar,
+    html.dark .ad-side-verified {
+        background: #A84538;
+    }
+
+    /* MOBILE */
+
+    #adminSidebarOverlay {
+        visibility: hidden;
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+
+        background: rgba(28,22,15,.42);
+
+        opacity: 0;
+        backdrop-filter: blur(3px);
+
+        transition:
+            opacity .18s ease,
+            visibility .18s ease;
+    }
+
+    #adminSidebarOverlay.is-visible {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    @media (max-width: 1023px) {
+        #adminSidebar,
+        #adminSidebar.is-collapsed {
+            width: var(--admin-side-width);
+            transform: translateX(-100%);
+        }
+
+        #adminSidebar.is-open {
+            transform: translateX(0);
+        }
+
+        #adminSidebar.is-collapsed .ad-side-brand,
+        #adminSidebar.is-collapsed .ad-side-profile-copy,
+        #adminSidebar.is-collapsed .ad-side-verified,
+        #adminSidebar.is-collapsed .ad-side-heading,
+        #adminSidebar.is-collapsed .ad-side-label,
+        #adminSidebar.is-collapsed .ad-side-badge,
+        #adminSidebar.is-collapsed .ad-side-theme-copy,
+        #adminSidebar.is-collapsed .ad-side-theme-state {
+            display: initial !important;
+        }
+
+        #adminSidebar.is-collapsed .ad-side-head {
+            justify-content: flex-start;
+            padding-inline: 11px;
+        }
+
+        #adminSidebar.is-collapsed .ad-side-profile {
+            display: grid;
+            grid-template-columns: auto minmax(0,1fr) auto;
+            min-height: 61px;
+            justify-content: initial;
+
+            margin: 13px 10px 8px;
+            padding: 10px;
+        }
+
+        #adminSidebar.is-collapsed .ad-side-link,
+        #adminSidebar.is-collapsed .ad-side-theme,
+        #adminSidebar.is-collapsed .ad-side-logout {
+            justify-content: initial;
+            padding-inline: 11px;
+        }
+    }
+
+    [data-sidebar-content] {
+        margin-left: var(--admin-side-width);
+        transition: margin-left .22s ease;
+    }
+
+    body.workspace-sidebar-collapsed [data-sidebar-content] {
+        margin-left: var(--admin-side-collapsed);
+    }
+
+    @media (min-width: 1024px) {
+        body.lk-buyer-home-sidebar-hover:not(.lk-buyer-home-sidebar-expanded) .lk-sidebar {
+            width: var(--lk-sidebar-collapsed);
+        }
+
+        body.lk-buyer-home-sidebar-hover:not(.lk-buyer-home-sidebar-expanded) [data-sidebar-content] {
+            margin-left: var(--admin-side-collapsed);
+        }
+    }
+
+    @media (max-width: 1023px) {
+        [data-sidebar-content] {
+            margin-left: 0 !important;
+        }
+    }
+
+/* Logistics and rider workspaces share the same sidebar markup. */
+body.logistics-shell,
+body.rider-shell {
+    --workspace-sidebar-width: 252px;
+    --workspace-sidebar-collapsed-width: 76px;
+    --workspace-sidebar-bg: #FFFDF9;
+    --workspace-sidebar-soft: #F6EFE7;
+    --workspace-sidebar-border: #EADCCC;
+    --workspace-sidebar-ink: #3B211B;
+    --workspace-sidebar-muted: #987865;
+    --workspace-sidebar-primary: #561C17;
+    --workspace-sidebar-active: #F3E4DE;
+}
+
+body.rider-shell {
+    --workspace-sidebar-width: 248px;
+}
+
+body.logistics-shell [data-sl-sidebar],
+body.rider-shell [data-sl-sidebar] {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 100;
+    display: flex;
+    width: var(--workspace-sidebar-width);
+    height: 100vh;
+    height: 100dvh;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--workspace-sidebar-border);
+    background: var(--workspace-sidebar-bg);
+    color: var(--workspace-sidebar-muted);
+    box-shadow: 8px 0 26px rgba(74, 35, 27, .05);
+    transition: width .22s ease, transform .22s ease;
+}
+
+body.logistics-shell .sl-sidebar-head,
+body.rider-shell .sl-sidebar-head {
+    display: flex;
+    min-height: 62px;
+    flex: 0 0 62px;
+    align-items: center;
+    gap: 11px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--workspace-sidebar-border);
+}
+
+body.logistics-shell .sl-icon-btn,
+body.rider-shell .sl-icon-btn {
+    display: inline-grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--workspace-sidebar-border);
+    border-radius: 10px;
+    background: var(--workspace-sidebar-soft);
+    color: var(--workspace-sidebar-primary);
+    cursor: pointer;
+}
+
+body.logistics-shell .sl-icon-btn svg,
+body.rider-shell .sl-icon-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+body.logistics-shell .sl-brand,
+body.rider-shell .sl-brand {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+}
+
+.sl-logistics-logo {
+    display: block;
+    width: 150px;
+    max-width: 100%;
+    aspect-ratio: 3 / 1;
+    flex: 0 1 150px;
+    overflow: hidden;
+}
+
+.sl-logistics-logo__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    mix-blend-mode: normal;
+}
+
+html.dark .sl-logistics-logo__image { mix-blend-mode: normal; }
+
+.sl-logistics-logo--compact {
+    width: 112px;
+    flex-basis: 112px;
+}
+
+body.logistics-shell .sl-brand-mark,
+body.rider-shell .sl-brand-mark {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--workspace-sidebar-primary);
+    color: #fff;
+    font-size: 19px;
+    font-weight: 700;
+}
+
+body.logistics-shell .sl-brand-copy,
+body.rider-shell .sl-brand-copy {
+    display: grid;
+    min-width: 0;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+
+body.logistics-shell .sl-brand-copy strong,
+body.rider-shell .sl-brand-copy strong {
+    color: var(--workspace-sidebar-ink);
+    font-size: 15px;
+    letter-spacing: .02em;
+}
+
+body.logistics-shell .sl-brand-copy small,
+body.rider-shell .sl-brand-copy small {
+    margin-top: 3px;
+    color: var(--workspace-sidebar-muted);
+    font-size: 8px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+body.logistics-shell .sl-seller-card,
+body.rider-shell .sl-seller-card {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 12px 11px 7px;
+    padding: 10px;
+    overflow: hidden;
+    border: 1px solid var(--workspace-sidebar-border);
+    border-radius: 12px;
+    background: var(--workspace-sidebar-soft);
+}
+
+body.logistics-shell .sl-avatar,
+body.rider-shell .sl-avatar {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--workspace-sidebar-primary);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+body.logistics-shell .sl-seller-copy,
+body.rider-shell .sl-seller-copy {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    white-space: nowrap;
+}
+
+body.logistics-shell .sl-seller-copy strong,
+body.rider-shell .sl-seller-copy strong {
+    overflow: hidden;
+    color: var(--workspace-sidebar-ink);
+    font-size: 10px;
+    text-overflow: ellipsis;
+}
+
+body.logistics-shell .sl-seller-copy small,
+body.rider-shell .sl-seller-copy small {
+    overflow: hidden;
+    color: var(--workspace-sidebar-muted);
+    font-size: 8px;
+    text-overflow: ellipsis;
+}
+
+body.logistics-shell .sl-verified,
+body.rider-shell .sl-verified {
+    display: grid;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--workspace-sidebar-primary);
+    color: #fff;
+    font-size: 10px;
+}
+
+body.logistics-shell .sl-sidebar-scroll,
+body.rider-shell .sl-sidebar-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 5px 9px 14px;
+    scrollbar-color: var(--workspace-sidebar-border) transparent;
+    scrollbar-width: thin;
+}
+
+body.logistics-shell .sl-nav-section,
+body.rider-shell .sl-nav-section {
+    margin-top: 11px;
+}
+
+body.logistics-shell .sl-nav-label,
+body.rider-shell .sl-nav-label {
+    display: flex;
+    min-height: 25px;
+    align-items: center;
+    padding: 0 10px;
+    color: var(--workspace-sidebar-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+body.logistics-shell .sl-nav-link,
+body.rider-shell .sl-nav-link {
+    position: relative;
+    display: flex;
+    width: 100%;
+    min-height: 39px;
+    align-items: center;
+    gap: 10px;
+    margin: 2px 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--workspace-sidebar-muted);
+    font: inherit;
+    font-size: 10px;
+    text-align: left;
+    text-decoration: none;
+    transition: color .15s ease, background .15s ease;
+}
+
+body.logistics-shell .sl-nav-link:hover,
+body.rider-shell .sl-nav-link:hover {
+    background: var(--workspace-sidebar-soft);
+    color: var(--workspace-sidebar-primary);
+}
+
+body.logistics-shell .sl-nav-link.is-active,
+body.rider-shell .sl-nav-link.is-active {
+    background: var(--workspace-sidebar-active);
+    color: var(--workspace-sidebar-primary);
+    font-weight: 700;
+}
+
+body.logistics-shell .sl-nav-link.is-active::before,
+body.rider-shell .sl-nav-link.is-active::before {
+    position: absolute;
+    inset: 8px auto 8px 0;
+    width: 3px;
+    border-radius: 0 5px 5px 0;
+    background: var(--workspace-sidebar-primary);
+    content: "";
+}
+
+body.logistics-shell .sl-nav-icon,
+body.rider-shell .sl-nav-icon {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    place-items: center;
+}
+
+body.logistics-shell .sl-nav-icon svg,
+body.rider-shell .sl-nav-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+body.logistics-shell .sl-nav-text,
+body.rider-shell .sl-nav-text {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.logistics-shell .sl-nav-badge,
+body.rider-shell .sl-nav-badge {
+    display: grid;
+    min-width: 18px;
+    height: 18px;
+    place-items: center;
+    padding: 0 5px;
+    border-radius: 99px;
+    background: #987865;
+    color: #fff;
+    font-size: 9px;
+}
+
+body.logistics-shell .sl-sidebar-foot,
+body.rider-shell .sl-sidebar-foot {
+    flex: 0 0 auto;
+    padding: 9px 9px max(9px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--workspace-sidebar-border);
+    background: var(--workspace-sidebar-bg);
+}
+
+body.logistics-shell .sl-sidebar-foot form,
+body.rider-shell .sl-sidebar-foot form {
+    margin: 0;
+}
+
+body.logistics-shell .sl-sidebar-foot .sl-logout,
+body.rider-shell .sl-sidebar-foot .sl-logout {
+    color: #B42318;
+}
+
+body.logistics-shell [data-sidebar-content],
+body.rider-shell [data-sidebar-content] {
+    margin-left: var(--workspace-sidebar-width);
+    transition: margin-left .22s ease;
+}
+
+body.logistics-shell.sl-sidebar-collapsed [data-sl-sidebar],
+body.rider-shell.sl-sidebar-collapsed [data-sl-sidebar] {
+    width: var(--workspace-sidebar-collapsed-width);
+}
+
+body.logistics-shell.sl-sidebar-collapsed [data-sidebar-content],
+body.rider-shell.sl-sidebar-collapsed [data-sidebar-content] {
+    margin-left: var(--workspace-sidebar-collapsed-width);
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-brand-copy,
+body.rider-shell.sl-sidebar-collapsed .sl-brand-copy,
+body.logistics-shell.sl-sidebar-collapsed .sl-seller-copy,
+body.rider-shell.sl-sidebar-collapsed .sl-seller-copy,
+body.logistics-shell.sl-sidebar-collapsed .sl-verified,
+body.rider-shell.sl-sidebar-collapsed .sl-verified,
+body.logistics-shell.sl-sidebar-collapsed .sl-nav-label,
+body.rider-shell.sl-sidebar-collapsed .sl-nav-label,
+body.logistics-shell.sl-sidebar-collapsed .sl-nav-text,
+body.rider-shell.sl-sidebar-collapsed .sl-nav-text,
+body.logistics-shell.sl-sidebar-collapsed .sl-nav-badge,
+body.rider-shell.sl-sidebar-collapsed .sl-nav-badge {
+    display: none !important;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-sidebar-head,
+body.rider-shell.sl-sidebar-collapsed .sl-sidebar-head {
+    position: relative;
+    justify-content: center;
+    padding-inline: 8px;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-sidebar-toggle,
+body.rider-shell.sl-sidebar-collapsed .sl-sidebar-toggle {
+    position: absolute;
+    top: 13px;
+    left: 19px;
+    z-index: 2;
+    opacity: 0;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-sidebar-head:hover .sl-sidebar-toggle,
+body.rider-shell.sl-sidebar-collapsed .sl-sidebar-head:hover .sl-sidebar-toggle,
+body.logistics-shell.sl-sidebar-collapsed .sl-sidebar-toggle:focus-visible,
+body.rider-shell.sl-sidebar-collapsed .sl-sidebar-toggle:focus-visible {
+    opacity: 1;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-sidebar-head:hover .sl-brand,
+body.rider-shell.sl-sidebar-collapsed .sl-sidebar-head:hover .sl-brand {
+    opacity: 0;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-seller-card,
+body.rider-shell.sl-sidebar-collapsed .sl-seller-card {
+    justify-content: center;
+    margin-inline: 8px;
+    padding: 8px 0;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-nav-link,
+body.rider-shell.sl-sidebar-collapsed .sl-nav-link {
+    justify-content: center;
+    padding-inline: 0;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-theme-copy,
+body.rider-shell.sl-sidebar-collapsed .sl-theme-copy,
+body.logistics-shell.sl-sidebar-collapsed .sl-theme-state,
+body.rider-shell.sl-sidebar-collapsed .sl-theme-state {
+    display: none !important;
+}
+
+body.logistics-shell.sl-sidebar-collapsed #themeToggle,
+body.rider-shell.sl-sidebar-collapsed #themeToggle {
+    justify-content: center !important;
+    padding-inline: 0 !important;
+}
+
+body.logistics-shell.sl-sidebar-collapsed .sl-nav-link:hover::after,
+body.rider-shell.sl-sidebar-collapsed .sl-nav-link:hover::after {
+    position: absolute;
+    left: 58px;
+    z-index: 130;
+    padding: 6px 9px;
+    border: 1px solid var(--workspace-sidebar-border);
+    border-radius: 7px;
+    background: var(--workspace-sidebar-ink);
+    color: #fff;
+    content: attr(data-title);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+body.logistics-shell .sl-overlay,
+body.rider-shell .sl-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    visibility: hidden;
+    background: rgba(28, 22, 15, .42);
+    opacity: 0;
+    backdrop-filter: blur(3px);
+    transition: opacity .2s ease, visibility .2s ease;
+}
+
+body.logistics-shell .sl-overlay.is-open,
+body.rider-shell .sl-overlay.is-open {
+    visibility: visible;
+    opacity: 1;
+}
+
+body.sl-mobile-open {
+    overflow: hidden;
+}
+
+html.dark body.logistics-shell,
+html.dark body.rider-shell {
+    --workspace-sidebar-bg: #130F0E;
+    --workspace-sidebar-soft: #1B1513;
+    --workspace-sidebar-border: #30231F;
+    --workspace-sidebar-ink: #F5EFE8;
+    --workspace-sidebar-muted: #B8AAA1;
+    --workspace-sidebar-active: #3A1111;
+}
+
+html.dark body.logistics-shell [data-sl-sidebar],
+html.dark body.rider-shell [data-sl-sidebar] {
+    box-shadow: none;
+}
+
+html.dark body.logistics-shell .sl-nav-link.is-active,
+html.dark body.rider-shell .sl-nav-link.is-active {
+    color: #F3C6BA;
+}
+
+@media (max-width: 1023px) {
+    body.logistics-shell [data-sl-sidebar],
+    body.rider-shell [data-sl-sidebar],
+    body.logistics-shell.sl-sidebar-collapsed [data-sl-sidebar],
+    body.rider-shell.sl-sidebar-collapsed [data-sl-sidebar] {
+        width: min(84vw, 270px);
+        height: 100dvh;
+        max-height: 100dvh;
+        transform: translateX(-102%);
+    }
+
+    body.logistics-shell [data-sl-sidebar].is-open,
+    body.rider-shell [data-sl-sidebar].is-open {
+        transform: translateX(0);
+    }
+
+    body.logistics-shell [data-sidebar-content],
+    body.rider-shell [data-sidebar-content],
+    body.logistics-shell.sl-sidebar-collapsed [data-sidebar-content],
+    body.rider-shell.sl-sidebar-collapsed [data-sidebar-content] {
+        margin-left: 0 !important;
+    }
+
+    body.logistics-shell.sl-sidebar-collapsed .sl-brand-copy,
+    body.rider-shell.sl-sidebar-collapsed .sl-brand-copy,
+    body.logistics-shell.sl-sidebar-collapsed .sl-seller-copy,
+    body.rider-shell.sl-sidebar-collapsed .sl-seller-copy,
+    body.logistics-shell.sl-sidebar-collapsed .sl-verified,
+    body.rider-shell.sl-sidebar-collapsed .sl-verified,
+    body.logistics-shell.sl-sidebar-collapsed .sl-nav-label,
+    body.rider-shell.sl-sidebar-collapsed .sl-nav-label,
+    body.logistics-shell.sl-sidebar-collapsed .sl-nav-text,
+    body.rider-shell.sl-sidebar-collapsed .sl-nav-text,
+    body.logistics-shell.sl-sidebar-collapsed .sl-nav-badge,
+    body.rider-shell.sl-sidebar-collapsed .sl-nav-badge {
+        display: initial !important;
+    }
+
+    body.logistics-shell.sl-sidebar-collapsed .sl-sidebar-head,
+    body.rider-shell.sl-sidebar-collapsed .sl-sidebar-head {
+        justify-content: flex-start;
+        padding-inline: 14px;
+    }
+
+    body.logistics-shell.sl-sidebar-collapsed .sl-seller-card,
+    body.rider-shell.sl-sidebar-collapsed .sl-seller-card {
+        justify-content: flex-start;
+        margin: 12px 11px 7px;
+        padding: 10px;
+    }
+
+    body.logistics-shell.sl-sidebar-collapsed .sl-nav-link,
+    body.rider-shell.sl-sidebar-collapsed .sl-nav-link {
+        justify-content: flex-start;
+        padding-inline: 10px;
+    }
+
+    body.logistics-shell.sl-sidebar-collapsed .sl-theme-copy,
+    body.rider-shell.sl-sidebar-collapsed .sl-theme-copy {
+        display: grid !important;
+    }
+
+    body.logistics-shell.sl-sidebar-collapsed .sl-theme-state,
+    body.rider-shell.sl-sidebar-collapsed .sl-theme-state {
+        display: inline-flex !important;
+    }
+
+    body.logistics-shell.sl-sidebar-collapsed .sl-sidebar-toggle,
+    body.rider-shell.sl-sidebar-collapsed .sl-sidebar-toggle {
+        position: static;
+        opacity: 1;
+    }
+
+    body.logistics-shell .sl-sidebar-toggle,
+    body.rider-shell .sl-sidebar-toggle {
+        display: none;
+    }
+}
+
+/* Admin-inspired polish for the logistics and rider workspaces. */
+body.logistics-shell .sl-sidebar-head,
+body.rider-shell .sl-sidebar-head {
+    min-height: 66px;
+    flex-basis: 66px;
+    padding-inline: 15px;
+    background: linear-gradient(115deg, rgba(246, 239, 231, .64), transparent 78%);
+}
+
+body.logistics-shell .sl-brand,
+body.rider-shell .sl-brand {
+    flex: 1 1 auto;
+    min-height: 40px;
+}
+
+body.logistics-shell .sl-logistics-logo,
+body.rider-shell .sl-logistics-logo {
+    width: 156px;
+    flex-basis: 156px;
+}
+
+body.logistics-shell .sl-sidebar-toggle,
+body.rider-shell .sl-sidebar-toggle {
+    border-radius: 11px;
+    background: var(--workspace-sidebar-bg);
+    box-shadow: 0 2px 8px rgba(74, 35, 27, .04);
+    transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+body.logistics-shell .sl-sidebar-toggle:hover,
+body.rider-shell .sl-sidebar-toggle:hover {
+    border-color: #D9C5B2;
+    background: var(--workspace-sidebar-soft);
+    transform: translateY(-1px);
+}
+
+body.logistics-shell .sl-sidebar-scroll,
+body.rider-shell .sl-sidebar-scroll {
+    padding: 8px 11px 15px;
+}
+
+body.logistics-shell .sl-nav-section,
+body.rider-shell .sl-nav-section {
+    margin-top: 13px;
+}
+
+body.logistics-shell .sl-nav-label,
+body.rider-shell .sl-nav-label {
+    min-height: 24px;
+    padding-inline: 11px;
+    color: #A18A7C;
+    font-size: 8px;
+    letter-spacing: .15em;
+}
+
+body.logistics-shell .sl-nav-link,
+body.rider-shell .sl-nav-link {
+    min-height: 41px;
+    gap: 11px;
+    padding-inline: 11px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font-size: 11px;
+}
+
+body.logistics-shell .sl-nav-link:hover,
+body.rider-shell .sl-nav-link:hover {
+    background: var(--workspace-sidebar-soft);
+}
+
+body.logistics-shell .sl-nav-link.is-active,
+body.rider-shell .sl-nav-link.is-active {
+    border-color: rgba(86, 28, 23, .08);
+    background: var(--workspace-sidebar-active);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32);
+}
+
+body.logistics-shell .sl-nav-link.is-active::before,
+body.rider-shell .sl-nav-link.is-active::before {
+    inset-block: 9px;
+    width: 3px;
+}
+
+body.logistics-shell .sl-nav-icon,
+body.rider-shell .sl-nav-icon {
+    width: 23px;
+    height: 23px;
+    flex-basis: 23px;
+}
+
+body.logistics-shell .sl-nav-icon svg,
+body.rider-shell .sl-nav-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.65;
+}
+
+body.logistics-shell .sl-nav-text,
+body.rider-shell .sl-nav-text {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+body.logistics-shell .sl-nav-link.is-active .sl-nav-text,
+body.rider-shell .sl-nav-link.is-active .sl-nav-text {
+    font-weight: 800;
+}
+
+body.logistics-shell .sl-nav-badge,
+body.rider-shell .sl-nav-badge {
+    min-width: 20px;
+    height: 20px;
+    background: #E8D8CB;
+    color: var(--workspace-sidebar-primary);
+    font-size: 9px;
+    font-weight: 800;
+}
+
+body.logistics-shell .sl-nav-link.is-active .sl-nav-badge,
+body.rider-shell .sl-nav-link.is-active .sl-nav-badge {
+    background: var(--workspace-sidebar-primary);
+    color: #fff;
+}
+
+body.logistics-shell .sl-sidebar-foot,
+body.rider-shell .sl-sidebar-foot {
+    padding: 10px 11px max(11px, env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, transparent, rgba(246, 239, 231, .42));
+}
+
+body.logistics-shell .sl-sidebar-foot .sl-nav-link,
+body.rider-shell .sl-sidebar-foot .sl-nav-link {
+    min-height: 40px;
+    font-size: 10px;
+}
+
+body.logistics-shell .sl-sidebar-foot .sl-logout:hover,
+body.rider-shell .sl-sidebar-foot .sl-logout:hover {
+    background: #FCEBE9;
+    color: #8A2118;
+}
+
+body.logistics-shell .sl-workspace-header,
+body.logistics-shell .sl-mobile-header {
+    border-color: var(--workspace-sidebar-border);
+    background: rgba(255, 253, 249, .92);
+    box-shadow: 0 5px 18px rgba(74, 35, 27, .035);
+}
+
+body.logistics-shell .sl-workspace-header {
+    min-height: 64px;
+    padding-inline: 24px;
+}
+
+body.logistics-shell .sl-header-title {
+    display: grid;
+    gap: 3px;
+}
+
+body.logistics-shell .sl-header-title strong {
+    color: var(--workspace-sidebar-ink);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -.035em;
+}
+
+body.logistics-shell .sl-header-title span {
+    color: var(--workspace-sidebar-muted);
+    font-size: 9px;
+}
+
+body.logistics-shell .sl-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+body.logistics-shell .sl-header-icon-btn {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border: 1px solid var(--workspace-sidebar-border);
+    border-radius: 11px;
+    border-color: var(--workspace-sidebar-border);
+    background: var(--workspace-sidebar-bg);
+    color: var(--workspace-sidebar-primary);
+    box-shadow: 0 2px 8px rgba(74, 35, 27, .035);
+}
+
+body.logistics-shell .sl-header-icon-btn:hover {
+    border-color: #D9C5B2;
+    background: var(--workspace-sidebar-soft);
+}
+
+body.logistics-shell .sl-mobile-header {
+    min-height: 62px;
+    padding-inline: 16px;
+}
+
+body.logistics-shell .sl-mobile-header > a {
+    flex: 0 1 150px;
+    justify-content: center;
+}
+
+body.logistics-shell .sl-mobile-header .sl-logistics-logo--compact {
+    width: 112px;
+    flex-basis: 112px;
+}
+
+html.dark body.logistics-shell .sl-sidebar-head {
+    background: linear-gradient(115deg, rgba(58, 17, 17, .34), transparent 78%);
+}
+
+html.dark body.rider-shell .sl-sidebar-head {
+    background: linear-gradient(115deg, rgba(58, 17, 17, .34), transparent 78%);
+}
+
+html.dark body.logistics-shell .sl-nav-label,
+html.dark body.rider-shell .sl-nav-label {
+    color: #9A8980;
+}
+
+html.dark body.logistics-shell .sl-nav-badge,
+html.dark body.rider-shell .sl-nav-badge {
+    background: #34231F;
+    color: #EAC2B7;
+}
+
+html.dark body.logistics-shell .sl-nav-link.is-active .sl-nav-badge,
+html.dark body.rider-shell .sl-nav-link.is-active .sl-nav-badge {
+    background: #A84538;
+    color: #fff;
+}
+
+html.dark body.logistics-shell .sl-sidebar-foot {
+    background: linear-gradient(180deg, transparent, rgba(58, 17, 17, .16));
+}
+
+html.dark body.rider-shell .sl-sidebar-foot {
+    background: linear-gradient(180deg, transparent, rgba(58, 17, 17, .16));
+}
+
+html.dark body.logistics-shell .sl-header-icon-btn,
+html.dark body.logistics-shell .sl-mobile-header {
+    background: rgba(27, 21, 19, .94);
+}
+
+html.dark body.logistics-shell .sl-workspace-header {
+    background: rgba(19, 15, 14, .92);
+}
+
+body.logistics-shell .sl-header-icon-btn > span {
+    border-color: var(--workspace-sidebar-bg);
+}
+
+body.logistics-shell .sl-workspace-header {
+    display: grid;
+    grid-template-columns: minmax(180px, .85fr) minmax(280px, 480px) minmax(300px, .85fr);
+    align-items: center;
+    gap: clamp(10px, 1.4vw, 20px);
+    min-height: 68px;
+    overflow: visible;
+    isolation: isolate;
+}
+
+body.logistics-shell .sl-header-title {
+    min-width: 0;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-wrap {
+    position: relative;
+    z-index: 5;
+    width: 100%;
+    min-width: 0;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search {
+    display: flex;
+    width: 100%;
+    height: 42px;
+    align-items: center;
+    gap: 9px;
+    padding: 0 12px;
+    border: 1px solid var(--workspace-sidebar-border);
+    border-radius: 12px;
+    background: var(--workspace-sidebar-bg);
+    transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search:focus-within {
+    border-color: #C19771;
+    background: var(--lk-surface, #fffdf9);
+    box-shadow: 0 0 0 3px rgba(86, 28, 23, .09);
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search > svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    fill: none;
+    stroke: var(--workspace-sidebar-muted);
+    stroke-width: 1.8;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search input {
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+    border: 0;
+    outline: 0;
+    color: var(--workspace-sidebar-ink);
+    background: transparent;
+    font: inherit;
+    font-size: 10px;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search input::placeholder {
+    color: var(--workspace-sidebar-muted);
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search kbd {
+    flex: 0 0 auto;
+    padding: 3px 6px;
+    border: 1px solid var(--workspace-sidebar-border);
+    border-radius: 5px;
+    color: var(--workspace-sidebar-muted);
+    background: var(--lk-surface, #fffdf9);
+    font-size: 8px;
+    white-space: nowrap;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown {
+    position: absolute;
+    z-index: 120;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    display: grid;
+    max-height: min(440px, 70vh);
+    gap: 4px;
+    overflow-y: auto;
+    padding: 8px;
+    border: 1px solid var(--workspace-sidebar-border);
+    border-radius: 13px;
+    background: var(--workspace-sidebar-bg);
+    box-shadow: 0 14px 34px rgba(44, 25, 20, .18);
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown[hidden],
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown__empty[hidden],
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown__clear[hidden] {
+    display: none !important;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown__heading {
+    margin: 0;
+    padding: 5px 9px 2px;
+    color: var(--workspace-sidebar-muted);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown__options {
+    display: grid;
+    gap: 4px;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option-group {
+    display: grid;
+    gap: 2px;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option-group + .sl-search-option-group {
+    padding-top: 5px;
+    border-top: 1px solid var(--workspace-sidebar-border);
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option-group__title {
+    margin: 0;
+    padding: 5px 9px 2px;
+    color: var(--workspace-sidebar-muted);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: .075em;
+    text-transform: uppercase;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 10px;
+    border-radius: 9px;
+    color: var(--workspace-sidebar-ink);
+    text-decoration: none;
+    transition: background .14s ease, color .14s ease;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option:hover,
+body:is(.logistics-shell, .rider-shell) .sl-search-option:focus-visible,
+body:is(.logistics-shell, .rider-shell) .sl-search-option.is-active {
+    color: var(--workspace-sidebar-primary);
+    background: var(--workspace-sidebar-soft);
+    outline: none;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option__copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option__copy strong {
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option__copy small {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--workspace-sidebar-muted);
+    font-size: 8px;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-option__location {
+    flex: 0 0 auto;
+    max-width: 42%;
+    overflow: hidden;
+    color: var(--workspace-sidebar-muted);
+    font-size: 8px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown__empty {
+    margin: 0;
+    padding: 9px 10px;
+    color: var(--workspace-sidebar-muted);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown__clear {
+    display: flex;
+    width: 100%;
+    min-height: 31px;
+    justify-content: flex-start;
+    padding: 7px 10px;
+    border: 0;
+    border-top: 1px solid var(--workspace-sidebar-border);
+    color: var(--workspace-sidebar-primary);
+    background: transparent;
+    font: inherit;
+    font-size: 9px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+}
+
+body:is(.logistics-shell, .rider-shell) .sl-search-dropdown__clear:hover {
+    text-decoration: underline;
+}
+
+body.logistics-shell .sl-header-actions {
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+body.logistics-shell .sl-header-actions .sl-header-icon-btn,
+body.logistics-shell .sl-mobile-header-actions .sl-header-icon-btn {
+    border-color: var(--workspace-sidebar-border);
+    border-radius: 10px;
+    color: var(--workspace-sidebar-primary);
+    background: var(--workspace-sidebar-bg);
+}
+
+body.logistics-shell .sl-header-actions .sl-header-icon-btn:hover,
+body.logistics-shell .sl-mobile-header-actions .sl-header-icon-btn:hover {
+    border-color: #D9C5B2;
+    color: #8A2118;
+    background: var(--workspace-sidebar-soft);
+}
+
+body.logistics-shell .sl-header-icon-btn svg {
+    width: 17px;
+    height: 17px;
+}
+
+body.logistics-shell .sl-header-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    display: grid;
+    min-width: 16px;
+    height: 16px;
+    place-items: center;
+    padding: 0 4px;
+    border: 2px solid var(--workspace-sidebar-bg);
+    border-radius: 999px;
+    color: #fff;
+    background: #9D2C27;
+    font-size: 7px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+body.logistics-shell .sl-mobile-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+html.dark body:is(.logistics-shell, .rider-shell) .sl-search:focus-within {
+    border-color: #A85D50;
+    background: var(--lk-surface, #211b17);
+}
+
+html.dark body:is(.logistics-shell, .rider-shell) .sl-search kbd {
+    background: var(--lk-surface, #211b17);
+}
+
+html.dark body:is(.logistics-shell, .rider-shell) .sl-search-option:hover,
+html.dark body:is(.logistics-shell, .rider-shell) .sl-search-option:focus-visible,
+html.dark body:is(.logistics-shell, .rider-shell) .sl-search-option.is-active {
+    color: #F0B6AA;
+    background: #361B17;
+}
+
+html.dark body.logistics-shell .sl-header-actions .sl-header-icon-btn,
+html.dark body.logistics-shell .sl-mobile-header-actions .sl-header-icon-btn {
+    color: #EAC2B7;
+    background: #211B17;
+}
+
+html.dark body.logistics-shell .sl-header-badge {
+    border-color: #211B17;
+    background: #8A3A2F;
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+    body.logistics-shell .sl-workspace-header {
+        grid-template-columns: minmax(105px, .55fr) minmax(170px, 1fr) auto;
+        gap: 10px;
+        padding-inline: 16px;
+    }
+
+    body.logistics-shell .sl-header-title strong {
+        font-size: 13px;
+    }
+
+    body:is(.logistics-shell, .rider-shell) .sl-search kbd {
+        display: none;
+    }
+
+    body.logistics-shell .sl-header-actions {
+        gap: 5px;
+    }
+
+    body.logistics-shell .sl-header-actions .workspace-account__copy {
+        display: none;
+    }
+}
+
+@media (max-width: 1023px) {
+    body.logistics-shell .sl-mobile-header {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 8px;
+        overflow: visible;
+        isolation: isolate;
+    }
+
+    body.logistics-shell .sl-mobile-header > a {
+        min-width: 0;
+        max-width: 150px;
+        justify-self: center;
+    }
+
+    body.logistics-shell .sl-mobile-header .sl-logistics-logo--compact {
+        width: 112px;
+        max-width: 100%;
+        flex-basis: 112px;
+    }
+
+    body.logistics-shell .sl-mobile-header-actions {
+        justify-self: end;
+    }
+}
+
+@media (max-width: 380px) {
+    body.logistics-shell .sl-mobile-header {
+        gap: 5px;
+        padding-inline: 10px;
+    }
+
+    body.logistics-shell .sl-mobile-header .sl-logistics-logo--compact {
+        width: 96px;
+        flex-basis: 96px;
+    }
+
+    body.logistics-shell .sl-mobile-header-actions {
+        gap: 3px;
+    }
+
+    body.logistics-shell .sl-mobile-header-actions .sl-header-icon-btn {
+        width: 34px;
+        height: 34px;
+        flex-basis: 34px;
+    }
+}
+
+@media (max-width: 1023px) {
+    body.logistics-shell .sl-sidebar-head,
+    body.rider-shell .sl-sidebar-head {
+        padding-inline: 14px;
+    }
+
+    body.logistics-shell .sl-logistics-logo,
+    body.rider-shell .sl-logistics-logo {
+        width: 150px;
+        flex-basis: 150px;
+    }
+
+    body.logistics-shell .sl-header-actions {
+        gap: 7px;
+    }
+}

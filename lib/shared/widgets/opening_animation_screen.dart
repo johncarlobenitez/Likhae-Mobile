@@ -8,8 +8,6 @@ import '../../features/buyer/cart/cart_screen.dart';
 import '../../features/buyer/orders/order_success_screen.dart';
 import '../../features/buyer/orders/order_tracking_screen.dart';
 import '../../features/buyer/orders/orders_screen.dart';
-import '../../features/rider/deliveries/rider_delivery_details_screen.dart';
-import '../../features/rider/deliveries/rider_delivery_models.dart';
 import 'app_motion.dart';
 import 'glass_navigation.dart';
 
@@ -28,7 +26,7 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
   final _homeScroll = ScrollController();
   int _stage = 0;
   bool _finished = false;
-  static const _ends = [0.18, 0.34, 0.43, 0.52, 0.65, 0.80, 0.89, 1.0];
+  static const _ends = [0.18, 0.34, 0.43, 0.52, 0.65, 0.82, 1.0];
   static const _labels = [
     'Welcome',
     'Discover',
@@ -36,7 +34,6 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
     'Cart',
     'Order confirmation',
     'Tracking',
-    'Delivery',
     'LIKHAE',
   ];
   static void _noop() {}
@@ -47,10 +44,10 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
     WidgetsBinding.instance.addObserver(this);
     _clock = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 7600),
+      duration: const Duration(milliseconds: 15200),
     )..addListener(_tick);
     // Navigation never relies on a painter, image, or ticker completing.
-    _deadline = Timer(const Duration(seconds: 8), _finish);
+    _deadline = Timer(const Duration(seconds: 16), _finish);
   }
 
   @override
@@ -89,7 +86,7 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
     if (_stage == 1 && _homeScroll.hasClients) {
       final progress = ((_clock.value - 0.21) / 0.12).clamp(0.0, 1.0);
       _homeScroll.jumpTo(
-        (900 * Curves.easeInOut.transform(progress)).clamp(
+        (320 * Curves.easeInOut.transform(progress)).clamp(
           0.0,
           _homeScroll.position.maxScrollExtent,
         ),
@@ -232,25 +229,12 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
           painter: _RoutePreview(
             _clock.drive(
               CurveTween(
-                curve: const Interval(.65, .80, curve: Curves.easeInOut),
+                curve: const Interval(.65, .82, curve: Curves.easeInOut),
               ),
             ),
             Theme.of(context).colorScheme,
           ),
         ),
-      ),
-    ),
-    6 => const RiderDeliveryDetailsScreen(
-      delivery: RiderDeliveryData(
-        id: 0,
-        trackingCode: 'DEMO-001',
-        buyerName: 'Preview customer',
-        contact: '',
-        address: 'Pila, Laguna',
-        amount: 799,
-        status: 'out_for_delivery',
-        statusLabel: 'Out For Delivery',
-        isPreview: true,
       ),
     ),
     _ => const Center(
@@ -264,7 +248,7 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final brand = _stage == 0 || _stage == 7;
+    final brand = _stage == 0 || _stage == 6;
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -296,11 +280,7 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
                                       borderRadius: BorderRadius.circular(24),
                                     ),
                                     child: Text(
-                                      _stage == 5
-                                          ? 'TRACKING'
-                                          : _stage == 6
-                                          ? 'RIDER'
-                                          : 'BUYER',
+                                      'PREVIEW',
                                       style: TextStyle(
                                         fontSize: 10,
                                         letterSpacing: 1,
@@ -327,35 +307,34 @@ class _OpeningAnimationScreenState extends State<OpeningAnimationScreen>
                           child: IgnorePointer(
                             child: _StageEntrance(
                               key: ValueKey(_stage),
-                              child: brand
-                                  ? _page()
-                                  : Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        12,
-                                        0,
-                                        12,
-                                        18,
-                                      ),
-                                      child: FittedBox(
-                                        fit: BoxFit.contain,
-                                        child: SizedBox(
-                                          width: 430,
-                                          height: 820,
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              24,
-                                            ),
-                                            child: MediaQuery(
-                                              data: MediaQuery.of(context)
-                                                  .copyWith(
-                                                    size: const Size(430, 820),
-                                                  ),
-                                              child: _page(),
-                                            ),
-                                          ),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  18,
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: 430,
+                                    height: brand ? 600 : 900,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: MediaQuery(
+                                        data: MediaQuery.of(context).copyWith(
+                                          size: Size(430, brand ? 600 : 900),
+                                          padding: EdgeInsets.zero,
+                                          viewPadding: EdgeInsets.zero,
+                                          viewInsets: EdgeInsets.zero,
+                                          textScaler: TextScaler.noScaling,
                                         ),
+                                        child: _page(),
                                       ),
                                     ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -374,16 +353,13 @@ class _StageEntrance extends StatelessWidget {
   final Widget child;
   @override
   Widget build(BuildContext context) => AppMotionTimeline(
-    duration: const Duration(milliseconds: 240),
+    duration: const Duration(milliseconds: 360),
     builder: (context, progress) {
       final ease = progress.drive(CurveTween(curve: Curves.easeOutCubic));
       return FadeTransition(
         opacity: ease,
-        child: SlideTransition(
-          position: Tween(
-            begin: const Offset(0, .045),
-            end: Offset.zero,
-          ).animate(ease),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: .96, end: 1).animate(ease),
           child: child,
         ),
       );

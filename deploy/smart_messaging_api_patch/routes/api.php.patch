@@ -1,0 +1,6 @@
+--- a/routes/api.php
++++ b/routes/api.php
+@@
+     Route::middleware([AuthenticateApiToken::class, RequireApiPolicyAcceptance::class])->group(function (): void {
+         require __DIR__.'/mobile_parity.php';
++        require __DIR__.'/smart_messaging_api.php';

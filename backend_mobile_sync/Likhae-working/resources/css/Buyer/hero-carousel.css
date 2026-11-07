@@ -1,0 +1,117 @@
+.lk-carousel { position: relative; isolation: isolate; overflow: hidden; border-radius: 24px; margin-bottom: 24px; background: #e3e9e9; color: #25332f; }
+.lk-carousel__slides { display: grid; }
+.lk-carousel__slide { grid-area: 1 / 1; position: relative; display: flex; align-items: center; min-height: 570px; opacity: 0; visibility: hidden; pointer-events: none; overflow: hidden; transition: opacity 850ms ease, visibility 850ms; }
+.lk-carousel__slide.is-active { opacity: 1; visibility: visible; pointer-events: auto; z-index: 1; }
+.lk-carousel__image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; transform: scale(1.045); transition: transform 7s linear; }
+.lk-carousel__slide.is-active .lk-carousel__image { transform: scale(1); }
+.lk-carousel__slide--home-living.is-active .lk-carousel__image { animation: lk-home-living-scene 5s ease-in-out infinite; }
+.lk-carousel__scene-glow { position: absolute; z-index: 1; inset: 0; overflow: hidden; pointer-events: none; }
+.lk-carousel__scene-glow::before,
+.lk-carousel__scene-glow::after { content: ''; position: absolute; inset: 0; background-repeat: no-repeat; mix-blend-mode: screen; animation: lk-home-living-particles 5s ease-in-out infinite; }
+.lk-carousel__scene-glow::before { opacity: .32; background-image: radial-gradient(circle, #fff9d9 0 1px, transparent 2px), radial-gradient(circle, #fff4c8 0 1.5px, transparent 2.5px), radial-gradient(circle, #ffffff 0 1px, transparent 2px), radial-gradient(circle, #fff2c2 0 1px, transparent 2px); background-position: 69% 23%, 79% 39%, 91% 19%, 61% 55%; background-size: 9px 9px, 11px 11px, 8px 8px, 7px 7px; }
+.lk-carousel__scene-glow::after { opacity: .2; background-image: radial-gradient(ellipse, rgba(255, 247, 211, .48), transparent 65%), radial-gradient(ellipse, rgba(255, 232, 177, .35), transparent 65%); background-position: 78% 28%, 94% 61%; background-size: 34% 44%, 27% 38%; }
+@keyframes lk-home-living-scene { 0%, 100% { transform: scale(1.015) translateY(0); } 50% { transform: scale(1.03) translateY(-4px); } }
+@keyframes lk-home-living-particles { 0%, 100% { opacity: .16; transform: translateY(2px); } 50% { opacity: .48; transform: translateY(-4px); } }
+.lk-carousel__slide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(249,248,239,.94), rgba(249,248,239,.78) 30%, rgba(249,248,239,.14) 62%, transparent 80%); }
+.lk-carousel__copy { position: relative; z-index: 1; width: 57%; padding: 64px clamp(24px, 4.5vw, 72px) 110px; }
+.lk-carousel__copy > * { opacity: 0; transform: translateY(20px); transition: opacity 650ms ease, transform 650ms ease; }
+.is-active .lk-carousel__copy > * { opacity: 1; transform: translateY(0); }
+.is-active .lk-carousel__copy > :nth-child(2) { transition-delay: 100ms; }
+.is-active .lk-carousel__copy > :nth-child(3) { transition-delay: 180ms; }
+.is-active .lk-carousel__copy > :nth-child(4) { transition-delay: 260ms; }
+.lk-carousel__eyebrow { display: block; font-size: 12px; font-weight: 700; letter-spacing: .18em; margin-bottom: 22px; color: #4b5951; }
+.lk-carousel__title { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: clamp(36px, 4vw, 68px); font-weight: 700; line-height: 1.13; letter-spacing: -.035em; color: #243a32; }
+.lk-carousel__title em { display: block; margin-top: 8px; color: #8c382f; }
+.lk-carousel__description { max-width: 510px; margin: 26px 0 32px; font-size: 16px; line-height: 1.85; color: #3e4a43; }
+.lk-carousel__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 24px; }
+.lk-carousel__actions .lk-btn { min-height: 50px; gap: 16px; font-size: 14px; }
+.lk-carousel__explore { font-size: 14px; font-weight: 600; color: #253d32; text-decoration: underline; text-underline-offset: 5px; }
+.lk-carousel__controls { position: absolute; z-index: 3; bottom: 28px; left: clamp(24px, 4.5vw, 72px); right: clamp(24px, 4.5vw, 72px); display: flex; align-items: center; gap: 18px; }
+.lk-carousel__controls[hidden] { display: none; }
+.lk-carousel__dots, .lk-carousel__buttons { display: flex; align-items: center; gap: 8px; }
+.lk-carousel__dots button { display: grid; place-items: center; width: 32px; height: 44px; border: 0; background: transparent; cursor: pointer; padding: 0; }
+.lk-carousel__dots span { width: 8px; height: 8px; border-radius: 10px; background: #64736c; transition: width 300ms, background 300ms; }
+.lk-carousel__dots button[aria-current="true"] span { width: 28px; background: #903d32; }
+.lk-carousel__count { font-size: 11px; letter-spacing: .15em; color: #384a40; }
+.lk-carousel__buttons { margin-left: auto; }
+.lk-carousel__buttons button { min-width: 44px; height: 44px; padding: 0 12px; border: 1px solid #ffffffa8; border-radius: 24px; background: #fffffff0; color: #293f34; cursor: pointer; font-size: 18px; transition: background 200ms, transform 200ms; }
+.lk-carousel__buttons button:hover { background: #fff; transform: translateY(-2px); }
+.lk-carousel__buttons [data-hero-pause] { font-size: 11px; min-width: 64px; }
+.lk-carousel a:focus-visible, .lk-carousel button:focus-visible { outline: 3px solid #903d32; outline-offset: 4px; }
+.lk-carousel__sr { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 900px) {
+    .lk-carousel__copy { width: 68%; }
+    .lk-carousel__slide { min-height: 540px; }
+}
+@media (max-width: 600px) {
+    .lk-carousel { border-radius: 18px; }
+    .lk-carousel__slide { align-items: flex-start; min-height: 650px; }
+    .lk-carousel__image { object-position: 72% bottom; }
+    .lk-carousel__slide::after { background: linear-gradient(180deg, #f9f8effa 0%, #f9f8eff2 38%, #f9f8ef38 70%, #f9f8efbd 100%); }
+    .lk-carousel__copy { width: 100%; padding: 32px 24px 220px; }
+    .lk-carousel__eyebrow { font-size: 9px; margin-bottom: 16px; }
+    .lk-carousel__title { font-size: clamp(34px, 8.5vw, 46px); }
+    .lk-carousel__description { font-size: 14px; margin: 18px 0 22px; }
+    .lk-carousel__actions { gap: 16px; }
+    .lk-carousel__controls { left: 16px; right: 16px; bottom: 18px; gap: 8px; }
+    .lk-carousel__count { display: none; }
+    .lk-carousel__buttons { gap: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .lk-carousel *, .lk-carousel *::after { animation: none !important; transition: none !important; transform: none !important; }
+}
+
+/* Landing-page dark mode. Keep the carousel readable without changing the image. */
+html.dark .lk-carousel {
+    background: #211b17;
+    color: #f5efe8;
+}
+
+html.dark .lk-carousel__slide::after {
+    background: linear-gradient(90deg, rgba(22, 18, 16, .96), rgba(22, 18, 16, .82) 30%, rgba(22, 18, 16, .2) 62%, transparent 82%);
+}
+
+html.dark .lk-carousel__eyebrow,
+html.dark .lk-carousel__count {
+    color: #c8b7ad;
+}
+
+html.dark .lk-carousel__title {
+    color: #f5efe8;
+}
+
+html.dark .lk-carousel__title em {
+    color: #eba99d;
+}
+
+html.dark .lk-carousel__description {
+    color: #c8b7ad;
+}
+
+html.dark .lk-carousel__explore {
+    color: #f0c0b6;
+}
+
+html.dark .lk-carousel__dots span {
+    background: #806f66;
+}
+
+html.dark .lk-carousel__dots button[aria-current="true"] span {
+    background: #eba99d;
+}
+
+html.dark .lk-carousel__buttons button {
+    background: rgba(33, 27, 23, .92);
+    border-color: #514037;
+    color: #f5efe8;
+}
+
+html.dark .lk-carousel__buttons button:hover {
+    background: #3b2e27;
+}
+
+@media (max-width: 600px) {
+    html.dark .lk-carousel__slide::after {
+        background: linear-gradient(180deg, rgba(22, 18, 16, .96) 0%, rgba(22, 18, 16, .9) 38%, rgba(22, 18, 16, .3) 70%, rgba(22, 18, 16, .8) 100%);
+    }
+}

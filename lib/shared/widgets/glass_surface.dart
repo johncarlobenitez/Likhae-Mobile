@@ -9,6 +9,7 @@ class GlassSurface extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final bool elevated;
   final double? opacity;
+  final double blurSigma;
   final Color? tintColor;
   final Color? borderColor;
 
@@ -19,6 +20,7 @@ class GlassSurface extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.elevated = true,
     this.opacity,
+    this.blurSigma = 10,
     this.tintColor,
     this.borderColor,
   });
@@ -42,7 +44,7 @@ class GlassSurface extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: BackdropFilter(
           enabled: !highContrast && surfaceOpacity < .9,
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: surfaceColor,

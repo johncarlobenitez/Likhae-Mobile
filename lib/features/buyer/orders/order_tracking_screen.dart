@@ -35,7 +35,7 @@ class OrderTrackingScreen extends StatefulWidget {
 }
 
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
-  static const Duration _locationRefreshInterval = Duration(seconds: 15);
+  static const Duration _locationRefreshInterval = Duration(seconds: 10);
   static const Duration _minimumRouteRefreshInterval = Duration(seconds: 45);
   static const double _minimumRerouteDistanceMeters = 100;
   static const double _minimumRiderMapUpdateMeters = 5;
@@ -55,7 +55,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   maplibre.CircleAnnotationManager? _mapMarkers;
   maplibre.PointAnnotationManager? _routeLabels;
   maplibre.PolylineAnnotationManager? _routeLines;
-  maplibre.PolylineAnnotation? _roadRouteLine;
+  final Map<String, maplibre.PolylineAnnotation> _roadRouteSegments =
+      <String, maplibre.PolylineAnnotation>{};
+  List<maplibre.Position> _roadRoutePositions = <maplibre.Position>[];
+  List<BuyerOrderLocation> _roadRouteStops = <BuyerOrderLocation>[];
+  double _confirmedRouteProgress = 0;
   List<maplibre.CircleAnnotation> _circleAnnotations =
       <maplibre.CircleAnnotation>[];
   List<maplibre.PointAnnotation> _pointAnnotations =
@@ -78,6 +82,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   DateTime? _lastRouteRequestAt;
   String? _lastRouteTopologyKey;
   bool _roadRouteUnavailable = false;
+  bool _mapExpanded = false;
   double? _roadDistanceMeters;
   double? _roadDurationSeconds;
 
@@ -528,7 +533,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _refreshingShipmentMap = true;
     try {
       final Map<String, dynamic> trackingData =
-          await BuyerMobileService.fetchPublicTracking(trackingNumber);
+          await BuyerMobileService.fetchShipmentMap(trackingNumber);
       if (!mounted || order.tracking?.trim() != trackingNumber) return;
 
       final dynamic rawMarkers =
@@ -540,7 +545,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           .toList(growable: false);
 
       BuyerOrderLocation? markerLocation(Map<String, dynamic> marker) =>
-          parseBuyerOrderLogisticsStop(marker);
+          parseBuyerOrderLogisticsStop({
+            ...marker,
+            'label': <String>[
+              (marker['label'] ?? '').toString(),
+              (marker['popup'] ?? '').toString(),
+            ].where((value) => value.isNotEmpty).join(' · '),
+          });
       bool isSeller(Map<String, dynamic> marker) =>
           marker['target_kind'] == 'seller' || marker['kind'] == 'seller';
       bool isBuyer(Map<String, dynamic> marker) =>
@@ -592,9 +603,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         (Map<String, dynamic> first, Map<String, dynamic> second) =>
             centerRoleOrder(first).compareTo(centerRoleOrder(second)),
       );
-      final List<BuyerOrderLocation> routeStops = <BuyerOrderLocation>[
-        ...order.shipmentRouteStops,
-      ];
+      final List<BuyerOrderLocation> routeStops = <BuyerOrderLocation>[];
       for (final Map<String, dynamic> marker in hubMarkers) {
         final BuyerOrderLocation? stop = markerLocation(marker);
         if (stop == null) continue;
@@ -613,12 +622,25 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ...existing.transferLegIds,
               ...stop.transferLegIds,
             }.toList(growable: false),
-            sequenceNo: existing.sequenceNo ?? stop.sequenceNo,
-            centerRole: existing.centerRole ?? stop.centerRole,
-            progressStatus: existing.progressStatus ?? stop.progressStatus,
+            sequenceNo: stop.sequenceNo ?? existing.sequenceNo,
+            centerRole: stop.centerRole ?? existing.centerRole,
+            progressStatus: stop.progressStatus ?? existing.progressStatus,
           );
         }
       }
+      routeStops.sort((BuyerOrderLocation first, BuyerOrderLocation second) {
+        final int sequence = (first.sequenceNo ?? 1 << 30).compareTo(
+          second.sequenceNo ?? 1 << 30,
+        );
+        if (sequence != 0) return sequence;
+        int roleOrder(BuyerOrderLocation stop) =>
+            switch (stop.centerRole?.toLowerCase()) {
+              'origin' => 0,
+              'destination' => 1,
+              _ => 2,
+            };
+        return roleOrder(first).compareTo(roleOrder(second));
+      });
 
       if (sellerLocation == null &&
           buyerLocation == null &&
@@ -631,8 +653,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           sellerLocation ?? order.sellerLocation;
       final BuyerOrderLocation? nextBuyer =
           buyerLocation ?? order.orderLocation;
-      final BuyerOrderLocation? nextRider =
-          riderLocation ?? order.riderLocation;
+      final BuyerOrderLocation? nextRider = riderLocation;
       bool sameLocation(BuyerOrderLocation? first, BuyerOrderLocation? second) {
         if (first == null || second == null)
           return first == null && second == null;
@@ -670,6 +691,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             sellerLocation: nextSeller,
             orderLocation: nextBuyer,
             riderLocation: nextRider,
+            clearRiderLocation: nextRider == null,
             shipmentRouteStops: routeStops,
           );
           final BuyerOrderParcelData? selected = _selectedParcel;
@@ -784,9 +806,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _roadRouteUnavailable = false;
     _roadDistanceMeters = null;
     _roadDurationSeconds = null;
+    _roadRoutePositions = <maplibre.Position>[];
+    _roadRouteStops = <BuyerOrderLocation>[];
+    _confirmedRouteProgress = 0;
     _lastRouteOrigin = null;
     _lastRouteRequestAt = null;
     _lastRouteTopologyKey = null;
+    final maplibre.PolylineAnnotationManager? manager = _routeLines;
+    if (manager != null) await _clearRoadRouteSegments(manager);
     await _syncMapLibreMarkers();
     if (!AppConfig.apiEnabled || order.isPreview) return;
     unawaited(_refreshShipmentMap());
@@ -915,7 +942,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Text(
+          Text(
             'TRACK A PARCEL',
             style: TextStyle(
               color: AppTheme.resolve(context, _muted),
@@ -955,7 +982,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       '$seller • ${parcel.statusLabel}$tracking',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:  TextStyle(
+                      style: TextStyle(
                         color: AppTheme.resolve(context, _text),
                         fontWeight: FontWeight.w700,
                       ),
@@ -970,7 +997,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               padding: const EdgeInsets.only(bottom: 5),
               child: Text(
                 'Destination: ${_selectedParcel!.destination}',
-                style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11.5),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 11.5,
+                ),
               ),
             ),
         ],
@@ -1034,7 +1064,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                 Text(
+                Text(
                   'DELIVERY RIDER',
                   style: TextStyle(
                     color: AppTheme.resolve(context, _muted),
@@ -1048,7 +1078,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:  TextStyle(
+                  style: TextStyle(
                     color: AppTheme.resolve(context, _text),
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -1061,13 +1091,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       : riderDetails.join('  •  '),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _muted),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-           Icon(Icons.delivery_dining_rounded, color: AppTheme.resolve(context, _maroon)),
+          Icon(
+            Icons.delivery_dining_rounded,
+            color: AppTheme.resolve(context, _maroon),
+          ),
         ],
       ),
     );
@@ -1078,10 +1114,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       alignment: Alignment.center,
       color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
       child: initials.trim().isEmpty
-          ?  Icon(Icons.person_rounded, color: AppTheme.resolve(context, _maroon), size: 28)
+          ? Icon(
+              Icons.person_rounded,
+              color: AppTheme.resolve(context, _maroon),
+              size: 28,
+            )
           : Text(
               initials,
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, _maroon),
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -1092,6 +1132,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Widget _buildMapCard() {
     final bool hasRider = order.riderLocation != null;
+    final double mapHeight = _mapExpanded
+        ? MediaQuery.sizeOf(context).height * 0.66
+        : order.isPreview
+        ? 220
+        : 300;
 
     return Container(
       decoration: BoxDecoration(
@@ -1118,10 +1163,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
+                    color: AppTheme.resolve(
+                      context,
+                      ShopColors.accentSoft,
+                      fill: true,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child:  Icon(
+                  child: Icon(
                     Icons.map_outlined,
                     color: AppTheme.resolve(context, _maroon),
                     size: 20,
@@ -1132,8 +1181,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                       Text(
-                        'Shipment Journey',
+                      Text(
+                        'LOCATION MAP',
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _muted),
+                          fontSize: 9,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Order route',
                         style: TextStyle(
                           color: AppTheme.resolve(context, _text),
                           fontSize: 17,
@@ -1143,22 +1202,46 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       const SizedBox(height: 4),
                       Text(
                         order.shipmentRouteStops.isNotEmpty
-                            ? 'See the logistics hubs your parcel passes through on its way to you.'
+                            ? 'Follow the parcel from the seller through its logistics hubs.'
                             : hasRider
-                            ? 'Live rider location and route to your delivery address.'
+                            ? 'See the rider’s live position and route to your address.'
                             : order.tracking?.trim().isNotEmpty == true
-                            ? 'No live rider position yet. Parcel updates appear in the timeline below.'
-                            : 'A map location will appear after the parcel is dispatched.',
-                        style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
+                            ? 'Route updates appear as the parcel moves through delivery.'
+                            : 'The route will appear after the parcel is dispatched.',
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _muted),
+                          fontSize: 12.5,
+                        ),
                       ),
                     ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() => _mapExpanded = !_mapExpanded);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) unawaited(_syncMapLibreMarkers());
+                    });
+                  },
+                  icon: Icon(
+                    _mapExpanded ? Icons.close_fullscreen : Icons.open_in_full,
+                    size: 15,
+                  ),
+                  label: Text(_mapExpanded ? 'Close map' : 'Full map'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.resolve(context, _maroon),
+                    padding: const EdgeInsets.symmetric(horizontal: 7),
+                    textStyle: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
           SizedBox(
-            height: 300,
+            height: mapHeight,
             child: Stack(
               children: <Widget>[
                 if (widget.previewMap != null)
@@ -1183,7 +1266,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           child: Text(
                             'The interactive map is available on Android and iOS.',
                             textAlign: TextAlign.center,
-                            style:  TextStyle(
+                            style: TextStyle(
                               color: AppTheme.resolve(context, _muted),
                               fontSize: 13,
                               height: 1.45,
@@ -1210,6 +1293,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           icon: Icons.remove,
                           onPressed: () => _zoomMap(-1),
                         ),
+                        const SizedBox(height: 8),
+                        _buildZoomButton(
+                          icon: Icons.fit_screen,
+                          onPressed: () => _syncMapLibreMarkers(),
+                        ),
                       ],
                     ),
                   ),
@@ -1217,16 +1305,89 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Wrap(
                   spacing: 14,
                   runSpacing: 8,
+                  children: const <Widget>[
+                    _RouteLineLegend(
+                      color: Color(0xFF800000),
+                      label: 'Confirmed / traveled',
+                    ),
+                    _RouteLineLegend(
+                      color: Color(0xFFC2410C),
+                      label: 'Hub transfer active',
+                    ),
+                    _RouteLineLegend(
+                      color: Color(0xFF9CA3AF),
+                      label: 'Remaining road',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Route updates refresh every 10 seconds while this screen is open.',
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _muted),
+                    fontSize: 10.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Locations',
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _text),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (order.sellerLocation != null)
+                  _buildRouteLocation(
+                    'Pickup address',
+                    order.sellerLocation!,
+                    const Color(0xFFB56B32),
+                  ),
+                for (final stop in order.shipmentRouteStops)
+                  _buildRouteLocation(
+                    'Sorting center',
+                    stop,
+                    const Color(0xFF258575),
+                  ),
+                if (order.orderLocation != null)
+                  _buildRouteLocation(
+                    'Delivery address',
+                    order.orderLocation!,
+                    _maroon,
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  _locations.length >= 2
+                      ? _roadRouteSummary
+                      : 'Waiting for saved route locations.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.resolve(context, _muted),
+                  ),
+                ),
+                if (!hasRider) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Rider GPS appears during active delivery when the rider is sharing a location.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.resolve(context, _muted),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 14,
+                  runSpacing: 8,
                   children: <Widget>[
                     if (order.sellerLocation != null)
-                       _LegendDot(
+                      _LegendDot(
                         color: AppTheme.resolve(context, Color(0xFFB56B32)),
                         label: 'Seller',
                       ),
@@ -1237,9 +1398,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         label: order.shipmentRouteStops[index].label,
                       ),
                     ),
-                     _LegendDot(color: AppTheme.resolve(context, _maroon), label: 'Buyer'),
+                    _LegendDot(
+                      color: AppTheme.resolve(context, _maroon),
+                      label: 'Buyer',
+                    ),
                     if (hasRider)
-                       _LegendDot(
+                      _LegendDot(
                         color: AppTheme.resolve(context, Color(0xFF1976D2)),
                         label: 'Current rider',
                       ),
@@ -1249,7 +1413,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   const SizedBox(height: 10),
                   Text(
                     'Route: ${<String>[if (order.sellerLocation != null) order.sellerLocation!.label, ...order.shipmentRouteStops.map((BuyerOrderLocation stop) => stop.label), order.orderLocation?.label ?? 'Delivery destination'].join(' -> ')}',
-                    style:  TextStyle(
+                    style: TextStyle(
                       color: AppTheme.resolve(context, _text),
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -1265,13 +1429,56 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Text(
                 '${order.shipmentRouteStops.isEmpty ? '$_roadRouteSummary\n' : ''}Rider is ${_riderDistanceText ?? 'nearby'} and on the way.',
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, _text),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteLocation(
+    String title,
+    BuyerOrderLocation location,
+    Color color,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.location_on_outlined, color: color, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.resolve(context, _text),
+                  ),
+                ),
+                Text(
+                  location.label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.resolve(context, _muted),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1482,7 +1689,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Text(
+          Text(
             'Tracking Timeline',
             style: TextStyle(
               color: AppTheme.resolve(context, _text),
@@ -1492,9 +1699,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ),
           const SizedBox(height: 16),
           if (newestFirstEvents.isEmpty)
-             Text(
+            Text(
               'No tracking updates yet.',
-              style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13),
+              style: TextStyle(
+                color: AppTheme.resolve(context, _muted),
+                fontSize: 13,
+              ),
             )
           else
             ...List<Widget>.generate(newestFirstEvents.length, (int index) {
@@ -1525,7 +1735,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     width: 84,
                     child: Text(
                       event.time,
-                      style:  TextStyle(
+                      style: TextStyle(
                         color: AppTheme.resolve(context, Color(0xFF999999)),
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -1542,8 +1752,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           height: 10,
                           decoration: BoxDecoration(
                             color: isLatest
-                                ? AppTheme.resolve(context, _timelineActive, fill: true)
-                                : AppTheme.resolve(context, _timelineInactive, fill: true),
+                                ? AppTheme.resolve(
+                                    context,
+                                    _timelineActive,
+                                    fill: true,
+                                  )
+                                : AppTheme.resolve(
+                                    context,
+                                    _timelineInactive,
+                                    fill: true,
+                                  ),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -1555,7 +1773,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                 : event.details.trim().isEmpty
                                 ? 34
                                 : 54,
-                            color: AppTheme.resolve(context, const Color(0xFFE1E1E1), fill: true),
+                            color: AppTheme.resolve(
+                              context,
+                              const Color(0xFFE1E1E1),
+                              fill: true,
+                            ),
                           ),
                       ],
                     ),
@@ -1572,7 +1794,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             style: TextStyle(
                               color: isLatest
                                   ? AppTheme.resolve(context, _timelineActive)
-                                  : AppTheme.resolve(context, const Color(0xFF858585)),
+                                  : AppTheme.resolve(
+                                      context,
+                                      const Color(0xFF858585),
+                                    ),
                               fontSize: 14,
                               height: 1.35,
                               fontWeight: isLatest
@@ -1585,7 +1810,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             TextButton(
                               onPressed: _openDeliveryProof,
                               style: TextButton.styleFrom(
-                                foregroundColor: AppTheme.resolve(context, _proofLink),
+                                foregroundColor: AppTheme.resolve(
+                                  context,
+                                  _proofLink,
+                                ),
                                 alignment: Alignment.centerLeft,
                                 padding: EdgeInsets.zero,
                               ),
@@ -1676,7 +1904,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                   child: Row(
                     children: <Widget>[
-                       Expanded(
+                      Expanded(
                         child: Text(
                           'Proof of delivery',
                           style: TextStyle(
@@ -1725,7 +1953,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     padding: const EdgeInsets.all(10),
                     child: Text(
                       'Swipe to view ${files.length} proof photos',
-                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
               ],
@@ -1754,7 +1985,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
                   child: Row(
                     children: <Widget>[
-                       Expanded(
+                      Expanded(
                         child: Text(
                           'Proof of delivery',
                           style: TextStyle(
@@ -1819,7 +2050,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     padding: const EdgeInsets.all(10),
                     child: Text(
                       'Swipe to view ${imageUrls.length} proof photos',
-                      style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
               ],
@@ -1838,7 +2072,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _circleAnnotations = <maplibre.CircleAnnotation>[];
     _pointAnnotations = <maplibre.PointAnnotation>[];
     _renderedMapMarkers = <_TrackingMapMarkerSpec>[];
-    _roadRouteLine = null;
+    _roadRouteSegments.clear();
     await _syncMapLibreMarkers();
   }
 
@@ -1957,7 +2191,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               textAnchor: maplibre.TextAnchor.bottom,
               textOffset: <double?>[0, -0.7],
               textSize: 11,
-              textColor: AppTheme.resolve(context, const Color(0xFF342E2E)).toARGB32(),
+              textColor: AppTheme.resolve(
+                context,
+                const Color(0xFF342E2E),
+              ).toARGB32(),
               textHaloColor: Colors.white.toARGB32(),
               textHaloWidth: 2,
               symbolSortKey: 10,
@@ -2102,11 +2339,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       }
     }
     if (routePoints.length < 2) {
-      final maplibre.PolylineAnnotation? routeLine = _roadRouteLine;
-      if (routeLine != null) {
-        await manager.delete(routeLine);
-        _roadRouteLine = null;
-      }
+      _roadRoutePositions = <maplibre.Position>[];
+      _roadRouteStops = <BuyerOrderLocation>[];
+      await _clearRoadRouteSegments(manager);
       _lastRouteTopologyKey = topologyKey;
       _lastRouteOrigin = null;
       _lastRouteRequestAt = null;
@@ -2131,6 +2366,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final LatLng? previousOrigin = _lastRouteOrigin;
     final DateTime? previousRequestAt = _lastRouteRequestAt;
     final bool topologyChanged = _lastRouteTopologyKey != topologyKey;
+    if (!topologyChanged && _roadRoutePositions.isNotEmpty) {
+      await _renderRoadRouteSegments();
+    }
     final bool routeIntervalElapsed =
         previousRequestAt == null ||
         DateTime.now().difference(previousRequestAt) >=
@@ -2187,25 +2425,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         throw StateError('The driving route was incomplete.');
       }
 
-      final maplibre.LineString routeLineGeometry = maplibre.LineString(
-        coordinates: positions,
-      );
-      final maplibre.PolylineAnnotation? currentLine = _roadRouteLine;
-      if (currentLine == null) {
-        _roadRouteLine = await manager.create(
-          maplibre.PolylineAnnotationOptions(
-            geometry: routeLineGeometry,
-            lineColor: AppTheme.resolve(context, _maroon).toARGB32(),
-            lineWidth: 5,
-            lineOpacity: 0.85,
-            lineBorderColor: Colors.white.toARGB32(),
-            lineBorderWidth: 1.5,
-          ),
-        );
-      } else {
-        currentLine.geometry = routeLineGeometry;
-        await manager.update(currentLine);
-      }
+      _roadRoutePositions = positions;
+      _roadRouteStops = List<BuyerOrderLocation>.from(routePoints);
+      await _renderRoadRouteSegments();
       if (!mounted) return;
 
       final double? distance = (route['distance'] as num?)?.toDouble();
@@ -2225,6 +2447,336 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       }
     } finally {
       _routeRequestInProgress = false;
+    }
+  }
+
+  List<double> _roadRouteCumulativeDistances(
+    List<maplibre.Position> positions,
+  ) {
+    final List<double> distances = <double>[0];
+    for (int index = 1; index < positions.length; index++) {
+      final maplibre.Position previous = positions[index - 1];
+      final maplibre.Position current = positions[index];
+      distances.add(
+        distances.last +
+            Geolocator.distanceBetween(
+              previous.lat,
+              previous.lng,
+              current.lat,
+              current.lng,
+            ),
+      );
+    }
+    return distances;
+  }
+
+  ({double distanceMeters, double progress})? _nearestRoadProgress(
+    List<maplibre.Position> positions,
+    List<double> cumulativeDistances,
+    double totalDistance,
+    BuyerOrderLocation location,
+  ) {
+    if (positions.isEmpty || totalDistance <= 0) return null;
+    double nearestDistance = double.infinity;
+    double nearestProgress = 0;
+    for (int index = 0; index < positions.length; index++) {
+      final maplibre.Position point = positions[index];
+      final double distance = Geolocator.distanceBetween(
+        location.latitude,
+        location.longitude,
+        point.lat,
+        point.lng,
+      );
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestProgress = cumulativeDistances[index] / totalDistance;
+      }
+    }
+    if (!nearestDistance.isFinite) return null;
+    return (distanceMeters: nearestDistance, progress: nearestProgress);
+  }
+
+  List<maplibre.Position> _sliceRoadRoute(
+    List<maplibre.Position> positions,
+    List<double> cumulativeDistances,
+    double totalDistance,
+    double startProgress,
+    double endProgress,
+  ) {
+    if (positions.length < 2 || totalDistance <= 0) {
+      return <maplibre.Position>[];
+    }
+    final double startDistance = startProgress.clamp(0, 1) * totalDistance;
+    final double endDistance = endProgress.clamp(0, 1) * totalDistance;
+    if (endDistance - startDistance < 1) return <maplibre.Position>[];
+
+    maplibre.Position pointAtDistance(double target) {
+      for (int index = 1; index < positions.length; index++) {
+        if (cumulativeDistances[index] < target) continue;
+        final double segmentStart = cumulativeDistances[index - 1];
+        final double segmentLength = cumulativeDistances[index] - segmentStart;
+        final double ratio = segmentLength <= 0
+            ? 0
+            : ((target - segmentStart) / segmentLength).clamp(0, 1);
+        final maplibre.Position start = positions[index - 1];
+        final maplibre.Position end = positions[index];
+        return maplibre.Position(
+          start.lng + (end.lng - start.lng) * ratio,
+          start.lat + (end.lat - start.lat) * ratio,
+        );
+      }
+      return positions.last;
+    }
+
+    return <maplibre.Position>[
+      pointAtDistance(startDistance),
+      for (int index = 1; index < positions.length - 1; index++)
+        if (cumulativeDistances[index] > startDistance &&
+            cumulativeDistances[index] < endDistance)
+          positions[index],
+      pointAtDistance(endDistance),
+    ];
+  }
+
+  Future<void> _clearRoadRouteSegments(
+    maplibre.PolylineAnnotationManager manager,
+  ) async {
+    for (final maplibre.PolylineAnnotation line
+        in _roadRouteSegments.values.toList(growable: false)) {
+      await manager.delete(line);
+    }
+    _roadRouteSegments.clear();
+  }
+
+  Future<void> _setRoadRouteSegment(
+    maplibre.PolylineAnnotationManager manager,
+    String key,
+    List<maplibre.Position> positions,
+    Color color,
+  ) async {
+    final maplibre.PolylineAnnotation? existing = _roadRouteSegments[key];
+    if (positions.length < 2) {
+      if (existing != null) {
+        await manager.delete(existing);
+        _roadRouteSegments.remove(key);
+      }
+      return;
+    }
+    final maplibre.LineString geometry = maplibre.LineString(
+      coordinates: positions,
+    );
+    if (existing == null) {
+      _roadRouteSegments[key] = await manager.create(
+        maplibre.PolylineAnnotationOptions(
+          geometry: geometry,
+          lineColor: color.toARGB32(),
+          lineWidth: key == 'active-transfer' ? 4 : 5,
+          lineOpacity: 0.88,
+          lineBorderColor: Colors.white.toARGB32(),
+          lineBorderWidth: 1.5,
+        ),
+      );
+      return;
+    }
+    existing.geometry = geometry;
+    existing.lineColor = color.toARGB32();
+    existing.lineWidth = key == 'active-transfer' ? 4 : 5;
+    existing.lineOpacity = 0.88;
+    await manager.update(existing);
+  }
+
+  Future<void> _renderRoadRouteSegments() async {
+    final maplibre.PolylineAnnotationManager? manager = _routeLines;
+    final List<maplibre.Position> positions = _roadRoutePositions;
+    if (manager == null || positions.length < 2) return;
+    final List<double> cumulativeDistances = _roadRouteCumulativeDistances(
+      positions,
+    );
+    final double totalDistance = cumulativeDistances.last;
+    if (totalDistance <= 0) return;
+
+    double progressAtStop(BuyerOrderLocation stop) =>
+        _nearestRoadProgress(
+          positions,
+          cumulativeDistances,
+          totalDistance,
+          stop,
+        )?.progress ??
+        0;
+    final List<({BuyerOrderLocation stop, double progress})> centerStops =
+        <({BuyerOrderLocation stop, double progress})>[];
+    for (final BuyerOrderLocation hub in order.shipmentRouteStops) {
+      final bool routeIncludesHub = _roadRouteStops.any(
+        (BuyerOrderLocation routeStop) =>
+            routeStop.latitude == hub.latitude &&
+            routeStop.longitude == hub.longitude,
+      );
+      if (routeIncludesHub) {
+        centerStops.add((stop: hub, progress: progressAtStop(hub)));
+      }
+    }
+
+    final double firstCenterProgress = centerStops.isEmpty
+        ? 0
+        : centerStops.first.progress;
+    final double lastCenterProgress = centerStops.isEmpty
+        ? 0
+        : centerStops.last.progress;
+    final List<({BuyerOrderLocation stop, double progress})> receivedCenters =
+        centerStops
+            .where(
+              (({BuyerOrderLocation stop, double progress}) center) =>
+                  center.stop.centerRole?.toLowerCase() == 'destination' &&
+                  center.stop.progressStatus?.toUpperCase() == 'RECEIVED',
+            )
+            .toList(growable: false);
+
+    double progress = 0;
+    final String status = order.normalizedStatus.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
+    switch (status) {
+      case 'PICKEDUP':
+        progress = firstCenterProgress;
+        break;
+      case 'ATSORTINGCENTER':
+      case 'SORTED':
+        progress = receivedCenters.isNotEmpty
+            ? receivedCenters.last.progress
+            : firstCenterProgress;
+        break;
+      case 'ASSIGNEDTORIDER':
+      case 'OUTFORDELIVERY':
+      case 'DELIVERYFAILED':
+        progress = lastCenterProgress;
+        break;
+      case 'DELIVERED':
+      case 'COMPLETED':
+        progress = 1;
+        break;
+      case 'RETURNED':
+      case 'CANCELLED':
+      case 'CANCELED':
+        progress = 0;
+        break;
+    }
+
+    if ((status == 'OUTFORDELIVERY' || status == 'DELIVERYFAILED') &&
+        order.riderLocation != null) {
+      final ({double distanceMeters, double progress})? riderProgress =
+          _nearestRoadProgress(
+            positions,
+            cumulativeDistances,
+            totalDistance,
+            order.riderLocation!,
+          );
+      if (riderProgress != null && riderProgress.distanceMeters <= 300) {
+        progress = progress < riderProgress.progress
+            ? riderProgress.progress
+            : progress;
+      }
+    }
+
+    if (status == 'RETURNED' || status == 'CANCELLED' || status == 'CANCELED') {
+      _confirmedRouteProgress = 0;
+    } else if (progress > _confirmedRouteProgress) {
+      _confirmedRouteProgress = progress;
+    }
+    progress = _confirmedRouteProgress.clamp(0, 1).toDouble();
+
+    ({double start, double end})? activeTransfer;
+    for (final ({BuyerOrderLocation stop, double progress}) origin
+        in centerStops.where(
+          (({BuyerOrderLocation stop, double progress}) center) =>
+              center.stop.centerRole?.toLowerCase() == 'origin' &&
+              center.stop.progressStatus?.toUpperCase() == 'IN_TRANSIT',
+        )) {
+      for (final ({BuyerOrderLocation stop, double progress}) destination
+          in centerStops) {
+        final bool sameLeg =
+            origin.stop.transferLegIds.isEmpty ||
+            destination.stop.transferLegIds.any(
+              origin.stop.transferLegIds.contains,
+            );
+        if (destination.stop.centerRole?.toLowerCase() == 'destination' &&
+            sameLeg &&
+            destination.progress > origin.progress) {
+          activeTransfer = (start: origin.progress, end: destination.progress);
+          break;
+        }
+      }
+      if (activeTransfer != null) break;
+    }
+
+    if (activeTransfer != null && activeTransfer.end > activeTransfer.start) {
+      await _setRoadRouteSegment(
+        manager,
+        'remaining',
+        _sliceRoadRoute(
+          positions,
+          cumulativeDistances,
+          totalDistance,
+          activeTransfer.end,
+          1,
+        ),
+        const Color(0xFF9CA3AF),
+      );
+      await _setRoadRouteSegment(
+        manager,
+        'active-transfer',
+        _sliceRoadRoute(
+          positions,
+          cumulativeDistances,
+          totalDistance,
+          activeTransfer.start,
+          activeTransfer.end,
+        ),
+        const Color(0xFFC2410C),
+      );
+      await _setRoadRouteSegment(
+        manager,
+        'traveled',
+        _sliceRoadRoute(
+          positions,
+          cumulativeDistances,
+          totalDistance,
+          0,
+          activeTransfer.start,
+        ),
+        AppTheme.resolve(context, _maroon),
+      );
+    } else {
+      await _setRoadRouteSegment(
+        manager,
+        'remaining',
+        _sliceRoadRoute(
+          positions,
+          cumulativeDistances,
+          totalDistance,
+          progress,
+          1,
+        ),
+        const Color(0xFF9CA3AF),
+      );
+      await _setRoadRouteSegment(
+        manager,
+        'active-transfer',
+        const <maplibre.Position>[],
+        const Color(0xFFC2410C),
+      );
+      await _setRoadRouteSegment(
+        manager,
+        'traveled',
+        _sliceRoadRoute(
+          positions,
+          cumulativeDistances,
+          totalDistance,
+          0,
+          progress,
+        ),
+        AppTheme.resolve(context, _maroon),
+      );
     }
   }
 
@@ -2307,7 +2859,42 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style:  TextStyle(fontSize: 11, color: AppTheme.resolve(context, ShopColors.muted)),
+          style: TextStyle(
+            fontSize: 11,
+            color: AppTheme.resolve(context, ShopColors.muted),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RouteLineLegend extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _RouteLineLegend({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 20,
+          height: 4,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10.5,
+            color: AppTheme.resolve(context, ShopColors.muted),
+          ),
         ),
       ],
     );

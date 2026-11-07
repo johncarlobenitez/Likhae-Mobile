@@ -81,6 +81,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   bool _addressChanged = false;
   bool _hasSaved = false;
   int _addressEditRevision = 0;
+  int _postalLookupGeneration = 0;
   String? _addressError;
 
   bool get _canShowMap =>
@@ -249,6 +250,7 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   }
 
   Future<void> _onRegionChanged(AddressOption? value) async {
+    _postalLookupGeneration++;
     setState(() {
       _region = value;
       _province = null;
@@ -257,6 +259,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
       _provinces = <AddressOption>[];
       _municipalities = <AddressOption>[];
       _barangays = <AddressOption>[];
+      _postalCode.clear();
+      _loadingPostalCode = false;
       _addressError = null;
       _markAddressChanged();
     });
@@ -274,12 +278,15 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   }
 
   Future<void> _onProvinceChanged(AddressOption? value) async {
+    _postalLookupGeneration++;
     setState(() {
       _province = value;
       _municipality = null;
       _barangay = null;
       _municipalities = <AddressOption>[];
       _barangays = <AddressOption>[];
+      _postalCode.clear();
+      _loadingPostalCode = false;
       _markAddressChanged();
     });
     if (value == null) return;
@@ -296,14 +303,17 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
   }
 
   Future<void> _onMunicipalityChanged(AddressOption? value) async {
+    final int postalLookupGeneration = ++_postalLookupGeneration;
     setState(() {
       _municipality = value;
       _barangay = null;
       _barangays = <AddressOption>[];
       _postalCode.clear();
+      _loadingPostalCode = value != null;
       _markAddressChanged();
     });
     if (value == null) return;
+    unawaited(_loadPostalCodeForMunicipality(value, postalLookupGeneration));
     try {
       final List<AddressOption> rows =
           await PhilippineAddressService.fetchBarangays(value.code);
@@ -316,31 +326,49 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     }
   }
 
-  Future<void> _onBarangayChanged(AddressOption? value) async {
-    setState(() {
-      _barangay = value;
-      _postalCode.clear();
-      _loadingPostalCode = value != null;
-      _markAddressChanged();
-    });
-    if (value == null || _municipality == null || _province == null) return;
+  Future<void> _loadPostalCodeForMunicipality(
+    AddressOption municipality,
+    int generation,
+  ) async {
+    final AddressOption? province = _province;
+    if (province == null) {
+      if (mounted && generation == _postalLookupGeneration) {
+        setState(() => _loadingPostalCode = false);
+      }
+      return;
+    }
     try {
       final String? postal = await PhilippineAddressService.fetchPostalCode(
-        municipalityCode: _municipality!.code,
-        barangayCode: value.code,
-        provinceCode: _province!.code,
-        provinceName: _province!.name,
-        municipalityName: _municipality!.name,
+        municipalityCode: municipality.code,
+        provinceCode: province.code,
+        provinceName: province.name,
+        municipalityName: municipality.name,
       );
-      if (!mounted || _barangay?.code != value.code) return;
-      setState(() => _postalCode.text = postal ?? '');
+      if (!mounted ||
+          generation != _postalLookupGeneration ||
+          _municipality?.code != municipality.code) {
+        return;
+      }
+      setState(() {
+        if (_postalCode.text.trim().isEmpty) {
+          _postalCode.text = postal ?? '';
+        }
+        _loadingPostalCode = false;
+      });
     } catch (_) {
-      // Postal codes may not exist for every barangay; the field stays editable.
+      // The postal code stays editable when the municipality has no entry.
     } finally {
-      if (mounted && _barangay?.code == value.code) {
+      if (mounted && generation == _postalLookupGeneration) {
         setState(() => _loadingPostalCode = false);
       }
     }
+  }
+
+  Future<void> _onBarangayChanged(AddressOption? value) async {
+    setState(() {
+      _barangay = value;
+      _markAddressChanged();
+    });
   }
 
   void _markAddressChanged() {
@@ -382,10 +410,8 @@ class _RiderProfileEditScreenState extends State<RiderProfileEditScreen> {
     try {
       LatLng? location;
       for (final String query in queries) {
-        final Response<dynamic> response = await ApiClient.get(
-          'maps/geocode',
-          queryParameters: <String, dynamic>{'text': query},
-          refresh: true,
+        final Response<dynamic> response = await ApiClient.getMapGeocode(
+          query,
         );
         if (!mounted || editRevision != _addressEditRevision) return;
 

@@ -922,7 +922,9 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
       _ProfileInformation(
         label: 'Vehicle Type',
         value: profile.vehicleType,
-        icon: Icons.two_wheeler_outlined,
+        icon: profile.isInterLogistics
+            ? Icons.local_shipping_outlined
+            : Icons.two_wheeler_outlined,
       ),
       _ProfileInformation(
         label: 'Plate Number',

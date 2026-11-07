@@ -1,0 +1,79 @@
+@props([
+    'markers' => [],
+    'center' => null,
+    'zoom' => null,
+    'title' => 'Location map',
+    'height' => '220px',
+    'allowUserLocation' => true,
+    'riderGps' => false,
+    'liveDeviceGps' => false,
+    'userLocationTarget' => null,
+    'navigation' => false,
+    'liveTracking' => true,
+    'orderRoute' => false,
+    'projection' => null,
+    'pinFormId' => null,
+    'class' => '',
+])
+
+<section
+    class="lk-map-shell {{ $class }}"
+    data-likhae-map
+    data-geoapify-key="{{ config('services.geoapify.key') }}"
+    data-map-style="{{ config('maps.style') }}"
+    data-map-markers="{{ json_encode(array_values($markers), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) }}"
+    data-map-center="{{ json_encode($center ?: config('maps.default_center')) }}"
+    data-map-zoom="{{ $zoom ?: config('maps.default_zoom') }}"
+    data-map-user-target="{{ $userLocationTarget }}"
+    data-map-rider-gps="{{ $riderGps ? 'true' : 'false' }}"
+    data-map-live-device-gps="{{ $liveDeviceGps ? 'true' : 'false' }}"
+    data-map-live="{{ auth()->check() && $liveTracking ? 'true' : 'false' }}"
+    data-map-order-route="{{ $orderRoute ? 'true' : 'false' }}"
+    data-map-projection="{{ $projection }}"
+    data-map-navigation="{{ $navigation ? 'true' : 'false' }}"
+    data-map-pin-form="{{ $pinFormId }}"
+    style="--lk-map-height: {{ $height }}"
+>
+    <div class="lk-map-toolbar">
+        <div>
+            <span class="lk-map-kicker" data-map-location-state>LOCATION MAP</span>
+            <h2>{{ $title }}</h2>
+        </div>
+        <div class="lk-map-actions">
+            @if($allowUserLocation || $liveDeviceGps)
+                <button type="button" class="lk-map-button lk-map-location" data-map-location>{{ $liveDeviceGps ? 'Start live GPS' : ($riderGps ? 'Refresh rider GPS current device' : 'Use my location') }}</button>
+            @endif
+            <button type="button" class="lk-map-button" data-map-rider-sharing hidden>Start rider GPS sharing</button>
+            <button type="button" class="lk-map-button lk-map-fullscreen" data-map-fullscreen aria-pressed="false">Open full map</button>
+        </div>
+    </div>
+    <div class="lk-map-canvas" data-map-canvas role="application" aria-label="{{ $title }}"></div>
+    @if($orderRoute)
+        <div class="lk-order-route-legend" aria-label="Order route legend">
+            <span><i class="is-traveled" aria-hidden="true"></i>Confirmed / traveled</span>
+            <span><i class="is-active-transfer" aria-hidden="true"></i>Hub transfer active</span>
+            <span><i class="is-remaining" aria-hidden="true"></i>Remaining road</span>
+        </div>
+    @endif
+    @if($navigation)
+        <div class="lk-map-navigation" data-map-navigation-panel hidden>
+            <div class="lk-map-navigation__head">
+                <div>
+                    <span class="lk-map-kicker">ACTIVE NAVIGATION</span>
+                    <strong data-map-navigation-assignment>Waiting for assignment</strong>
+                </div>
+                <span class="lk-map-navigation__status" data-map-navigation-status>Waiting for live GPS</span>
+            </div>
+            <div class="lk-map-navigation__metrics">
+                <div><strong data-map-navigation-eta>—</strong><span>estimated time</span></div>
+                <div><strong data-map-navigation-distance>—</strong><span>road distance</span></div>
+                <div><strong data-map-navigation-arrival>—</strong><span>estimated arrival</span></div>
+            </div>
+            <div class="lk-map-navigation__destination">
+                <strong data-map-navigation-destination>Active destination</strong>
+                <span data-map-navigation-address>Waiting for saved destination coordinates.</span>
+            </div>
+        </div>
+    @endif
+    <p class="lk-map-status" data-map-status aria-live="polite">Shipment and rider coordinates are shown when available.</p>
+</section>

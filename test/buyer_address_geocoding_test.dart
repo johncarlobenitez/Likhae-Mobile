@@ -4,6 +4,33 @@ import 'package:likhae/services/philippine_address_geocoding.dart';
 
 void main() {
   group('PhilippineAddressGeocoding.buildQueries', () {
+    test(
+      'searches Aplaya without the Brgy prefix before broadening to Pila',
+      () {
+        final queries = PhilippineAddressGeocoding.buildQueries(
+          searchText: 'Brgy Aplaya, Pila, Laguna',
+        );
+        expect(queries.first, 'Aplaya, Pila, Laguna, Philippines');
+        expect(queries, contains('Aplaya, Pila, Laguna, Philippines'));
+        expect(queries, contains('Pila, Laguna, Philippines'));
+        expect(
+          queries.indexOf('Aplaya, Pila, Laguna, Philippines'),
+          lessThan(queries.indexOf('Pila, Laguna, Philippines')),
+        );
+        expect(queries, isNot(contains('Philippines')));
+      },
+    );
+
+    test('tries the structured barangay without region or abbreviation', () {
+      final queries = PhilippineAddressGeocoding.buildQueries(
+        barangay: 'Brgy. Aplaya',
+        municipality: 'Pila',
+        province: 'Laguna',
+        region: 'Region IV-A (CALABARZON)',
+      );
+      expect(queries, contains('Aplaya, Pila, Laguna, Philippines'));
+    });
+
     test('uses the freeform address and full saved address details', () {
       final List<String> queries = PhilippineAddressGeocoding.buildQueries(
         searchText: 'Purok 3',
@@ -122,5 +149,22 @@ void main() {
 
     expect(message, contains('api/v1/maps/geocode'));
     expect(message, contains('API_BASE_URL'));
+  });
+
+  test('a no-match response allows the next query, but outages do not', () {
+    for (final status in [404, 422]) {
+      expect(
+        PhilippineAddressGeocoding.errorMessageForResponse(status, {
+          'message': 'No matching address was found.',
+        }),
+        isNull,
+      );
+    }
+    expect(
+      PhilippineAddressGeocoding.errorMessageForResponse(503, {
+        'message': 'The map service is temporarily unavailable.',
+      }),
+      isNotNull,
+    );
   });
 }

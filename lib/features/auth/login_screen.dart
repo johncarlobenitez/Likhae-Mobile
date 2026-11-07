@@ -1,4 +1,4 @@
-import 'package:likhae/core/theme/app_theme.dart';
+﻿import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
 
@@ -209,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final double horizontalPadding = screenWidth < 380 ? 16 : 20;
 
-    final double heroHeight = compactHeight ? 175 : 205;
+    final double heroHeight = compactHeight ? 190 : 205;
 
     return Scaffold(
       backgroundColor: AppTheme.resolve(context, _background, fill: true),
@@ -222,8 +222,8 @@ class _LoginScreenState extends State<LoginScreen> {
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: EdgeInsets.only(
                 bottom: media.viewInsets.bottom > 0
-                    ? 24
-                    : media.padding.bottom + 24,
+                    ? 12
+                    : media.padding.bottom,
               ),
               child: Center(
                 child: ConstrainedBox(
@@ -378,10 +378,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 8),
 
                   Text(
-                    'Discover everyday essentials and local finds.',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: AppTheme.resolve(context, _secondaryText), fontSize: 11.5),
+                    'Everyday essentials. Unexpected finds. Discover a little more to love from local sellers.',
+                    maxLines: 2,
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _secondaryText),
+                      fontSize: 11.5,
+                      height: 1.3,
+                    ),
                   ),
                 ],
               ),
@@ -494,32 +497,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Expanded(child: _FieldLabel(text: 'Password')),
-
-                  TextButton(
-                    onPressed: widget.onForgotPassword,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child:  Text(
-                      'Forgot password?',
-                      style: TextStyle(
-                        color: AppTheme.resolve(context, _primary),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              const _FieldLabel(text: 'Password'),
 
               const SizedBox(height: 8),
 
@@ -562,6 +540,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   return null;
                 },
+              ),
+
+              const SizedBox(height: 4),
+
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: widget.onForgotPassword,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _primary),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
 
               const SizedBox(height: 14),
@@ -776,36 +779,27 @@ class _LikhaeBrand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-         Text(
+        SizedBox(
+          width: 78,
+          height: 44,
+          child: Image.asset(
+            'assets/icons/likhae_ai_logo.png',
+            fit: BoxFit.cover,
+            semanticLabel: 'LIKHAE logo',
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
           'LIKHAE',
           style: TextStyle(
-            color: AppTheme.resolve(context, Color(0xFF3B261F)),
-            fontSize: 21,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.2,
-          ),
-        ),
-
-        SizedBox(width: 8),
-
-        Container(
-          width: 4,
-          height: 4,
-          decoration:  BoxDecoration(
-            color: AppTheme.resolve(context, Color(0xFF9E171B), fill: true),
-            shape: BoxShape.circle,
-          ),
-        ),
-
-        SizedBox(width: 8),
-
-        Text(
-          'Marketplace',
-          style: TextStyle(
-            color: AppTheme.resolve(context, Color(0xFF8B7669)),
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
+            color: AppTheme.resolve(context, const Color(0xFF3B261F)),
+            fontFamily: 'serif',
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -1.3,
           ),
         ),
       ],

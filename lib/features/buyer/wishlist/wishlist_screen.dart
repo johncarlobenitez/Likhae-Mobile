@@ -877,8 +877,6 @@ class _WishlistScreenState
         bottom: false,
         child: Column(
           children: [
-            _buildTopBar(),
-
             Expanded(
               child:
                   RefreshIndicator(
@@ -921,13 +919,6 @@ class _WishlistScreenState
                               const SizedBox(
                                 height:
                                     14,
-                              ),
-
-                              _buildToolbar(),
-
-                              const SizedBox(
-                                height:
-                                    13,
                               ),
 
                               _buildResultSummary(
@@ -981,16 +972,6 @@ class _WishlistScreenState
     );
   }
 
-  Widget _buildTopBar() => ShopPageHeader(
-    title: 'Saved finds', onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-    actions: [
-      Badge.count(count: widget.unreadNotificationCount, isLabelVisible: widget.unreadNotificationCount > 0,
-        child: GlassIconButton(icon: Icons.notifications_none_rounded, label: 'Notifications', onPressed: widget.onNotifications)),
-      Badge.count(count: widget.cartItemCount, isLabelVisible: widget.cartItemCount > 0,
-        child: GlassIconButton(icon: Icons.shopping_bag_outlined, label: 'Cart', onPressed: widget.onCart)),
-    ],
-  );
-
   Widget _buildHero() {
     return Container(
       width:
@@ -998,7 +979,7 @@ class _WishlistScreenState
       padding:
           const EdgeInsets.fromLTRB(
         20,
-        22,
+        14,
         20,
         20,
       ),
@@ -1069,60 +1050,55 @@ class _WishlistScreenState
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-               Text(
-                'SAVED PRODUCTS',
-                style:
-                    TextStyle(
-                  color:
-                      AppTheme.resolve(context, _maroon),
-                  fontSize:
-                      8.5,
-                  letterSpacing:
-                      1.8,
-                  fontWeight:
-                      FontWeight.w800,
-                ),
-              ),
-
-              const SizedBox(
-                height:
-                    7,
-              ),
-
-               Text.rich(
-                TextSpan(
-                  children:
-                      <InlineSpan>[
-                    TextSpan(
-                      text:
-                          'Your Wishlist',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GlassIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    label: 'Back',
+                    onPressed:
+                        widget.onBack ?? () => Navigator.of(context).maybePop(),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'SAVED PRODUCTS',
+                          style: TextStyle(
+                            color: AppTheme.resolve(context, _maroon),
+                            fontSize: 8.5,
+                            letterSpacing: 1.8,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Text.rich(
+                          TextSpan(
+                            children: <InlineSpan>[
+                              const TextSpan(text: 'Your Wishlist'),
+                              TextSpan(
+                                text: '.',
+                                style: TextStyle(
+                                  color: AppTheme.resolve(context, _maroon),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                          style: TextStyle(
+                            color: AppTheme.resolve(context, _text),
+                            fontSize: 31,
+                            height: 1,
+                            letterSpacing: -.8,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
-                    TextSpan(
-                      text:
-                          '.',
-                      style:
-                          TextStyle(
-                        color:
-                            AppTheme.resolve(context, _maroon),
-                        fontStyle:
-                            FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-                style:
-                    TextStyle(
-                  color:
-                      AppTheme.resolve(context, _text),
-                  fontSize:
-                      31,
-                  height:
-                      1,
-                  letterSpacing:
-                      -0.8,
-                  fontWeight:
-                      FontWeight.w800,
-                ),
+                  ),
+                ],
               ),
 
               const SizedBox(
@@ -2554,7 +2530,11 @@ class _WishlistProductImage extends StatelessWidget {
     final value = imageUrl?.trim() ?? '';
     if (value.isEmpty) return  Center(child: Icon(Icons.inventory_2_outlined,
       color: AppTheme.resolve(context, ShopColors.faint), size: 36));
-    return SizedNetworkImage(url: AppConfig.resolveMediaUrl(value), iconSize: 36);
+    return SizedNetworkImage(
+      url: AppConfig.resolveMediaUrl(value),
+      fit: BoxFit.cover,
+      iconSize: 36,
+    );
   }
 }
 

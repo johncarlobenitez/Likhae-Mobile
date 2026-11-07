@@ -24,48 +24,24 @@ class RiderHistoryData {
     this.imageUrl,
   });
 
-  factory RiderHistoryData.fromApi(
-    Map<String, dynamic> json,
-  ) {
+  factory RiderHistoryData.fromApi(Map<String, dynamic> json) {
     return RiderHistoryData(
       id: _parseInt(json['id']),
-      trackingCode:
-          (json['tracking'] ??
-                  json['tracking_code'] ??
-                  '')
-              .toString(),
-      buyerName:
-          (json['buyer'] ??
-                  json['buyer_name'] ??
-                  '')
-              .toString(),
-      statusLabel:
-          (json['status_label'] ??
-                  json['status'] ??
-                  '')
-              .toString(),
-      updatedLabel:
-          (json['updated'] ??
-                  json['updated_at'] ??
-                  '')
-              .toString(),
-      failureReason: _nullableString(
-        json['failure_reason'],
-      ),
+      trackingCode: (json['tracking'] ?? json['tracking_code'] ?? '')
+          .toString(),
+      buyerName: (json['buyer'] ?? json['buyer_name'] ?? '').toString(),
+      statusLabel: (json['status_label'] ?? json['status'] ?? '').toString(),
+      updatedLabel: (json['updated'] ?? json['updated_at'] ?? '').toString(),
+      failureReason: _nullableString(json['failure_reason']),
       imageUrl: riderProductImageUrl(json),
     );
   }
 
   bool get hasFailureReason {
-    return failureReason
-            ?.trim()
-            .isNotEmpty ==
-        true;
+    return failureReason?.trim().isNotEmpty == true;
   }
 
-  static int? _parseInt(
-    dynamic value,
-  ) {
+  static int? _parseInt(dynamic value) {
     if (value == null) {
       return null;
     }
@@ -74,20 +50,15 @@ class RiderHistoryData {
       return value;
     }
 
-    return int.tryParse(
-      value.toString(),
-    );
+    return int.tryParse(value.toString());
   }
 
-  static String? _nullableString(
-    dynamic value,
-  ) {
+  static String? _nullableString(dynamic value) {
     if (value == null) {
       return null;
     }
 
-    final String result =
-        value.toString().trim();
+    final String result = value.toString().trim();
 
     if (result.isEmpty) {
       return null;
@@ -97,74 +68,52 @@ class RiderHistoryData {
   }
 }
 
-typedef RiderHistoryRefreshCallback =
-    Future<void> Function();
+typedef RiderHistoryRefreshCallback = Future<void> Function();
 
-typedef RiderHistoryItemCallback =
-    void Function(
-  RiderHistoryData history,
-);
+typedef RiderHistoryItemCallback = void Function(RiderHistoryData history);
 
-class RiderHistoryScreen
-    extends StatefulWidget {
+class RiderHistoryScreen extends StatefulWidget {
   final List<RiderHistoryData> history;
 
   final String? statusMessage;
 
-  final RiderHistoryRefreshCallback?
-      onRefresh;
+  final RiderHistoryRefreshCallback? onRefresh;
 
-  final RiderHistoryItemCallback?
-      onOpenHistory;
+  final RiderHistoryItemCallback? onOpenHistory;
 
   const RiderHistoryScreen({
     super.key,
-    this.history =
-        const <RiderHistoryData>[],
+    this.history = const <RiderHistoryData>[],
     this.statusMessage,
     this.onRefresh,
     this.onOpenHistory,
   });
 
   @override
-  State<RiderHistoryScreen>
-      createState() =>
-          _RiderHistoryScreenState();
+  State<RiderHistoryScreen> createState() => _RiderHistoryScreenState();
 }
 
-class _RiderHistoryScreenState
-    extends State<RiderHistoryScreen> {
-  static const Color _background =
-      Color(0xFFFBF7F2);
+class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
+  static const Color _background = Color(0xFFFBF7F2);
 
-  static const Color _surface =
-      Color(0xFFFFFDF9);
+  static const Color _surface = Color(0xFFFFFDF9);
 
-  static const Color _border =
-      Color(0xFFEADCCC);
+  static const Color _border = Color(0xFFEADCCC);
 
-  static const Color _maroon =
-      Color(0xFF561C17);
+  static const Color _maroon = Color(0xFF561C17);
 
-  static const Color _maroonSoft =
-      Color(0xFFF1E4D7);
+  static const Color _maroonSoft = Color(0xFFF1E4D7);
 
-  static const Color _text =
-      Color(0xFF3B211B);
+  static const Color _text = Color(0xFF3B211B);
 
-  static const Color _muted =
-      Color(0xFF987865);
+  static const Color _muted = Color(0xFF987865);
 
-  static const Color _success =
-      Color(0xFF237A44);
+  static const Color _success = Color(0xFF237A44);
 
-  static const Color _successSoft =
-      Color(0xFFEAF6EE);
+  static const Color _successSoft = Color(0xFFEAF6EE);
 
   Future<void> _refresh() async {
-    final RiderHistoryRefreshCallback?
-        callback =
-        widget.onRefresh;
+    final RiderHistoryRefreshCallback? callback = widget.onRefresh;
 
     if (callback == null) {
       return;
@@ -174,9 +123,7 @@ class _RiderHistoryScreenState
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.resolve(context, _background, fill: true),
       appBar: AppBar(
@@ -184,14 +131,6 @@ class _RiderHistoryScreenState
         foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
-        title:  Text(
-          'Delivery History',
-          style: TextStyle(
-            color: AppTheme.resolve(context, _text),
-            fontSize: 19,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
       ),
       body: SafeArea(
         top: false,
@@ -199,34 +138,17 @@ class _RiderHistoryScreenState
           color: AppTheme.resolve(context, _maroon),
           onRefresh: _refresh,
           child: ListView(
-            physics:
-                const AlwaysScrollableScrollPhysics(),
-            padding:
-                const EdgeInsets.fromLTRB(
-              16,
-              10,
-              16,
-              100,
-            ),
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
             children: <Widget>[
-              if (widget
-                      .statusMessage
-                      ?.trim()
-                      .isNotEmpty ==
-                  true) ...<Widget>[
-                _buildStatusMessage(
-                  widget.statusMessage!,
-                ),
-                const SizedBox(
-                  height: 18,
-                ),
+              if (widget.statusMessage?.trim().isNotEmpty == true) ...<Widget>[
+                _buildStatusMessage(widget.statusMessage!),
+                const SizedBox(height: 18),
               ],
 
               _buildHeader(),
 
-              const SizedBox(
-                height: 24,
-              ),
+              const SizedBox(height: 24),
 
               _buildHistorySection(),
             ],
@@ -237,9 +159,8 @@ class _RiderHistoryScreenState
   }
 
   Widget _buildHeader() {
-    return  Column(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           'RIDER HISTORY',
@@ -251,9 +172,7 @@ class _RiderHistoryScreenState
           ),
         ),
 
-        SizedBox(
-          height: 8,
-        ),
+        SizedBox(height: 8),
 
         Text(
           'Pickup and Delivery History',
@@ -266,9 +185,7 @@ class _RiderHistoryScreenState
           ),
         ),
 
-        SizedBox(
-          height: 9,
-        ),
+        SizedBox(height: 9),
 
         Text(
           'Completed, failed, returned, and sorting-center handoff records from the deliveries table.',
@@ -288,43 +205,27 @@ class _RiderHistoryScreenState
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, _surface, fill: true),
-        borderRadius:
-            BorderRadius.circular(
-          22,
-        ),
-        border: Border.all(
-          color: AppTheme.resolve(context, _border),
-        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Padding(
-            padding:
-                EdgeInsets.fromLTRB(
-              18,
-              18,
-              18,
-              16,
-            ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(18, 18, 18, 16),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
                   'History',
                   style: TextStyle(
                     color: AppTheme.resolve(context, _text),
                     fontSize: 18,
-                    fontWeight:
-                        FontWeight.w900,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
 
-                SizedBox(
-                  height: 5,
-                ),
+                SizedBox(height: 5),
 
                 Text(
                   'This list uses your real rider assignments only.',
@@ -338,7 +239,7 @@ class _RiderHistoryScreenState
             ),
           ),
 
-           Divider(
+          Divider(
             height: 1,
             thickness: 1,
             color: AppTheme.resolve(context, _border),
@@ -347,43 +248,29 @@ class _RiderHistoryScreenState
           if (widget.history.isEmpty)
             _buildEmptyState()
           else
-            ...List<Widget>.generate(
-              widget.history.length,
-              (
-                int index,
-              ) {
-                final RiderHistoryData
-                    parcel =
-                    widget.history[index];
+            ...List<Widget>.generate(widget.history.length, (int index) {
+              final RiderHistoryData parcel = widget.history[index];
 
-                return Column(
-                  children: <Widget>[
-                    _HistoryItem(
-                      parcel: parcel,
-                      onTap:
-                          widget.onOpenHistory ==
-                                  null
-                              ? null
-                              : () {
-                                  widget
-                                      .onOpenHistory!(
-                                    parcel,
-                                  );
-                                },
+              return Column(
+                children: <Widget>[
+                  _HistoryItem(
+                    parcel: parcel,
+                    onTap: widget.onOpenHistory == null
+                        ? null
+                        : () {
+                            widget.onOpenHistory!(parcel);
+                          },
+                  ),
+
+                  if (index != widget.history.length - 1)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: AppTheme.resolve(context, _border),
                     ),
-
-                    if (index !=
-                        widget.history.length -
-                            1)
-                       Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: AppTheme.resolve(context, _border),
-                      ),
-                  ],
-                );
-              },
-            ),
+                ],
+              );
+            }),
         ],
       ),
     );
@@ -391,11 +278,7 @@ class _RiderHistoryScreenState
 
   Widget _buildEmptyState() {
     return Padding(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 24,
-        vertical: 42,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 42),
       child: Center(
         child: Column(
           children: <Widget>[
@@ -414,9 +297,7 @@ class _RiderHistoryScreenState
               ),
             ),
 
-            SizedBox(
-              height: 14,
-            ),
+            SizedBox(height: 14),
 
             Text(
               'No rider history found yet.',
@@ -424,14 +305,11 @@ class _RiderHistoryScreenState
               style: TextStyle(
                 color: AppTheme.resolve(context, _text),
                 fontSize: 16,
-                fontWeight:
-                    FontWeight.w900,
+                fontWeight: FontWeight.w900,
               ),
             ),
 
-            SizedBox(
-              height: 6,
-            ),
+            SizedBox(height: 6),
 
             Text(
               'Your completed and previous pickup or delivery assignments will appear here.',
@@ -448,48 +326,36 @@ class _RiderHistoryScreenState
     );
   }
 
-  Widget _buildStatusMessage(
-    String message,
-  ) {
+  Widget _buildStatusMessage(String message) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(
-        14,
-      ),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, _successSoft, fill: true),
-        borderRadius:
-            BorderRadius.circular(
-          14,
-        ),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: AppTheme.resolve(context, const Color(0xFFB7DFC5)),
         ),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Icon(
-            Icons
-                .check_circle_outline_rounded,
+          Icon(
+            Icons.check_circle_outline_rounded,
             color: AppTheme.resolve(context, _success),
             size: 20,
           ),
 
-          const SizedBox(
-            width: 9,
-          ),
+          const SizedBox(width: 9),
 
           Expanded(
             child: Text(
               message,
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, _success),
                 fontSize: 13,
                 height: 1.45,
-                fontWeight:
-                    FontWeight.w700,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -499,117 +365,79 @@ class _RiderHistoryScreenState
   }
 }
 
-class _HistoryItem
-    extends StatelessWidget {
+class _HistoryItem extends StatelessWidget {
   final RiderHistoryData parcel;
 
   final VoidCallback? onTap;
 
-  const _HistoryItem({
-    required this.parcel,
-    this.onTap,
-  });
+  const _HistoryItem({required this.parcel, this.onTap});
 
-  static const Color _text =
-      Color(0xFF3B211B);
+  static const Color _text = Color(0xFF3B211B);
 
-  static const Color _muted =
-      Color(0xFF987865);
+  static const Color _muted = Color(0xFF987865);
 
-  static const Color _maroon =
-      Color(0xFF561C17);
+  static const Color _maroon = Color(0xFF561C17);
 
-  static const Color _maroonSoft =
-      Color(0xFFF1E4D7);
+  static const Color _maroonSoft = Color(0xFFF1E4D7);
 
-  static const Color _danger =
-      Color(0xFFB42318);
+  static const Color _danger = Color(0xFFB42318);
 
-  static const Color _dangerSoft =
-      Color(0xFFFFF1F0);
+  static const Color _dangerSoft = Color(0xFFFFF1F0);
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(
-            16,
-          ),
+          padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Row(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _HistoryImage(
-                    imageUrl:
-                        parcel.imageUrl,
-                  ),
+                  _HistoryImage(imageUrl: parcel.imageUrl),
 
-                  const SizedBox(
-                    width: 12,
-                  ),
+                  const SizedBox(width: 12),
 
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          parcel.trackingCode
-                                  .trim()
-                                  .isEmpty
+                          parcel.trackingCode.trim().isEmpty
                               ? 'No tracking code'
-                              : parcel
-                                  .trackingCode,
+                              : parcel.trackingCode,
                           maxLines: 2,
-                          overflow:
-                              TextOverflow
-                                  .ellipsis,
-                          style:
-                               TextStyle(
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             color: AppTheme.resolve(context, _text),
                             fontSize: 15,
                             height: 1.25,
-                            fontWeight:
-                                FontWeight
-                                    .w900,
+                            fontWeight: FontWeight.w900,
                           ),
                         ),
 
-                        const SizedBox(
-                          height: 5,
-                        ),
+                        const SizedBox(height: 5),
 
                         Text(
                           'Buyer: ${parcel.buyerName}',
                           maxLines: 2,
-                          overflow:
-                              TextOverflow
-                                  .ellipsis,
-                          style:
-                               TextStyle(
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             color: AppTheme.resolve(context, _muted),
                             fontSize: 12.5,
                             height: 1.4,
                           ),
                         ),
 
-                        const SizedBox(
-                          height: 4,
-                        ),
+                        const SizedBox(height: 4),
 
                         Text(
                           '${parcel.statusLabel} - ${parcel.updatedLabel}',
-                          style:
-                               TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, _muted),
                             fontSize: 12,
                             height: 1.4,
@@ -621,59 +449,38 @@ class _HistoryItem
                 ],
               ),
 
-              if (parcel
-                  .hasFailureReason) ...<
-                  Widget>[
-                const SizedBox(
-                  height: 12,
-                ),
+              if (parcel.hasFailureReason) ...<Widget>[
+                const SizedBox(height: 12),
 
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.all(
-                    11,
-                  ),
-                  decoration:
-                      BoxDecoration(
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
                     color: AppTheme.resolve(context, _dangerSoft, fill: true),
-                    borderRadius:
-                        BorderRadius.circular(
-                      11,
-                    ),
-                    border:
-                        Border.all(
-                      color:
-                          AppTheme.resolve(context, const Color(0xFFF5C5C1)),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(
+                      color: AppTheme.resolve(context, const Color(0xFFF5C5C1)),
                     ),
                   ),
                   child: Row(
-                    crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                       Icon(
-                        Icons
-                            .error_outline_rounded,
+                      Icon(
+                        Icons.error_outline_rounded,
                         color: AppTheme.resolve(context, _danger),
                         size: 18,
                       ),
 
-                      const SizedBox(
-                        width: 8,
-                      ),
+                      const SizedBox(width: 8),
 
                       Expanded(
                         child: Text(
                           'Reason: ${parcel.failureReason}',
-                          style:
-                               TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, _danger),
                             fontSize: 12,
                             height: 1.45,
-                            fontWeight:
-                                FontWeight
-                                    .w600,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -682,38 +489,25 @@ class _HistoryItem
                 ),
               ],
 
-              const SizedBox(
-                height: 13,
-              ),
+              const SizedBox(height: 13),
 
               Row(
                 children: <Widget>[
                   Container(
-                    padding:
-                        const EdgeInsets
-                            .symmetric(
+                    padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 7,
                     ),
-                    decoration:
-                        BoxDecoration(
-                      color:
-                          AppTheme.resolve(context, _maroonSoft, fill: true),
-                      borderRadius:
-                          BorderRadius
-                              .circular(
-                        100,
-                      ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.resolve(context, _maroonSoft, fill: true),
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: Text(
                       parcel.statusLabel,
-                      style:
-                           TextStyle(
+                      style: TextStyle(
                         color: AppTheme.resolve(context, _maroon),
                         fontSize: 11,
-                        fontWeight:
-                            FontWeight
-                                .w900,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
@@ -721,11 +515,9 @@ class _HistoryItem
                   const Spacer(),
 
                   if (onTap != null)
-                     Icon(
-                      Icons
-                          .chevron_right_rounded,
-                      color:
-                          AppTheme.resolve(context, Color(0xFFA99386)),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppTheme.resolve(context, Color(0xFFA99386)),
                     ),
                 ],
               ),
@@ -737,20 +529,14 @@ class _HistoryItem
   }
 }
 
-class _HistoryImage
-    extends StatelessWidget {
+class _HistoryImage extends StatelessWidget {
   final String? imageUrl;
 
-  const _HistoryImage({
-    required this.imageUrl,
-  });
+  const _HistoryImage({required this.imageUrl});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final String? url =
-        imageUrl?.trim();
+  Widget build(BuildContext context) {
+    final String? url = imageUrl?.trim();
 
     return Container(
       width: 58,
@@ -758,20 +544,15 @@ class _HistoryImage
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, const Color(0xFFF3ECE4), fill: true),
-        borderRadius:
-            BorderRadius.circular(
-          12,
-        ),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppTheme.resolve(context, const Color(0xFFEADCCC)),
         ),
       ),
-      child: url == null ||
-              url.isEmpty
-          ?  Center(
+      child: url == null || url.isEmpty
+          ? Center(
               child: Icon(
-                Icons
-                    .inventory_2_outlined,
+                Icons.inventory_2_outlined,
                 color: AppTheme.resolve(context, Color(0xFFA99386)),
                 size: 25,
               ),
@@ -779,7 +560,7 @@ class _HistoryImage
           : SizedNetworkImage(
               url: url,
               fit: BoxFit.cover,
-              placeholder:  Center(
+              placeholder: Center(
                 child: SizedBox(
                   width: 18,
                   height: 18,
@@ -789,21 +570,16 @@ class _HistoryImage
                   ),
                 ),
               ),
-              errorBuilder: (
-                BuildContext context,
-                Object error,
-                StackTrace?
-                    stackTrace,
-              ) {
-                return  Center(
-                  child: Icon(
-                    Icons
-                        .broken_image_outlined,
-                    color: AppTheme.resolve(context, Color(0xFFA99386)),
-                    size: 25,
-                  ),
-                );
-              },
+              errorBuilder:
+                  (BuildContext context, Object error, StackTrace? stackTrace) {
+                    return Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: AppTheme.resolve(context, Color(0xFFA99386)),
+                        size: 25,
+                      ),
+                    );
+                  },
             ),
     );
   }

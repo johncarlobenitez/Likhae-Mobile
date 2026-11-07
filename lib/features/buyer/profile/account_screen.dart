@@ -19,7 +19,15 @@ import 'package:likhae/services/philippine_address_geocoding.dart';
 import '../../auth/register_screen.dart'
     show AddressLoader, AddressOption, ChildAddressLoader, PostalCodeLoader;
 
-enum BuyerAccountTab { profile, addresses, vouchers, password, settings }
+enum BuyerAccountTab {
+  profile,
+  addresses,
+  vouchers,
+  wallet,
+  password,
+  settings,
+  dangerZone,
+}
 
 extension BuyerAccountTabInfo on BuyerAccountTab {
   String get label {
@@ -33,11 +41,17 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
       case BuyerAccountTab.vouchers:
         return 'Vouchers';
 
+      case BuyerAccountTab.wallet:
+        return 'Wallet';
+
       case BuyerAccountTab.password:
         return 'Change Password';
 
       case BuyerAccountTab.settings:
         return 'System Settings';
+
+      case BuyerAccountTab.dangerZone:
+        return 'Danger Zone';
     }
   }
 
@@ -52,11 +66,17 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
       case BuyerAccountTab.vouchers:
         return 'Discounts and deals';
 
+      case BuyerAccountTab.wallet:
+        return 'Refund destination';
+
       case BuyerAccountTab.password:
         return 'Account security';
 
       case BuyerAccountTab.settings:
         return 'App preferences';
+
+      case BuyerAccountTab.dangerZone:
+        return 'Close account';
     }
   }
 
@@ -71,11 +91,17 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
       case BuyerAccountTab.vouchers:
         return Icons.confirmation_number_outlined;
 
+      case BuyerAccountTab.wallet:
+        return Icons.account_balance_wallet_outlined;
+
       case BuyerAccountTab.password:
         return Icons.lock_outline_rounded;
 
       case BuyerAccountTab.settings:
         return Icons.settings_outlined;
+
+      case BuyerAccountTab.dangerZone:
+        return Icons.warning_amber_rounded;
     }
   }
 }
@@ -164,6 +190,54 @@ class BuyerAccountSnapshot {
   final List<BuyerAddressData> addresses;
 
   const BuyerAccountSnapshot({required this.profile, required this.addresses});
+}
+
+class BuyerRefundDestination {
+  final String id;
+  final String method;
+  final String? bankName;
+  final String accountName;
+  final String accountType;
+  final String accountNumber;
+  final bool isDefault;
+
+  const BuyerRefundDestination({
+    required this.id,
+    required this.method,
+    required this.accountName,
+    required this.accountType,
+    required this.accountNumber,
+    this.bankName,
+    this.isDefault = false,
+  });
+
+  String get maskedNumber {
+    final String compact = accountNumber.replaceAll(RegExp(r'\s+'), '');
+    if (compact.length <= 4) return compact;
+    return '•••• ${compact.substring(compact.length - 4)}';
+  }
+}
+
+class BuyerRefundDestinationMutation {
+  final String action;
+  final String? destinationId;
+  final String? method;
+  final String? bankName;
+  final String? accountName;
+  final String? accountType;
+  final String? accountNumber;
+  final bool makeDefault;
+
+  const BuyerRefundDestinationMutation({
+    required this.action,
+    this.destinationId,
+    this.method,
+    this.bankName,
+    this.accountName,
+    this.accountType,
+    this.accountNumber,
+    this.makeDefault = false,
+  });
 }
 
 class SelectedProfilePhoto {
@@ -411,6 +485,14 @@ typedef ChangeBuyerPasswordCallback =
 typedef DeleteBuyerAccountCallback =
     Future<void> Function(String password, String confirmation);
 
+typedef LoadBuyerRefundDestinationsCallback =
+    Future<List<BuyerRefundDestination>> Function();
+
+typedef BuyerRefundDestinationMutationCallback =
+    Future<List<BuyerRefundDestination>> Function(
+      BuyerRefundDestinationMutation mutation,
+    );
+
 typedef RefreshBuyerAccountCallback = Future<BuyerAccountSnapshot> Function();
 
 typedef LogoutBuyerCallback = Future<void> Function();
@@ -463,6 +545,10 @@ class AccountScreen extends StatefulWidget {
 
   final DeleteBuyerAccountCallback? onDeleteAccount;
 
+  final LoadBuyerRefundDestinationsCallback? onLoadRefundDestinations;
+
+  final BuyerRefundDestinationMutationCallback? onMutateRefundDestination;
+
   final VoidCallback? onReviewHistory;
 
   final VoidCallback? onSystemSettings;
@@ -513,6 +599,8 @@ class AccountScreen extends StatefulWidget {
     this.onSetDefaultAddress,
     this.onChangePassword,
     this.onDeleteAccount,
+    this.onLoadRefundDestinations,
+    this.onMutateRefundDestination,
     this.onReviewHistory,
     this.onSystemSettings,
     this.onVouchers,
@@ -579,6 +667,26 @@ class _AccountScreenState extends State<AccountScreen> {
   bool _refreshing = false;
 
   bool _loggingOut = false;
+
+  List<BuyerRefundDestination> _refundDestinations = <BuyerRefundDestination>[];
+  bool _loadingRefundDestinations = false;
+  bool _savingRefundDestination = false;
+  bool _refundDestinationsLoaded = false;
+  String? _refundDestinationError;
+  String? _editingRefundDestinationId;
+  String _refundMethod = 'GCash';
+  String _refundAccountType = 'MOBILE_NUMBER';
+  bool _refundMakeDefault = true;
+  final GlobalKey<FormState> _refundDestinationFormKey = GlobalKey<FormState>();
+  final TextEditingController _refundBankController = TextEditingController();
+  final TextEditingController _refundNameController = TextEditingController();
+  final TextEditingController _refundNumberController = TextEditingController();
+  final TextEditingController _deleteAccountPasswordController =
+      TextEditingController();
+  final TextEditingController _deleteAccountConfirmationController =
+      TextEditingController();
+  bool _deletingAccount = false;
+  String? _deleteAccountError;
 
   final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
 
@@ -701,6 +809,9 @@ class _AccountScreenState extends State<AccountScreen> {
     if (_activeTab == BuyerAccountTab.addresses) {
       unawaited(_loadAddressRegions());
     }
+    if (_activeTab == BuyerAccountTab.wallet) {
+      unawaited(_loadRefundDestinations());
+    }
   }
 
   @override
@@ -753,6 +864,9 @@ class _AccountScreenState extends State<AccountScreen> {
       if (_activeTab == BuyerAccountTab.addresses) {
         unawaited(_loadAddressRegions());
       }
+      if (_activeTab == BuyerAccountTab.wallet) {
+        unawaited(_loadRefundDestinations());
+      }
     }
   }
 
@@ -779,6 +893,11 @@ class _AccountScreenState extends State<AccountScreen> {
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _refundBankController.dispose();
+    _refundNameController.dispose();
+    _refundNumberController.dispose();
+    _deleteAccountPasswordController.dispose();
+    _deleteAccountConfirmationController.dispose();
 
     super.dispose();
   }
@@ -1045,7 +1164,9 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _onAddressMunicipalityChanged(AddressOption? value) async {
     if (_selectedMunicipality?.code == value?.code) return;
     final int request = ++_addressOptionsRequest;
+    final int postalLookupGeneration = ++_postalCodeLookupGeneration;
     final ChildAddressLoader? loadBarangays = widget.loadBarangays;
+    final PostalCodeLoader? loadPostalCode = widget.loadPostalCode;
     final bool shouldLoad = value != null && loadBarangays != null;
     setState(() {
       _selectedMunicipality = value;
@@ -1054,21 +1175,27 @@ class _AccountScreenState extends State<AccountScreen> {
       _loadingAddressBarangays = shouldLoad;
       _municipalityController.text = value?.name ?? '';
       _barangayController.clear();
-      _clearPostalCodeForLocationChange();
+      _postalCodeController.clear();
+      _loadingPostalCode = value != null && loadPostalCode != null;
+      _postalCodeLookupFailed = false;
       _selectedAddressLocation = null;
       _addressLocationMessage = null;
       _addressMapCenter = _defaultAddressMapCenter;
       _addressMapZoom = 14;
     });
     _refreshAddressPinAfterLocationChange();
+    if (value != null && loadPostalCode != null) {
+      unawaited(_loadPostalCodeForMunicipality(value, postalLookupGeneration));
+    }
     if (value == null || loadBarangays == null) return;
 
     try {
       final List<AddressOption> options = await loadBarangays(value.code);
       if (!mounted ||
           request != _addressOptionsRequest ||
-          _selectedMunicipality?.code != value.code)
+          _selectedMunicipality?.code != value.code) {
         return;
+      }
       setState(() => _addressBarangays = options);
     } catch (_) {
       if (mounted && request == _addressOptionsRequest) {
@@ -1083,55 +1210,51 @@ class _AccountScreenState extends State<AccountScreen> {
 
   Future<void> _onAddressBarangayChanged(AddressOption? value) async {
     if (_selectedBarangay?.code == value?.code) return;
-    final int lookupGeneration = ++_postalCodeLookupGeneration;
     setState(() {
       _selectedBarangay = value;
       _barangayController.text = value?.name ?? '';
-      _postalCodeController.clear();
-      _loadingPostalCode = value != null;
-      _postalCodeLookupFailed = false;
       _selectedAddressLocation = null;
       _addressLocationMessage = null;
       _addressMapCenter = _defaultAddressMapCenter;
       _addressMapZoom = 14;
     });
     _refreshAddressPinAfterLocationChange();
+  }
 
-    final AddressOption? municipality = _selectedMunicipality;
+  Future<void> _loadPostalCodeForMunicipality(
+    AddressOption municipality,
+    int lookupGeneration,
+  ) async {
     final PostalCodeLoader? loadPostalCode = widget.loadPostalCode;
-    if (value == null || municipality == null || loadPostalCode == null) {
-      if (mounted && value != null) {
-        setState(() {
-          _loadingPostalCode = false;
-          _postalCodeLookupFailed = true;
-        });
-      }
-      return;
-    }
+    if (loadPostalCode == null) return;
 
     try {
       final String? postalCode = await loadPostalCode(
         municipalityCode: municipality.code,
-        barangayCode: value.code,
         provinceCode: _selectedProvince?.code ?? '',
         provinceName: _selectedProvince?.name ?? '',
         municipalityName: municipality.name,
       );
       if (!mounted ||
           lookupGeneration != _postalCodeLookupGeneration ||
-          _selectedBarangay?.code != value.code)
+          _selectedMunicipality?.code != municipality.code) {
         return;
+      }
       final String normalizedPostalCode = postalCode?.trim() ?? '';
       setState(() {
-        _postalCodeController.text = normalizedPostalCode;
+        if (_postalCodeController.text.trim().isEmpty) {
+          _postalCodeController.text = normalizedPostalCode;
+        }
         _loadingPostalCode = false;
-        _postalCodeLookupFailed = normalizedPostalCode.isEmpty;
+        _postalCodeLookupFailed =
+            normalizedPostalCode.isEmpty &&
+            _postalCodeController.text.trim().isEmpty;
       });
     } catch (_) {
       if (mounted && lookupGeneration == _postalCodeLookupGeneration) {
         setState(() {
           _loadingPostalCode = false;
-          _postalCodeLookupFailed = true;
+          _postalCodeLookupFailed = _postalCodeController.text.trim().isEmpty;
         });
       }
     }
@@ -1228,11 +1351,11 @@ class _AccountScreenState extends State<AccountScreen> {
   String get _postalCodeHelperText {
     if (_loadingPostalCode) return 'Finding postal code...';
     if (_postalCodeLookupFailed) {
-      return 'Postal code is unavailable for this barangay.';
+      return 'Not found automatically. Enter it if you know it.';
     }
     final String postalCode = _postalCodeController.text.trim();
     if (postalCode.isNotEmpty) return 'Postal code: $postalCode';
-    return 'Postal code will fill after you select a barangay.';
+    return 'Postal code will fill after you select a municipality.';
   }
 
   Widget _buildAddressLocationField() {
@@ -1292,7 +1415,12 @@ class _AccountScreenState extends State<AccountScreen> {
           prefixIcon: Icons.markunread_mailbox_outlined,
           keyboardType: TextInputType.number,
           maxLength: 20,
-          readOnly: true,
+          readOnly: false,
+          onChanged: (_) {
+            if (_postalCodeLookupFailed) {
+              setState(() => _postalCodeLookupFailed = false);
+            }
+          },
         ),
       ],
     );
@@ -1329,11 +1457,8 @@ class _AccountScreenState extends State<AccountScreen> {
     try {
       LatLng? location;
       for (final String query in queries) {
-        final Response<dynamic> response = await ApiClient.get(
-          'maps/geocode',
-          queryParameters: <String, dynamic>{'text': query},
-          refresh: true,
-        );
+        final Response<dynamic> response = await ApiClient.getMapGeocode(query);
+        if (!mounted) return;
         final int statusCode = response.statusCode ?? 500;
         final String? errorMessage =
             PhilippineAddressGeocoding.errorMessageForResponse(
@@ -1351,11 +1476,17 @@ class _AccountScreenState extends State<AccountScreen> {
 
       if (location == null) {
         throw const FormatException(
-          'No matching address was found. Check the street and city, or tap the map to place the pin manually.',
+          'We could not locate this address. Tap your delivery spot on the map or use device location. You can still save with your chosen pin.',
         );
       }
 
       _setAddressLocation(location);
+      if (mounted) {
+        setState(() {
+          _addressLocationMessage =
+              'Check the pin before saving. If needed, tap the map to mark your exact delivery spot.';
+        });
+      }
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -1444,6 +1575,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
     if (tab == BuyerAccountTab.addresses) {
       unawaited(_loadAddressRegions());
+    }
+    if (tab == BuyerAccountTab.wallet) {
+      unawaited(_loadRefundDestinations());
     }
 
     widget.onTabChanged?.call(tab);
@@ -2047,7 +2181,7 @@ class _AccountScreenState extends State<AccountScreen> {
             style: TextStyle(
               color: AppTheme.resolve(context, _text),
               fontWeight: FontWeight.w800,
-          ),
+            ),
           ),
           content: Text(
             'Your account will use your initial when no profile photo is saved.',
@@ -2346,6 +2480,9 @@ class _AccountScreenState extends State<AccountScreen> {
     await _onAddressBarangayChanged(barangay);
     if (!mounted) return;
     setState(() {
+      _postalCodeLookupGeneration++;
+      _loadingPostalCode = false;
+      _postalCodeLookupFailed = false;
       _postalCodeController.text = address.postalCode ?? '';
       _selectedAddressLocation =
           address.latitude != null && address.longitude != null
@@ -2805,6 +2942,16 @@ class _AccountScreenState extends State<AccountScreen> {
                 onPressed: handleBack,
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
+            if (widget.showBackButton)
+              Text(
+                'BUYER CENTER',
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _maroon),
+                  fontSize: 12,
+                  letterSpacing: 1.7,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             const Spacer(),
             ...actions,
           ],
@@ -2824,17 +2971,18 @@ class _AccountScreenState extends State<AccountScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'BUYER CENTER',
-          style: TextStyle(
-            color: AppTheme.resolve(context, _maroon),
-            fontSize: 12,
-            letterSpacing: 1.7,
-            fontWeight: FontWeight.w800,
+        if (!widget.showBackButton) ...[
+          Text(
+            'BUYER CENTER',
+            style: TextStyle(
+              color: AppTheme.resolve(context, _maroon),
+              fontSize: 12,
+              letterSpacing: 1.7,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-
-        SizedBox(height: 5),
+          const SizedBox(height: 5),
+        ],
 
         Text(
           'Account Management',
@@ -2930,34 +3078,23 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget _buildTabs() {
     final List<BuyerAccountTab> tabs = BuyerAccountTab.values;
 
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        const double spacing = 8;
-        final double tabWidth = constraints.maxWidth >= 760
-            ? (constraints.maxWidth - spacing * (tabs.length - 1)) / tabs.length
-            : 152;
-
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            children: [
-              for (int index = 0; index < tabs.length; index++) ...[
-                if (index > 0) const SizedBox(width: spacing),
-                SizedBox(
-                  width: tabWidth,
-                  height: 62,
-                  child: _buildTab(tabs[index], compact: true),
-                ),
-              ],
+    return SizedBox(
+      height: 50,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (int index = 0; index < tabs.length; index++) ...[
+              if (index > 0) const SizedBox(width: 8),
+              _buildTab(tabs[index]),
             ],
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildTab(BuyerAccountTab tab, {bool compact = false}) {
+  Widget _buildTab(BuyerAccountTab tab) {
     final bool selected = tab == _activeTab;
 
     return Material(
@@ -2965,7 +3102,7 @@ class _AccountScreenState extends State<AccountScreen> {
       color: selected
           ? AppTheme.resolve(context, ShopColors.accentSoft, fill: true)
           : AppTheme.resolve(context, _surface, fill: true),
-      borderRadius: BorderRadius.circular(13),
+      borderRadius: BorderRadius.circular(100),
       child: InkWell(
         onTap: () {
           if (selected) return;
@@ -2985,11 +3122,12 @@ class _AccountScreenState extends State<AccountScreen> {
           }
           _changeTab(tab);
         },
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(100),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 11),
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(100),
             border: Border.all(
               color: selected
                   ? AppTheme.resolve(context, _tan)
@@ -2997,44 +3135,26 @@ class _AccountScreenState extends State<AccountScreen> {
             ),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 tab.icon,
                 color: selected
                     ? AppTheme.resolve(context, _maroon)
                     : AppTheme.resolve(context, _muted),
-                size: compact ? 16 : 18,
+                size: 17,
               ),
-              SizedBox(width: compact ? 5 : 8),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tab.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: selected
-                            ? AppTheme.resolve(context, _maroon)
-                            : AppTheme.resolve(context, _text),
-                        fontSize: compact ? 11.5 : 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      tab.description,
-                      maxLines: compact ? 2 : 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppTheme.resolve(context, _muted2),
-                        fontSize: compact ? 9.5 : 11.5,
-                        height: compact ? 1.1 : null,
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 7),
+              Text(
+                tab.label,
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  color: selected
+                      ? AppTheme.resolve(context, _maroon)
+                      : AppTheme.resolve(context, _text),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
@@ -3064,6 +3184,9 @@ class _AccountScreenState extends State<AccountScreen> {
           ),
         );
 
+      case BuyerAccountTab.wallet:
+        return _buildWalletSection();
+
       case BuyerAccountTab.password:
         return _buildPasswordSection();
 
@@ -3078,7 +3201,625 @@ class _AccountScreenState extends State<AccountScreen> {
             label: const Text('Open System Settings'),
           ),
         );
+
+      case BuyerAccountTab.dangerZone:
+        return _buildDangerZoneSection();
     }
+  }
+
+  Future<void> _loadRefundDestinations() async {
+    final LoadBuyerRefundDestinationsCallback? callback =
+        widget.onLoadRefundDestinations;
+    if (callback == null) {
+      setState(() {
+        _refundDestinationsLoaded = false;
+        _refundDestinationError =
+            'Refund destinations are unavailable while the buyer API is disconnected.';
+      });
+      return;
+    }
+    if (_loadingRefundDestinations) return;
+    setState(() {
+      _loadingRefundDestinations = true;
+      _refundDestinationError = null;
+    });
+    try {
+      final List<BuyerRefundDestination> destinations = await callback();
+      if (!mounted) return;
+      setState(() {
+        _refundDestinations = destinations;
+        _refundDestinationsLoaded = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _refundDestinationError = _errorText(error));
+    } finally {
+      if (mounted) setState(() => _loadingRefundDestinations = false);
+    }
+  }
+
+  Future<void> _mutateRefundDestination(
+    BuyerRefundDestinationMutation mutation,
+  ) async {
+    final BuyerRefundDestinationMutationCallback? callback =
+        widget.onMutateRefundDestination;
+    if (_savingRefundDestination) return;
+    if (callback == null) {
+      setState(() {
+        _refundDestinationError =
+            'Refund destinations are unavailable while the buyer API is disconnected.';
+      });
+      return;
+    }
+    setState(() {
+      _savingRefundDestination = true;
+      _refundDestinationError = null;
+    });
+    try {
+      final List<BuyerRefundDestination> destinations = await callback(
+        mutation,
+      );
+      if (!mounted) return;
+      setState(() {
+        _refundDestinations = destinations;
+        _refundDestinationsLoaded = true;
+      });
+      if (mutation.action == 'add' || mutation.action == 'update') {
+        setState(_resetRefundDestinationForm);
+      }
+      _showMessage(
+        mutation.action == 'remove'
+            ? 'Refund destination removed.'
+            : mutation.action == 'set_default'
+            ? 'Default refund destination updated.'
+            : 'Refund destination saved securely.',
+      );
+    } catch (error) {
+      if (mounted) setState(() => _refundDestinationError = _errorText(error));
+    } finally {
+      if (mounted) setState(() => _savingRefundDestination = false);
+    }
+  }
+
+  void _editRefundDestination(BuyerRefundDestination destination) {
+    setState(() {
+      _editingRefundDestinationId = destination.id;
+      _refundMethod = destination.method;
+      _refundAccountType = destination.accountType;
+      _refundBankController.text = destination.bankName ?? '';
+      _refundNameController.text = destination.accountName;
+      _refundNumberController.clear();
+      _refundMakeDefault = destination.isDefault;
+    });
+  }
+
+  void _resetRefundDestinationForm() {
+    _editingRefundDestinationId = null;
+    _refundMethod = 'GCash';
+    _refundAccountType = 'MOBILE_NUMBER';
+    _refundBankController.clear();
+    _refundNameController.clear();
+    _refundNumberController.clear();
+    _refundMakeDefault = _refundDestinations.isEmpty;
+  }
+
+  Future<void> _saveRefundDestination() async {
+    if (_savingRefundDestination ||
+        !_refundDestinationFormKey.currentState!.validate()) {
+      return;
+    }
+    await _mutateRefundDestination(
+      BuyerRefundDestinationMutation(
+        action: _editingRefundDestinationId == null ? 'add' : 'update',
+        destinationId: _editingRefundDestinationId,
+        method: _refundMethod,
+        bankName: _refundMethod == 'Bank Transfer'
+            ? _refundBankController.text.trim()
+            : null,
+        accountName: _refundNameController.text.trim(),
+        accountType: _refundAccountType,
+        accountNumber: _refundNumberController.text.trim(),
+        makeDefault: _refundMakeDefault,
+      ),
+    );
+  }
+
+  Future<void> _removeRefundDestination(
+    BuyerRefundDestination destination,
+  ) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Remove refund destination?'),
+        content: Text(
+          'Remove ${destination.method} ending in ${destination.maskedNumber.split(' ').last}?',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: _danger),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _mutateRefundDestination(
+        BuyerRefundDestinationMutation(
+          action: 'remove',
+          destinationId: destination.id,
+        ),
+      );
+    }
+  }
+
+  Widget _buildWalletSection() {
+    return _AccountPanel(
+      title: 'Wallet',
+      subtitle:
+          'Save a GCash, Maya, or bank account as your destination for future digital refunds.',
+      icon: Icons.account_balance_wallet_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFAEB),
+              border: Border.all(color: const Color(0xFFFED766)),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Text(
+              'Online checkout remains disabled; new purchases use Cash on Delivery. Current return and refund requests use the cash refund process after approval, return receipt, and inspection. Saved account details are reserved for future digital refunds.',
+              style: TextStyle(fontSize: 12, height: 1.5),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_loadingRefundDestinations && !_refundDestinationsLoaded)
+            const Padding(
+              padding: EdgeInsets.all(22),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_refundDestinationError != null)
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: AppTheme.resolve(context, _soft, fill: true),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    _refundDestinationError!,
+                    style: TextStyle(color: AppTheme.resolve(context, _danger)),
+                  ),
+                  TextButton.icon(
+                    onPressed: _loadingRefundDestinations
+                        ? null
+                        : _loadRefundDestinations,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Try again'),
+                  ),
+                ],
+              ),
+            )
+          else if (_refundDestinations.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: AppTheme.resolve(context, _soft, fill: true),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.resolve(context, _border)),
+              ),
+              child: const Text(
+                'No refund destinations saved yet. Add one below; it will become the default automatically.',
+                style: TextStyle(fontSize: 12, height: 1.5),
+              ),
+            )
+          else ...<Widget>[
+            for (final BuyerRefundDestination destination
+                in _refundDestinations) ...<Widget>[
+              _buildRefundDestinationTile(destination),
+              const SizedBox(height: 9),
+            ],
+          ],
+          const SizedBox(height: 14),
+          Form(
+            key: _refundDestinationFormKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  _editingRefundDestinationId == null
+                      ? 'Add a refund destination'
+                      : 'Update refund destination',
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _text),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (_editingRefundDestinationId != null) ...<Widget>[
+                  const SizedBox(height: 5),
+                  Text(
+                    'Re-enter the account number to save changes.',
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _muted),
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _refundMethod,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Refund destination method',
+                  ),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem(value: 'GCash', child: Text('GCash')),
+                    DropdownMenuItem(value: 'Maya', child: Text('Maya')),
+                    DropdownMenuItem(
+                      value: 'Bank Transfer',
+                      child: Text('Bank Transfer'),
+                    ),
+                    DropdownMenuItem(value: 'Other', child: Text('Other')),
+                  ],
+                  onChanged: _savingRefundDestination
+                      ? null
+                      : (String? value) {
+                          if (value == null) return;
+                          setState(() {
+                            _refundMethod = value;
+                            if (value == 'GCash' || value == 'Maya') {
+                              _refundAccountType = 'MOBILE_NUMBER';
+                            } else if (value == 'Bank Transfer') {
+                              _refundAccountType = 'ACCOUNT_NUMBER';
+                            }
+                          });
+                        },
+                ),
+                if (_refundMethod == 'Bank Transfer') ...<Widget>[
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _refundBankController,
+                    decoration: const InputDecoration(labelText: 'Bank name'),
+                    validator: (String? value) =>
+                        value == null || value.trim().isEmpty
+                        ? 'Enter your bank name.'
+                        : null,
+                  ),
+                ],
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _refundNameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Account holder name',
+                  ),
+                  validator: (String? value) =>
+                      value == null || value.trim().isEmpty
+                      ? 'Enter the name on the account.'
+                      : null,
+                ),
+                if (_refundMethod == 'Other') ...<Widget>[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _refundAccountType,
+                    decoration: const InputDecoration(labelText: 'Number type'),
+                    items: const <DropdownMenuItem<String>>[
+                      DropdownMenuItem(
+                        value: 'MOBILE_NUMBER',
+                        child: Text('Mobile number'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'ACCOUNT_NUMBER',
+                        child: Text('Account number'),
+                      ),
+                    ],
+                    onChanged: (String? value) {
+                      if (value != null) {
+                        setState(() => _refundAccountType = value);
+                      }
+                    },
+                  ),
+                ],
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _refundNumberController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: _refundAccountType == 'MOBILE_NUMBER'
+                        ? 'Mobile number'
+                        : 'Account number',
+                    hintText: _refundAccountType == 'MOBILE_NUMBER'
+                        ? '09XX XXX XXXX or +63 9XX XXX XXXX'
+                        : '6 to 20 digits',
+                  ),
+                  validator: (String? value) {
+                    final String number = (value ?? '').replaceAll(
+                      RegExp(r'[\s().-]+'),
+                      '',
+                    );
+                    if (_refundAccountType == 'MOBILE_NUMBER') {
+                      return RegExp(
+                            r'^(?:09\d{9}|\+639\d{9}|639\d{9})$',
+                          ).hasMatch(number)
+                          ? null
+                          : 'Enter a valid Philippine mobile number.';
+                    }
+                    return RegExp(r'^\d{6,20}$').hasMatch(number)
+                        ? null
+                        : 'Enter an account number with 6 to 20 digits.';
+                  },
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _refundMakeDefault,
+                  onChanged: (bool? value) =>
+                      setState(() => _refundMakeDefault = value ?? false),
+                  title: const Text(
+                    'Set as default for future digital refunds',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.resolve(context, _soft, fill: true),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.resolve(context, _border),
+                    ),
+                  ),
+                  child: const Text(
+                    'Your saved account details are private and encrypted. Card numbers and security codes are never collected.',
+                    style: TextStyle(fontSize: 11.5, height: 1.45),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    if (_editingRefundDestinationId != null)
+                      TextButton(
+                        onPressed: _savingRefundDestination
+                            ? null
+                            : () => setState(_resetRefundDestinationForm),
+                        child: const Text('Cancel edit'),
+                      ),
+                    const Spacer(),
+                    FilledButton.icon(
+                      onPressed: _savingRefundDestination
+                          ? null
+                          : _saveRefundDestination,
+                      icon: _savingRefundDestination
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(
+                        _editingRefundDestinationId == null
+                            ? 'Save refund destination'
+                            : 'Update destination',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRefundDestinationTile(BuyerRefundDestination destination) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.resolve(context, _surface, fill: true),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                color: AppTheme.resolve(context, _maroon),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  destination.method,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (destination.isDefault)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.resolve(
+                      context,
+                      ShopColors.accentSoft,
+                      fill: true,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'DEFAULT',
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _maroon),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '${destination.accountName} · ${destination.maskedNumber}',
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 12,
+            ),
+          ),
+          if (destination.bankName?.isNotEmpty == true) ...<Widget>[
+            const SizedBox(height: 2),
+            Text(
+              destination.bankName!,
+              style: TextStyle(
+                color: AppTheme.resolve(context, _muted2),
+                fontSize: 11,
+              ),
+            ),
+          ],
+          const SizedBox(height: 5),
+          Wrap(
+            spacing: 4,
+            runSpacing: 0,
+            children: <Widget>[
+              if (!destination.isDefault)
+                TextButton(
+                  onPressed: _savingRefundDestination
+                      ? null
+                      : () => _mutateRefundDestination(
+                          BuyerRefundDestinationMutation(
+                            action: 'set_default',
+                            destinationId: destination.id,
+                          ),
+                        ),
+                  child: const Text('Set as default'),
+                ),
+              TextButton(
+                onPressed: _savingRefundDestination
+                    ? null
+                    : () => _editRefundDestination(destination),
+                child: const Text('Edit'),
+              ),
+              TextButton(
+                onPressed: _savingRefundDestination
+                    ? null
+                    : () => _removeRefundDestination(destination),
+                style: TextButton.styleFrom(foregroundColor: _danger),
+                child: const Text('Remove'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDangerZoneSection() {
+    return _AccountPanel(
+      title: 'Account Deletion',
+      subtitle: 'Close your LIKHAE Buyer account.',
+      icon: Icons.warning_amber_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1F1),
+              border: Border.all(color: const Color(0xFFFFCACA)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'This action cannot be undone',
+                  style: TextStyle(
+                    color: Color(0xFFB42318),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'This securely deactivates your account and signs you out. Historical orders are retained to protect fulfilment and payment records. Active orders must be completed or cancelled first.',
+                  style: TextStyle(
+                    color: Color(0xFFB42318),
+                    fontSize: 11.5,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (widget.onDeleteAccount == null) ...<Widget>[
+            const SizedBox(height: 12),
+            Text(
+              'Account closure is unavailable while the buyer API is disconnected.',
+              style: TextStyle(color: AppTheme.resolve(context, _muted)),
+            ),
+          ] else ...<Widget>[
+            const SizedBox(height: 14),
+            TextField(
+              controller: _deleteAccountPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirm your password',
+              ),
+            ),
+            const SizedBox(height: 11),
+            TextField(
+              controller: _deleteAccountConfirmationController,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Type DELETE to confirm',
+              ),
+            ),
+            if (_deleteAccountError != null) ...<Widget>[
+              const SizedBox(height: 9),
+              Text(
+                _deleteAccountError!,
+                style: TextStyle(color: AppTheme.resolve(context, _danger)),
+              ),
+            ],
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: _deletingAccount ? null : _deleteAccount,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.resolve(
+                    context,
+                    _danger,
+                    fill: true,
+                  ),
+                ),
+                icon: _deletingAccount
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.person_off_outlined),
+                label: const Text('Close My Account'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildProfileSection() {
@@ -3288,8 +4029,8 @@ class _AccountScreenState extends State<AccountScreen> {
               autofillHints: const <String>[AutofillHints.email],
               decoration:
                   _inputDecoration(
-                hintText: 'Email address',
-                prefixIcon: Icons.email_outlined,
+                    hintText: 'Email address',
+                    prefixIcon: Icons.email_outlined,
                   ).copyWith(
                     counterText: '',
                     helperText:
@@ -3454,32 +4195,6 @@ class _AccountScreenState extends State<AccountScreen> {
                 label: const Text('My review history'),
               ),
             ],
-            if (widget.onDeleteAccount != null) ...[
-              const SizedBox(height: 22),
-              const Divider(),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _savingProfile ? null : _deleteAccount,
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.resolve(
-                      context,
-                      const Color(0xFFB42318),
-                    ),
-                  ),
-                  icon: const Icon(Icons.person_off_outlined),
-                  label: const Text('Close buyer account'),
-                ),
-              ),
-              Text(
-                'Active orders must be completed or cancelled before the account can be closed.',
-                style: TextStyle(
-                  color: AppTheme.resolve(context, _muted),
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -3489,106 +4204,30 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _deleteAccount() async {
     final DeleteBuyerAccountCallback? callback = widget.onDeleteAccount;
     if (callback == null) return;
-    final TextEditingController passwordController = TextEditingController();
-    final TextEditingController confirmationController =
-        TextEditingController();
-    String? error;
-    bool submitting = false;
+    if (_deleteAccountConfirmationController.text.trim() != 'DELETE') {
+      setState(() => _deleteAccountError = 'Type DELETE to confirm.');
+      return;
+    }
+    if (_deleteAccountPasswordController.text.isEmpty) {
+      setState(() => _deleteAccountError = 'Enter your current password.');
+      return;
+    }
+    setState(() {
+      _deletingAccount = true;
+      _deleteAccountError = null;
+    });
     try {
-      final bool? confirmed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) => StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            Future<void> submit() async {
-              if (submitting) return;
-              if (confirmationController.text.trim() != 'DELETE') {
-                setDialogState(() => error = 'Type DELETE to confirm.');
-                return;
-              }
-              setDialogState(() {
-                submitting = true;
-                error = null;
-              });
-              try {
-                await callback(
-                  passwordController.text,
-                  confirmationController.text.trim(),
-                );
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop(true);
-                }
-              } catch (exception) {
-                if (dialogContext.mounted) {
-                  setDialogState(() {
-                    submitting = false;
-                    error = _errorText(exception);
-                  });
-                }
-              }
-            }
-
-            return AlertDialog(
-              title: const Text('Close buyer account?'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const Text(
-                    'This deactivates your account. Enter your password and type DELETE to continue.',
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Current password',
-                    ),
-                  ),
-                  TextField(
-                    controller: confirmationController,
-                    decoration: const InputDecoration(labelText: 'Type DELETE'),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: submitting
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: submitting ? null : submit,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.resolve(
-                      context,
-                      const Color(0xFFB42318),
-                      fill: true,
-                    ),
-                  ),
-                  child: submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Close account'),
-                ),
-              ],
-            );
-          },
-        ),
+      await callback(
+        _deleteAccountPasswordController.text,
+        _deleteAccountConfirmationController.text.trim(),
       );
-      if (confirmed == true && mounted && widget.onLogout != null) {
+      if (mounted && widget.onLogout != null) {
         await widget.onLogout!();
       }
+    } catch (error) {
+      if (mounted) setState(() => _deleteAccountError = _errorText(error));
     } finally {
-      passwordController.dispose();
-      confirmationController.dispose();
+      if (mounted) setState(() => _deletingAccount = false);
     }
   }
 
@@ -4014,7 +4653,10 @@ class _AccountScreenState extends State<AccountScreen> {
               child: Text(
                 _addressLocationMessage!,
                 style: TextStyle(
-                  color: AppTheme.resolve(context, _danger),
+                  color: AppTheme.resolve(
+                    context,
+                    selectedLocation == null ? _danger : _muted,
+                  ),
                   fontSize: 11.5,
                 ),
               ),
@@ -4805,6 +5447,8 @@ class _AddressInput extends StatelessWidget {
 
   final int maxLength;
 
+  final ValueChanged<String>? onChanged;
+
   const _AddressInput({
     required this.label,
     required this.controller,
@@ -4816,6 +5460,7 @@ class _AddressInput extends StatelessWidget {
     this.readOnly = false,
     this.helperText,
     this.helperTextError = false,
+    this.onChanged,
   });
 
   @override
@@ -4839,6 +5484,7 @@ class _AddressInput extends StatelessWidget {
             keyboardType: keyboardType,
             maxLength: maxLength,
             readOnly: readOnly,
+            onChanged: onChanged,
             textCapitalization:
                 keyboardType == TextInputType.phone ||
                     keyboardType == TextInputType.number

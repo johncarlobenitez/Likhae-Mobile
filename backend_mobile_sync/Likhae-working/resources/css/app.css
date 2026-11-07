@@ -1,0 +1,991 @@
+/* =========================================================
+   LIKHAE LOGISTICS
+   GLOBAL TAILWIND CSS
+   Tailwind CSS v4
+========================================================= */
+
+@import "tailwindcss";
+
+
+/* =========================================================
+   TAILWIND SOURCE SCANNING
+========================================================= */
+
+/*
+|--------------------------------------------------------------------------
+| Laravel framework views
+|--------------------------------------------------------------------------
+*/
+
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
+
+
+/*
+|--------------------------------------------------------------------------
+| Laravel compiled views
+|--------------------------------------------------------------------------
+*/
+
+@source "../../storage/framework/views/*.php";
+
+
+/*
+|--------------------------------------------------------------------------
+| Application Blade files
+|--------------------------------------------------------------------------
+*/
+
+@source "../views/**/*.blade.php";
+
+
+/*
+|--------------------------------------------------------------------------
+| Application JavaScript
+|--------------------------------------------------------------------------
+*/
+
+@source "../js/**/*.js";
+
+
+/* =========================================================
+   MANUAL DARK MODE
+========================================================= */
+
+/*
+|--------------------------------------------------------------------------
+| Dark mode is activated by:
+|
+| <html class="dark">
+|
+| Default theme remains LIGHT because the "dark" class is not present
+| unless JavaScript adds it.
+|--------------------------------------------------------------------------
+*/
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+
+/* =========================================================
+   LIKHAE THEME VARIABLES
+========================================================= */
+
+html {
+    font-size: 14px;
+}
+
+body {
+    font-size: 0.875rem;
+}
+
+:root {
+
+    /* -----------------------------------------------------
+       Main page
+    ----------------------------------------------------- */
+
+    --lk-page: #f7f3ec;
+
+    --lk-page-secondary: #f2ede6;
+
+
+    /* -----------------------------------------------------
+       Surfaces / cards
+    ----------------------------------------------------- */
+
+    --lk-surface: #fffcf8;
+
+    --lk-surface-secondary: #f8f3ed;
+
+    --lk-surface-hover: #f4eee7;
+
+
+    /* -----------------------------------------------------
+       Text
+    ----------------------------------------------------- */
+
+    --lk-text: #211a19;
+
+    --lk-text-secondary: #514844;
+
+    --lk-muted: #7e746e;
+
+    --lk-muted-light: #a19791;
+
+
+    /* -----------------------------------------------------
+       Borders
+    ----------------------------------------------------- */
+
+    --lk-border: #e5ddd5;
+
+    --lk-border-strong: #d4c9c0;
+
+
+    /* -----------------------------------------------------
+       Main Burgundy Brand
+    ----------------------------------------------------- */
+
+    --lk-primary: #74181c;
+
+    --lk-primary-hover: #8b2025;
+
+    --lk-primary-active: #5d1115;
+
+    --lk-primary-soft: #f6e5e3;
+
+    --lk-primary-soft-strong: #eccbc8;
+
+
+    /* -----------------------------------------------------
+       Sidebar
+    ----------------------------------------------------- */
+
+    --lk-sidebar: #74181c;
+
+    --lk-sidebar-secondary: #691418;
+
+    --lk-sidebar-hover: rgba(255, 255, 255, 0.10);
+
+    --lk-sidebar-border: rgba(255, 255, 255, 0.12);
+
+    --lk-sidebar-text: #ffffff;
+
+    --lk-sidebar-muted: rgba(255, 255, 255, 0.58);
+
+
+    /* -----------------------------------------------------
+       Status colors
+    ----------------------------------------------------- */
+
+    --lk-success: #2f7a55;
+
+    --lk-success-bg: #e1f0e7;
+
+    --lk-warning: #b97925;
+
+    --lk-warning-bg: #f8ecd7;
+
+    --lk-danger: #b43b3b;
+
+    --lk-danger-bg: #f7dfdf;
+
+    --lk-info: #4e7182;
+
+    --lk-info-bg: #e2edf1;
+
+
+    /* -----------------------------------------------------
+       Misc
+    ----------------------------------------------------- */
+
+    --lk-overlay: rgba(20, 15, 15, 0.45);
+
+    --lk-shadow:
+        0 10px 35px rgba(70, 32, 25, 0.06);
+
+    --lk-shadow-lg:
+        0 18px 50px rgba(70, 32, 25, 0.10);
+
+}
+
+
+/* =========================================================
+   DARK THEME VARIABLES
+========================================================= */
+
+.dark {
+
+    /* -----------------------------------------------------
+       Main page
+    ----------------------------------------------------- */
+
+    --lk-page: #121617;
+
+    --lk-page-secondary: #161b1d;
+
+
+    /* -----------------------------------------------------
+       Surfaces / cards
+    ----------------------------------------------------- */
+
+    --lk-surface: #191e20;
+
+    --lk-surface-secondary: #202628;
+
+    --lk-surface-hover: #272e30;
+
+
+    /* -----------------------------------------------------
+       Text
+    ----------------------------------------------------- */
+
+    --lk-text: #f3edea;
+
+    --lk-text-secondary: #d6ceca;
+
+    --lk-muted: #9f9691;
+
+    --lk-muted-light: #78716d;
+
+
+    /* -----------------------------------------------------
+       Borders
+    ----------------------------------------------------- */
+
+    --lk-border: #343a3c;
+
+    --lk-border-strong: #454c4e;
+
+
+    /* -----------------------------------------------------
+       Main Burgundy Brand
+    ----------------------------------------------------- */
+
+    --lk-primary: #a92b31;
+
+    --lk-primary-hover: #bd383e;
+
+    --lk-primary-active: #8b2025;
+
+    --lk-primary-soft: #321d20;
+
+    --lk-primary-soft-strong: #482226;
+
+
+    /* -----------------------------------------------------
+       Sidebar
+    ----------------------------------------------------- */
+
+    --lk-sidebar: #211517;
+
+    --lk-sidebar-secondary: #191113;
+
+    --lk-sidebar-hover: rgba(255, 255, 255, 0.07);
+
+    --lk-sidebar-border: rgba(255, 255, 255, 0.08);
+
+    --lk-sidebar-text: #f7efec;
+
+    --lk-sidebar-muted: rgba(247, 239, 236, 0.50);
+
+
+    /* -----------------------------------------------------
+       Status colors
+    ----------------------------------------------------- */
+
+    --lk-success: #55a879;
+
+    --lk-success-bg: #193126;
+
+    --lk-warning: #d49a46;
+
+    --lk-warning-bg: #342a1a;
+
+    --lk-danger: #d45c5c;
+
+    --lk-danger-bg: #361e20;
+
+    --lk-info: #72a1b5;
+
+    --lk-info-bg: #1c2e35;
+
+
+    /* -----------------------------------------------------
+       Misc
+    ----------------------------------------------------- */
+
+    --lk-overlay: rgba(0, 0, 0, 0.60);
+
+    --lk-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.18);
+
+    --lk-shadow-lg:
+        0 20px 60px rgba(0, 0, 0, 0.28);
+
+}
+
+
+/* =========================================================
+   TAILWIND THEME TOKENS
+========================================================= */
+
+/*
+|--------------------------------------------------------------------------
+| These create Tailwind utilities such as:
+|
+| bg-page
+| bg-surface
+| bg-primary
+| text-ink
+| text-muted
+| border-line
+| text-success
+| bg-success-soft
+|
+| The values automatically change when .dark is enabled.
+|--------------------------------------------------------------------------
+*/
+
+@theme inline {
+
+    /* -----------------------------------------------------
+       Backgrounds
+    ----------------------------------------------------- */
+
+    --color-page:
+        var(--lk-page);
+
+    --color-page-secondary:
+        var(--lk-page-secondary);
+
+    --color-surface:
+        var(--lk-surface);
+
+    --color-surface-secondary:
+        var(--lk-surface-secondary);
+
+    --color-surface-hover:
+        var(--lk-surface-hover);
+
+
+    /* -----------------------------------------------------
+       Typography
+    ----------------------------------------------------- */
+
+    --color-ink:
+        var(--lk-text);
+
+    --color-ink-secondary:
+        var(--lk-text-secondary);
+
+    --color-muted:
+        var(--lk-muted);
+
+    --color-muted-light:
+        var(--lk-muted-light);
+
+
+    /* -----------------------------------------------------
+       Borders
+    ----------------------------------------------------- */
+
+    --color-line:
+        var(--lk-border);
+
+    --color-line-strong:
+        var(--lk-border-strong);
+
+
+    /* -----------------------------------------------------
+       Brand
+    ----------------------------------------------------- */
+
+    --color-primary:
+        var(--lk-primary);
+
+    --color-primary-hover:
+        var(--lk-primary-hover);
+
+    --color-primary-active:
+        var(--lk-primary-active);
+
+    --color-primary-soft:
+        var(--lk-primary-soft);
+
+    --color-primary-soft-strong:
+        var(--lk-primary-soft-strong);
+
+
+    /* -----------------------------------------------------
+       Sidebar
+    ----------------------------------------------------- */
+
+    --color-sidebar:
+        var(--lk-sidebar);
+
+    --color-sidebar-secondary:
+        var(--lk-sidebar-secondary);
+
+    --color-sidebar-text:
+        var(--lk-sidebar-text);
+
+    --color-sidebar-muted:
+        var(--lk-sidebar-muted);
+
+
+    /* -----------------------------------------------------
+       Success
+    ----------------------------------------------------- */
+
+    --color-success:
+        var(--lk-success);
+
+    --color-success-soft:
+        var(--lk-success-bg);
+
+
+    /* -----------------------------------------------------
+       Warning
+    ----------------------------------------------------- */
+
+    --color-warning:
+        var(--lk-warning);
+
+    --color-warning-soft:
+        var(--lk-warning-bg);
+
+
+    /* -----------------------------------------------------
+       Danger
+    ----------------------------------------------------- */
+
+    --color-danger:
+        var(--lk-danger);
+
+    --color-danger-soft:
+        var(--lk-danger-bg);
+
+
+    /* -----------------------------------------------------
+       Information
+    ----------------------------------------------------- */
+
+    --color-info:
+        var(--lk-info);
+
+    --color-info-soft:
+        var(--lk-info-bg);
+
+
+    /* -----------------------------------------------------
+       Fonts
+    ----------------------------------------------------- */
+
+    --font-sans:
+        Inter,
+        "Segoe UI",
+        Arial,
+        Helvetica,
+        sans-serif;
+
+
+    --font-display:
+        Georgia,
+        "Times New Roman",
+        serif;
+
+
+    /* -----------------------------------------------------
+       Radius
+    ----------------------------------------------------- */
+
+    --radius-likhae-sm:
+        0.5rem;
+
+    --radius-likhae:
+        0.75rem;
+
+    --radius-likhae-lg:
+        1rem;
+
+    --radius-likhae-xl:
+        1.25rem;
+
+}
+
+
+/* =========================================================
+   RIDER CONTENT SCALE
+========================================================= */
+
+.rider-shell .rounded-3xl {
+    border-radius: 1rem;
+}
+
+.rider-shell .p-6 {
+    padding: 1.25rem;
+}
+
+.rider-shell .gap-8 {
+    gap: 1.5rem;
+}
+
+.rider-shell aside {
+    width: 245px;
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: 10px 0 35px rgba(50, 15, 18, 0.08);
+}
+
+.rider-shell aside > div:first-child {
+    min-height: 78px;
+    height: auto;
+    gap: 0.75rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+}
+
+.rider-shell aside > div:first-child > div:first-child {
+    height: 2.25rem;
+    width: 2.25rem;
+    border-radius: 10px;
+    font-size: 15px;
+}
+
+.rider-shell aside > div:first-child h1 {
+    font-size: 17px;
+}
+
+.rider-shell aside > div:first-child p {
+    font-size: 8px;
+}
+
+.rider-shell aside nav {
+    gap: 0;
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+}
+
+.rider-shell aside nav a {
+    min-height: 40px;
+    gap: 0.75rem;
+    border-radius: 10px;
+    padding: 0 0.75rem;
+    font-size: 12px;
+}
+
+.rider-shell aside nav a svg {
+    height: 1rem;
+    width: 1rem;
+}
+
+.rider-shell main {
+    margin-left: 0;
+}
+
+@media (min-width: 1024px) {
+    .rider-shell main {
+        margin-left: 245px;
+    }
+}
+
+.rider-shell main > header {
+    height: 4rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
+
+.rider-shell main > header h2 {
+    font-size: 14px;
+}
+
+.rider-shell main > header p {
+    font-size: 9px;
+}
+
+.rider-shell aside h3 {
+    font-size: 12px;
+}
+
+.rider-shell aside h3 + p {
+    font-size: 10px;
+}
+
+.logistics-shell #logisticsSidebar nav a,
+.logistics-shell #logisticsSidebar > nav > div > button {
+    font-size: 12px;
+}
+
+.logistics-shell #logisticsSidebar nav p {
+    font-size: 8px;
+}
+
+.logistics-shell #logisticsSidebar strong {
+    font-size: 12px;
+}
+
+.logistics-shell #logisticsSidebar small {
+    font-size: 9px;
+}
+
+
+/* =========================================================
+   GLOBAL BASE STYLES
+========================================================= */
+
+@layer base {
+
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
+
+    html {
+        min-height: 100%;
+
+        background:
+            var(--lk-page);
+
+        color-scheme: light;
+
+        scroll-behavior: smooth;
+    }
+
+
+    html.dark {
+        color-scheme: dark;
+    }
+
+
+    body {
+        min-height: 100vh;
+
+        margin: 0;
+
+        overflow-x: hidden;
+
+        background:
+            var(--lk-page);
+
+        color:
+            var(--lk-text);
+
+        font-family:
+            Poppins,
+            "Segoe UI",
+            Arial,
+            Helvetica,
+            sans-serif;
+
+        -webkit-font-smoothing:
+            antialiased;
+
+        -moz-osx-font-smoothing:
+            grayscale;
+
+        transition:
+            background-color 250ms ease,
+            color 250ms ease;
+    }
+
+
+    button,
+    input,
+    textarea,
+    select {
+        font: inherit;
+    }
+
+
+    button {
+        cursor: pointer;
+    }
+
+
+    button:disabled {
+        cursor: not-allowed;
+    }
+
+
+    a {
+        color: inherit;
+
+        text-decoration: none;
+    }
+
+
+    img,
+    svg {
+        display: block;
+    }
+
+
+    img {
+        max-width: 100%;
+    }
+
+
+    ::selection {
+        background:
+            var(--lk-primary);
+
+        color: #ffffff;
+    }
+
+}
+
+
+/* =========================================================
+   FORM COLOR SCHEME
+========================================================= */
+
+@layer base {
+
+    input,
+    textarea,
+    select {
+        color:
+            var(--lk-text);
+    }
+
+
+    input::placeholder,
+    textarea::placeholder {
+        color:
+            var(--lk-muted-light);
+    }
+
+
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+        -webkit-text-fill-color:
+            var(--lk-text);
+
+        transition:
+            background-color 9999s ease-in-out 0s;
+    }
+
+}
+
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+@layer base {
+
+    * {
+        scrollbar-width: thin;
+
+        scrollbar-color:
+            var(--lk-border-strong)
+            transparent;
+    }
+
+
+    *::-webkit-scrollbar {
+        width: 7px;
+
+        height: 7px;
+    }
+
+
+    *::-webkit-scrollbar-track {
+        background:
+            transparent;
+    }
+
+
+    *::-webkit-scrollbar-thumb {
+        border-radius:
+            999px;
+
+        background:
+            var(--lk-border-strong);
+    }
+
+
+    *::-webkit-scrollbar-thumb:hover {
+        background:
+            var(--lk-muted);
+    }
+
+}
+
+
+/* =========================================================
+   OPTIONAL REUSABLE COMPONENTS
+========================================================= */
+
+/*
+|--------------------------------------------------------------------------
+| These are intentionally very small.
+|
+| Most styling should still be done directly using Tailwind utility
+| classes inside Blade.
+|--------------------------------------------------------------------------
+*/
+
+@layer components {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Standard card
+    |--------------------------------------------------------------------------
+    */
+
+    .likhae-card {
+        @apply rounded-xl border border-line bg-surface;
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Elevated card
+    |--------------------------------------------------------------------------
+    */
+
+    .likhae-card-elevated {
+        border:
+            1px solid var(--lk-border);
+
+        border-radius:
+            0.75rem;
+
+        background:
+            var(--lk-surface);
+
+        box-shadow:
+            var(--lk-shadow);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Primary button
+    |--------------------------------------------------------------------------
+    */
+
+    .likhae-btn-primary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition;
+    }
+
+
+    .likhae-btn-primary:hover {
+        background:
+            var(--lk-primary-hover);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Secondary button
+    |--------------------------------------------------------------------------
+    */
+
+    .likhae-btn-secondary {
+        @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-ink transition;
+    }
+
+
+    .likhae-btn-secondary:hover {
+        background:
+            var(--lk-surface-hover);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Form field
+    |--------------------------------------------------------------------------
+    */
+
+    .likhae-input {
+        @apply w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink outline-none transition;
+    }
+
+
+    .likhae-input::placeholder {
+        color:
+            var(--lk-muted-light);
+    }
+
+
+    .likhae-input:focus {
+        border-color:
+            var(--lk-primary);
+
+        box-shadow:
+            0 0 0 3px
+            color-mix(
+                in srgb,
+                var(--lk-primary) 12%,
+                transparent
+            );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Status badges
+    |--------------------------------------------------------------------------
+    */
+
+    .likhae-badge-success {
+        @apply inline-flex items-center rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success;
+    }
+
+
+    .likhae-badge-warning {
+        @apply inline-flex items-center rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning;
+    }
+
+
+    .likhae-badge-danger {
+        @apply inline-flex items-center rounded-full bg-danger-soft px-2.5 py-1 text-xs font-semibold text-danger;
+    }
+
+
+    .likhae-badge-info {
+        @apply inline-flex items-center rounded-full bg-info-soft px-2.5 py-1 text-xs font-semibold text-info;
+    }
+
+}
+
+
+/* =========================================================
+   UTILITY HELPERS
+========================================================= */
+
+@layer utilities {
+
+    /*
+    |--------------------------------------------------------------------------
+    | LIKHAE shadows
+    |--------------------------------------------------------------------------
+    */
+
+    .shadow-likhae {
+        box-shadow:
+            var(--lk-shadow);
+    }
+
+
+    .shadow-likhae-lg {
+        box-shadow:
+            var(--lk-shadow-lg);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sidebar custom background
+    |--------------------------------------------------------------------------
+    */
+
+    .bg-sidebar-hover {
+        background:
+            var(--lk-sidebar-hover);
+    }
+
+
+    .border-sidebar {
+        border-color:
+            var(--lk-sidebar-border);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Overlay
+    |--------------------------------------------------------------------------
+    */
+
+    .bg-likhae-overlay {
+        background:
+            var(--lk-overlay);
+    }
+
+}

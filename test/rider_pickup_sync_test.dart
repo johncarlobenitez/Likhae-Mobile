@@ -312,14 +312,12 @@ void main() {
         ],
       });
 
-  testWidgets('transfer camera scans every parcel and submits QR method', (
+  testWidgets('transfer starts after origin hub release without rider scans', (
     tester,
   ) async {
     await largeViewport(tester);
-    var scans = 0;
     var detailReads = 0;
-    Map<int, String>? submitted;
-    String? method;
+    int? startedManifestId;
     await tester.pumpWidget(
       MaterialApp(
         home: RiderInterHubTransfersScreen(
@@ -328,29 +326,18 @@ void main() {
             detailReads++;
             return manifest();
           },
-          onScanParcel: () async =>
-              RiderParcelScanResult(code: 'TRK-${++scans}', method: 'QR'),
-          onStart: (id, codes, {scanMethod = 'MANUAL'}) async {
-            submitted = codes;
-            method = scanMethod;
+          onStart: (id) async {
+            startedManifestId = id;
           },
         ),
       ),
     );
     await tester.pumpAndSettle();
     await tapText(tester, 'Start transport');
-    await tapText(tester, 'Start transport');
-    expect(find.text('Scan every parcel before starting.'), findsOneWidget);
-    expect(submitted, isNull);
-    for (var i = 1; i <= 2; i++) {
-      await tester.tap(find.byTooltip('Scan parcel $i'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    await tapText(tester, 'Start transport');
+    await tester.pumpAndSettle();
     expect(detailReads, 1);
-    expect(submitted, {21: 'TRK-1', 22: 'TRK-2'});
-    expect(method, 'QR');
+    expect(startedManifestId, 9);
+    expect(find.text('Scan manifest parcels'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -364,7 +351,7 @@ void main() {
         home: RiderInterHubTransfersScreen(
           transfers: [manifest()],
           onLoadTransfer: (_) async => manifest(canStart: false),
-          onStart: (_, codes, {scanMethod = 'MANUAL'}) async {
+          onStart: (_) async {
             starts++;
           },
         ),

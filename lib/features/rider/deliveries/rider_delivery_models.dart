@@ -416,9 +416,7 @@ class RiderDeliveryTransitionRequest {
     }
 
     if (normalized == 'delivered') {
-      return receiverName != null &&
-          receiverName!.trim().isNotEmpty &&
-          proofPath != null &&
+      return proofPath != null &&
           proofPath!.trim().isNotEmpty &&
           scannedCode != null &&
           scannedCode!.trim().isNotEmpty &&

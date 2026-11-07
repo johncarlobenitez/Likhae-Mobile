@@ -11,6 +11,7 @@ class RiderDeliveriesScreen extends StatefulWidget {
   final String? statusMessage;
   final bool showPreviewWhenEmpty;
   final RiderDeliveryCallback? onViewDelivery;
+  final Future<void> Function(List<RiderDeliveryData> deliveries)? onAcceptAll;
   final RiderDeliveryRefreshCallback? onRefresh;
   final VoidCallback? onBack;
 
@@ -21,6 +22,7 @@ class RiderDeliveriesScreen extends StatefulWidget {
     this.statusMessage,
     this.showPreviewWhenEmpty = true,
     this.onViewDelivery,
+    this.onAcceptAll,
     this.onRefresh,
     this.onBack,
   });
@@ -37,6 +39,7 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
   static const Color _maroon = Color(0xFF561C17);
   static const Color _text = Color(0xFF3B211B);
   static const Color _muted = Color(0xFF987865);
+  bool _acceptingAll = false;
 
   static const List<RiderDeliveryData> _sampleDeliveries = <RiderDeliveryData>[
     RiderDeliveryData(
@@ -104,9 +107,14 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
     final List<RiderDeliveryData> rows = _displayDeliveries;
 
     return RiderDeliveryStatsData(
-      assigned: rows.where((RiderDeliveryData row) => row.normalizedStatus == 'assigned').length,
+      assigned: rows
+          .where((RiderDeliveryData row) => row.normalizedStatus == 'assigned')
+          .length,
       outForDelivery: rows
-          .where((RiderDeliveryData row) => row.normalizedStatus == 'out_for_delivery')
+          .where(
+            (RiderDeliveryData row) =>
+                row.normalizedStatus == 'out_for_delivery',
+          )
           .length,
       deliveredToday: rows
           .where((RiderDeliveryData row) => row.normalizedStatus == 'delivered')
@@ -128,6 +136,52 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
     }
   }
 
+  Future<void> _acceptAll(List<RiderDeliveryData> deliveries) async {
+    final eligible = deliveries
+        .where((delivery) => delivery.isAssigned && !delivery.isPreview)
+        .toList(growable: false);
+    if (eligible.isEmpty || widget.onAcceptAll == null || _acceptingAll) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Accept all deliveries?'),
+        content: Text(
+          'Accept ${eligible.length} assigned ${eligible.length == 1 ? 'order' : 'orders'} for delivery before leaving the logistics center?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Accept all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _acceptingAll = true);
+    try {
+      await widget.onAcceptAll!(eligible);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Accepted ${eligible.length} deliveries.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not accept all deliveries: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _acceptingAll = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<RiderDeliveryData> deliveries = _displayDeliveries;
@@ -146,40 +200,39 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
                 sliver: SliverList(
-                  delegate: SliverChildListDelegate(
-                    <Widget>[
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton(
-                          tooltip: 'Back',
-                          onPressed:
-                              widget.onBack ??
-                              () => Navigator.of(context).maybePop(),
-                          icon: const Icon(Icons.arrow_back_rounded),
-                          color: AppTheme.resolve(context, _text),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 40,
-                            minHeight: 40,
-                          ),
+                  delegate: SliverChildListDelegate(<Widget>[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        tooltip: 'Back',
+                        onPressed:
+                            widget.onBack ??
+                            () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        color: AppTheme.resolve(context, _text),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      if (widget.statusMessage?.trim().isNotEmpty == true) ...<Widget>[
-                        _StatusNotice(message: widget.statusMessage!),
-                        const SizedBox(height: 16),
-                      ],
-                      if (_usingPreview) ...<Widget>[
-                        const _PreviewNotice(),
-                        const SizedBox(height: 18),
-                      ],
-                      _buildHeader(deliveries.length),
-                      const SizedBox(height: 22),
-                      _buildStats(stats),
-                      const SizedBox(height: 24),
-                      _buildAssignments(deliveries),
+                    ),
+                    const SizedBox(height: 2),
+                    if (widget.statusMessage?.trim().isNotEmpty ==
+                        true) ...<Widget>[
+                      _StatusNotice(message: widget.statusMessage!),
+                      const SizedBox(height: 16),
                     ],
-                  ),
+                    if (_usingPreview) ...<Widget>[
+                      const _PreviewNotice(),
+                      const SizedBox(height: 18),
+                    ],
+                    _buildHeader(deliveries.length),
+                    const SizedBox(height: 22),
+                    _buildStats(stats),
+                    const SizedBox(height: 24),
+                    _buildAssignments(deliveries),
+                  ]),
                 ),
               ),
             ],
@@ -193,7 +246,7 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-         Text(
+        Text(
           'DELIVERY MANAGEMENT',
           style: TextStyle(
             color: AppTheme.resolve(context, _maroon),
@@ -206,7 +259,7 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-             Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -236,12 +289,16 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: AppTheme.resolve(context, const Color(0xFFF1E4D7), fill: true),
+                color: AppTheme.resolve(
+                  context,
+                  const Color(0xFFF1E4D7),
+                  fill: true,
+                ),
                 borderRadius: BorderRadius.circular(100),
               ),
               child: Text(
                 '$count Active',
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, _maroon),
                   fontSize: 11.5,
                   fontWeight: FontWeight.w900,
@@ -257,9 +314,21 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
   Widget _buildStats(RiderDeliveryStatsData stats) {
     final List<_DeliveryStat> items = <_DeliveryStat>[
       _DeliveryStat('Assigned', stats.assigned, Icons.assignment_outlined),
-      _DeliveryStat('Out For Delivery', stats.outForDelivery, Icons.near_me_outlined),
-      _DeliveryStat('Delivered Today', stats.deliveredToday, Icons.task_alt_rounded),
-      _DeliveryStat('Failed Today', stats.failedToday, Icons.error_outline_rounded),
+      _DeliveryStat(
+        'Out For Delivery',
+        stats.outForDelivery,
+        Icons.near_me_outlined,
+      ),
+      _DeliveryStat(
+        'Delivered Today',
+        stats.deliveredToday,
+        Icons.task_alt_rounded,
+      ),
+      _DeliveryStat(
+        'Failed Today',
+        stats.failedToday,
+        Icons.error_outline_rounded,
+      ),
     ];
 
     return LayoutBuilder(
@@ -297,7 +366,7 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(17, 17, 17, 15),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,12 +388,38 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
                     height: 1.4,
                   ),
                 ),
+                if (widget.onAcceptAll != null &&
+                    deliveries.any(
+                      (delivery) => delivery.isAssigned && !delivery.isPreview,
+                    )) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _acceptingAll
+                          ? null
+                          : () => _acceptAll(deliveries),
+                      icon: _acceptingAll
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.done_all_rounded),
+                      label: Text(
+                        _acceptingAll
+                            ? 'Accepting deliveries…'
+                            : 'Accept all assigned orders',
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-           Divider(height: 1, color: AppTheme.resolve(context, _border)),
+          Divider(height: 1, color: AppTheme.resolve(context, _border)),
           if (deliveries.isEmpty)
-             Padding(
+            Padding(
               padding: EdgeInsets.all(28),
               child: Center(
                 child: Text(
@@ -337,24 +432,24 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
               ),
             )
           else
-            ...List<Widget>.generate(
-              deliveries.length,
-              (int index) {
-                final RiderDeliveryData delivery = deliveries[index];
-                return Column(
-                  children: <Widget>[
-                    _DeliveryTile(
-                      delivery: delivery,
-                      onTap: widget.onViewDelivery == null
-                          ? null
-                          : () => widget.onViewDelivery!(delivery),
+            ...List<Widget>.generate(deliveries.length, (int index) {
+              final RiderDeliveryData delivery = deliveries[index];
+              return Column(
+                children: <Widget>[
+                  _DeliveryTile(
+                    delivery: delivery,
+                    onTap: widget.onViewDelivery == null
+                        ? null
+                        : () => widget.onViewDelivery!(delivery),
+                  ),
+                  if (index != deliveries.length - 1)
+                    Divider(
+                      height: 1,
+                      color: AppTheme.resolve(context, _border),
                     ),
-                    if (index != deliveries.length - 1)
-                       Divider(height: 1, color: AppTheme.resolve(context, _border)),
-                  ],
-                );
-              },
-            ),
+                ],
+              );
+            }),
         ],
       ),
     );
@@ -382,7 +477,9 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, const Color(0xFFFFFDF9), fill: true),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFEADCCC)),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,17 +489,25 @@ class _StatCard extends StatelessWidget {
             height: 38,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppTheme.resolve(context, const Color(0xFFF1E4D7), fill: true),
+              color: AppTheme.resolve(
+                context,
+                const Color(0xFFF1E4D7),
+                fill: true,
+              ),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(data.icon, color: AppTheme.resolve(context, const Color(0xFF561C17)), size: 19),
+            child: Icon(
+              data.icon,
+              color: AppTheme.resolve(context, const Color(0xFF561C17)),
+              size: 19,
+            ),
           ),
           const SizedBox(height: 17),
           Text(
             data.label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style:  TextStyle(
+            style: TextStyle(
               color: AppTheme.resolve(context, Color(0xFF987865)),
               fontSize: 12.5,
               height: 1.3,
@@ -412,7 +517,7 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             '${data.value}',
-            style:  TextStyle(
+            style: TextStyle(
               color: AppTheme.resolve(context, Color(0xFF3B211B)),
               fontSize: 29,
               height: 1,
@@ -450,9 +555,18 @@ class _DeliveryTile extends StatelessWidget {
                     height: 72,
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      color: AppTheme.resolve(context, const Color(0xFFF3ECE4), fill: true),
+                      color: AppTheme.resolve(
+                        context,
+                        const Color(0xFFF3ECE4),
+                        fill: true,
+                      ),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
+                      border: Border.all(
+                        color: AppTheme.resolve(
+                          context,
+                          const Color(0xFFEADCCC),
+                        ),
+                      ),
                     ),
                     child: _DeliveryImage(imageUrl: delivery.imageUrl),
                   ),
@@ -465,7 +579,7 @@ class _DeliveryTile extends StatelessWidget {
                           delivery.trackingCode,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:  TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, Color(0xFF3B211B)),
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
@@ -476,7 +590,7 @@ class _DeliveryTile extends StatelessWidget {
                           'Buyer: ${delivery.buyerName}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:  TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, Color(0xFF6C4936)),
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
@@ -487,7 +601,7 @@ class _DeliveryTile extends StatelessWidget {
                           delivery.address,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style:  TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, Color(0xFF987865)),
                             fontSize: 12,
                             height: 1.4,
@@ -496,7 +610,7 @@ class _DeliveryTile extends StatelessWidget {
                         const SizedBox(height: 7),
                         Text(
                           formatRiderMoney(delivery.amount),
-                          style:  TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, Color(0xFF561C17)),
                             fontSize: 13.5,
                             fontWeight: FontWeight.w900,
@@ -517,8 +631,13 @@ class _DeliveryTile extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: onTap,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.resolve(context, const Color(0xFF561C17)),
-                        side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFC19771))),
+                        foregroundColor: AppTheme.resolve(
+                          context,
+                          const Color(0xFF561C17),
+                        ),
+                        side: BorderSide(
+                          color: AppTheme.resolve(context, Color(0xFFC19771)),
+                        ),
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(11),
@@ -594,8 +713,9 @@ class _DeliveryStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final _DeliveryStatusColors colors =
-        _DeliveryStatusColors.fromStatus(delivery.normalizedStatus);
+    final _DeliveryStatusColors colors = _DeliveryStatusColors.fromStatus(
+      delivery.normalizedStatus,
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
@@ -625,7 +745,7 @@ class _DeliveryImage extends StatelessWidget {
     final String? url = imageUrl?.trim();
 
     if (url == null || url.isEmpty) {
-      return  Center(
+      return Center(
         child: Icon(
           Icons.inventory_2_outlined,
           color: AppTheme.resolve(context, Color(0xFFA99386)),
@@ -637,19 +757,16 @@ class _DeliveryImage extends StatelessWidget {
     return SizedNetworkImage(
       url: url,
       fit: BoxFit.cover,
-      errorBuilder: (
-        BuildContext context,
-        Object error,
-        StackTrace? stackTrace,
-      ) {
-        return  Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: AppTheme.resolve(context, Color(0xFFA99386)),
-            size: 28,
-          ),
-        );
-      },
+      errorBuilder:
+          (BuildContext context, Object error, StackTrace? stackTrace) {
+            return Center(
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: AppTheme.resolve(context, Color(0xFFA99386)),
+                size: 28,
+              ),
+            );
+          },
     );
   }
 }
@@ -667,12 +784,14 @@ class _StatusNotice extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, const Color(0xFFFFF1F0), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF2B8B5))),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFF2B8B5)),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Icon(
+          Icon(
             Icons.error_outline_rounded,
             color: AppTheme.resolve(context, Color(0xFFB42318)),
             size: 20,
@@ -681,7 +800,7 @@ class _StatusNotice extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style:  TextStyle(
+              style: TextStyle(
                 color: AppTheme.resolve(context, Color(0xFFB42318)),
                 fontSize: 13,
                 height: 1.45,
@@ -704,20 +823,36 @@ class _PreviewNotice extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: AppTheme.resolve(context, _RiderDeliveriesScreenState._soft, fill: true),
+        color: AppTheme.resolve(
+          context,
+          _RiderDeliveriesScreenState._soft,
+          fill: true,
+        ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.resolve(context, _RiderDeliveriesScreenState._border)),
+        border: Border.all(
+          color: AppTheme.resolve(context, _RiderDeliveriesScreenState._border),
+        ),
       ),
-      child:  Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.visibility_outlined, color: AppTheme.resolve(context, _RiderDeliveriesScreenState._maroon), size: 20),
+          Icon(
+            Icons.visibility_outlined,
+            color: AppTheme.resolve(
+              context,
+              _RiderDeliveriesScreenState._maroon,
+            ),
+            size: 20,
+          ),
           SizedBox(width: 9),
           Expanded(
             child: Text(
               'Sample delivery assignments only. They are not stored in Laravel and will disappear when real Rider API data is supplied.',
               style: TextStyle(
-                color: AppTheme.resolve(context, _RiderDeliveriesScreenState._muted),
+                color: AppTheme.resolve(
+                  context,
+                  _RiderDeliveriesScreenState._muted,
+                ),
                 fontSize: 12.5,
                 height: 1.5,
                 fontWeight: FontWeight.w600,

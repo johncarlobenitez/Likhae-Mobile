@@ -4,7 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/shop_colors.dart';
-import 'app_motion.dart';
 
 /// Reuses the existing disk cache and bounds decoded image memory by the
 /// display size. Buckets avoid a new memory-cache entry for tiny size changes.
@@ -43,10 +42,16 @@ class SizedNetworkImage extends StatelessWidget {
           ? pixels(constraints.maxHeight)
           : null;
       if (url.startsWith('assets/opening/')) {
-        return Image.asset(url, fit: fit, cacheWidth: width,
+        return Image.asset(
+          url,
+          fit: fit,
+          cacheWidth: width,
           semanticLabel: semanticLabel,
-          errorBuilder: errorBuilder ?? (context, error, stack) =>
-            Icon(Icons.image_outlined, size: iconSize));
+          errorBuilder:
+              errorBuilder ??
+              (context, error, stack) =>
+                  Icon(Icons.image_outlined, size: iconSize),
+        );
       }
       return Image(
         image: ResizeImage(
@@ -58,17 +63,9 @@ class SizedNetworkImage extends StatelessWidget {
         fit: fit,
         semanticLabel: semanticLabel,
         frameBuilder: (context, child, frame, synchronous) {
-          if (synchronous) return child;
-          if (frame != null) {
-            return AppReveal(
-              key: ValueKey(url),
-              milliseconds: 180,
-              beginScale: 1,
-              child: child,
-            );
-          }
+          if (synchronous || frame != null) return child;
           return placeholder ??
-               Center(
+              Center(
                 child: Icon(
                   Icons.image_outlined,
                   size: 28,

@@ -29,9 +29,9 @@ Override the API and web origins for a local or staging backend:
 flutter run --dart-define=API_ENABLED=true --dart-define=API_BASE_URL=https://your-host.example/api/v1 --dart-define=WEB_BASE_URL=https://your-host.example
 ```
 
-The API client sends the stored mobile login token as a Bearer token. Only
-buyer and rider features listed below are synchronized when API mode is
-enabled. Other app areas still depend on their existing local/demo behavior.
+The API client sends the stored mobile login token as a Bearer token. Buyer,
+rider, and logistics features listed below use Laravel when API mode is enabled.
+Other app areas still depend on their existing local/demo behavior.
 
 ### Buyer API coverage
 
@@ -59,6 +59,16 @@ delivery-service-area data when possible; checkout rejects addresses without
 an active service area. Add the correct service-area/PSGC records in Laravel
 before expecting delivery outside the configured coverage. Cashback remains
 zero because the current Laravel rewards rules do not implement cashback.
+
+### Logistics API coverage
+
+With `API_ENABLED=true`, the logistics mobile scanner posts scanned tracking
+codes to Laravel's `/api/v1/logistics/scan-receive` endpoint. Laravel validates
+the shipment and logistics-center assignment, records the parcel scan and
+status event, and updates the shipment in the shared database. The logistics
+web dashboard reads the same records and refreshes its summary every 15 seconds.
+Build with `API_BASE_URL` set to the same Laravel host used by the web portal
+when deploying to a non-default or local server.
 
 ### Rider API coverage
 

@@ -99,6 +99,12 @@ class LogisticsMobileService {
     String rawTrackingNumber, {
     String scanMethod = 'MANUAL',
   }) async {
+    if (!AppConfig.apiEnabled) {
+      throw UnsupportedError(
+        'Laravel sync is disabled. Rebuild the app with --dart-define=API_ENABLED=true.',
+      );
+    }
+
     final String trackingNumber = rawTrackingNumber.trim();
     if (trackingNumber.isEmpty) {
       throw const FormatException('Scan or enter a parcel tracking number.');

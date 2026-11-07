@@ -1,0 +1,205 @@
+<?php
+
+use App\Http\Controllers\Auth\AuthenticationController;
+use App\Http\Controllers\Communication\SmartMessagingController;
+use App\Http\Controllers\Logistics\DispatchController;
+use App\Http\Controllers\Logistics\LogisticsPortalController;
+use App\Http\Controllers\Logistics\PublicParcelTrackingController;
+use App\Http\Controllers\Logistics\InterhubTimekeepingController;
+use App\Http\Controllers\Logistics\LogisticsReturnWorkflowController;
+use App\Http\Controllers\Logistics\LogisticsRemittanceController;
+use App\Http\Controllers\Finance\PayoutProofController;
+use App\Http\Controllers\Logistics\LogisticsShippingRateController;
+use App\Http\Controllers\Logistics\RiderApplicationController;
+use App\Http\Controllers\Logistics\RiderPolicyController;
+use App\Http\Controllers\Logistics\LocalTripController;
+use App\Http\Controllers\Logistics\TransferController;
+use App\Http\Controllers\WorkspaceAiController;
+use App\Http\Controllers\WorkspaceSettingsController;
+use App\Http\Middleware\EnsureWorkspaceRole;
+use App\Models\User;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Route;
+
+Route::prefix('logistics')->name('logistics.')->group(function (): void {
+    Route::get('/', fn () => view('logistics.landing'))->name('home');
+    Route::post('/tracking/lookup', [PublicParcelTrackingController::class, 'lookup'])
+        ->middleware('throttle:12,1')
+        ->name('tracking.lookup');
+
+    Route::get('/login', function (\Illuminate\Http\Request $request, AuthenticationController $auth) {
+        $user = $request->user();
+        if ($user) {
+            if (! $user->isAccountType(User::TYPE_LOGISTICS, User::TYPE_RIDER)) {
+                return redirect()->route('login');
+            }
+
+            $pendingPolicies = $request->attributes->get('mandatory_policy_documents');
+            if (! $pendingPolicies instanceof Collection || $pendingPolicies->isEmpty()) {
+                return redirect()->route($user->workspaceRoute());
+            }
+        }
+
+        $savedAccounts = collect($auth->savedAccounts($request, 'logistics'));
+
+        return view('auth.workspace-login', [
+            'workspace' => 'logistics',
+            'accountLabel' => 'Logistics & Rider Portal',
+            'headline' => 'Coordinate every parcel movement.',
+            'description' => 'Logistics centers manage intake and assignments. Riders manage only their own pickup and delivery work.',
+            'homeRoute' => route('logistics.home'),
+            'loginRoute' => route('logistics.login.store'),
+            'registerRoute' => route('register', ['role' => 'logistics']),
+            'savedAccounts' => $savedAccounts,
+            'showSavedAccountPicker' => $savedAccounts->isNotEmpty()
+                && blank(old('email'))
+                && blank(request('email'))
+                && ! $request->session()->has('_errors'),
+        ]);
+    })->name('login');
+
+    Route::post('/login', [AuthenticationController::class, 'store'])->middleware(['guest', 'throttle:30,1'])->name('login.store');
+
+    Route::middleware(['auth', 'verified', EnsureWorkspaceRole::class.':logistics', 'provider.approved'])->group(function (): void {
+        Route::post('/ai/chat', [WorkspaceAiController::class, 'chat'])
+            ->defaults('workspace', 'logistics')
+            ->middleware('throttle:20,1')
+            ->name('ai.chat');
+
+        Route::get('/dashboard', [LogisticsPortalController::class, 'dashboard'])->name('dashboard');
+        Route::get('/settings', [WorkspaceSettingsController::class, 'show'])->defaults('workspace', 'logistics')->name('settings');
+        Route::put('/settings', [WorkspaceSettingsController::class, 'update'])->defaults('workspace', 'logistics')->name('settings.update');
+        Route::post('/policies/rider', [RiderPolicyController::class, 'store'])->name('policies.rider.store');
+        Route::get('/shipping-rate', [LogisticsShippingRateController::class, 'index'])->name('shipping-rate');
+        Route::post('/shipping-rate-requests', [LogisticsShippingRateController::class, 'store'])->name('shipping-rate-requests.store');
+        Route::post('/shipping-rate-requests/{shippingRateRequest}/cancel', [LogisticsShippingRateController::class, 'cancel'])
+            ->whereNumber('shippingRateRequest')->name('shipping-rate-requests.cancel');
+
+        Route::get('/parcels', [DispatchController::class, 'parcels'])->name('parcels');
+        Route::get('/parcels/receive', [DispatchController::class, 'receive'])->name('parcels.receive');
+        Route::post('/parcels/receive/scan', [DispatchController::class, 'receiveScanned'])->name('parcels.receive.scan');
+        Route::post('/parcels/receive/{shipment}/confirm', [DispatchController::class, 'confirmReceive'])->name('parcels.receive.confirm');
+        Route::get('/parcels/tracking', [DispatchController::class, 'tracking'])->name('parcels.tracking');
+        Route::post('/parcels/{shipment}/status-override', [DispatchController::class, 'overrideShipmentStatus'])->name('parcels.status-override');
+        Route::post('/parcels/{shipment}/exceptions', [DispatchController::class, 'reportShipmentException'])->name('parcels.exceptions.store');
+        Route::get('/parcels/{shipment}', [DispatchController::class, 'show'])->name('parcels.show');
+
+        Route::get('/returns', [LogisticsReturnWorkflowController::class, 'index'])->name('returns');
+        Route::post('/returns/receive-batch', [LogisticsReturnWorkflowController::class, 'receiveBatch'])->name('returns.receive-batch');
+        Route::post('/returns/{workflow}/receive', [LogisticsReturnWorkflowController::class, 'receive'])->whereNumber('workflow')->name('returns.receive');
+        Route::post('/returns/{workflow}/assign', [LogisticsReturnWorkflowController::class, 'assign'])->whereNumber('workflow')->name('returns.assign');
+        Route::post('/returns/{workflow}/prepare-transfer', [LogisticsReturnWorkflowController::class, 'prepareTransfer'])->whereNumber('workflow')->name('returns.prepare-transfer');
+        Route::post('/returns/{workflow}/handoff', [LogisticsReturnWorkflowController::class, 'requestHandoff'])->whereNumber('workflow')->name('returns.handoff');
+        Route::post('/returns/{workflow}/handoff/cancel', [LogisticsReturnWorkflowController::class, 'cancelHandoff'])->whereNumber('workflow')->name('returns.handoff.cancel');
+        Route::post('/returns/{workflow}/exceptions/resolve', [LogisticsReturnWorkflowController::class, 'resolveException'])->whereNumber('workflow')->name('returns.exceptions.resolve');
+
+        Route::get('/pickups', [DispatchController::class, 'pickups'])->name('pickups');
+        Route::post('/pickups/requests/{pickupRequest}/assign', [DispatchController::class, 'assignSellerPickupRequest'])
+            ->whereNumber('pickupRequest')->name('pickups.requests.assign');
+        Route::post('/pickups/requests/{pickupRequest}/reject', [DispatchController::class, 'rejectSellerPickupRequest'])
+            ->whereNumber('pickupRequest')->name('pickups.requests.reject');
+        Route::post('/pickups/assignments', [DispatchController::class, 'assignPickupBatch'])->name('pickups.assignments.store');
+        Route::patch('/pickups/batches/{trip}/reassign', [DispatchController::class, 'reassignPickupBatch'])->name('pickups.batches.reassign');
+        Route::post('/pickups/{pickupRequest}/approve', [DispatchController::class, 'approvePickup'])->name('pickups.approve');
+        Route::post('/pickups/{pickupRequest}/reject', [DispatchController::class, 'rejectPickup'])->name('pickups.reject');
+        Route::post('/pickups/{shipment}/auto-assign', [DispatchController::class, 'autoAssignPickup'])->name('pickups.auto-assign');
+        Route::post('/pickups/{shipment}/assign', [DispatchController::class, 'assignPickup'])->name('pickups.assign');
+
+        Route::get('/sorting', [DispatchController::class, 'sorting'])->name('sorting');
+        Route::post('/sorting/{shipment}/sort', [DispatchController::class, 'sortParcel'])->name('sorting.sort');
+
+        Route::get('/assignments', [DispatchController::class, 'assignments'])->name('assignments');
+        Route::post('/assignments/{shipment}/assign', [DispatchController::class, 'assign'])->name('assignments.assign');
+        Route::post('/assignments/{shipment}/auto-match', [DispatchController::class, 'autoMatchDelivery'])->name('assignments.auto-match');
+        Route::redirect('/dispatch', '/logistics/assignments');
+
+        Route::get('/transfers', [TransferController::class, 'index'])->name('transfers');
+        Route::post('/transfers', [TransferController::class, 'store'])->name('transfers.store');
+        Route::get('/transfers/{manifest}', [TransferController::class, 'show'])->name('transfers.show');
+        Route::post('/transfers/{manifest}/items', [TransferController::class, 'addLeg'])->name('transfers.items.store');
+        Route::patch('/transfers/{manifest}/items/{item}/measurements', [TransferController::class, 'recordItemMeasurements'])->name('transfers.items.measurements');
+        Route::patch('/transfers/{manifest}/driver', [TransferController::class, 'assignDriver'])->name('transfers.driver.update');
+        Route::post('/transfers/{manifest}/seal', [TransferController::class, 'seal'])->name('transfers.seal');
+        Route::post('/transfers/{manifest}/items/{item}/release', [TransferController::class, 'releaseItem'])->name('transfers.items.release');
+        Route::post('/transfers/{manifest}/release', [TransferController::class, 'release'])->name('transfers.release');
+        Route::post('/transfers/{manifest}/depart', [TransferController::class, 'depart'])->name('transfers.depart');
+        Route::post('/transfers/{manifest}/arrive', [TransferController::class, 'arrive'])->name('transfers.arrive');
+        Route::post('/transfers/{manifest}/cancel', [TransferController::class, 'cancel'])->name('transfers.cancel');
+        Route::post('/transfer-manifest-items/{item}/receive', [TransferController::class, 'receiveItem'])->name('transfers.items.receive');
+
+        Route::get('/local-trips', [LocalTripController::class, 'index'])->name('local-trips');
+        Route::get('/local-trips/{trip}', [LocalTripController::class, 'show'])->name('local-trips.show');
+        Route::post('/local-trips/{trip}/load', [LocalTripController::class, 'load'])->name('local-trips.load');
+        Route::post('/local-trips/{trip}/close', [LocalTripController::class, 'close'])->name('local-trips.close');
+
+        Route::get('/scanner', fn () => redirect()->route('logistics.parcels.receive'))->name('scanner');
+        Route::get('/waybills/{tracking}', [DispatchController::class, 'waybill'])->name('waybills.show');
+
+        Route::get('/riders', [LogisticsPortalController::class, 'riders'])->name('riders');
+        Route::post('/riders/sessions/revoke', [LogisticsPortalController::class, 'revokeRiderSessions'])->name('riders.sessions.revoke');
+        Route::get('/riders/applications', [RiderApplicationController::class, 'index'])->name('riders.applications');
+        Route::get('/riders/applications/{application}', [RiderApplicationController::class, 'show'])->name('riders.application.show');
+        Route::post('/riders/applications/{application}/approve', [RiderApplicationController::class, 'approve'])->name('riders.approve');
+        Route::post('/riders/applications/{application}/reject', [RiderApplicationController::class, 'reject'])->name('riders.reject');
+        Route::get('/riders/applications/{application}/documents/{document}', [RiderApplicationController::class, 'document'])->name('riders.application.documents.show');
+        Route::post('/riders/applications/{application}/documents/{document}/verify', [RiderApplicationController::class, 'verifyDocument'])->name('riders.application.documents.verify');
+        Route::post('/riders/applications/{application}/documents/{document}/reject', [RiderApplicationController::class, 'rejectDocument'])->name('riders.application.documents.reject');
+        Route::get('/riders/{rider}', [LogisticsPortalController::class, 'riderShow'])->name('riders.show');
+        Route::get('/riders/{rider}/profile-updates/{profileUpdateRequest}/documents/{document}', [LogisticsPortalController::class, 'riderProfileUpdateDocument'])->name('riders.profile-updates.documents.show');
+        Route::post('/riders/{rider}/profile-updates/{profileUpdateRequest}/approve', [LogisticsPortalController::class, 'approveRiderProfileUpdate'])->name('riders.profile-updates.approve');
+        Route::post('/riders/{rider}/profile-updates/{profileUpdateRequest}/reject', [LogisticsPortalController::class, 'rejectRiderProfileUpdate'])->name('riders.profile-updates.reject');
+        Route::patch('/riders/{rider}/moderation', [LogisticsPortalController::class, 'moderateRider'])->name('riders.moderation.update');
+        Route::post('/riders/{rider}/warnings', [LogisticsPortalController::class, 'warnRider'])->name('riders.warnings.store');
+        Route::post('/riders/{rider}/suspend', [LogisticsPortalController::class, 'suspendRider'])->name('riders.suspend');
+        Route::post('/riders/{rider}/reactivate', [LogisticsPortalController::class, 'reactivateRider'])->name('riders.reactivate');
+        Route::post('/riders/{rider}/ban', [LogisticsPortalController::class, 'permanentlyBanRider'])->name('riders.ban');
+        Route::patch('/riders/{rider}/area', [LogisticsPortalController::class, 'reassignRiderArea'])->name('riders.area.update');
+        Route::patch('/riders/{rider}/capacity', [LogisticsPortalController::class, 'updateRiderCapacity'])->name('riders.capacity.update');
+        Route::patch('/riders/{rider}/activate', [LogisticsPortalController::class, 'activateRider'])->name('riders.activate');
+        Route::patch('/riders/{rider}/deactivate', [LogisticsPortalController::class, 'deactivateRider'])->name('riders.deactivate');
+
+        Route::get('/delivery-areas', [LogisticsPortalController::class, 'deliveryAreas'])->name('delivery-areas');
+        Route::post('/delivery-areas', [LogisticsPortalController::class, 'saveDeliveryArea'])->name('delivery-areas.store');
+        Route::patch('/delivery-areas/{area}', [LogisticsPortalController::class, 'toggleDeliveryArea'])->name('delivery-areas.toggle');
+
+        Route::get('/messages', [LogisticsPortalController::class, 'messages'])->name('messages');
+        Route::get('/messages/stream', [LogisticsPortalController::class, 'messageStream'])->name('messages.stream');
+        Route::post('/messages', [LogisticsPortalController::class, 'sendMessage'])->name('messages.send');
+        Route::post('/messages/{conversation}/smart-help/answer', [SmartMessagingController::class, 'answer'])->whereNumber('conversation')->middleware('throttle:120,1')->name('messages.smart-help.answer');
+        Route::post('/messages/{conversation}/smart-help/feedback', [SmartMessagingController::class, 'feedback'])->whereNumber('conversation')->middleware('throttle:60,1')->name('messages.smart-help.feedback');
+        Route::post('/messages/{conversation}/smart-help/handoff', [SmartMessagingController::class, 'handoff'])->whereNumber('conversation')->middleware('throttle:20,1')->name('messages.smart-help.handoff');
+        Route::get('/reports', [LogisticsPortalController::class, 'reports'])->name('reports');
+        Route::get('/reports/transactions.csv', [LogisticsPortalController::class, 'exportFinancialTransactionsCsv'])->name('reports.transactions.csv');
+        Route::get('/reports/transactions.pdf', [LogisticsPortalController::class, 'exportFinancialTransactionsPdf'])->name('reports.transactions.pdf');
+        Route::get('/remittances', [LogisticsRemittanceController::class, 'index'])->name('remittances');
+        Route::post('/interhub-attendance/rates', [InterhubTimekeepingController::class, 'saveRate'])->name('interhub-attendance.rates.store');
+        Route::get('/interhub-attendance/qr', [InterhubTimekeepingController::class, 'logisticsQr'])->name('interhub-attendance.qr');
+        Route::post('/interhub-attendance/scan', [InterhubTimekeepingController::class, 'scanByLogistics'])->middleware('throttle:30,1')->name('interhub-attendance.scan');
+        Route::get('/interhub-attendance/active', [InterhubTimekeepingController::class, 'activeSessions'])->middleware('throttle:60,1')->name('interhub-attendance.active');
+        Route::patch('/interhub-attendance/sessions/{session}', [InterhubTimekeepingController::class, 'correct'])->whereNumber('session')->name('interhub-attendance.correct');
+        Route::post('/interhub-attendance/payroll', [InterhubTimekeepingController::class, 'generatePayroll'])->name('interhub-attendance.payroll.store');
+        Route::post('/interhub-attendance/payroll-items/{item}/paid', [InterhubTimekeepingController::class, 'recordPayment'])->whereNumber('item')->name('interhub-attendance.payroll-items.paid');
+        Route::get('/interhub-attendance/payroll-items/{item}/proof', [InterhubTimekeepingController::class, 'proof'])->whereNumber('item')->name('interhub-attendance.payroll-items.proof');
+        Route::get('/wallet', [LogisticsRemittanceController::class, 'wallet'])->name('wallet');
+        Route::put('/wallet/payout-destination', [LogisticsRemittanceController::class, 'updatePayoutDestination'])->name('wallet.payout-destination.update');
+        Route::post('/wallet/payout-requests/{pool}', [LogisticsRemittanceController::class, 'requestPayout'])->whereNumber('pool')->name('wallet.payout-requests.store');
+        Route::get('/wallet/payouts/{entry}/proof', [PayoutProofController::class, 'logistics'])->whereNumber('entry')->name('wallet.payout-proof');
+        Route::post('/wallet/payouts/{entry}/report-issue', [LogisticsRemittanceController::class, 'reportPayoutIssue'])->whereNumber('entry')->middleware('throttle:5,1')->name('wallet.payout-report-issue');
+        Route::post('/remittances/rider-payouts/{entry}/record', [LogisticsRemittanceController::class, 'recordRiderPayout'])->whereNumber('entry')->name('remittances.rider-payouts.record');
+        Route::post('/remittances/rider-payouts/{entry}/fail', [LogisticsRemittanceController::class, 'failRiderPayout'])->whereNumber('entry')->name('remittances.rider-payouts.fail');
+        Route::post('/remittances/logistics-payouts/{entry}/acknowledge', [LogisticsRemittanceController::class, 'acknowledgeLogisticsPayout'])->whereNumber('entry')->name('remittances.logistics-payouts.acknowledge');
+        Route::post('/remittances/{remittance}/verify', [LogisticsRemittanceController::class, 'verify'])->name('remittances.verify');
+        Route::post('/remittances/{remittance}/reconcile', [LogisticsRemittanceController::class, 'reconcile'])->name('remittances.reconcile');
+        Route::post('/remittances/{remittance}/resolve', [LogisticsRemittanceController::class, 'resolveDiscrepancy'])->name('remittances.resolve');
+        Route::post('/product-proceeds/submit-batch', [LogisticsRemittanceController::class, 'submitProductProceedsBatch'])->name('product-proceeds.batch-submit');
+        Route::post('/product-proceeds/{entry}/submit', [LogisticsRemittanceController::class, 'submitProductProceeds'])->name('product-proceeds.submit');
+        Route::get('/reports/export', [LogisticsPortalController::class, 'exportReport'])->name('reports.export');
+        Route::get('/profile', [LogisticsPortalController::class, 'profile'])->name('profile');
+        Route::get('/account', [LogisticsPortalController::class, 'profile'])->name('account');
+        Route::post('/profile/verification-documents', [LogisticsPortalController::class, 'submitVerificationDocuments'])
+            ->middleware('throttle:5,1')->name('profile.verification-documents.store');
+        Route::patch('/account/profile', [LogisticsPortalController::class, 'updateAccount'])->name('account.profile.update');
+        Route::patch('/account/address', [LogisticsPortalController::class, 'updateCenterAddress'])->name('account.address.update');
+        Route::patch('/account/password', [LogisticsPortalController::class, 'updatePassword'])->name('account.password.update');
+    });
+});

@@ -36,6 +36,12 @@ class PhilippineAddressGeocoding {
       if (streetAddress.isNotEmpty) <String>[...streetAddress, ...context],
       for (final String variant in searchVariants)
         <String>[variant, 'Philippines'],
+      <String>[
+        _withoutBarangayPrefix(barangay),
+        municipality,
+        province,
+        'Philippines',
+      ],
       context,
       <String>[municipality, province, 'Philippines'],
     ];
@@ -100,15 +106,18 @@ class PhilippineAddressGeocoding {
     final String? serverMessage = payload is Map
         ? payload['message']?.toString().trim()
         : null;
+    // A missed address is an empty result, not a failure of the service.
+    // Let callers try the remaining locality queries.
+    if ((statusCode == 404 || statusCode == 422) &&
+        RegExp(
+          r'^no matching address (was )?found[.!]?$',
+          caseSensitive: false,
+        ).hasMatch(serverMessage ?? '')) {
+      return null;
+    }
     if (statusCode == 404 &&
         serverMessage?.toLowerCase() == 'api endpoint not found.') {
-      final String? serverPath = payload is Map
-          ? payload['path']?.toString().trim()
-          : null;
-      final String pathHint = serverPath?.isNotEmpty == true
-          ? ' (${serverPath!.trim()})'
-          : '';
-      return 'The configured Laravel API is missing the address map route$pathHint. Deploy the map route/controller, clear Laravel route cache, and check that API_BASE_URL ends in /api/v1.';
+      return 'Address search is temporarily unavailable. Tap the map to place your delivery pin.';
     }
 
     if (serverMessage?.isNotEmpty == true) return serverMessage;
@@ -127,17 +136,22 @@ class PhilippineAddressGeocoding {
   }
 
   static List<String> _searchVariants(String searchText) {
-    final String fullAddress = searchText.trim().replaceAll(
-      RegExp(r'\s+'),
-      ' ',
-    );
+    final String fullAddress = searchText
+        .trim()
+        .split(',')
+        .map(_withoutBarangayPrefix)
+        .where((String part) => part.isNotEmpty)
+        .join(', ')
+        .replaceAll(RegExp(r'\s+'), ' ');
     if (fullAddress.isEmpty) return <String>[];
 
     final List<String> variants = <String>[fullAddress];
     final List<String> commaParts = fullAddress
         .split(',')
         .map((String part) => part.trim())
-        .where((String part) => part.isNotEmpty)
+        .where(
+          (String part) => part.isNotEmpty && _normalize(part) != 'philippines',
+        )
         .toList();
     final bool hasPostalCode =
         commaParts.length > 1 && RegExp(r'^\d{4,6}$').hasMatch(commaParts.last);
@@ -147,11 +161,18 @@ class PhilippineAddressGeocoding {
     if (hasPostalCode) {
       variants.add(partsWithoutPostalCode.join(', '));
     }
-    if (partsWithoutPostalCode.length >= 3) {
-      variants.add(partsWithoutPostalCode.skip(1).join(', '));
+    // Keep at least city + province; never fall back to the whole country.
+    for (int start = 1; start <= partsWithoutPostalCode.length - 2; start++) {
+      variants.add(partsWithoutPostalCode.skip(start).join(', '));
     }
     return _uniqueParts(variants);
   }
+
+  static String _withoutBarangayPrefix(String value) =>
+      value.trim().replaceFirst(
+        RegExp(r'^(?:brgy\.?|barangay)\s+', caseSensitive: false),
+        '',
+      );
 
   static String _joinParts(Iterable<String> values) {
     final List<String> parts = <String>[];

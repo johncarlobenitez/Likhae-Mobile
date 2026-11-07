@@ -655,9 +655,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (widget.onLoadQuote != null && _loadingQuote) {
       return false;
     }
+    if (widget.onLoadQuote != null && !_hasValidShippingQuoteToken) {
+      return false;
+    }
     final dynamic availability = _serverQuote?['delivery_availability'];
     if (availability is Map && availability['available'] == false) return false;
     return true;
+  }
+
+  bool get _hasValidShippingQuoteToken {
+    final dynamic token = _serverQuote?['shipping_quote_token'];
+    return token is String && RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(token.trim());
   }
 
   Future<void> _handlePlaceOrder() async {
@@ -685,6 +693,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (widget.onLoadQuote != null && _loadingQuote) {
       _showSnack('Wait for the server quote to finish loading.');
       return;
+    }
+
+    if (widget.onLoadQuote != null && !_hasValidShippingQuoteToken) {
+      await _refreshQuote();
+      if (!mounted) return;
+      if (!_hasValidShippingQuoteToken) {
+        _showSnack('Could not verify the shipping quote. Refresh checkout and try again.');
+        return;
+      }
     }
 
     if (widget.onPlaceOrder == null) {
@@ -722,6 +739,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       priceSnapshot: _serverQuote?['price_snapshot'] is Map
           ? Map<String, dynamic>.from(_serverQuote!['price_snapshot'] as Map)
           : null,
+      shippingQuoteToken: _serverQuote?['shipping_quote_token']?.toString(),
       voucherCodes: Map<int, String>.from(_selectedVoucherCodes),
       platformVoucherCode: _selectedPlatformVoucherCode,
       shippingVoucherCode: _selectedShippingVoucherCode,
@@ -1958,6 +1976,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               label: const Text('Refresh total'),
             ),
           ],
+          if (widget.onLoadQuote != null &&
+              !_loadingQuote &&
+              _quoteError == null &&
+              _serverQuote != null &&
+              !_hasValidShippingQuoteToken) ...[
+            const SizedBox(height: 10),
+            const _InfoBanner(
+              icon: Icons.verified_user_outlined,
+              text: 'The server did not return a verifiable shipping quote. Refresh before placing your order.',
+              danger: true,
+            ),
+            TextButton.icon(
+              onPressed: _loadingQuote ? null : _refreshQuote,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh shipping quote'),
+            ),
+          ],
           if (_serverQuote?['delivery_availability'] is Map &&
               (_serverQuote!['delivery_availability'] as Map)['available'] ==
                   false) ...[
@@ -2928,6 +2963,7 @@ class CheckoutPlaceOrderRequest {
     this.protectionItemIds = const <int>[],
     this.logisticsCenterId,
     this.priceSnapshot,
+    this.shippingQuoteToken,
     this.paymentMethod = 'cod',
     this.rewardPoints = 0,
   });
@@ -2946,6 +2982,7 @@ class CheckoutPlaceOrderRequest {
   final List<int> protectionItemIds;
   final int? logisticsCenterId;
   final Map<String, dynamic>? priceSnapshot;
+  final String? shippingQuoteToken;
   final String paymentMethod;
   final int rewardPoints;
 
@@ -2979,6 +3016,8 @@ class CheckoutPlaceOrderRequest {
       if (protectionItemIds.isNotEmpty)
         'protection_item_ids': protectionItemIds,
       if (priceSnapshot != null) 'expected_price_snapshot': priceSnapshot,
+      if (shippingQuoteToken?.trim().isNotEmpty == true)
+        'shipping_quote_token': shippingQuoteToken!.trim(),
       'payment_method': paymentMethod,
       'reward_points': rewardPoints,
     };

@@ -49,7 +49,6 @@ void main() {
         await PhilippineAddressService.fetchBarangays('0405643000');
         final postal = await PhilippineAddressService.fetchPostalCode(
           municipalityCode: '0405643000',
-          barangayCode: '0405643001',
           provinceCode: '0405600000',
           provinceName: 'Quezon',
           municipalityName: 'City of Lucena',

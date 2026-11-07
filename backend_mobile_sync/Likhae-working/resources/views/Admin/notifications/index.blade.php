@@ -1,0 +1,7 @@
+@extends('layouts.admin.app')
+@section('title','Notifications')
+@section('subtitle','Your real administrator workspace notifications.')
+@section('active','notifications')
+@section('content')
+<div style="display:grid;gap:16px"><div class="ad-page-head"><div><span class="ad-overline">Notifications</span><h2>Admin notifications</h2><p>{{ number_format($notifications->total()) }} records for your Admin account.</p></div><form method="POST" action="{{ route('admin.notifications.read-all') }}">@csrf<button class="ad-btn ad-btn-secondary">Mark all as read</button></form></div><div class="ad-card"><div class="ad-card-body" style="display:grid;gap:10px">@forelse($notifications as $notification)<div style="padding:12px;border:1px solid var(--ad-border);border-radius:12px;{{ $notification->read_at ? '' : 'background:var(--ad-blue-soft)' }}"><div class="ad-inline-actions" style="justify-content:space-between"><div><strong>{{ $notification->title }}</strong><p>{{ $notification->body }}</p><small>{{ str($notification->type)->headline() }} · {{ $notification->created_at?->diffForHumans() }}</small></div>@if(!$notification->read_at)<form method="POST" action="{{ route('admin.notifications.read',$notification) }}">@csrf<button class="ad-btn ad-btn-secondary ad-btn-sm">Mark read</button></form>@endif</div></div>@empty<p>No notifications.</p>@endforelse</div><div class="ad-card-body">{{ $notifications->links() }}</div></div></div>
+@endsection

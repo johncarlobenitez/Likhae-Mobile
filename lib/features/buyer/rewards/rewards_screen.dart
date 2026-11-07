@@ -1363,8 +1363,8 @@ class _RewardStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minHeight: 92),
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minHeight: 116),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, ShopColors.surface, fill: true),
         borderRadius: BorderRadius.circular(15),
@@ -1374,7 +1374,7 @@ class _RewardStatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 19),
+          Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 24),
 
           const SizedBox(height: 8),
 
@@ -1384,7 +1384,7 @@ class _RewardStatCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style:  TextStyle(
               color: AppTheme.resolve(context, ShopColors.text),
-              fontSize: 15,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1395,7 +1395,11 @@ class _RewardStatCard extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 8.5),
+            style: TextStyle(
+              color: AppTheme.resolve(context, ShopColors.muted),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

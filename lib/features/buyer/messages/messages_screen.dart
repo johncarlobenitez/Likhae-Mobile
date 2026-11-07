@@ -978,7 +978,8 @@ class _MessagesScreenState extends State<MessagesScreen>
       return;
     }
 
-    final String preview = message.hasAttachment &&
+    final String preview =
+        message.hasAttachment &&
             (message.body.trim().isEmpty || message.isAttachmentPlaceholder)
         ? 'Photo'
         : message.body;
@@ -2078,6 +2079,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                 context,
                 workspace: 'buyer',
                 conversationId: seller.conversationId,
+                productId: _activeProductReference?.productId,
               ),
               icon: Icon(Icons.support_agent_outlined, color: _maroon),
             ),
@@ -2151,7 +2153,11 @@ class _MessagesScreenState extends State<MessagesScreen>
                   decoration: BoxDecoration(
                     color: Theme.of(context).brightness == Brightness.dark
                         ? AppTheme.darkSurfaceSoft
-                        : AppTheme.resolve(context, const Color(0xFFFCECE7), fill: true),
+                        : AppTheme.resolve(
+                            context,
+                            const Color(0xFFFCECE7),
+                            fill: true,
+                          ),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: Theme.of(context).brightness == Brightness.dark
@@ -3138,8 +3144,16 @@ class _ProductInquiryCard extends StatelessWidget {
                 colors: <Color>[
                   context.messagesAccent,
                   Theme.of(context).brightness == Brightness.dark
-                      ? AppTheme.resolve(context, const Color(0xFF4E2523), fill: true)
-                      : AppTheme.resolve(context, const Color(0xFF642920), fill: true),
+                      ? AppTheme.resolve(
+                          context,
+                          const Color(0xFF4E2523),
+                          fill: true,
+                        )
+                      : AppTheme.resolve(
+                          context,
+                          const Color(0xFF642920),
+                          fill: true,
+                        ),
                 ],
               ),
               borderRadius: BorderRadius.circular(20),
@@ -3195,7 +3209,7 @@ class _ProductInquiryCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                       Text(
+                      Text(
                         'PRODUCT INQUIRY',
                         style: TextStyle(
                           color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
@@ -3224,7 +3238,7 @@ class _ProductInquiryCard extends StatelessWidget {
 
                         Text(
                           '₱${product.price!.toStringAsFixed(2)}',
-                          style:  TextStyle(
+                          style: TextStyle(
                             color: AppTheme.resolve(context, Color(0xFFFFE7D9)),
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -3430,7 +3444,11 @@ class _SellerStatus extends StatelessWidget {
             height: 7,
             decoration: BoxDecoration(
               color: isOnline == true
-                  ? AppTheme.resolve(context, const Color(0xFF256F4A), fill: true)
+                  ? AppTheme.resolve(
+                      context,
+                      const Color(0xFF256F4A),
+                      fill: true,
+                    )
                   : context.messagesFaint,
               shape: BoxShape.circle,
             ),
@@ -3466,6 +3484,13 @@ class _SellerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String? url = seller.avatarUrl?.trim();
+    final String identity = '${seller.name} ${seller.slug} ${seller.sellerId}'
+        .toLowerCase();
+    final bool isSupport = identity.contains('support');
+    final IconData fallbackIcon = isSupport
+        ? Icons.person_rounded
+        : Icons.storefront_outlined;
+    final Color fallbackColor = context.messagesAccentText;
 
     return Container(
       width: size,
@@ -3473,8 +3498,10 @@ class _SellerAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: context.messagesAccent,
-        border: Border.all(color: Colors.white, width: 2),
+        color: url == null || url.isEmpty
+            ? context.messagesBackgroundSoft
+            : context.messagesAccent,
+        border: Border.all(color: context.messagesBorder, width: 1),
         boxShadow: <BoxShadow>[
           BoxShadow(
             color: context.messagesAccent.withValues(alpha: 0.12),
@@ -3484,7 +3511,7 @@ class _SellerAvatar extends StatelessWidget {
         ],
       ),
       child: url == null || url.isEmpty
-          ? _InitialAvatar(initials: seller.initials)
+          ? Icon(fallbackIcon, color: fallbackColor, size: size * 0.52)
           : SizedNetworkImage(
               url: url,
               fit: BoxFit.cover,
@@ -3500,31 +3527,17 @@ class _SellerAvatar extends StatelessWidget {
               ),
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
-                    return _InitialAvatar(initials: seller.initials);
+                    return Container(
+                      color: context.messagesBackgroundSoft,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        fallbackIcon,
+                        color: fallbackColor,
+                        size: size * 0.52,
+                      ),
+                    );
                   },
             ),
-    );
-  }
-}
-
-class _InitialAvatar extends StatelessWidget {
-  final String initials;
-
-  const _InitialAvatar({required this.initials});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: context.messagesAccent,
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
     );
   }
 }

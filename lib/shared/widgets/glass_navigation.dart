@@ -47,7 +47,8 @@ class GlassNavigationBar extends StatelessWidget {
     return GlassSurface(
       radius: 36,
       padding: const EdgeInsets.all(6),
-      opacity: 1,
+      opacity: .76,
+      blurSigma: 8,
       tintColor: navigationSurfaceTint,
       borderColor: colors.primary.withValues(alpha: dark ? .38 : .27),
       child: SizedBox(
@@ -59,33 +60,39 @@ class GlassNavigationBar extends StatelessWidget {
             final index = rtl
                 ? destinations.length - 1 - currentIndex
                 : currentIndex;
+            final hasSelectedDestination =
+                currentIndex >= 0 && currentIndex < destinations.length;
             return Stack(
               children: [
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(
-                      begin: index * itemWidth,
-                      end: index * itemWidth,
-                    ),
-                    duration: duration,
-                    curve: AppMotion.settle,
-                    builder: (context, x, child) =>
-                        Transform.translate(offset: Offset(x, 0), child: child),
-                    child: IgnorePointer(
-                      child: RepaintBoundary(
-                        child: SizedBox(
-                          width: itemWidth,
-                          height: height,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              borderRadius: BorderRadius.circular(29),
-                              border: Border.all(
-                                color: Colors.white.withValues(
-                                  alpha: dark ? .20 : .28,
+                if (hasSelectedDestination)
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(
+                        begin: index * itemWidth,
+                        end: index * itemWidth,
+                      ),
+                      duration: duration,
+                      curve: AppMotion.settle,
+                      builder: (context, x, child) => Transform.translate(
+                        offset: Offset(x, 0),
+                        child: child,
+                      ),
+                      child: IgnorePointer(
+                        child: RepaintBoundary(
+                          child: SizedBox(
+                            width: itemWidth,
+                            height: height,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: colors.primary,
+                                borderRadius: BorderRadius.circular(29),
+                                border: Border.all(
+                                  color: Colors.white.withValues(
+                                    alpha: dark ? .20 : .28,
+                                  ),
                                 ),
                               ),
                             ),
@@ -94,7 +101,6 @@ class GlassNavigationBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
                 Row(
                   children: [
                     for (int i = 0; i < destinations.length; i++)

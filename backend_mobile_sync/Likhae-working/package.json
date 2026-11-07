@@ -1,0 +1,27 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "clean:hot": "node scripts/clean-vite-hot.mjs",
+        "prebuild": "npm run clean:hot",
+        "build": "npm run clean:hot && vite build",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "4.3.3",
+        "concurrently": "10.0.5",
+        "laravel-echo": "^2.5.0",
+        "laravel-vite-plugin": "3.2.0",
+        "pusher-js": "^8.6.0",
+        "tailwindcss": "4.3.3",
+        "vite": "8.2.1"
+    },
+    "optionalDependencies": {
+        "@laravel/multiplex": "0.4.2"
+    },
+    "dependencies": {
+        "@zxing/browser": "^0.2.1",
+        "use-postal-ph": "^1.1.14"
+    }
+}

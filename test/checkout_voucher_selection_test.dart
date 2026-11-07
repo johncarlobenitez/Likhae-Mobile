@@ -27,12 +27,14 @@ void main() {
         addressId: 3,
         couriersBySeller: const <int, int>{},
         notesBySeller: const <int, String>{},
+        shippingQuoteToken: 'a' * 64,
         voucherCodes: selection.sellerCodes,
         platformVoucherCode: selection.platformCode,
         shippingVoucherCode: selection.shippingCode,
       );
 
       expect(request.toJson()['voucher_codes'], expected);
+      expect(request.toJson()['shipping_quote_token'], 'a' * 64);
     },
   );
 }
