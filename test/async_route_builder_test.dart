@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:likhae/shared/widgets/async_route_builder.dart';
@@ -8,6 +9,45 @@ Widget contents(BuildContext context, AsyncSnapshot<int> snapshot) => Scaffold(
 );
 
 void main() {
+  testWidgets('timed out cart can retry without exposing Dio details', (
+    tester,
+  ) async {
+    var calls = 0;
+    final retry = Completer<int>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AsyncRouteBuilder<int>(
+          errorTitle: 'Cart',
+          load: () {
+            if (++calls == 1) {
+              throw DioException(
+                requestOptions: RequestOptions(path: '/buyer/cart'),
+                type: DioExceptionType.receiveTimeout,
+              );
+            }
+            return retry.future;
+          },
+          builder: (context, snapshot) => snapshot.hasData
+              ? contents(context, snapshot)
+              : const RouteLoadingPage(title: 'Cart'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('The request timed out. Please try again.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('DioException'), findsNothing);
+    await tester.tap(find.text('Try again'));
+    await tester.pump();
+    expect(calls, 2);
+    expect(find.text('Try again'), findsNothing);
+    retry.complete(42);
+    await tester.pumpAndSettle();
+    expect(find.text('Value: 42'), findsOneWidget);
+  });
+
   testWidgets(
     'six parent builds: legacy loader calls six times, stable loader once',
     (tester) async {

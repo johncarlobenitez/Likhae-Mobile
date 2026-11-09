@@ -50,6 +50,8 @@ class _RiderStageNavigationScreenState
   double? _routeSeconds;
   bool _routeRequestInProgress = false;
   bool _cameraPositioned = false;
+  bool _mapSyncInProgress = false;
+  bool _mapSyncQueued = false;
   bool _gpsTracking = false;
   bool _gpsStarting = false;
   bool _locationPostErrorShown = false;
@@ -205,21 +207,40 @@ class _RiderStageNavigationScreenState
   }
 
   Future<void> _toggleLocationTracking() async {
-    if (_positionSubscription != null) {
-      await _positionSubscription?.cancel();
-      _positionSubscription = null;
+    try {
+      if (_positionSubscription != null) {
+        await _positionSubscription?.cancel();
+        _positionSubscription = null;
+        if (mounted) {
+          setState(() {
+            _gpsTracking = false;
+            _status = 'Live rider GPS paused. Resume GPS to update your route.';
+          });
+        }
+        return;
+      }
+
+      await _startLocationTracking();
+    } catch (error) {
       if (mounted) {
         setState(() {
           _gpsTracking = false;
-          _status = 'Live rider GPS paused. Resume GPS to update your route.';
+          _status = 'Could not resume rider GPS: $error';
         });
       }
-      return;
     }
-    await _startLocationTracking();
   }
 
   void _onPosition(Position position) {
+    if (!position.latitude.isFinite ||
+        !position.longitude.isFinite ||
+        position.latitude < -90 ||
+        position.latitude > 90 ||
+        position.longitude < -180 ||
+        position.longitude > 180) {
+      if (mounted) setState(() => _status = 'Waiting for a valid GPS fix.');
+      return;
+    }
     _latestPosition = position;
     if (mounted) setState(() => _status = 'Live rider GPS is active.');
     final LatLng origin = LatLng(position.latitude, position.longitude);
@@ -287,16 +308,44 @@ class _RiderStageNavigationScreenState
   }
 
   Future<void> _onMapCreated(maplibre.MapLibreSession map) async {
-    _map = map;
-    _markers = await map.annotations.createCircleAnnotationManager();
-    _routeLines = await map.annotations.createPolylineAnnotationManager();
-    final Position? position = _latestPosition;
-    await _syncMap(
-      position == null ? null : LatLng(position.latitude, position.longitude),
-    );
+    try {
+      _map = map;
+      _markers = await map.annotations.createCircleAnnotationManager();
+      _routeLines = await map.annotations.createPolylineAnnotationManager();
+      final Position? position = _latestPosition;
+      await _syncMap(
+        position == null ? null : LatLng(position.latitude, position.longitude),
+      );
+    } catch (error) {
+      if (mounted) setState(() => _status = 'Map could not be updated: $error');
+    }
   }
 
   Future<void> _syncMap(LatLng? origin) async {
+    if (_mapSyncInProgress) {
+      _mapSyncQueued = true;
+      return;
+    }
+
+    _mapSyncInProgress = true;
+    LatLng? nextOrigin = origin;
+    try {
+      do {
+        _mapSyncQueued = false;
+        await _syncMapOnce(nextOrigin);
+        final Position? latest = _latestPosition;
+        nextOrigin = latest == null
+            ? nextOrigin
+            : LatLng(latest.latitude, latest.longitude);
+      } while (mounted && _mapSyncQueued);
+    } catch (error) {
+      if (mounted) setState(() => _status = 'Map could not be updated: $error');
+    } finally {
+      _mapSyncInProgress = false;
+    }
+  }
+
+  Future<void> _syncMapOnce(LatLng? origin) async {
     final maplibre.MapLibreSession? map = _map;
     final maplibre.CircleAnnotationManager? markerManager = _markers;
     final LatLng? destination = _destination;
@@ -479,9 +528,17 @@ class _RiderStageNavigationScreenState
   Widget build(BuildContext context) {
     final LatLng? destination = _destination;
     return Scaffold(
-      backgroundColor: AppTheme.resolve(context, const Color(0xFFFBF7F2), fill: true),
+      backgroundColor: AppTheme.resolve(
+        context,
+        const Color(0xFFFBF7F2),
+        fill: true,
+      ),
       appBar: AppBar(
-        backgroundColor: AppTheme.resolve(context, const Color(0xFFFBF7F2), fill: true),
+        backgroundColor: AppTheme.resolve(
+          context,
+          const Color(0xFFFBF7F2),
+          fill: true,
+        ),
         foregroundColor: AppTheme.resolve(context, const Color(0xFF3B211B)),
         title: Text(
           widget.toLogisticsCenter
@@ -502,7 +559,11 @@ class _RiderStageNavigationScreenState
                       onMapCreated: _onMapCreated,
                     )
                   : ColoredBox(
-                      color: AppTheme.resolve(context, const Color(0xFFF1E9E2), fill: true),
+                      color: AppTheme.resolve(
+                        context,
+                        const Color(0xFFF1E9E2),
+                        fill: true,
+                      ),
                       child: Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
@@ -511,7 +572,10 @@ class _RiderStageNavigationScreenState
                                 ? 'The interactive map is available on Android and iOS.'
                                 : 'The saved destination coordinates are unavailable.',
                             textAlign: TextAlign.center,
-                            style:  TextStyle(color: AppTheme.resolve(context, _muted), height: 1.5),
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, _muted),
+                              height: 1.5,
+                            ),
                           ),
                         ),
                       ),
@@ -520,7 +584,7 @@ class _RiderStageNavigationScreenState
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-              decoration:  BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppTheme.resolve(context, Colors.white, fill: true),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
               ),
@@ -529,7 +593,7 @@ class _RiderStageNavigationScreenState
                 children: <Widget>[
                   Text(
                     _destinationName,
-                    style:  TextStyle(
+                    style: TextStyle(
                       color: AppTheme.resolve(context, Color(0xFF3B211B)),
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
@@ -539,7 +603,10 @@ class _RiderStageNavigationScreenState
                     const SizedBox(height: 5),
                     Text(
                       _destinationAddress,
-                      style:  TextStyle(color: AppTheme.resolve(context, _muted), height: 1.4),
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        height: 1.4,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -568,7 +635,10 @@ class _RiderStageNavigationScreenState
                   const SizedBox(height: 12),
                   Text(
                     _status,
-                    style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12),
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, _muted),
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -578,7 +648,11 @@ class _RiderStageNavigationScreenState
                           ? null
                           : _toggleLocationTracking,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
+                        backgroundColor: AppTheme.resolve(
+                          context,
+                          _maroon,
+                          fill: true,
+                        ),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(13),
@@ -628,16 +702,22 @@ class _RouteMetric extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style:  TextStyle(
-              color: AppTheme.resolve(context, _RiderStageNavigationScreenState._muted),
+            style: TextStyle(
+              color: AppTheme.resolve(
+                context,
+                _RiderStageNavigationScreenState._muted,
+              ),
               fontSize: 10,
             ),
           ),
           const SizedBox(height: 3),
           Text(
             value,
-            style:  TextStyle(
-              color: AppTheme.resolve(context, _RiderStageNavigationScreenState._maroon),
+            style: TextStyle(
+              color: AppTheme.resolve(
+                context,
+                _RiderStageNavigationScreenState._maroon,
+              ),
               fontWeight: FontWeight.w900,
             ),
           ),

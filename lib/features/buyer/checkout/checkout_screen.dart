@@ -3,7 +3,9 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'dart:async';
 import 'dart:math';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:likhae/core/api/api_client.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -339,7 +341,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       });
       if (widget.onLoadQuote != null) unawaited(_refreshQuote());
     } catch (error) {
-      if (mounted) setState(() => _rewardPointsError = error.toString());
+      if (mounted) setState(() => _rewardPointsError = _errorMessage(error));
     } finally {
       if (mounted) setState(() => _loadingRewardPoints = false);
     }
@@ -482,12 +484,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       );
       if (!mounted || requestGeneration != _quoteRequestGeneration) return;
+      final dynamic token = quote['shipping_quote_token'];
+      if (token is! String ||
+          !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(token.trim())) {
+        throw const FormatException(
+          'The delivery service returned an incomplete quote. Please try again later.',
+        );
+      }
       setState(() => _serverQuote = quote);
     } catch (error) {
       if (!mounted || requestGeneration != _quoteRequestGeneration) return;
       setState(() {
         _serverQuote = null;
-        _quoteError = error.toString();
+        _quoteError = _errorMessage(error);
       });
     } finally {
       if (mounted && requestGeneration == _quoteRequestGeneration) {
@@ -655,12 +664,39 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (widget.onLoadQuote != null && _loadingQuote) {
       return false;
     }
-    if (widget.onLoadQuote != null && !_hasValidShippingQuoteToken) {
-      return false;
-    }
     final dynamic availability = _serverQuote?['delivery_availability'];
     if (availability is Map && availability['available'] == false) return false;
     return true;
+  }
+
+  String? get _placeOrderStatus {
+    if (_submitting) return null;
+    if (widget.items.isEmpty) return 'Your cart has no items to order.';
+    if (_selectedAddressId == null) return 'Choose a delivery address.';
+    if (_recipientController.text.trim().isEmpty) {
+      return 'Enter the recipient name.';
+    }
+    if (_contactController.text.trim().isEmpty) {
+      return 'Enter a contact number.';
+    }
+    if (_hasMissingCourierAvailability) {
+      return 'No approved courier is available for one or more shops.';
+    }
+    if (_hasUnselectedCouriers) return 'Choose a courier for every shop.';
+
+    final dynamic availability = _serverQuote?['delivery_availability'];
+    if (availability is Map && availability['available'] == false) {
+      final String message = (availability['message'] ?? '').toString().trim();
+      return message.isEmpty ? 'Delivery is unavailable for this address.' : message;
+    }
+    if (_loadingQuote) return 'Confirming delivery and total…';
+    if (_quoteError != null) {
+      return _quoteError;
+    }
+    if (widget.onLoadQuote != null && !_hasValidShippingQuoteToken) {
+      return 'Delivery quote needs refreshing. Tap Place Order to continue.';
+    }
+    return null;
   }
 
   bool get _hasValidShippingQuoteToken {
@@ -669,6 +705,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _handlePlaceOrder() async {
+    if (_submitting) return;
     FocusScope.of(context).unfocus();
 
     if (!_formKey.currentState!.validate()) {
@@ -699,13 +736,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       await _refreshQuote();
       if (!mounted) return;
       if (!_hasValidShippingQuoteToken) {
-        _showSnack('Could not verify the shipping quote. Refresh checkout and try again.');
+        _showSnack(_quoteError ??
+            'Delivery could not be confirmed. Please refresh the total.');
         return;
       }
     }
 
     if (widget.onPlaceOrder == null) {
       _showSnack('Place Order is not connected to the Laravel API yet.');
+      return;
+    }
+
+    // A refreshed quote can reject an address that was previously serviceable.
+    final dynamic availability = _serverQuote?['delivery_availability'];
+    if (availability is Map && availability['available'] == false) {
+      _showSnack((availability['message'] ??
+          'Delivery is unavailable for this address.').toString());
       return;
     }
 
@@ -755,7 +801,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       await widget.onPlaceOrder!(request);
     } catch (error) {
       if (!mounted) return;
-      _showSnack(error.toString());
+      // A price or shipping validation failure requires a fresh quote for the
+      // buyer to review before retrying. Keep the attempt key for idempotency.
+      if (widget.onLoadQuote != null && error is! DioException) {
+        await _refreshQuote();
+        if (!mounted) return;
+      }
+      _showSnack(_errorMessage(error));
     } finally {
       if (mounted) {
         setState(() {
@@ -769,6 +821,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _errorMessage(Object error) {
+    if (error is DioException) return ApiClient.formatError(error);
+    if (error is FormatException) return error.message;
+    return error.toString().replaceFirst('Exception: ', '');
   }
 
   Future<void> _openShopVoucherPicker() async {
@@ -826,7 +884,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       });
       unawaited(_refreshQuote());
     } catch (error) {
-      if (mounted) _showSnack('Unable to load shop vouchers: $error');
+      if (mounted) {
+        _showSnack('Unable to load shop vouchers: ${_errorMessage(error)}');
+      }
     } finally {
       if (mounted) setState(() => _loadingVouchers = false);
     }
@@ -854,21 +914,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   String _peso(double value) {
-    final String fixed = value.toStringAsFixed(2);
-    final List<String> parts = fixed.split('.');
-    final String whole = parts.first;
-    final String decimal = parts.last;
-
-    final StringBuffer buffer = StringBuffer();
-    for (int index = 0; index < whole.length; index++) {
-      final int reverseIndex = whole.length - index;
-      buffer.write(whole[index]);
-      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
-        buffer.write(',');
-      }
-    }
-
-    return '₱${buffer.toString()}.$decimal';
+    return formatPesoAmount(value);
   }
 
   @override
@@ -2058,57 +2104,81 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Text(
-                    'Total',
-                    style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    _peso(_estimatedTotal),
-                    style:  TextStyle(
-                      color: AppTheme.resolve(context, _primaryDark),
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
+            if (_placeOrderStatus != null) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    _placeOrderStatus!,
+                    style: TextStyle(
+                      color: _serverQuote?['delivery_availability'] is Map &&
+                              (_serverQuote!['delivery_availability'] as Map)['available'] == false
+                          ? AppTheme.resolve(context, _danger)
+                          : AppTheme.resolve(context, _muted),
+                      fontSize: 11,
+                      height: 1.3,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            SizedBox(
-              height: 50,
-              child: FilledButton(
-                onPressed: _canPlaceOrder ? _handlePlaceOrder : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.resolve(context, _primary, fill: true),
-                  disabledBackgroundColor: AppTheme.resolve(context, _disabled, fill: true),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
                 ),
-                child: _submitting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Place Order',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
               ),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                       Text(
+                        'Total',
+                        style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        _peso(_estimatedTotal),
+                        style:  TextStyle(
+                          color: AppTheme.resolve(context, _primaryDark),
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                SizedBox(
+                  height: 50,
+                  child: FilledButton(
+                    onPressed: _canPlaceOrder ? _handlePlaceOrder : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.resolve(context, _primary, fill: true),
+                      disabledBackgroundColor: AppTheme.resolve(context, _disabled, fill: true),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Place Order',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -2360,7 +2430,7 @@ class _ElectronicProtectionTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '+₱${fee.toStringAsFixed(2)}',
+                  '+${formatPesoAmount(fee)}',
                   style:  TextStyle(
                     color: AppTheme.resolve(context, ShopColors.accentDark),
                     fontSize: 12,

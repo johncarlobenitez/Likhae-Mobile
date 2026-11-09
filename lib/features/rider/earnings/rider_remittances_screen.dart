@@ -3,9 +3,11 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../services/rider_mobile_service.dart';
+import '../../../shared/formatting/money_formatting.dart';
 import '../deliveries/rider_delivery_models.dart';
 import 'rider_remittance_models.dart';
 
@@ -93,7 +95,7 @@ class _RiderRemittancesScreenState extends State<RiderRemittancesScreen>
     try {
       final receipt = await widget.submit(
         collectionId: id,
-        amount: _amount.text,
+        amount: parseMoneyInput(_amount.text),
         notes: _notes.text,
       );
       if (!mounted) return;
@@ -209,8 +211,11 @@ class _RiderRemittancesScreenState extends State<RiderRemittancesScreen>
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
+                  inputFormatters: const <TextInputFormatter>[
+                    MonetaryAmountInputFormatter(),
+                  ],
                   decoration: const InputDecoration(
-                    labelText: 'Amount handed over (PHP)',
+                    labelText: 'Amount handed over (₱)',
                     border: OutlineInputBorder(),
                   ),
                 ),

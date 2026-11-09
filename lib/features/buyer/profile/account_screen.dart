@@ -25,6 +25,7 @@ enum BuyerAccountTab {
   vouchers,
   wallet,
   password,
+  recentlyViewed,
   settings,
   dangerZone,
 }
@@ -49,6 +50,8 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.settings:
         return 'System Settings';
+      case BuyerAccountTab.recentlyViewed:
+        return 'Recently Viewed';
 
       case BuyerAccountTab.dangerZone:
         return 'Danger Zone';
@@ -74,6 +77,8 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.settings:
         return 'App preferences';
+      case BuyerAccountTab.recentlyViewed:
+        return 'Products you viewed';
 
       case BuyerAccountTab.dangerZone:
         return 'Close account';
@@ -99,6 +104,8 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.settings:
         return Icons.settings_outlined;
+      case BuyerAccountTab.recentlyViewed:
+        return Icons.visibility_outlined;
 
       case BuyerAccountTab.dangerZone:
         return Icons.warning_amber_rounded;
@@ -552,6 +559,7 @@ class AccountScreen extends StatefulWidget {
   final VoidCallback? onReviewHistory;
 
   final VoidCallback? onSystemSettings;
+  final VoidCallback? onRecentlyViewed;
 
   final VoidCallback? onVouchers;
 
@@ -603,6 +611,7 @@ class AccountScreen extends StatefulWidget {
     this.onMutateRefundDestination,
     this.onReviewHistory,
     this.onSystemSettings,
+    this.onRecentlyViewed,
     this.onVouchers,
     this.showNavigationTabs = true,
     this.showBackButton = false,
@@ -3079,7 +3088,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final List<BuyerAccountTab> tabs = BuyerAccountTab.values;
 
     return SizedBox(
-      height: 50,
+      height: 62,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -3116,6 +3125,11 @@ class _AccountScreenState extends State<AccountScreen> {
             widget.onSystemSettings!();
             return;
           }
+          if (tab == BuyerAccountTab.recentlyViewed &&
+              widget.onRecentlyViewed != null) {
+            widget.onRecentlyViewed!();
+            return;
+          }
           if (widget.onTabChanged != null) {
             widget.onTabChanged!(tab);
             return;
@@ -3124,8 +3138,8 @@ class _AccountScreenState extends State<AccountScreen> {
         },
         borderRadius: BorderRadius.circular(100),
         child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(100),
             border: Border.all(
@@ -3142,7 +3156,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 color: selected
                     ? AppTheme.resolve(context, _maroon)
                     : AppTheme.resolve(context, _muted),
-                size: 17,
+                size: 20,
               ),
               const SizedBox(width: 7),
               Text(
@@ -3153,7 +3167,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   color: selected
                       ? AppTheme.resolve(context, _maroon)
                       : AppTheme.resolve(context, _text),
-                  fontSize: 13,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -3199,6 +3213,17 @@ class _AccountScreenState extends State<AccountScreen> {
             onPressed: widget.onSystemSettings,
             icon: const Icon(Icons.open_in_new_rounded),
             label: const Text('Open System Settings'),
+          ),
+        );
+
+      case BuyerAccountTab.recentlyViewed:
+        return _AccountPanel(
+          title: 'Recently Viewed',
+          subtitle: 'Products you viewed',
+          icon: Icons.visibility_outlined,
+          child: FilledButton(
+            onPressed: widget.onRecentlyViewed,
+            child: const Text('Open Recently Viewed'),
           ),
         );
 

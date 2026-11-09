@@ -462,6 +462,75 @@ class BuyerOrderLocation {
   );
 }
 
+String _normalizedLogisticsStopLabel(String label) => label
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .replaceFirst(
+      RegExp(
+        r'^(?:visited\s+)?(?:(?:origin|destination|current|intermediate)\s+)?(?:sorting|logistics)\s+center\s*:?\s*',
+      ),
+      '',
+    )
+    .trim();
+
+bool sameBuyerOrderLogisticsStop(
+  BuyerOrderLocation first,
+  BuyerOrderLocation second,
+) {
+  final String? firstId = first.id?.trim();
+  final String? secondId = second.id?.trim();
+  if (firstId != null && firstId.isNotEmpty && firstId == secondId) {
+    return true;
+  }
+  final double distanceMeters = Geolocator.distanceBetween(
+    first.latitude,
+    first.longitude,
+    second.latitude,
+    second.longitude,
+  );
+  return distanceMeters <= 25 &&
+      _normalizedLogisticsStopLabel(first.label) ==
+          _normalizedLogisticsStopLabel(second.label);
+}
+
+List<BuyerOrderLocation> deduplicateBuyerOrderLogisticsStops(
+  Iterable<BuyerOrderLocation> stops,
+) {
+  final List<BuyerOrderLocation> unique = <BuyerOrderLocation>[];
+  for (final BuyerOrderLocation stop in stops) {
+    final int existingIndex = unique.indexWhere(
+      (BuyerOrderLocation existing) =>
+          sameBuyerOrderLogisticsStop(existing, stop),
+    );
+    if (existingIndex < 0) {
+      unique.add(stop);
+      continue;
+    }
+
+    final BuyerOrderLocation existing = unique[existingIndex];
+    final List<int> sequences = <int>[
+      if (existing.sequenceNo != null) existing.sequenceNo!,
+      if (stop.sequenceNo != null) stop.sequenceNo!,
+    ];
+    unique[existingIndex] = existing.copyWith(
+      id: existing.id ?? stop.id,
+      transferLegIds: <String>{
+        ...existing.transferLegIds,
+        ...stop.transferLegIds,
+      }.toList(growable: false),
+      sequenceNo: sequences.isEmpty
+          ? null
+          : sequences.reduce(
+              (int first, int second) => first < second ? first : second,
+            ),
+      centerRole: existing.centerRole ?? stop.centerRole,
+      progressStatus: stop.progressStatus ?? existing.progressStatus,
+    );
+  }
+  return unique;
+}
+
 class BuyerRiderInfo {
   final String? name;
   final String? photoUrl;
@@ -704,7 +773,16 @@ BuyerOrderLocation? parseBuyerOrderLogisticsStop(Map<String, dynamic> row) {
   final Map<String, dynamic> location = rawLocation is Map
       ? Map<String, dynamic>.from(rawLocation)
       : row;
-  final String name = <dynamic>[
+  final List<String> nameParts = <String>[];
+  final Set<String> seenNameParts = <String>{};
+  void addNamePart(dynamic value) {
+    final String part = value?.toString().trim() ?? '';
+    if (part.isEmpty) return;
+    final String key = part.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    if (seenNameParts.add(key)) nameParts.add(part);
+  }
+
+  for (final dynamic value in <dynamic>[
     row['label'],
     row['name'],
     row['facility_name'],
@@ -727,7 +805,10 @@ BuyerOrderLocation? parseBuyerOrderLogisticsStop(Map<String, dynamic> row) {
     row['details'],
     row['description'],
     row['message'],
-  ].where((dynamic value) => value != null).join(' ').trim();
+  ]) {
+    addNamePart(value);
+  }
+  final String name = nameParts.join(' ');
   final double? latitude = double.tryParse(
     (location['latitude'] ?? location['lat'] ?? location['y'] ?? '').toString(),
   );
@@ -753,11 +834,21 @@ BuyerOrderLocation? parseBuyerOrderLogisticsStop(Map<String, dynamic> row) {
       row['transferLegId'],
       row['leg_id'],
     ]);
+    final String? rawId = firstValue(<dynamic>[row['id']]);
+    final String? centerId = firstValue(<dynamic>[
+      row['center_id'],
+      row['logistics_center_id'],
+      facility['id'],
+      facility['center_id'],
+    ]);
+    final String? markerCenterId = RegExp(
+      r'^logistics-center-(\d+)',
+    ).firstMatch(rawId ?? '')?.group(1);
     return BuyerOrderLocation(
       latitude: latitude,
       longitude: longitude,
       label: name.isEmpty ? 'Logistics hub' : name,
-      id: firstValue(<dynamic>[row['id'], facility['id'], row['center_id']]),
+      id: centerId ?? markerCenterId ?? rawId,
       transferLegIds: transferLegId == null
           ? const <String>[]
           : <String>[transferLegId],
@@ -1327,28 +1418,13 @@ class BuyerOrderData {
       if (stop == null) return;
       final int existingIndex = shipmentRouteStops.indexWhere(
         (BuyerOrderLocation existing) =>
-            existing.latitude == stop.latitude &&
-            existing.longitude == stop.longitude,
+            sameBuyerOrderLogisticsStop(existing, stop),
       );
       if (existingIndex >= 0) {
         final BuyerOrderLocation existing = shipmentRouteStops[existingIndex];
-        final List<String> transferLegIds = <String>{
-          ...existing.transferLegIds,
-          ...stop.transferLegIds,
-        }.toList(growable: false);
-        if (transferLegIds.length != existing.transferLegIds.length ||
-            existing.id == null && stop.id != null ||
-            existing.sequenceNo == null && stop.sequenceNo != null ||
-            existing.centerRole == null && stop.centerRole != null ||
-            existing.progressStatus == null && stop.progressStatus != null) {
-          shipmentRouteStops[existingIndex] = existing.copyWith(
-            id: existing.id ?? stop.id,
-            transferLegIds: transferLegIds,
-            sequenceNo: existing.sequenceNo ?? stop.sequenceNo,
-            centerRole: existing.centerRole ?? stop.centerRole,
-            progressStatus: existing.progressStatus ?? stop.progressStatus,
-          );
-        }
+        shipmentRouteStops[existingIndex] = deduplicateBuyerOrderLogisticsStops(
+          <BuyerOrderLocation>[existing, stop],
+        ).first;
         return;
       }
       shipmentRouteStops.add(stop);
@@ -1415,11 +1491,26 @@ class BuyerOrderData {
     if (currentLogisticsCenter != null &&
         !shipmentRouteStops.any(
           (BuyerOrderLocation stop) =>
-              stop.latitude == currentLogisticsCenter.latitude &&
-              stop.longitude == currentLogisticsCenter.longitude,
+              sameBuyerOrderLogisticsStop(stop, currentLogisticsCenter),
         )) {
       shipmentRouteStops.add(currentLogisticsCenter);
     }
+    shipmentRouteStops.sort((
+      BuyerOrderLocation first,
+      BuyerOrderLocation second,
+    ) {
+      final int sequence = (first.sequenceNo ?? 1 << 30).compareTo(
+        second.sequenceNo ?? 1 << 30,
+      );
+      if (sequence != 0) return sequence;
+      int roleOrder(BuyerOrderLocation stop) =>
+          switch (stop.centerRole?.toLowerCase()) {
+            'origin' => 0,
+            'destination' => 1,
+            _ => 2,
+          };
+      return roleOrder(first).compareTo(roleOrder(second));
+    });
     final String backendStatus =
         (json['status'] ?? json['order_status'] ?? 'pending').toString();
     String normalizeStatus(dynamic value) => value

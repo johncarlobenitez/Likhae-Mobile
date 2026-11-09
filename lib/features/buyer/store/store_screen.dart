@@ -84,7 +84,7 @@ class StoreVoucherData {
                 .replaceFirst(RegExp(r'\.$'), '');
       return '$amount% off';
     }
-    return '₱${discountValue.toStringAsFixed(2)} off';
+    return '${formatPesoAmount(discountValue)} off';
   }
 }
 
@@ -2058,7 +2058,7 @@ class _StoreScreenState extends State<StoreScreen> {
               final bool isClaiming =
                   voucherId != null && _claimingVoucherIds.contains(voucherId);
               final String conditions =
-                  '${voucher.minimumOrderAmount > 0 ? 'Min. ₱${voucher.minimumOrderAmount.toStringAsFixed(2)}' : 'No minimum spend'}${voucher.expires.isNotEmpty && voucher.expires.toLowerCase() != 'no expiry' ? ' · Until ${voucher.expires}' : ''}';
+          '${voucher.minimumOrderAmount > 0 ? 'Min. ${formatPesoAmount(voucher.minimumOrderAmount)}' : 'No minimum spend'}${voucher.expires.isNotEmpty && voucher.expires.toLowerCase() != 'no expiry' ? ' · Until ${voucher.expires}' : ''}';
               return Container(
                 width: 286,
                 padding: const EdgeInsets.all(13),
@@ -3137,7 +3137,7 @@ class _StoreProductCard extends StatelessWidget {
   }
 
   static String _formatPrice(double value) {
-    return '₱${value.toStringAsFixed(2)}';
+    return formatPesoAmount(value);
   }
 }
 

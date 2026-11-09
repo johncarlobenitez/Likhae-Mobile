@@ -2,12 +2,12 @@ import 'package:likhae/core/theme/app_theme.dart';
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'rider_collection_field.dart';
+import '../../../shared/formatting/money_formatting.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
@@ -38,7 +38,8 @@ class RiderDeliveryTrackingScreen extends StatefulWidget {
 
   final RiderDeliveryCallback? onOpenDetails;
 
-  final RiderExternalActionCallback? onOpenNavigation;
+  final Future<void> Function(RiderDeliveryData delivery, LatLng? destination)?
+  onOpenNavigation;
 
   final RiderExternalActionCallback? onContactCustomer;
 
@@ -127,6 +128,8 @@ class _RiderDeliveryTrackingScreenState
   DateTime? _lastLocationSyncAttemptAt;
   LatLng? _lastSyncedRiderLocation;
   bool _locationSyncErrorShown = false;
+  bool _locationTrackingStarting = false;
+  bool _locationTrackingErrorShown = false;
   bool _locationSyncEnabled = false;
   LatLng? _lastRouteOrigin;
   LatLng? _lastRouteDestination;
@@ -137,15 +140,16 @@ class _RiderDeliveryTrackingScreenState
 
   StreamSubscription<Position>? _positionSubscription;
   bool _routeRequestInProgress = false;
+  bool _mapMarkerSyncInProgress = false;
+  bool _mapMarkerSyncQueued = false;
+  bool _mapMarkerSyncErrorShown = false;
 
   double _zoomLevel = 14;
   LatLng _lastMapCenter = _defaultCenter;
 
   maplibre.MapLibreSession? _mapLibreMap;
   maplibre.CircleAnnotationManager? _mapMarkers;
-  maplibre.PointAnnotationManager? _riderMarkers;
   maplibre.PolylineAnnotationManager? _routeLines;
-  Uint8List? _riderMarkerImage;
 
   bool get _supportsMapLibre {
     return kIsWeb ||
@@ -308,73 +312,97 @@ class _RiderDeliveryTrackingScreenState
   }
 
   Future<void> _startRiderLocationTracking() async {
-    if (!_supportsMapLibre) {
+    if (!_supportsMapLibre ||
+        _positionSubscription != null ||
+        _locationTrackingStarting) {
       return;
     }
 
-    final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return;
+    _locationTrackingStarting = true;
+    try {
+      final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      _positionSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 5,
+        ),
+      ).listen(_onRiderPosition, onError: _onRiderLocationStreamError);
+      _locationTrackingErrorShown = false;
+    } catch (error) {
+      if (mounted && !_locationTrackingErrorShown) {
+        _locationTrackingErrorShown = true;
+        _showMessage('Could not start rider GPS: $error');
+      }
+    } finally {
+      _locationTrackingStarting = false;
     }
+  }
 
-    LocationPermission permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+  void _onRiderPosition(Position position) {
+    if (!mounted) return;
+    try {
+      if (!position.latitude.isFinite ||
+          !position.longitude.isFinite ||
+          position.latitude < -90 ||
+          position.latitude > 90 ||
+          position.longitude < -180 ||
+          position.longitude > 180) {
+        return;
+      }
+
+      final LatLng nextLocation = LatLng(position.latitude, position.longitude);
+      final DateTime now = DateTime.now();
+      final DateTime? lastUiUpdate = _lastUiLocationUpdateAt;
+      final bool shouldRefreshUi =
+          _liveRiderLocation == null ||
+          lastUiUpdate == null ||
+          now.difference(lastUiUpdate) >= const Duration(milliseconds: 1200) ||
+          Geolocator.distanceBetween(
+                _liveRiderLocation!.latitude,
+                _liveRiderLocation!.longitude,
+                nextLocation.latitude,
+                nextLocation.longitude,
+              ) >=
+              8;
+
+      setState(() {
+        _liveRiderLocation = nextLocation;
+        _liveRiderLocationUpdatedAt = now;
+        if (shouldRefreshUi) _lastUiLocationUpdateAt = now;
+      });
+
+      _syncRiderLocationIfNeeded(position, nextLocation, now);
+      unawaited(_syncMapLibreMarkers());
+    } catch (error) {
+      if (!_locationTrackingErrorShown) {
+        _locationTrackingErrorShown = true;
+        _showMessage('Rider GPS update failed: $error');
+      }
     }
+  }
 
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return;
+  void _onRiderLocationStreamError(Object error, [StackTrace? stackTrace]) {
+    final StreamSubscription<Position>? subscription = _positionSubscription;
+    _positionSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel().catchError((Object _) {}));
     }
-
-    await _positionSubscription?.cancel();
-    _positionSubscription =
-        Geolocator.getPositionStream(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 5,
-          ),
-        ).listen((Position position) {
-          if (!mounted) {
-            return;
-          }
-
-          final LatLng nextLocation = LatLng(
-            position.latitude,
-            position.longitude,
-          );
-          final DateTime now = DateTime.now();
-          final DateTime? lastUiUpdate = _lastUiLocationUpdateAt;
-
-          final bool shouldRefreshUi =
-              _liveRiderLocation == null ||
-              lastUiUpdate == null ||
-              now.difference(lastUiUpdate) >=
-                  const Duration(milliseconds: 1200) ||
-              Geolocator.distanceBetween(
-                    _liveRiderLocation!.latitude,
-                    _liveRiderLocation!.longitude,
-                    nextLocation.latitude,
-                    nextLocation.longitude,
-                  ) >=
-                  8;
-
-          if (shouldRefreshUi) {
-            setState(() {
-              _liveRiderLocation = nextLocation;
-              _liveRiderLocationUpdatedAt = now;
-              _lastUiLocationUpdateAt = now;
-            });
-          } else {
-            setState(() {
-              _liveRiderLocation = nextLocation;
-              _liveRiderLocationUpdatedAt = now;
-            });
-          }
-
-          _syncRiderLocationIfNeeded(position, nextLocation, now);
-          _syncMapLibreMarkers();
-        });
+    if (mounted && !_locationTrackingErrorShown) {
+      _locationTrackingErrorShown = true;
+      _showMessage('Device GPS is temporarily unavailable: $error');
+    }
   }
 
   void _syncRiderLocationIfNeeded(
@@ -481,9 +509,7 @@ class _RiderDeliveryTrackingScreenState
     try {
       LatLng? location;
       for (final String query in queries) {
-        final Response<dynamic> response = await ApiClient.getMapGeocode(
-          query,
-        );
+        final Response<dynamic> response = await ApiClient.getMapGeocode(query);
         final String? errorMessage =
             PhilippineAddressGeocoding.errorMessageForResponse(
               response.statusCode ?? 500,
@@ -534,100 +560,62 @@ class _RiderDeliveryTrackingScreenState
   }
 
   Future<void> _onMapLibreSessionCreated(maplibre.MapLibreSession map) async {
-    _mapLibreMap = map;
-    _mapMarkers = await map.annotations.createCircleAnnotationManager();
-    _riderMarkers = await map.annotations.createPointAnnotationManager();
-    _routeLines = await map.annotations.createPolylineAnnotationManager();
+    try {
+      _mapLibreMap = map;
+      _mapMarkers = await map.annotations.createCircleAnnotationManager();
+      _routeLines = await map.annotations.createPolylineAnnotationManager();
+    } catch (_) {
+      if (mounted && !_mapMarkerSyncErrorShown) {
+        _mapMarkerSyncErrorShown = true;
+        _showMessage('Map markers could not be initialized.');
+      }
+    }
 
     try {
-      _riderMarkerImage ??= await _createRiderMarkerImage();
-    } catch (_) {
-      // A blue location dot is used if the rider icon cannot be rendered.
+      await _syncMapLibreMarkers();
+    } catch (error) {
+      if (mounted && !_mapMarkerSyncErrorShown) {
+        _mapMarkerSyncErrorShown = true;
+        _showMessage('Map update failed: $error');
+      }
     }
-
-    await _syncMapLibreMarkers();
-  }
-
-  Future<Uint8List> _createRiderMarkerImage() async {
-    const int imageSize = 112;
-    const double center = imageSize / 2;
-    final ui.PictureRecorder recorder = ui.PictureRecorder();
-    final ui.Canvas canvas = ui.Canvas(recorder);
-
-    canvas.drawCircle(
-      const ui.Offset(center, center + 4),
-      47,
-      ui.Paint()..color = AppTheme.resolve(context, Colors.black).withAlpha(45),
-    );
-    canvas.drawCircle(
-      const ui.Offset(center, center),
-      45,
-      ui.Paint()..color = Colors.white,
-    );
-    canvas.drawCircle(
-      const ui.Offset(center, center),
-      39,
-      ui.Paint()..color = AppTheme.resolve(context, _riderColor),
-    );
-
-    const IconData riderIcon = Icons.two_wheeler_rounded;
-    final TextPainter iconPainter = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(riderIcon.codePoint),
-        style: TextStyle(
-          color: Colors.white,
-          fontFamily: riderIcon.fontFamily,
-          fontSize: 58,
-          height: 1,
-          package: riderIcon.fontPackage,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    iconPainter.paint(
-      canvas,
-      ui.Offset(
-        center - (iconPainter.width / 2),
-        center - (iconPainter.height / 2),
-      ),
-    );
-
-    final ui.Image image = await recorder.endRecording().toImage(
-      imageSize,
-      imageSize,
-    );
-    final ByteData? imageData = await image.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    image.dispose();
-
-    if (imageData == null) {
-      throw StateError('Unable to render the rider marker.');
-    }
-
-    return imageData.buffer.asUint8List(
-      imageData.offsetInBytes,
-      imageData.lengthInBytes,
-    );
   }
 
   Future<void> _syncMapLibreMarkers() async {
+    if (_mapMarkerSyncInProgress) {
+      _mapMarkerSyncQueued = true;
+      return;
+    }
+
+    _mapMarkerSyncInProgress = true;
+    try {
+      do {
+        _mapMarkerSyncQueued = false;
+        await _syncMapLibreMarkersOnce();
+      } while (mounted && _mapMarkerSyncQueued);
+      _mapMarkerSyncErrorShown = false;
+    } catch (error) {
+      if (mounted && !_mapMarkerSyncErrorShown) {
+        _mapMarkerSyncErrorShown = true;
+        _showMessage('Map update failed: $error');
+      }
+    } finally {
+      _mapMarkerSyncInProgress = false;
+    }
+  }
+
+  Future<void> _syncMapLibreMarkersOnce() async {
     final maplibre.MapLibreSession? map = _mapLibreMap;
     final maplibre.CircleAnnotationManager? manager = _mapMarkers;
-    final maplibre.PointAnnotationManager? riderManager = _riderMarkers;
 
     if (map == null || manager == null) {
       return;
     }
 
     await manager.deleteAll();
-    await riderManager?.deleteAll();
 
     final LatLng? destination = _displayDeliveryLocation;
     final LatLng? rider = _displayRiderLocation;
-    final Uint8List? riderMarkerImage = _riderMarkerImage;
-    final bool canShowRiderIcon =
-        rider != null && riderManager != null && riderMarkerImage != null;
     final List<maplibre.CircleAnnotationOptions> annotations =
         <maplibre.CircleAnnotationOptions>[
           if (destination != null)
@@ -639,7 +627,7 @@ class _RiderDeliveryTrackingScreenState
               circleStrokeWidth: 3,
               circleSortKey: 2,
             ),
-          if (rider != null && !canShowRiderIcon)
+          if (rider != null)
             maplibre.CircleAnnotationOptions(
               geometry: _toMapLibrePoint(rider),
               circleColor: AppTheme.resolve(context, _riderColor).toARGB32(),
@@ -652,18 +640,6 @@ class _RiderDeliveryTrackingScreenState
 
     if (annotations.isNotEmpty) {
       await manager.createMulti(annotations);
-    }
-
-    if (rider != null && riderManager != null && riderMarkerImage != null) {
-      await riderManager.create(
-        maplibre.PointAnnotationOptions(
-          geometry: _toMapLibrePoint(rider),
-          image: riderMarkerImage,
-          iconAnchor: maplibre.IconAnchor.center,
-          iconSize: 0.55,
-          symbolSortKey: 3,
-        ),
-      );
     }
 
     if (destination != null && rider != null) {
@@ -1121,7 +1097,7 @@ class _RiderDeliveryTrackingScreenState
           delivery: delivery,
           status: 'delivered',
           proofPath: _proofPhoto!.path,
-          collectedAmount: _collectionController.text.trim(),
+            collectedAmount: parseMoneyInput(_collectionController.text.trim()),
           scannedCode: _deliveryScan?.code,
           scanMethod: _deliveryScan?.method ?? 'MANUAL',
         );
@@ -1151,7 +1127,8 @@ class _RiderDeliveryTrackingScreenState
 
   Future<void> _chooseNextAttemptTime() async {
     final DateTime now = DateTime.now();
-    final DateTime initial = _nextAttemptAt ?? now.add(const Duration(hours: 2));
+    final DateTime initial =
+        _nextAttemptAt ?? now.add(const Duration(hours: 2));
     final DateTime? day = await showDatePicker(
       context: context,
       initialDate: initial.isBefore(now) ? now : initial,
@@ -1178,9 +1155,7 @@ class _RiderDeliveryTrackingScreenState
     setState(() => _nextAttemptAt = selected);
   }
 
-  Future<void> _recordRescheduledDelivery(
-    RiderDeliveryData delivery,
-  ) async {
+  Future<void> _recordRescheduledDelivery(RiderDeliveryData delivery) async {
     final String reason = _failedReasonController.text.trim();
     final DateTime? nextAttemptAt = _nextAttemptAt;
     if (reason.isEmpty) {
@@ -1250,8 +1225,7 @@ class _RiderDeliveryTrackingScreenState
       });
 
       _showMessage(
-        request.attemptStatus == 'RESCHEDULED' &&
-                request.nextAttemptAt != null
+        request.attemptStatus == 'RESCHEDULED' && request.nextAttemptAt != null
             ? 'Delivery rescheduled for ${_formatNextAttemptTime(request.nextAttemptAt!)}.'
             : 'Delivery status updated successfully.',
       );
@@ -1301,9 +1275,12 @@ class _RiderDeliveryTrackingScreenState
               () {
                 Navigator.of(context).maybePop();
               },
-          icon:  Icon(Icons.arrow_back_rounded, color: AppTheme.resolve(context, _text)),
+          icon: Icon(
+            Icons.arrow_back_rounded,
+            color: AppTheme.resolve(context, _text),
+          ),
         ),
-        title:  Text(
+        title: Text(
           'Delivery Tracking',
           style: TextStyle(
             color: AppTheme.resolve(context, _text),
@@ -1359,13 +1336,17 @@ class _RiderDeliveryTrackingScreenState
         ),
         title: const Text('Delivery Tracking'),
       ),
-      body:  Center(
+      body: Center(
         child: Padding(
           padding: EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(Icons.location_off_outlined, color: AppTheme.resolve(context, _mutedLight), size: 52),
+              Icon(
+                Icons.location_off_outlined,
+                color: AppTheme.resolve(context, _mutedLight),
+                size: 52,
+              ),
               SizedBox(height: 14),
               Text(
                 'Delivery not available',
@@ -1379,7 +1360,11 @@ class _RiderDeliveryTrackingScreenState
               Text(
                 'Open a valid rider delivery to view its tracking information.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13, height: 1.5),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 13,
+                  height: 1.5,
+                ),
               ),
             ],
           ),
@@ -1399,7 +1384,7 @@ class _RiderDeliveryTrackingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Text(
+          Text(
             'LIVE DELIVERY',
             style: TextStyle(
               color: AppTheme.resolve(context, _maroon),
@@ -1411,7 +1396,7 @@ class _RiderDeliveryTrackingScreenState
           const SizedBox(height: 7),
           Text(
             parcel.trackingCode,
-            style:  TextStyle(
+            style: TextStyle(
               color: AppTheme.resolve(context, _text),
               fontSize: 25,
               height: 1.1,
@@ -1421,7 +1406,11 @@ class _RiderDeliveryTrackingScreenState
           const SizedBox(height: 8),
           Text(
             '${parcel.statusLabel} · ${parcel.address}',
-            style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 13.5, height: 1.5),
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 13.5,
+              height: 1.5,
+            ),
           ),
         ],
       ),
@@ -1457,17 +1446,21 @@ class _RiderDeliveryTrackingScreenState
                   height: 40,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppTheme.resolve(context, const Color(0xFFF1E4D7), fill: true),
+                    color: AppTheme.resolve(
+                      context,
+                      const Color(0xFFF1E4D7),
+                      fill: true,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child:  Icon(
+                  child: Icon(
                     Icons.map_outlined,
                     color: AppTheme.resolve(context, _maroon),
                     size: 20,
                   ),
                 ),
                 const SizedBox(width: 10),
-                 Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -1482,9 +1475,23 @@ class _RiderDeliveryTrackingScreenState
                       SizedBox(height: 4),
                       Text(
                         'Live rider location and route to the buyer.',
-                        style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5),
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _muted),
+                          fontSize: 12.5,
+                        ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Open full-screen navigation',
+                  onPressed: widget.onOpenNavigation == null
+                      ? null
+                      : () => _openFullScreenNavigation(parcel),
+                  icon: Icon(
+                    Icons.open_in_full_rounded,
+                    color: AppTheme.resolve(context, _maroon),
                   ),
                 ),
               ],
@@ -1514,7 +1521,7 @@ class _RiderDeliveryTrackingScreenState
                           child: Text(
                             'The interactive map is available on Android, iOS, and web.',
                             textAlign: TextAlign.center,
-                            style:  TextStyle(
+                            style: TextStyle(
                               color: AppTheme.resolve(context, _muted),
                               fontSize: 13,
                               height: 1.45,
@@ -1536,7 +1543,11 @@ class _RiderDeliveryTrackingScreenState
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: AppTheme.resolve(context, Colors.white, fill: true),
+                            color: AppTheme.resolve(
+                              context,
+                              Colors.white,
+                              fill: true,
+                            ),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: const <BoxShadow>[
                               BoxShadow(
@@ -1548,7 +1559,10 @@ class _RiderDeliveryTrackingScreenState
                           ),
                           child: IconButton(
                             onPressed: () => _zoomMap(1),
-                            icon:  Icon(Icons.add, color: AppTheme.resolve(context, _text)),
+                            icon: Icon(
+                              Icons.add,
+                              color: AppTheme.resolve(context, _text),
+                            ),
                             splashRadius: 20,
                             padding: EdgeInsets.zero,
                           ),
@@ -1558,7 +1572,11 @@ class _RiderDeliveryTrackingScreenState
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: AppTheme.resolve(context, Colors.white, fill: true),
+                            color: AppTheme.resolve(
+                              context,
+                              Colors.white,
+                              fill: true,
+                            ),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: const <BoxShadow>[
                               BoxShadow(
@@ -1570,7 +1588,10 @@ class _RiderDeliveryTrackingScreenState
                           ),
                           child: IconButton(
                             onPressed: () => _zoomMap(-1),
-                            icon:  Icon(Icons.remove, color: AppTheme.resolve(context, _text)),
+                            icon: Icon(
+                              Icons.remove,
+                              color: AppTheme.resolve(context, _text),
+                            ),
                             splashRadius: 20,
                             padding: EdgeInsets.zero,
                           ),
@@ -1666,7 +1687,7 @@ class _RiderDeliveryTrackingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Text(
+          Text(
             'Tracking Timeline',
             style: TextStyle(
               color: AppTheme.resolve(context, _text),
@@ -1704,12 +1725,19 @@ class _RiderDeliveryTrackingScreenState
                           decoration: BoxDecoration(
                             color: isCurrent || isDone
                                 ? AppTheme.resolve(context, _maroon, fill: true)
-                                : AppTheme.resolve(context, const Color(0xFFEDE4DC), fill: true),
+                                : AppTheme.resolve(
+                                    context,
+                                    const Color(0xFFEDE4DC),
+                                    fill: true,
+                                  ),
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: isCurrent || isDone
                                   ? AppTheme.resolve(context, _maroon)
-                                  : AppTheme.resolve(context, const Color(0xFFD9CFC3)),
+                                  : AppTheme.resolve(
+                                      context,
+                                      const Color(0xFFD9CFC3),
+                                    ),
                               width: 2,
                             ),
                           ),
@@ -1718,7 +1746,11 @@ class _RiderDeliveryTrackingScreenState
                           Container(
                             width: 2,
                             height: 34,
-                            color: AppTheme.resolve(context, const Color(0xFFD9CFC3), fill: true),
+                            color: AppTheme.resolve(
+                              context,
+                              const Color(0xFFD9CFC3),
+                              fill: true,
+                            ),
                           ),
                       ],
                     ),
@@ -1728,7 +1760,9 @@ class _RiderDeliveryTrackingScreenState
                     child: Text(
                       step.label,
                       style: TextStyle(
-                        color: isCurrent || isDone ? AppTheme.resolve(context, _text) : AppTheme.resolve(context, _muted),
+                        color: isCurrent || isDone
+                            ? AppTheme.resolve(context, _text)
+                            : AppTheme.resolve(context, _muted),
                         fontSize: 15,
                         fontWeight: isCurrent || isDone
                             ? FontWeight.w700
@@ -1756,7 +1790,7 @@ class _RiderDeliveryTrackingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-           Text(
+          Text(
             'Recipient',
             style: TextStyle(
               color: AppTheme.resolve(context, _text),
@@ -1793,7 +1827,7 @@ class _RiderDeliveryTrackingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-           Text(
+          Text(
             'Delivery Actions',
             style: TextStyle(
               color: AppTheme.resolve(context, _text),
@@ -1871,7 +1905,11 @@ class _RiderDeliveryTrackingScreenState
                       },
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: AppTheme.resolve(context, _success, fill: true),
+                  backgroundColor: AppTheme.resolve(
+                    context,
+                    _success,
+                    fill: true,
+                  ),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -1896,7 +1934,7 @@ class _RiderDeliveryTrackingScreenState
 
             const SizedBox(height: 18),
 
-             Divider(color: AppTheme.resolve(context, _border), height: 1),
+            Divider(color: AppTheme.resolve(context, _border), height: 1),
 
             const SizedBox(height: 18),
 
@@ -1923,8 +1961,14 @@ class _RiderDeliveryTrackingScreenState
                       },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.resolve(context, _danger),
-                  backgroundColor: AppTheme.resolve(context, const Color(0xFFFFF3F2), fill: true),
-                  side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFF5B7B1))),
+                  backgroundColor: AppTheme.resolve(
+                    context,
+                    const Color(0xFFFFF3F2),
+                    fill: true,
+                  ),
+                  side: BorderSide(
+                    color: AppTheme.resolve(context, Color(0xFFF5B7B1)),
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -1980,7 +2024,11 @@ class _RiderDeliveryTrackingScreenState
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           decoration: BoxDecoration(
-            color: AppTheme.resolve(context, const Color(0xFFFCF9F5), fill: true),
+            color: AppTheme.resolve(
+              context,
+              const Color(0xFFFCF9F5),
+              fill: true,
+            ),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppTheme.resolve(context, _border)),
           ),
@@ -1990,12 +2038,16 @@ class _RiderDeliveryTrackingScreenState
                 width: 54,
                 height: 54,
                 alignment: Alignment.center,
-                decoration:  BoxDecoration(
-                  color: AppTheme.resolve(context, Color(0xFFF1E4D7), fill: true),
+                decoration: BoxDecoration(
+                  color: AppTheme.resolve(
+                    context,
+                    Color(0xFFF1E4D7),
+                    fill: true,
+                  ),
                   shape: BoxShape.circle,
                 ),
                 child: _takingPhoto
-                    ?  SizedBox(
+                    ? SizedBox(
                         width: 23,
                         height: 23,
                         child: CircularProgressIndicator(
@@ -2003,7 +2055,7 @@ class _RiderDeliveryTrackingScreenState
                           color: AppTheme.resolve(context, _maroon),
                         ),
                       )
-                    :  Icon(
+                    : Icon(
                         Icons.photo_camera_outlined,
                         color: AppTheme.resolve(context, _maroon),
                         size: 27,
@@ -2014,17 +2066,21 @@ class _RiderDeliveryTrackingScreenState
                 _takingPhoto
                     ? 'Capturing and watermarking...'
                     : 'Take Proof of Delivery',
-                style:  TextStyle(
+                style: TextStyle(
                   color: AppTheme.resolve(context, _text),
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 5),
-               Text(
+              Text(
                 'Take a clear photo showing that the parcel was delivered.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12, height: 1.45),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _muted),
+                  fontSize: 12,
+                  height: 1.45,
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
@@ -2061,7 +2117,7 @@ class _RiderDeliveryTrackingScreenState
                       Object error,
                       StackTrace? stackTrace,
                     ) {
-                      return  Center(
+                      return Center(
                         child: Icon(
                           Icons.broken_image_outlined,
                           size: 40,
@@ -2076,13 +2132,13 @@ class _RiderDeliveryTrackingScreenState
             padding: const EdgeInsets.all(12),
             child: Row(
               children: <Widget>[
-                 Icon(
+                Icon(
                   Icons.check_circle_rounded,
                   color: AppTheme.resolve(context, _success),
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                 Expanded(
+                Expanded(
                   child: Text(
                     'Proof of delivery photo captured',
                     style: TextStyle(
@@ -2095,12 +2151,15 @@ class _RiderDeliveryTrackingScreenState
                 IconButton(
                   tooltip: 'Take another photo',
                   onPressed: _submitting ? null : _takeProofPhoto,
-                  icon:  Icon(Icons.photo_camera_outlined, color: AppTheme.resolve(context, _maroon)),
+                  icon: Icon(
+                    Icons.photo_camera_outlined,
+                    color: AppTheme.resolve(context, _maroon),
+                  ),
                 ),
                 IconButton(
                   tooltip: 'Remove proof',
                   onPressed: _submitting ? null : _removeProofPhoto,
-                  icon:  Icon(
+                  icon: Icon(
                     Icons.delete_outline_rounded,
                     color: AppTheme.resolve(context, _danger),
                   ),
@@ -2136,7 +2195,11 @@ class _RiderDeliveryTrackingScreenState
       ),
       child: Text(
         message,
-        style:  TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 12.5, height: 1.45),
+        style: TextStyle(
+          color: AppTheme.resolve(context, _muted),
+          fontSize: 12.5,
+          height: 1.45,
+        ),
       ),
     );
   }
@@ -2157,7 +2220,7 @@ class _RiderDeliveryTrackingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-           Text(
+          Text(
             'Actions',
             style: TextStyle(
               color: AppTheme.resolve(context, _text),
@@ -2197,14 +2260,7 @@ class _RiderDeliveryTrackingScreenState
                 : 'Resume Rider GPS / Refresh Route',
             onPressed: _refreshingNavigation
                 ? null
-                : () async {
-                    if (widget.onOpenNavigation != null) {
-                      await widget.onOpenNavigation!(parcel);
-                      return;
-                    }
-
-                    await _refreshNavigationRoute(parcel);
-                  },
+                : () => _refreshNavigationRoute(parcel),
           ),
           if (hasContact) ...<Widget>[
             const SizedBox(height: 9),
@@ -2223,28 +2279,54 @@ class _RiderDeliveryTrackingScreenState
     );
   }
 
+  Future<void> _openFullScreenNavigation(RiderDeliveryData parcel) async {
+    final Future<void> Function(RiderDeliveryData, LatLng?)? openNavigation =
+        widget.onOpenNavigation;
+    if (openNavigation == null) return;
+    await _resolveBuyerLocation();
+    if (!mounted) return;
+    final LatLng? destination = _displayDeliveryLocation;
+    if (destination == null) {
+      _showMessage(
+        'The buyer delivery pin is unavailable. Check the saved address and try again.',
+      );
+      return;
+    }
+    await openNavigation(parcel, destination);
+  }
+
   InputDecoration _inputDecoration({
     required String hintText,
     required IconData prefixIcon,
   }) {
     return InputDecoration(
       hintText: hintText,
-      hintStyle:  TextStyle(color: AppTheme.resolve(context, _mutedLight), fontSize: 13),
-      prefixIcon: Icon(prefixIcon, color: AppTheme.resolve(context, _muted), size: 20),
+      hintStyle: TextStyle(
+        color: AppTheme.resolve(context, _mutedLight),
+        fontSize: 13,
+      ),
+      prefixIcon: Icon(
+        prefixIcon,
+        color: AppTheme.resolve(context, _muted),
+        size: 20,
+      ),
       filled: true,
       fillColor: AppTheme.resolve(context, Colors.white, fill: true),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide:  BorderSide(color: AppTheme.resolve(context, _border)),
+        borderSide: BorderSide(color: AppTheme.resolve(context, _border)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide:  BorderSide(color: AppTheme.resolve(context, _maroon), width: 1.4),
+        borderSide: BorderSide(
+          color: AppTheme.resolve(context, _maroon),
+          width: 1.4,
+        ),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide:  BorderSide(color: AppTheme.resolve(context, _danger)),
+        borderSide: BorderSide(color: AppTheme.resolve(context, _danger)),
       ),
     );
   }
@@ -2288,9 +2370,16 @@ class _TrackingStepCard extends StatelessWidget {
           height: 12,
           margin: const EdgeInsets.only(top: 3),
           decoration: BoxDecoration(
-            color: active ? AppTheme.resolve(context, _accent, fill: true) : AppTheme.resolve(context, _inactive, fill: true),
+            color: active
+                ? AppTheme.resolve(context, _accent, fill: true)
+                : AppTheme.resolve(context, _inactive, fill: true),
             shape: BoxShape.circle,
-            border: Border.all(color: active ? AppTheme.resolve(context, _accent) : AppTheme.resolve(context, _line), width: 2),
+            border: Border.all(
+              color: active
+                  ? AppTheme.resolve(context, _accent)
+                  : AppTheme.resolve(context, _line),
+              width: 2,
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -2301,7 +2390,9 @@ class _TrackingStepCard extends StatelessWidget {
               Text(
                 step.label,
                 style: TextStyle(
-                  color: active ? AppTheme.resolve(context, _text) : AppTheme.resolve(context, _muted),
+                  color: active
+                      ? AppTheme.resolve(context, _text)
+                      : AppTheme.resolve(context, _muted),
                   fontSize: 15,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                 ),
@@ -2313,7 +2404,7 @@ class _TrackingStepCard extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   delivery.failureReason!,
-                  style:  TextStyle(
+                  style: TextStyle(
                     color: AppTheme.resolve(context, _muted),
                     fontSize: 12,
                     height: 1.45,
@@ -2376,7 +2467,11 @@ class _PrimaryActionButton extends StatelessWidget {
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: AppTheme.resolve(context, const Color(0xFF561C17), fill: true),
+          backgroundColor: AppTheme.resolve(
+            context,
+            const Color(0xFF561C17),
+            fill: true,
+          ),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -2419,7 +2514,7 @@ class _TrackingActionButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           foregroundColor: AppTheme.resolve(context, const Color(0xFF3B211B)),
-          side:  BorderSide(color: AppTheme.resolve(context, Color(0xFFEADCCC))),
+          side: BorderSide(color: AppTheme.resolve(context, Color(0xFFEADCCC))),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -2445,7 +2540,7 @@ class _InfoRow extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style:  TextStyle(
+          style: TextStyle(
             color: AppTheme.resolve(context, Color(0xFF987865)),
             fontSize: 11.5,
             fontWeight: FontWeight.w600,
@@ -2454,7 +2549,7 @@ class _InfoRow extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           value,
-          style:  TextStyle(
+          style: TextStyle(
             color: AppTheme.resolve(context, Color(0xFF3B211B)),
             fontSize: 13.5,
             height: 1.45,
@@ -2486,7 +2581,10 @@ class _MapLegendDot extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF766C65)), fontSize: 11),
+          style: TextStyle(
+            color: AppTheme.resolve(context, Color(0xFF766C65)),
+            fontSize: 11,
+          ),
         ),
       ],
     );
@@ -2519,7 +2617,10 @@ class _MapLegendRider extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style:  TextStyle(color: AppTheme.resolve(context, Color(0xFF766C65)), fontSize: 11),
+          style: TextStyle(
+            color: AppTheme.resolve(context, Color(0xFF766C65)),
+            fontSize: 11,
+          ),
         ),
       ],
     );
@@ -2576,12 +2677,18 @@ class _TrackingPreviewNotice extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, const Color(0xFFF6EFE7), fill: true),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEADCCC))),
+        border: Border.all(
+          color: AppTheme.resolve(context, const Color(0xFFEADCCC)),
+        ),
       ),
-      child:  Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.visibility_outlined, color: AppTheme.resolve(context, Color(0xFF561C17)), size: 19),
+          Icon(
+            Icons.visibility_outlined,
+            color: AppTheme.resolve(context, Color(0xFF561C17)),
+            size: 19,
+          ),
           SizedBox(width: 8),
           Expanded(
             child: Text(

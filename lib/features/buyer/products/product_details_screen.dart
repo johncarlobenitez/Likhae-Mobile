@@ -1,6 +1,9 @@
 import 'package:likhae/core/theme/app_theme.dart';
+import '../../../services/recently_viewed_service.dart';
 
 import 'dart:async';
+
+import 'package:dio/dio.dart';
 
 import '../../../shared/widgets/sized_network_image.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +11,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/shop_ui.dart';
 import '../../../shared/widgets/app_motion.dart';
 import 'package:likhae/core/config/app_config.dart';
+import 'package:likhae/core/api/api_client.dart';
 import 'package:likhae/core/utils/api_value_parsers.dart';
 import 'package:likhae/services/buyer_mobile_service.dart';
 import 'package:likhae/services/wishlist_service.dart';
@@ -281,6 +285,8 @@ class ProductDetailData {
   final int? sellerUserId;
   final String? sellerAvatarUrl;
   final String? sellerLocation;
+  final double? sellerRating;
+  final int? sellerProductCount;
 
   final bool sellerVerified;
 
@@ -322,6 +328,8 @@ class ProductDetailData {
     this.sellerUserId,
     this.sellerAvatarUrl,
     this.sellerLocation,
+    this.sellerRating,
+    this.sellerProductCount,
     this.sellerVerified = false,
     this.variations = const [],
     this.options = const [],
@@ -821,6 +829,17 @@ class ProductDetailData {
           : AppConfig.resolveMediaUrl(rawSellerAvatar.trim()),
       sellerLocation:
           json['location']?.toString() ?? json['seller_location']?.toString(),
+      sellerRating: double.tryParse(
+        (json['seller_rating'] ?? seller?['rating'] ?? '').toString(),
+      ),
+      sellerProductCount: int.tryParse(
+        (json['seller_product_count'] ??
+                seller?['products_count'] ??
+                seller?['product_count'] ??
+                seller?['active_products_count'] ??
+                '')
+            .toString(),
+      ),
       sellerVerified:
           json['seller_verified'] == true ||
           json['seller_is_verified'] == true ||
@@ -1024,6 +1043,8 @@ class ProductDetailData {
       sellerUserId: sellerUserId,
       sellerAvatarUrl: sellerAvatarUrl,
       sellerLocation: sellerLocation,
+      sellerRating: sellerRating,
+      sellerProductCount: sellerProductCount,
       sellerVerified: sellerVerified,
       variations: variations,
       options: options,
@@ -1179,6 +1200,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   final PageController _galleryController = PageController();
   final GlobalKey _shareButtonKey = GlobalKey();
+  final GlobalKey _sellerShareButtonKey = GlobalKey();
 
   late ProductDetailData _product;
 
@@ -1208,6 +1230,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     super.initState();
 
     _product = widget.product;
+    unawaited(RecentlyViewedService.record(_product));
 
     _quantity = widget.initialQuantity.clamp(1, 999999).toInt();
 
@@ -1296,6 +1319,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     if (oldWidget.product.id != widget.product.id ||
         oldWidget.product != widget.product) {
       _product = widget.product;
+      if (oldWidget.product.id != widget.product.id) {
+        unawaited(RecentlyViewedService.record(_product));
+      }
 
       _wishlisted =
           WishlistService.isWishlisted(_product.id) ||
@@ -1813,7 +1839,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         'Added to cart', success: true,
       );
     } catch (error) {
-      _showMessage(_errorText(error), error: true);
+      _showMessage(_purchaseErrorText(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -1863,7 +1889,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         await widget.onBuyNow!(_product, _quantity, _selectedVariantMap);
       }
     } catch (error) {
-      _showMessage(_errorText(error), error: true);
+      _showMessage(_purchaseErrorText(error), error: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -2347,7 +2373,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   String _errorText(Object error) {
+    if (error is DioException) {
+      return ApiClient.formatError(error);
+    }
+    if (error is FormatException) {
+      return error.message;
+    }
     return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  String _purchaseErrorText(Object error) {
+    if (error is DioException && error.error is FormatException) {
+      return "We couldn't confirm the cart update. Check your cart before trying again.";
+    }
+    return _errorText(error);
   }
 
   Uri _productShareUri() {
@@ -2389,6 +2428,40 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       if (mounted) {
         _showMessage('Could not share this product.', error: true);
       }
+    }
+  }
+
+  Future<void> _shareSeller() async {
+    final String sellerKey = _product.sellerSlug?.trim().isNotEmpty == true
+        ? _product.sellerSlug!.trim()
+        : (_product.sellerUserId?.toString() ?? '');
+    if (sellerKey.isEmpty) return;
+    final Uri baseUri = Uri.parse(AppConfig.webBaseUrl);
+    final Uri storeUri = baseUri.replace(
+      pathSegments: <String>[
+        ...baseUri.pathSegments.where((String segment) => segment.isNotEmpty),
+        'shops',
+        sellerKey,
+      ],
+      query: null,
+      fragment: null,
+    );
+    final RenderBox? buttonBox =
+        _sellerShareButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final Rect? shareOrigin = buttonBox?.hasSize == true
+        ? buttonBox!.localToGlobal(Offset.zero) & buttonBox.size
+        : null;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          uri: storeUri,
+          title: _product.sellerName ?? 'Likhae shop',
+          subject: _product.sellerName ?? 'Likhae shop',
+          sharePositionOrigin: shareOrigin,
+        ),
+      );
+    } catch (_) {
+      if (mounted) _showMessage('Could not share this shop.', error: true);
     }
   }
 
@@ -3425,174 +3498,151 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildSellerBand() {
+    const Color banner = Color(0xFF261A17);
+    const Color bannerBorder = Color(0xFF50372E);
+    const Color secondaryText = Color(0xFFD2C3BC);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.resolve(context, _surface, fill: true),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.resolve(context, _border)),
+        color: banner,
+        borderRadius: BorderRadius.circular(19),
+        border: Border.all(color: bannerBorder),
       ),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final bool compact = constraints.maxWidth < 560;
-
-          final Widget sellerInfo = Semantics(
-            button: widget.onViewStore != null,
-            label: 'View ${_product.sellerName} store',
-            child: InkWell(
-              onTap: widget.onViewStore == null
-                  ? null
-                  : () => widget.onViewStore!(_product),
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Row(
+          final Widget details = Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
                   children: [
-                    _SellerAvatar(product: _product),
-
-                    const SizedBox(width: 11),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  _product.sellerVerified
-                                      ? 'VERIFIED SELLER'
-                                      : 'SELLER',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: _product.sellerVerified
-                                        ? AppTheme.resolve(context, _success)
-                                        : AppTheme.resolve(context, _muted),
-                                    fontSize: 9.5,
-                                    letterSpacing: 0.8,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-
-                              if (_product.sellerVerified) ...[
-                                const SizedBox(width: 4),
-
-                                 Icon(
-                                  Icons.verified_rounded,
-                                  color: AppTheme.resolve(context, _success),
-                                  size: 13,
-                                ),
-                              ],
-                            ],
-                          ),
-
-                          const SizedBox(height: 3),
-
-                          Text(
-                            _product.sellerName!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style:  TextStyle(
-                              color: AppTheme.resolve(context, _text),
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-
-                          if (_product.sellerLocation?.trim().isNotEmpty ==
-                              true) ...[
-                            const SizedBox(height: 3),
-
-                            Text(
-                              _product.sellerLocation!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style:  TextStyle(
-                                color: AppTheme.resolve(context, _muted),
-                                fontSize: 10,
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ],
+                    Flexible(
+                      child: Text(
+                        _product.sellerVerified ? 'OFFICIAL SELLER' : 'SELLER',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFE8D8D0),
+                          fontSize: 9,
+                          letterSpacing: 1,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
+                    if (_product.sellerVerified) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.verified_rounded,
+                          color: Color(0xFFE7B6A8), size: 13),
+                    ],
                   ],
                 ),
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  _product.sellerName!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (_product.sellerLocation?.trim().isNotEmpty == true)
+                      Text(_product.sellerLocation!, style: const TextStyle(color: secondaryText, fontSize: 10.5)),
+                    if (_product.sellerRating != null) ...[
+                      if (_product.sellerLocation?.trim().isNotEmpty == true)
+                        const Text('·', style: TextStyle(color: secondaryText, fontSize: 10.5)),
+                      const Icon(Icons.star_rounded, color: Color(0xFFE4A339), size: 13),
+                      Text('${_product.sellerRating!.toStringAsFixed(1)} seller rating', style: const TextStyle(color: secondaryText, fontSize: 10.5)),
+                    ],
+                    if (_product.sellerProductCount != null) ...[
+                      const Text('·', style: TextStyle(color: secondaryText, fontSize: 10.5)),
+                      Text('${_product.sellerProductCount} products', style: const TextStyle(color: secondaryText, fontSize: 10.5)),
+                    ],
+                  ],
+                ),
+              ],
             ),
           );
-
+          final Widget share = IconButton(
+            key: _sellerShareButtonKey,
+            onPressed: _shareSeller,
+            tooltip: 'Share shop',
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFF342520),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(40, 40),
+              maximumSize: const Size(40, 40),
+            ),
+            icon: const Icon(Icons.share_outlined, size: 18),
+          );
           final Widget buttons = Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              OutlinedButton(
+              ElevatedButton(
                 onPressed: widget.onViewStore == null
                     ? null
-                    : () {
-                        widget.onViewStore!(_product);
-                      },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppTheme.resolve(context, _maroon),
-                  side:  BorderSide(color: AppTheme.resolve(context, _tan)),
-                  minimumSize: const Size(0, 38),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'View Store',
-                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
-                ),
-              ),
-
-              const SizedBox(width: 7),
-
-              ElevatedButton(
-                onPressed: widget.onMessageSeller == null
-                    ? null
-                    : () {
-                        widget.onMessageSeller!(_product);
-                      },
+                    : () => widget.onViewStore!(_product),
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
+                  backgroundColor: const Color(0xFF8E392E),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(0, 38),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                child: const Text(
-                  'Message',
-                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                child: const Text('Visit Shop', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800)),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: widget.onMessageSeller == null
+                    ? null
+                    : () => widget.onMessageSeller!(_product),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: bannerBorder),
+                  minimumSize: const Size(0, 38),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
+                child: const Text('Message', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800)),
               ),
             ],
           );
-
+          final Widget profile = Row(
+            children: [
+              _SellerAvatar(product: _product, size: 58),
+              const SizedBox(width: 12),
+              details,
+              const SizedBox(width: 8),
+              share,
+            ],
+          );
           if (compact) {
             return Column(
               children: [
-                sellerInfo,
-
-                const SizedBox(height: 12),
-
+                profile,
+                const SizedBox(height: 13),
                 Align(alignment: Alignment.centerRight, child: buttons),
               ],
             );
           }
-
           return Row(
             children: [
-              Expanded(child: sellerInfo),
-
+              _SellerAvatar(product: _product, size: 68),
+              const SizedBox(width: 15),
+              details,
+              const SizedBox(width: 10),
+              share,
               const SizedBox(width: 12),
-
               buttons,
             ],
           );
@@ -3600,7 +3650,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       ),
     );
   }
-
   Widget _buildDescriptionAndSpecifications({required bool wide}) {
     final bool hasDescription =
         _product.description?.trim().isNotEmpty == true ||
@@ -4155,27 +4204,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   );
 
   static String _formatPrice(double value) {
-    final String raw = value.toStringAsFixed(2);
-
-    final List<String> parts = raw.split('.');
-
-    final String whole = parts.first;
-
-    final String decimals = parts.length > 1 ? parts.last : '00';
-
-    final StringBuffer buffer = StringBuffer();
-
-    for (int index = 0; index < whole.length; index++) {
-      final int remaining = whole.length - index;
-
-      buffer.write(whole[index]);
-
-      if (remaining > 1 && remaining % 3 == 1) {
-        buffer.write(',');
-      }
-    }
-
-    return '₱${buffer.toString()}.$decimals';
+    return formatPesoAmount(value);
   }
 }
 
@@ -4355,21 +4384,22 @@ class _QuantityButton extends StatelessWidget {
 
 class _SellerAvatar extends StatelessWidget {
   final ProductDetailData product;
+  final double size;
 
-  const _SellerAvatar({required this.product});
+  const _SellerAvatar({required this.product, this.size = 52});
 
   @override
   Widget build(BuildContext context) {
     final String? url = product.sellerAvatarUrl;
 
     return Container(
-      width: 52,
-      height: 52,
+      width: size,
+      height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(13),
         color: AppTheme.resolve(context, const Color(0xFF6A2019), fill: true),
-        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
+        border: Border.all(color: Colors.white, width: 2),
       ),
       child: url == null || url.trim().isEmpty
           ? _SellerInitial(value: product.sellerInitial)

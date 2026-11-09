@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/config/app_config.dart';
 import '../../../shared/widgets/sized_network_image.dart';
 import '../../../services/workspace_mobile_service.dart';
+import '../../../shared/widgets/shop_ui.dart';
 
 class SellerOffersScreen extends StatefulWidget {
   final String? offerType;
@@ -176,17 +177,8 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
     }
   }
 
-  String _formatAmount(double amount) {
-    final List<String> parts = amount.toStringAsFixed(2).split('.');
-    final String grouped = parts.first.replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (Match match) => ',',
-    );
-    return '$grouped.${parts.last}';
-  }
-
   String _peso(double amount) =>
-      String.fromCharCode(0x20B1) + ' ' + _formatAmount(amount);
+      formatPesoAmount(amount);
 
   Widget _offerPill(String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),

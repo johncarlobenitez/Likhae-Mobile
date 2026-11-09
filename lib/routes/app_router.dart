@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/config/app_config.dart';
 import '../core/storage/remembered_login_storage.dart';
@@ -44,6 +45,7 @@ import '../features/buyer/rewards/seller_offers_screen.dart';
 import '../features/buyer/promotions/platform_events_screen.dart';
 import '../features/buyer/ai/buyer_ai_assistant.dart';
 import '../features/buyer/store/following_shops_screen.dart';
+import '../features/buyer/products/recently_viewed_screen.dart';
 import '../features/buyer/store/store_screen.dart';
 import '../features/buyer/settings/buyer_system_settings_screen.dart';
 import '../features/buyer/settings/buyer_system_settings_controller.dart';
@@ -53,6 +55,7 @@ import '../features/rider/mobile_workflows_screen.dart';
 import '../features/rider/deliveries/rider_deliveries_screen.dart';
 import '../features/rider/deliveries/rider_delivery_details_screen.dart';
 import '../features/rider/deliveries/rider_delivery_models.dart';
+import '../features/rider/deliveries/rider_delivery_navigation_screen.dart';
 import '../features/rider/deliveries/rider_delivery_tracking_screen.dart';
 import '../features/rider/earnings/rider_earnings_screen.dart';
 import '../features/rider/earnings/rider_remittances_screen.dart';
@@ -369,7 +372,7 @@ Widget _productDetailScreen(BuildContext context, ProductDetailData product) {
     onBuyNowRequest: (ProductPurchaseRequest request) async {
       if (context.mounted) {
         if (AppConfig.apiEnabled) {
-          final CartItemData cartItem = await BuyerMobileService.addCartItem(
+          final CartItemData cartItem = await BuyerMobileService.buyNow(
             productId: request.productId,
             productVariantId:
                 request.productVariationId ??
@@ -1789,6 +1792,7 @@ final GoRouter appRouter = GoRouter(
                                 : null,
                             onSystemSettings: () =>
                                 context.push('/buyer/settings'),
+                            onRecentlyViewed: () => context.push('/buyer/recently-viewed'),
                             onVouchers: () => context.push('/buyer/rewards'),
                             onTabChanged: (BuyerAccountTab tab) {
                               if (tab == BuyerAccountTab.vouchers) {
@@ -1797,6 +1801,10 @@ final GoRouter appRouter = GoRouter(
                               }
                               if (tab == BuyerAccountTab.settings) {
                                 context.push('/buyer/settings');
+                                return;
+                              }
+                              if (tab == BuyerAccountTab.recentlyViewed) {
+                                context.push('/buyer/recently-viewed');
                                 return;
                               }
                               context.push('/buyer/profile', extra: tab);
@@ -2582,6 +2590,8 @@ final GoRouter appRouter = GoRouter(
         }
         return AsyncRouteBuilder<List<Object>>(
           load: () => loadCartData(),
+          errorTitle: 'Cart',
+          onErrorBack: () => safeBack(context, fallback: '/buyer/home'),
           refreshOnActivate: true,
           builder: (BuildContext context, AsyncSnapshot<List<Object>> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting &&
@@ -2753,6 +2763,8 @@ final GoRouter appRouter = GoRouter(
           );
         }
         return AsyncRouteBuilder<_BuyerCheckoutLoadData>(
+          errorTitle: 'Checkout',
+          onErrorBack: () => safeBack(context, fallback: '/buyer/cart'),
           load: () async {
             final List<CheckoutAddressData> addresses =
                 await BuyerMobileService.fetchCheckoutAddresses();
@@ -3065,6 +3077,17 @@ final GoRouter appRouter = GoRouter(
     ),
 
     GoRoute(
+      path: '/buyer/recently-viewed',
+      name: 'buyer-recently-viewed',
+      builder: (context, state) => RecentlyViewedScreen(
+        onBack: () => safeBack(context, fallback: '/buyer/profile'),
+        onProductSelected: (product) async {
+          await context.push('/buyer/product-details', extra: product);
+        },
+      ),
+    ),
+
+    GoRoute(
       path: '/buyer/settings',
       name: 'buyer-settings',
       builder: (BuildContext context, GoRouterState state) {
@@ -3092,7 +3115,7 @@ final GoRouter appRouter = GoRouter(
         return LogisticsDashboardScreen(
           staffName: staffName,
           onOpenScanner: () =>
-              context.push<Map<String, String>>('/logistics/scanner'),
+              context.push<List<Map<String, String>>>('/logistics/scanner'),
           onSignOut: () async {
             await AuthService.logout();
             if (context.mounted) context.go('/login');
@@ -3109,6 +3132,7 @@ final GoRouter appRouter = GoRouter(
             child: const RiderScannerScreen(
               showSignOut: false,
               returnScanDetails: true,
+              multiScan: true,
             ),
           ),
     ),
@@ -3816,6 +3840,19 @@ final GoRouter appRouter = GoRouter(
             onOpenDetails: (RiderDeliveryData delivery) {
               context.push('/rider/delivery-details', extra: delivery);
             },
+            onOpenNavigation:
+                (RiderDeliveryData delivery, LatLng? destination) async {
+                  await Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      fullscreenDialog: true,
+                      builder: (BuildContext context) =>
+                          RiderDeliveryNavigationScreen(
+                            delivery: delivery,
+                            destination: destination,
+                          ),
+                    ),
+                  );
+                },
           ),
         );
       },

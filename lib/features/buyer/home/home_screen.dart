@@ -2293,8 +2293,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
             .toUpperCase();
     if (discount != null && discount > 0) {
       String amountLabel(double amount) => amount == amount.roundToDouble()
-          ? amount.toStringAsFixed(0)
-          : amount.toStringAsFixed(2);
+          ? formatGroupedMoney(amount, decimalDigits: 0)
+          : formatGroupedMoney(amount, trimTrailingZeros: true);
       final bool percentage = discountType == 'PERCENT';
       final String benefit = percentage
           ? '${amountLabel(discount)}% off'

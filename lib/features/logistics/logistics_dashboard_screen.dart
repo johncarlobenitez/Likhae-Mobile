@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/shop_colors.dart';
 import '../../services/logistics_mobile_service.dart';
 
-typedef OpenLogisticsScanner = Future<Map<String, String>?> Function();
+typedef OpenLogisticsScanner = Future<List<Map<String, String>>?> Function();
 typedef LogisticsSignOut = Future<void> Function();
 
 class LogisticsDashboardScreen extends StatefulWidget {
@@ -83,45 +83,73 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
 
   Future<void> _scanAndReceive() async {
     if (_working) return;
-    final Map<String, String>? scanResult = await widget.onOpenScanner();
-    final String trackingNumber = scanResult?['scanned_code']?.trim() ?? '';
-    if (!mounted || trackingNumber.isEmpty) {
+    final List<Map<String, String>>? scannedParcels = await widget
+        .onOpenScanner();
+    final List<Map<String, String>> batch =
+        (scannedParcels ?? <Map<String, String>>[])
+            .where((Map<String, String> scan) {
+              return (scan['scanned_code'] ?? '').trim().isNotEmpty;
+            })
+            .toList(growable: false);
+    if (!mounted || batch.isEmpty) {
       return;
     }
 
     setState(() => _working = true);
     try {
-      final LogisticsReceivedParcel parcel =
-          await LogisticsMobileService.receiveScannedParcel(
-            trackingNumber,
-            scanMethod: scanResult?['scan_method'] ?? 'MANUAL',
+      final List<LogisticsReceivedParcel> received =
+          <LogisticsReceivedParcel>[];
+      final List<String> failed = <String>[];
+      for (final Map<String, String> scan in batch) {
+        final String trackingNumber = scan['scanned_code']!.trim();
+        try {
+          received.add(
+            await LogisticsMobileService.receiveScannedParcel(
+              trackingNumber,
+              scanMethod: scan['scan_method'] ?? 'MANUAL',
+            ),
           );
-      final bool refreshed = await _loadDashboard(showLoading: false);
+        } catch (error) {
+          failed.add(
+            '$trackingNumber: ${error.toString().replaceFirst('Exception: ', '')}',
+          );
+        }
+      }
+
+      final bool refreshed = received.isNotEmpty
+          ? await _loadDashboard(showLoading: false)
+          : false;
       if (!mounted) return;
 
-      if (!refreshed) {
+      if (received.isNotEmpty && !refreshed) {
         setState(() {
-          _recentScansAfterRefreshFailure.insert(
+          _recentScansAfterRefreshFailure.insertAll(
             0,
-            LogisticsScanActivity(
-              trackingNumber: parcel.trackingNumber,
-              status: parcel.status,
-              scannedAt: DateTime.now().toIso8601String(),
+            received.map(
+              (LogisticsReceivedParcel parcel) => LogisticsScanActivity(
+                trackingNumber: parcel.trackingNumber,
+                status: parcel.status,
+                scannedAt: DateTime.now().toIso8601String(),
+              ),
             ),
           );
         });
       }
 
+      final String message = received.isEmpty
+          ? 'No parcels were received. ${failed.take(2).join(' · ')}'
+          : 'Received ${received.length} of ${batch.length} parcels${refreshed ? ' and refreshed the dashboard' : ''}.${failed.isEmpty ? '' : ' Failed: ${failed.take(2).join(' · ')}${failed.length > 2 ? ' · +${failed.length - 2} more' : ''}'}';
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(
-              refreshed
-                  ? '${parcel.trackingNumber} synced to Laravel as ${parcel.status}.'
-                  : '${parcel.trackingNumber} was saved to Laravel as ${parcel.status}, but the dashboard could not refresh.',
+            content: Text(message),
+            duration: const Duration(seconds: 6),
+            backgroundColor: AppTheme.resolve(
+              context,
+              failed.isEmpty ? _success : _danger,
+              fill: true,
             ),
-            backgroundColor: AppTheme.resolve(context, _success, fill: true),
           ),
         );
     } catch (error) {
@@ -173,9 +201,15 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
         backgroundColor: AppTheme.resolve(context, _canvas, fill: true),
         foregroundColor: AppTheme.resolve(context, _ink),
         elevation: 0,
-        title: const Text(
-          'Logistics Dashboard',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Image.asset(
+          Theme.of(context).brightness == Brightness.dark
+              ? 'assets/logistics/logistics-dark.png'
+              : 'assets/logistics/logistics-light.png',
+          width: 150,
+          height: 48,
+          fit: BoxFit.contain,
+          alignment: Alignment.centerLeft,
+          semanticLabel: 'LIKHAE Logistics',
         ),
         actions: <Widget>[
           IconButton(
@@ -235,32 +269,71 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                 _errorCard(_dashboardError!),
               ],
               const SizedBox(height: 22),
-              _summaryCard(),
-              const SizedBox(height: 18),
               _scanCard(),
+              const SizedBox(height: 18),
+              _summaryCard(),
               const SizedBox(height: 24),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      'Recent parcel activity',
-                      style: TextStyle(
-                        color: AppTheme.resolve(context, _ink),
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.resolve(context, _surface, fill: true),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.resolve(context, _border)),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppTheme.resolve(context, _soft, fill: true),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(
+                        Icons.history_rounded,
+                        size: 19,
+                        color: AppTheme.resolve(context, _brand),
                       ),
                     ),
-                  ),
-                  Text(
-                    _dashboard == null && _loadingDashboard
-                        ? 'Loading'
-                        : '${scans.length}',
-                    style: TextStyle(
-                      color: AppTheme.resolve(context, _brand),
-                      fontWeight: FontWeight.w900,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Recent parcel activity',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _ink),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.resolve(context, _soft, fill: true),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        _dashboard == null && _loadingDashboard
+                            ? 'Loading'
+                            : '${scans.length} scans',
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _brand),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               if (_loadingDashboard && _dashboard == null)

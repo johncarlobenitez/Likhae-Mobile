@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import '../../services/workspace_mobile_service.dart';
 import '../../features/rider/scanner/rider_scanner_screen.dart';
 import '../../features/rider/scanner/rider_parcel_scan_result.dart';
+import '../formatting/money_formatting.dart';
 
 String workflowError(Object error) =>
     error.toString().replaceFirst('Exception: ', '');
@@ -75,7 +77,9 @@ class _WorkflowFormState extends State<WorkflowForm> {
   final _key = GlobalKey<FormState>();
   late final _controllers = {
     for (final f in widget.fields)
-      f.keyName: TextEditingController(text: f.initial),
+      f.keyName: TextEditingController(
+        text: f.numeric ? formatGroupedMoneyInput(f.initial) : f.initial,
+      ),
   };
   final _files = <String, ({String name, Uint8List bytes})>{};
   var _busy = false;
@@ -98,7 +102,8 @@ class _WorkflowFormState extends State<WorkflowForm> {
     try {
       final data = <String, dynamic>{...widget.fixed};
       for (final field in widget.fields) {
-        final text = _controllers[field.keyName]!.text.trim();
+        final entered = _controllers[field.keyName]!.text.trim();
+        final text = field.numeric ? parseMoneyInput(entered) : entered;
         if (text.isNotEmpty) data[field.keyName] = text;
         if (field.scan && field.keyName == 'scanned_code')
           data['scan_method'] = _scanMethod;
@@ -232,6 +237,11 @@ class _WorkflowFormState extends State<WorkflowForm> {
                               : field.multiline
                               ? TextInputType.multiline
                               : TextInputType.text,
+                          inputFormatters: field.numeric
+                              ? const <TextInputFormatter>[
+                                  MonetaryAmountInputFormatter(),
+                                ]
+                              : const <TextInputFormatter>[],
                           minLines: field.multiline ? 3 : 1,
                           maxLines: field.multiline ? 5 : 1,
                           decoration: InputDecoration(
@@ -252,11 +262,16 @@ class _WorkflowFormState extends State<WorkflowForm> {
                             if (field.required &&
                                 (value?.trim().isEmpty ?? true))
                               return 'Enter ${field.label.toLowerCase()}.';
-                            if (field.numeric &&
-                                value!.isNotEmpty &&
-                                (num.tryParse(value) == null ||
-                                    num.parse(value) < 0))
-                              return 'Enter a valid amount.';
+                            if (field.numeric && value!.isNotEmpty) {
+                              final num? amount = num.tryParse(
+                                parseMoneyInput(value),
+                              );
+                              if (amount == null ||
+                                  !amount.isFinite ||
+                                  amount < 0) {
+                                return 'Enter a valid amount.';
+                              }
+                            }
                             return null;
                           },
                         ),

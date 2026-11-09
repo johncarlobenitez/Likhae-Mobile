@@ -33,6 +33,8 @@ class MapDataService
             'riderAssignments.riderProfile',
             'riderAssignments.liveLocation',
             'logisticsCenter.address',
+            'originLogisticsCenter.address',
+            'destinationLogisticsCenter.address',
             'serviceArea.logisticsCenter.address',
         ];
         if (Schema::hasTable('shipment_transfer_legs')) {
@@ -40,6 +42,16 @@ class MapDataService
             $relations[] = 'transferLegs.destinationLogisticsCenter.address';
         } elseif (! $shipment->relationLoaded('transferLegs')) {
             $shipment->setRelation('transferLegs', collect());
+        }
+        if (Schema::hasTable('shipment_events')) {
+            $relations[] = 'events.logisticsCenter.address';
+        } elseif (! $shipment->relationLoaded('events')) {
+            $shipment->setRelation('events', collect());
+        }
+        if (Schema::hasTable('parcel_scans')) {
+            $relations[] = 'scans.logisticsCenter.address';
+        } elseif (! $shipment->relationLoaded('scans')) {
+            $shipment->setRelation('scans', collect());
         }
         $shipment->loadMissing($relations);
         $tracking = $this->trackingState($shipment, $viewer);
@@ -128,6 +140,101 @@ class MapDataService
                 }
                 $markers[] = $marker;
             }
+        }
+
+        // Older shipments may not have transfer-leg rows yet, but their scan
+        // and status history still records which sorting centers handled the
+        // parcel. Keep those visited centers on the buyer's route.
+        $observations = collect();
+        foreach ($shipment->events ?? [] as $event) {
+            if ($event->logisticsCenter) {
+                $observations->push([
+                    'center' => $event->logisticsCenter,
+                    'at' => $event->occurred_at,
+                    'status' => $event->status,
+                ]);
+            }
+        }
+        foreach ($shipment->scans ?? [] as $scan) {
+            if ($scan->result === 'SUCCESS' && $scan->logisticsCenter) {
+                $observations->push([
+                    'center' => $scan->logisticsCenter,
+                    'at' => $scan->scanned_at,
+                    'status' => $scan->scan_type,
+                ]);
+            }
+        }
+        $observations = $observations
+            ->sortBy(fn (array $observation): int => $observation['at']?->getTimestamp() ?? 0)
+            ->values();
+        $knownCenterIds = array_fill_keys(array_map('intval', array_filter([
+            $shipment->origin_logistics_center_id,
+            $shipment->destination_logistics_center_id,
+        ])), true);
+        foreach (array_keys($transferCenterMarkerIndexes) as $centerId) {
+            $knownCenterIds[(int) $centerId] = true;
+        }
+        $observedCenterMarkers = [];
+        foreach ($observations as $observation) {
+            $center = $observation['center'];
+            $centerId = (int) ($center?->id ?? 0);
+            if ($centerId === 0 || isset($knownCenterIds[$centerId])) {
+                continue;
+            }
+
+            $marker = $this->centerMarker($center);
+            if (! $marker) {
+                continue;
+            }
+
+            $knownCenterIds[$centerId] = true;
+            $sequence = (int) ($transferLegs->max('sequence_no') ?? 0) + count($observedCenterMarkers) + 1;
+            $label = $center->business_name ?: 'Sorting center';
+            $marker['id'] = 'logistics-center-'.$centerId.'-shipment-'.$shipment->id.'-visited';
+            $marker['shipment_id'] = $shipment->id;
+            $marker['target_kind'] = 'logistics';
+            $marker['center_role'] = 'intermediate';
+            $marker['sequence_no'] = $sequence;
+            $marker['transfer_status'] = 'RECEIVED';
+            $marker['label'] = 'Visited sorting center: '.$label;
+            $marker['title'] = $marker['label'];
+            $observedCenterMarkers[] = $marker;
+        }
+        foreach ($observedCenterMarkers as $marker) {
+            $transferCenterMarkerIndexes[(int) $marker['center_id']] = count($markers);
+            $markers[] = $marker;
+        }
+
+        // The route's planned endpoints are saved before transfer legs exist.
+        // Include them so buyers can still see the sorting centers while a
+        // parcel is waiting for its first hub transfer to be created.
+        $plannedRouteSequence = (int) ($transferLegs->max('sequence_no') ?? 0)
+            + count($observedCenterMarkers);
+        foreach ([
+            ['center' => $shipment->originLogisticsCenter, 'role' => 'origin', 'sequence' => 0],
+            ['center' => $shipment->destinationLogisticsCenter, 'role' => 'destination', 'sequence' => $plannedRouteSequence + 1],
+        ] as $routeStop) {
+            $center = $routeStop['center'];
+            $centerId = (int) ($center?->id ?? 0);
+            if (! $center || $centerId === 0 || isset($transferCenterMarkerIndexes[$centerId])) {
+                continue;
+            }
+
+            $marker = $this->centerMarker($center);
+            if (! $marker) {
+                continue;
+            }
+
+            $marker['id'] = 'logistics-center-'.$centerId.'-shipment-'.$shipment->id.'-planned-'.$routeStop['role'];
+            $marker['shipment_id'] = $shipment->id;
+            $marker['target_kind'] = 'logistics';
+            $marker['center_role'] = $routeStop['role'];
+            $marker['sequence_no'] = $routeStop['sequence'];
+            $marker['transfer_status'] = 'PLANNED';
+            $marker['label'] = $routeStop['role'] === 'origin' ? 'Origin sorting center' : 'Destination sorting center';
+            $marker['title'] = $marker['label'];
+            $transferCenterMarkerIndexes[$centerId] = count($markers);
+            $markers[] = $marker;
         }
 
         $center = $shipment->logisticsCenter ?: $shipment->serviceArea?->logisticsCenter;
@@ -522,7 +629,12 @@ class MapDataService
         }
 
         if ($viewer->isAccountType('BUYER')) {
-            return $shipment->current_status === 'OUT_FOR_DELIVERY'
+            return in_array($shipment->current_status, [
+                'PICKUP_ASSIGNED',
+                'PICKED_UP',
+                'ASSIGNED_TO_RIDER',
+                'OUT_FOR_DELIVERY',
+            ], true)
                 && (int) $shipment->sellerOrder?->order?->buyer_user_id === (int) $viewer->id;
         }
 
@@ -567,7 +679,7 @@ class MapDataService
     private function canSeePendingDeliveryLocation(Shipment $shipment, RiderAssignment $assignment, array $tracking, ?User $viewer): bool
     {
         return $viewer?->isAccountType(User::TYPE_BUYER) === true
-            && $shipment->current_status === 'OUT_FOR_DELIVERY'
+            && in_array($shipment->current_status, ['ASSIGNED_TO_RIDER', 'OUT_FOR_DELIVERY'], true)
             && $assignment->assignment_type === RiderAssignment::TYPE_DELIVERY
             && (int) ($tracking['active_assignment_id'] ?? 0) === (int) $assignment->id
             && (int) $shipment->sellerOrder?->order?->buyer_user_id === (int) $viewer->id;

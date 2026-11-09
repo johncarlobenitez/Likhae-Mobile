@@ -2,7 +2,7 @@ import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/shop_colors.dart';
+import '../../../shared/widgets/shop_ui.dart';
 import '../rewards/rewards_screen.dart';
 
 class VoucherCodesSelection {
@@ -190,7 +190,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
     if (subtotal < minimum) {
       final double remaining = minimum - subtotal;
       _showMessage(
-        'Add ₱${remaining.toStringAsFixed(2)} more from this shop to use it.',
+        'Add ${formatPesoAmount(remaining)} more from this shop to use it.',
       );
       return;
     }
@@ -526,7 +526,7 @@ class _ShopVoucherPickerState extends State<ShopVoucherPicker> {
                       const SizedBox(height: 5),
                       Text(
                         !meetsMinimum
-                            ? 'Add ₱${remaining.toStringAsFixed(2)} more · Code ${voucher.code}'
+                            ? 'Add ${formatPesoAmount(remaining)} more · Code ${voucher.code}'
                             : '${voucher.condition} · Code ${voucher.code}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

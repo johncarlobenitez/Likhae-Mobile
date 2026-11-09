@@ -115,18 +115,7 @@ class CartItemData {
 }
 
 String _formatCartAmount(double value) {
-  final String fixed = value.abs().toStringAsFixed(2);
-  final List<String> parts = fixed.split('.');
-  final String whole = parts.first;
-  final StringBuffer grouped = StringBuffer();
-  for (int index = 0; index < whole.length; index++) {
-    final int remaining = whole.length - index;
-    grouped.write(whole[index]);
-    if (remaining > 1 && remaining % 3 == 1) grouped.write(',');
-  }
-
-  final String sign = value < 0 ? '-' : '';
-  return '₱$sign$grouped.${parts.last}';
+  return formatPesoAmount(value);
 }
 
 class DeliveryAddressData {
@@ -2039,10 +2028,7 @@ class _CartScreenState extends State<CartScreen> {
         : null;
     String amount(String key) {
       final dynamic raw = quote?[key];
-      final double? value = raw is num
-          ? raw.toDouble()
-          : double.tryParse(raw?.toString() ?? '');
-      return value == null ? '—' : 'PHP ${value.toStringAsFixed(2)}';
+      return formatPesoValue(raw);
     }
 
     return _SectionCard(

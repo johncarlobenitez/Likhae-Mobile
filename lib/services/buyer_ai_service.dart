@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
+import 'buyer_ai_offline_help.dart';
 
 class BuyerAiResponse {
   final String reply;
@@ -23,10 +24,11 @@ class BuyerAiService {
   }) async {
     final String normalizedWorkspace = workspace == 'rider' ? 'rider' : 'buyer';
     if (!AppConfig.apiEnabled) {
-      return const BuyerAiResponse(
-        reply:
-            'The workspace assistant is ready. Enable the mobile API to connect it to your LIKHAE account.',
+      final BuyerAiOfflineAnswer answer = BuyerAiOfflineHelp.answer(
+        message,
+        workspace: normalizedWorkspace,
       );
+      return BuyerAiResponse(reply: answer.reply, options: answer.options);
     }
 
     final Response<dynamic> response = await ApiClient.post(
@@ -41,22 +43,26 @@ class BuyerAiService {
 
     final dynamic rawPayload = response.data;
     if (rawPayload is! Map) {
-      throw const FormatException('The workspace assistant returned an invalid response.');
+      throw const FormatException(
+        'The workspace assistant returned an invalid response.',
+      );
     }
 
     final Map<String, dynamic> payload = Map<String, dynamic>.from(rawPayload);
     final String reply = payload['reply']?.toString().trim() ?? '';
     if (reply.isEmpty) {
-      throw const FormatException('The workspace assistant returned an empty response.');
+      throw const FormatException(
+        'The workspace assistant returned an empty response.',
+      );
     }
 
     final dynamic rawOptions = payload['options'];
     final List<String> options = rawOptions is Iterable
         ? rawOptions
-            .map((dynamic option) => option.toString().trim())
-            .where((String option) => option.isNotEmpty)
-            .take(6)
-            .toList(growable: false)
+              .map((dynamic option) => option.toString().trim())
+              .where((String option) => option.isNotEmpty)
+              .take(6)
+              .toList(growable: false)
         : const <String>[];
 
     return BuyerAiResponse(reply: reply, options: options);

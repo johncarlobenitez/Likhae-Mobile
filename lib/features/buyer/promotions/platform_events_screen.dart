@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/buyer_mobile_service.dart';
 import '../../../services/product_service.dart';
+import '../../../shared/widgets/shop_ui.dart';
 
 class PlatformEventsScreen extends StatefulWidget {
   const PlatformEventsScreen({super.key});
@@ -67,7 +68,7 @@ class _PlatformEventsScreenState extends State<PlatformEventsScreen> {
               0;
           final String discountLabel = discountType == 'PERCENT'
               ? '${discount.toStringAsFixed(0)}% off'
-              : '₱${discount.toStringAsFixed(2)} off';
+              : '${formatPesoAmount(discount)} off';
 
           return SafeArea(
             child: Padding(
@@ -108,7 +109,9 @@ class _PlatformEventsScreenState extends State<PlatformEventsScreen> {
                           ) !=
                           0) ...<Widget>[
                     const SizedBox(height: 6),
-                    Text('Minimum order ₱${event['minimum_order_amount']}.'),
+                    Text(
+                      'Minimum order ${formatPesoValue(event['minimum_order_amount'])}.',
+                    ),
                   ],
                   const SizedBox(height: 18),
                   SizedBox(

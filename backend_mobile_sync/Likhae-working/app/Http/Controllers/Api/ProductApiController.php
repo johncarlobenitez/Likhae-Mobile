@@ -34,9 +34,23 @@ class ProductApiController extends Controller
 
     public function show(string $slug): JsonResponse
     {
+        $product = $this->catalog->findVisibleBySlug($slug);
+        $payload = $this->catalog->productPayload($product, true);
+        $seller = $product->sellerProfile;
+        if ($seller) {
+            $seller->loadMissing('businessAddress');
+            $payload['seller_rating'] = $this->catalog->sellerRating($seller);
+            $payload['seller_product_count'] = Product::visible()
+                ->where('seller_profile_id', $seller->id)
+                ->count();
+            $payload['seller_location'] = $seller->businessAddress?->formatted()
+                ?: $seller->location;
+            $payload['seller_verified'] = $seller->status === 'ACTIVE';
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $this->catalog->productPayload($this->catalog->findVisibleBySlug($slug), true),
+            'data' => $payload,
         ]);
     }
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import '../formatting/money_formatting.dart';
 
 /// Price range control shared by the product catalog and seller store.
 ///
@@ -45,7 +45,7 @@ class _PriceRangeFilterState extends State<PriceRangeFilter> {
   }
 
   String _format(double value) =>
-      value.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+      formatGroupedMoney(value, trimTrailingZeros: true);
 
   Future<void> _editBound({required bool isMinimum}) async {
     final RangeValues current = _selected;
@@ -60,16 +60,14 @@ class _PriceRangeFilterState extends State<PriceRangeFilter> {
           controller: controller,
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-          ],
+          inputFormatters: const [MonetaryAmountInputFormatter()],
           textInputAction: TextInputAction.done,
           decoration: const InputDecoration(
             labelText: 'Amount',
             prefixText: '\u20B1 ',
           ),
           onSubmitted: (String value) {
-            final double? parsed = double.tryParse(value.trim());
+            final double? parsed = parseMoneyAmount(value.trim());
             if (parsed != null) Navigator.of(dialogContext).pop(parsed);
           },
         ),
@@ -80,7 +78,7 @@ class _PriceRangeFilterState extends State<PriceRangeFilter> {
           ),
           FilledButton(
             onPressed: () {
-              final double? parsed = double.tryParse(controller.text.trim());
+              final double? parsed = parseMoneyAmount(controller.text.trim());
               if (parsed != null) Navigator.of(dialogContext).pop(parsed);
             },
             child: const Text('Apply'),
@@ -185,7 +183,7 @@ class _PriceRangeFilterState extends State<PriceRangeFilter> {
                     Text(label, style: TextStyle(color: accent, fontSize: 10)),
                     const SizedBox(height: 3),
                     Text(
-                      '\u20B1 ${_format(value)}',
+                      '\u20B1${_format(value)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -223,8 +221,9 @@ String? closestProductSuggestion(String query, Iterable<String> candidates) {
 
     for (final String word in words) {
       final int distance = _editDistance(normalized, word.toLowerCase());
-      final int threshold =
-          ((normalized.length * 0.25).ceil()).clamp(1, 3).toInt();
+      final int threshold = ((normalized.length * 0.25).ceil())
+          .clamp(1, 3)
+          .toInt();
       if (distance <= threshold && distance < bestDistance) {
         best = word;
         bestDistance = distance;

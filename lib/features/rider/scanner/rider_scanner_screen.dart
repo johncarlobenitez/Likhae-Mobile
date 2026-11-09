@@ -33,6 +33,9 @@ class RiderScannerScreen extends StatefulWidget {
   /// Return the tracking code with its input method instead of just the code.
   final bool returnScanDetails;
 
+  /// Keep the camera open and return every unique parcel detected in session.
+  final bool multiScan;
+
   final bool showSignOut;
 
   /// Presents the scanner for inter-hub attendance QR codes instead of parcels.
@@ -47,6 +50,7 @@ class RiderScannerScreen extends StatefulWidget {
     this.onSignOut,
     this.expectedTrackingCode,
     this.returnScanDetails = false,
+    this.multiScan = false,
     this.showSignOut = true,
     this.attendanceMode = false,
     this.onLoadRiderQr,
@@ -91,6 +95,10 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
   String? _scannedCode;
   String? _errorMessage;
+  final List<Map<String, String>> _batchScans = <Map<String, String>>[];
+  final Set<String> _batchTrackingCodes = <String>{};
+
+  bool get _isMultiScan => widget.multiScan && !widget.attendanceMode;
 
   @override
   void dispose() {
@@ -103,6 +111,33 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_isMultiScan) {
+      if (_scannerPaused) return;
+
+      final List<Map<String, String>> detectedScans = <Map<String, String>>[];
+      for (final Barcode barcode in capture.barcodes) {
+        final String code = barcode.rawValue?.trim() ?? '';
+        if (code.isEmpty || !_batchTrackingCodes.add(code.toUpperCase())) {
+          continue;
+        }
+        detectedScans.add(<String, String>{
+          'scanned_code': code,
+          'scan_method': barcode.format.name.toLowerCase().contains('qr')
+              ? 'QR'
+              : 'BARCODE',
+        });
+      }
+
+      if (detectedScans.isNotEmpty && mounted) {
+        setState(() {
+          _batchScans.addAll(detectedScans);
+          _scannedCode = detectedScans.last['scanned_code'];
+          _errorMessage = null;
+        });
+      }
+      return;
+    }
+
     if (_handlingScan || _scannerPaused) {
       return;
     }
@@ -244,7 +279,40 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       return;
     }
 
+    if (_isMultiScan) {
+      _addManualBatchCode(code);
+      return;
+    }
+
     await _processTrackingCode(code);
+  }
+
+  void _addManualBatchCode(String rawCode) {
+    final String code = rawCode.trim();
+    if (code.isEmpty) return;
+
+    if (!_batchTrackingCodes.add(code.toUpperCase())) {
+      setState(() => _errorMessage = '$code is already in this scan batch.');
+      return;
+    }
+
+    setState(() {
+      _batchScans.add(<String, String>{
+        'scanned_code': code,
+        'scan_method': 'MANUAL',
+      });
+      _scannedCode = code;
+      _manualCodeController.clear();
+      _errorMessage = null;
+    });
+  }
+
+  void _finishMultiScan() {
+    if (!_isMultiScan || _batchScans.isEmpty || !context.canPop()) return;
+    context.pop(<Map<String, String>>[
+      for (final Map<String, String> scan in _batchScans)
+        Map<String, String>.from(scan),
+    ]);
   }
 
   Future<void> _loadRiderAttendanceQr() async {
@@ -397,7 +465,11 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text(
-          widget.attendanceMode ? 'Attendance Scanner' : 'Parcel Scanner',
+          widget.attendanceMode
+              ? 'Attendance Scanner'
+              : _isMultiScan
+              ? 'Logistics Parcel Intake'
+              : 'Parcel Scanner',
           style: TextStyle(
             color: AppTheme.resolve(context, _text),
             fontSize: 18,
@@ -405,6 +477,15 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           ),
         ),
         actions: <Widget>[
+          if (_isMultiScan)
+            TextButton.icon(
+              onPressed: _batchScans.isEmpty ? null : _finishMultiScan,
+              icon: const Icon(Icons.done_rounded, size: 18),
+              label: Text('Finish (${_batchScans.length})'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.resolve(context, _primary),
+              ),
+            ),
           if (widget.showSignOut)
             TextButton.icon(
               onPressed: _signingOut ? null : _signOut,
@@ -437,13 +518,21 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
             const SizedBox(height: 16),
 
+            if (_isMultiScan) ...<Widget>[
+              _buildBatchSummary(),
+
+              const SizedBox(height: 16),
+            ],
+
             if (_errorMessage != null) ...<Widget>[
               _buildErrorMessage(),
 
               const SizedBox(height: 16),
             ],
 
-            if (_scannedCode != null && _errorMessage == null) ...<Widget>[
+            if (!_isMultiScan &&
+                _scannedCode != null &&
+                _errorMessage == null) ...<Widget>[
               _buildSuccessMessage(),
 
               const SizedBox(height: 16),
@@ -463,7 +552,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          widget.attendanceMode
+          _isMultiScan
+              ? 'LOGISTICS PARCEL INTAKE'
+              : widget.attendanceMode
               ? 'INTER-HUB ATTENDANCE'
               : 'PARCEL VERIFICATION',
           style: TextStyle(
@@ -477,7 +568,11 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
         const SizedBox(height: 7),
 
         Text(
-          widget.attendanceMode ? 'Scan Logistics QR' : 'Scan Waybill',
+          _isMultiScan
+              ? 'Scan multiple parcels'
+              : widget.attendanceMode
+              ? 'Scan Logistics QR'
+              : 'Scan Waybill',
           style: TextStyle(
             color: AppTheme.resolve(context, _text),
             fontSize: 28,
@@ -489,7 +584,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
         const SizedBox(height: 8),
 
         Text(
-          widget.attendanceMode
+          _isMultiScan
+              ? 'Scan parcels one after another. Each unique barcode is added to this batch; finish when you are done.'
+              : widget.attendanceMode
               ? 'Scan the QR code displayed by Logistics to record your Time In or Time Out.'
               : 'Scan the QR code or barcode printed on the seller\'s parcel waybill.',
           style: TextStyle(
@@ -633,7 +730,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    _scannerPaused
+                    _isMultiScan
+                        ? '${_batchScans.length} ${_batchScans.length == 1 ? 'parcel' : 'parcels'} captured · camera stays active'
+                        : _scannerPaused
                         ? 'Scanner paused'
                         : widget.attendanceMode
                         ? 'Attendance scanner active'
@@ -646,7 +745,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
                   ),
                 ),
 
-                if (_scannerPaused)
+                if (_scannerPaused && !_isMultiScan)
                   TextButton.icon(
                     onPressed: _scanAgain,
                     icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -719,7 +818,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            widget.attendanceMode
+            _isMultiScan
+                ? 'Add Parcel Manually'
+                : widget.attendanceMode
                 ? 'Enter Attendance QR Token'
                 : 'Manual Tracking Code',
             style: TextStyle(
@@ -732,7 +833,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
           const SizedBox(height: 5),
 
           Text(
-            widget.attendanceMode
+            _isMultiScan
+                ? 'Use this if a parcel barcode cannot be read by the camera.'
+                : widget.attendanceMode
                 ? 'If the camera cannot read the QR, enter the token shown by Logistics.'
                 : 'If the camera cannot read the waybill, enter the parcel tracking code manually.',
             style: TextStyle(
@@ -848,7 +951,9 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               _submitManualCode();
             },
             decoration: InputDecoration(
-              hintText: widget.attendanceMode
+              hintText: _isMultiScan
+                  ? 'Enter tracking code'
+                  : widget.attendanceMode
                   ? 'Enter attendance token'
                   : 'Enter tracking code',
               prefixIcon: Icon(
@@ -899,13 +1004,104 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
               ),
               icon: const Icon(Icons.verified_outlined),
               label: Text(
-                widget.attendanceMode
+                _isMultiScan
+                    ? 'Add to Batch'
+                    : widget.attendanceMode
                     ? 'Submit Attendance QR'
                     : 'Use Tracking Code',
                 style: TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchSummary() {
+    final List<Map<String, String>> recentScans = _batchScans.reversed
+        .take(4)
+        .toList(growable: false);
+    final int hiddenCount = _batchScans.length - recentScans.length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.resolve(context, _surface, fill: true),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 19,
+                color: AppTheme.resolve(context, _primary),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_batchScans.length} ${_batchScans.length == 1 ? 'parcel' : 'parcels'} in this batch',
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _text),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (recentScans.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: <Widget>[
+                ...recentScans.map((Map<String, String> scan) {
+                  return Container(
+                    constraints: const BoxConstraints(maxWidth: 245),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.resolve(context, _soft, fill: true),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      scan['scanned_code'] ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _primary),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  );
+                }),
+                if (hiddenCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      '+$hiddenCount more',
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, _muted),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -1,4 +1,6 @@
-double _amount(dynamic value) => double.tryParse('$value') ?? 0;
+import '../../../shared/formatting/money_formatting.dart';
+
+double _amount(dynamic value) => parseMoneyAmount('$value') ?? 0;
 
 class RiderCodCollection {
   final int id;

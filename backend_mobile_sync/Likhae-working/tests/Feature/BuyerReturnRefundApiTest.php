@@ -18,6 +18,47 @@ class BuyerReturnRefundApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_mobile_evidence_request_can_be_submitted_listed_and_opened(): void
+    {
+        [$buyer, $order, $shipment] = $this->createDeliveredOrder();
+        $item = \App\Models\Buyer\OrderItem::create([
+            'seller_order_id' => $shipment->seller_order_id,
+            'product_name' => 'Mobile return item',
+            'sku' => 'MOBILE-RETURN',
+            'unit_price' => 100,
+            'quantity' => 1,
+            'discount_amount' => 0,
+            'line_total' => 100,
+        ]);
+        $token = $this->issueToken($buyer);
+        $payload = [
+            'issue_category' => 'DAMAGED',
+            'issue_reason' => 'Scratched item',
+            'item_ids' => [$item->id],
+            'quantities' => [$item->id => 1],
+            'description' => 'The item arrived with a visible scratch.',
+            'refund_method' => 'cash',
+            'buyer_email' => 'buyer@example.test',
+            'confirm_cash' => '1',
+            'confirm_request' => '1',
+            'images' => [\Illuminate\Http\UploadedFile::fake()->image('evidence.jpg')],
+        ];
+
+        $response = $this->withToken($token)->postJson(
+            route('api.v1.buyer.orders.return-refund', $order), $payload,
+        )->assertCreated();
+        $requestNumber = $response->json('request_id');
+        $this->assertNotNull($requestNumber);
+        $list = $this->withToken($token)->getJson('/api/v1/buyer/returns')
+            ->assertOk()->assertJsonFragment(['request_number' => $requestNumber]);
+        $requestId = $list->json('data.0.id');
+        $this->withToken($token)->getJson('/api/v1/buyer/returns/'.$requestId)
+            ->assertOk()->assertJsonPath('data.id', $requestId);
+        $this->withToken($token)->postJson(
+            route('api.v1.buyer.orders.return-refund', $order), $payload,
+        )->assertConflict();
+    }
+
     public function test_legacy_structured_return_refund_payload_is_supported(): void
     {
         [$buyer, $order] = $this->createDeliveredOrder();

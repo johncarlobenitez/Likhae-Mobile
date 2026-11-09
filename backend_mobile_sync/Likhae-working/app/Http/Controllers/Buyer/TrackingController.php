@@ -63,7 +63,7 @@ class TrackingController extends Controller
             || $hasSellerReturnInProgress
             || $hasCancellationEvent;
 
-        $mapMarkers = app(MapDataService::class)->forShipment($shipment);
+        $mapMarkers = app(MapDataService::class)->forShipment($shipment, includeSeller: true);
 
         return view('buyer.tracking.show', compact('shipment', 'mapMarkers', 'hideMap'));
     }

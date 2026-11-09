@@ -3,10 +3,13 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/shop_colors.dart';
+import '../formatting/money_formatting.dart' as money;
 import 'glass_surface.dart';
 import 'app_motion.dart';
 
 export '../../core/theme/shop_colors.dart';
+export '../formatting/money_formatting.dart'
+    show MonetaryAmountInputFormatter, formatGroupedMoney, formatPesoValue;
 export 'glass_surface.dart';
 
 class ShopPageHeader extends StatelessWidget {
@@ -564,17 +567,7 @@ class ShopProductCard extends StatelessWidget {
 }
 
 String formatPesoAmount(num value) {
-  final bool negative = value < 0;
-  final List<String> parts = value.abs().toStringAsFixed(2).split('.');
-  final String whole = parts.first;
-  final StringBuffer grouped = StringBuffer();
-  for (int index = 0; index < whole.length; index++) {
-    if (index > 0 && (whole.length - index) % 3 == 0) {
-      grouped.write(',');
-    }
-    grouped.write(whole[index]);
-  }
-  return '₱${negative ? '-' : ''}${grouped.toString()}.${parts.last}';
+  return money.formatPesoCurrency(value);
 }
 
 class ShopEmptyState extends StatelessWidget {

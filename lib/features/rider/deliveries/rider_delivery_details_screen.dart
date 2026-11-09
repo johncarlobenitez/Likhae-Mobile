@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'rider_collection_field.dart';
+import '../../../shared/formatting/money_formatting.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../services/auth_service.dart';
@@ -224,7 +225,7 @@ class _RiderDeliveryDetailsScreenState
             scannedCode: _deliveryScan?.code,
             scanMethod: _deliveryScan?.method ?? 'MANUAL',
             collectedAmount: status == 'delivered'
-                ? _collectionController.text.trim()
+                ? parseMoneyInput(_collectionController.text.trim())
                 : null,
             attemptStatus: attemptStatus,
             nextAttemptAt: nextAttemptAt,

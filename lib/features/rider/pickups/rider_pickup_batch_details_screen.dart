@@ -337,27 +337,6 @@ class _RiderPickupBatchDetailsScreenState
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: <Widget>[
-            if (const {'LOADING', 'READY', 'IN_PROGRESS'}.contains(status)) ...[
-              if (!inProgress)
-                _notice('Accept and start seller pickup to enable scanning.'),
-              OutlinedButton.icon(
-                onPressed:
-                    inProgress && !allResolved && !_busy && !_needsRefresh
-                    ? _scanWithCamera
-                    : null,
-                icon: const Icon(Icons.qr_code_scanner_rounded),
-                label: const Text('Scan all parcel barcodes'),
-              ),
-              TextButton.icon(
-                onPressed:
-                    inProgress && !allResolved && !_busy && !_needsRefresh
-                    ? _scanManually
-                    : null,
-                icon: const Icon(Icons.keyboard_alt_outlined),
-                label: const Text('Enter tracking code manually'),
-              ),
-              const SizedBox(height: 14),
-            ],
             _buildSellerCard(),
             const SizedBox(height: 14),
             _buildProgressCard(collected, progressStatusLabel),
@@ -411,6 +390,42 @@ class _RiderPickupBatchDetailsScreenState
                         color: AppTheme.resolve(context, _maroon),
                       ),
                       const SizedBox(height: 10),
+                    ],
+                    if (const {
+                      'LOADING',
+                      'READY',
+                      'IN_PROGRESS',
+                    }.contains(status)) ...<Widget>[
+                      if (!inProgress)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: _notice(
+                            'Accept and start seller pickup to enable scanning.',
+                          ),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed:
+                            inProgress &&
+                                !allResolved &&
+                                !_busy &&
+                                !_needsRefresh
+                            ? _scanWithCamera
+                            : null,
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: const Text('Scan all parcel barcodes'),
+                      ),
+                      TextButton.icon(
+                        onPressed:
+                            inProgress &&
+                                !allResolved &&
+                                !_busy &&
+                                !_needsRefresh
+                            ? _scanManually
+                            : null,
+                        icon: const Icon(Icons.keyboard_alt_outlined),
+                        label: const Text('Enter tracking code manually'),
+                      ),
+                      const SizedBox(height: 6),
                     ],
                     primaryAction,
                   ],

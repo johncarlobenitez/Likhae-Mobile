@@ -75,6 +75,9 @@ class BuyerMobileService {
     do {
       final Response<dynamic> response = await ApiClient.get(
         AppConfig.resolveApiUrl(endpoint),
+        options: endpoint == 'buyer/cart' || endpoint == 'buyer/addresses'
+            ? Options(receiveTimeout: const Duration(seconds: 60))
+            : null,
         queryParameters: <String, dynamic>{
           'page': page,
           'per_page': 50,
@@ -152,6 +155,52 @@ class BuyerMobileService {
     if (item is! Map) {
       throw const FormatException(
         'The server did not return the saved cart item.',
+      );
+    }
+    _refreshNavigationBadges();
+    return _cartItem(Map<String, dynamic>.from(item));
+  }
+
+  static Future<CartItemData> buyNow({
+    required int productId,
+    required int productVariantId,
+    required int quantity,
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/checkout/buy-now'),
+      <String, dynamic>{
+        'product_id': productId,
+        'product_variant_id': productVariantId,
+        'quantity': quantity,
+      },
+    );
+    // Older API deployments do not have the dedicated Buy Now route yet.
+    // Only fall back when the route was rejected, never after an ambiguous
+    // timeout or server failure where the first write might have succeeded.
+    if (response.statusCode == 404 || response.statusCode == 405) {
+      final List<CartItemData> cart = await fetchCart();
+      CartItemData? selected;
+      for (final CartItemData item in cart) {
+        if (item.productId == productId &&
+            item.productVariationId == productVariantId) {
+          selected = item;
+          break;
+        }
+      }
+      selected ??= await addCartItem(
+        productId: productId,
+        productVariantId: productVariantId,
+        quantity: quantity,
+      );
+      if (selected.quantity != quantity) {
+        await updateCartQuantity(selected, quantity);
+      }
+      return selected.copyWith(quantity: quantity);
+    }
+    final dynamic item = _requirePayload(response)['data'];
+    if (item is! Map) {
+      throw const FormatException(
+        'The server did not return the checkout item.',
       );
     }
     _refreshNavigationBadges();
@@ -549,6 +598,7 @@ class BuyerMobileService {
         if (protectionItemIds.isNotEmpty)
           'protection_item_ids': protectionItemIds,
       },
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     final dynamic order = _requirePayload(response)['data'];
     if (order is! Map) {
@@ -590,7 +640,13 @@ class BuyerMobileService {
         'protection_item_ids': protectionItemIds,
         'reward_points': rewardPoints,
       },
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
+    if ((response.statusCode ?? 500) >= 500) {
+      throw const FormatException(
+        'The delivery service is temporarily unavailable. Please try again later.',
+      );
+    }
     final dynamic data = _requirePayload(response)['data'];
     if (data is! Map) {
       throw const FormatException(

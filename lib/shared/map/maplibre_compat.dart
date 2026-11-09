@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
 
 /// OpenStreetMap basemap served by OpenFreeMap. No client key is required.
@@ -214,6 +215,7 @@ class CircleAnnotationOptions {
   final Point geometry;
   final int circleColor;
   final double circleRadius;
+  final double circleOpacity;
   final int circleStrokeColor;
   final double circleStrokeWidth;
   final double circleSortKey;
@@ -222,6 +224,7 @@ class CircleAnnotationOptions {
     required this.geometry,
     this.circleColor = 0xFF561C17,
     this.circleRadius = 8,
+    this.circleOpacity = 1,
     this.circleStrokeColor = 0xFFFFFFFF,
     this.circleStrokeWidth = 0,
     this.circleSortKey = 0,
@@ -233,6 +236,7 @@ class CircleAnnotation {
   Point geometry;
   int circleColor;
   double circleRadius;
+  double circleOpacity;
   int circleStrokeColor;
   double circleStrokeWidth;
   double circleSortKey;
@@ -241,6 +245,7 @@ class CircleAnnotation {
     : geometry = options.geometry,
       circleColor = options.circleColor,
       circleRadius = options.circleRadius,
+      circleOpacity = options.circleOpacity,
       circleStrokeColor = options.circleStrokeColor,
       circleStrokeWidth = options.circleStrokeWidth,
       circleSortKey = options.circleSortKey;
@@ -287,6 +292,7 @@ class CircleAnnotationManager {
           geometry: annotation.geometry,
           circleColor: annotation.circleColor,
           circleRadius: annotation.circleRadius,
+          circleOpacity: annotation.circleOpacity,
           circleStrokeColor: annotation.circleStrokeColor,
           circleStrokeWidth: annotation.circleStrokeWidth,
           circleSortKey: annotation.circleSortKey,
@@ -362,15 +368,25 @@ class PointAnnotationManager {
   final ml.MapLibreMapController _controller;
   final List<PointAnnotation> _annotations = <PointAnnotation>[];
   final Set<String> _registeredImages = <String>{};
+  bool _supportsStyleImages = true;
 
   PointAnnotationManager(this._controller);
 
   Future<PointAnnotation> create(PointAnnotationOptions options) async {
     String? imageId;
-    if (options.image != null) {
-      imageId = 'likhae-symbol-${identityHashCode(options.image!)}';
-      if (_registeredImages.add(imageId)) {
-        await _controller.addImage(imageId, options.image!);
+    if (options.image != null && _supportsStyleImages) {
+      final String requestedImageId =
+          'likhae-symbol-${identityHashCode(options.image!)}';
+      try {
+        if (_registeredImages.add(requestedImageId)) {
+          await _controller.addImage(requestedImageId, options.image!);
+        }
+        imageId = requestedImageId;
+      } on MissingPluginException {
+        // Some installed maplibre_gl builds do not expose style.addImage.
+        // Keep the text symbol and let its circle annotation provide the pin.
+        _supportsStyleImages = false;
+        _registeredImages.remove(requestedImageId);
       }
     }
     final ml.Symbol native = await _controller.addSymbol(
@@ -501,6 +517,7 @@ ml.CircleOptions _circleOptions(CircleAnnotationOptions options) =>
       geometry: _toLatLng(options.geometry),
       circleColor: _mapColor(options.circleColor),
       circleRadius: options.circleRadius,
+      circleOpacity: options.circleOpacity,
       circleStrokeColor: _mapColor(options.circleStrokeColor),
       circleStrokeWidth: options.circleStrokeWidth,
     );

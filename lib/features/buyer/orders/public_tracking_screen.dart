@@ -10,6 +10,7 @@ import 'package:likhae/shared/map/maplibre_compat.dart' as maplibre;
 import '../../../core/api/api_client.dart';
 import '../../../services/buyer_mobile_service.dart';
 import '../../../shared/widgets/shop_ui.dart';
+import 'buyer_map_marker_icons.dart';
 
 class BuyerPublicTrackingScreen extends StatefulWidget {
   final String initialTrackingNumber;
@@ -34,6 +35,7 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
   Timer? _refreshTimer;
   maplibre.MapLibreSession? _map;
   maplibre.PointAnnotationManager? _mapPoints;
+  final BuyerMapMarkerIcons _markerIcons = BuyerMapMarkerIcons();
   maplibre.CircleAnnotationManager? _mapCircles;
   maplibre.PolylineAnnotationManager? _routeLines;
   maplibre.PolylineAnnotation? _routeLine;
@@ -275,15 +277,18 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
         .toList(growable: false);
   }
 
-  Color _mapMarkerColor(Map<String, dynamic> marker) {
-    if (marker['kind'] == 'rider') return AppTheme.resolve(context, const Color(0xFF1976D2));
+  BuyerMapMarkerKind _mapMarkerKind(Map<String, dynamic> marker) {
+    if (marker['kind'] == 'rider') return BuyerMapMarkerKind.rider;
     if (marker['target_kind'] == 'seller' || marker['kind'] == 'seller') {
-      return AppTheme.resolve(context, const Color(0xFFB56B32));
+      return BuyerMapMarkerKind.seller;
+    }
+    if (marker['kind'] == 'center' || marker['target_kind'] == 'logistics') {
+      return BuyerMapMarkerKind.hub;
     }
     if (marker['target_kind'] == 'buyer' || marker['kind'] == 'destination') {
-      return AppTheme.resolve(context, ShopColors.accent);
+      return BuyerMapMarkerKind.buyer;
     }
-    return AppTheme.resolve(context, const Color(0xFF27806E));
+    return BuyerMapMarkerKind.hub;
   }
 
   Future<void> _syncMapMarkers() async {
@@ -303,38 +308,34 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
     await circleManager.deleteAll();
     if (!mounted || !identical(_map, map)) return;
     if (markers.isEmpty) return;
-    final List<maplibre.PointAnnotationOptions> options = markers
-        .map(
-          (Map<String, dynamic> marker) => maplibre.PointAnnotationOptions(
-            geometry: _mapPoint(
-              double.parse(marker['latitude'].toString()),
-              double.parse(marker['longitude'].toString()),
-            ),
-            textField: (marker['label'] ?? 'Logistics center').toString(),
-            textAnchor: maplibre.TextAnchor.bottom,
-            textOffset: <double?>[0, -0.7],
-            textSize: 11,
-            textColor: AppTheme.resolve(context, const Color(0xFF342E2E)).toARGB32(),
-            textHaloColor: Colors.white.toARGB32(),
-            textHaloWidth: 2,
-          ),
-        )
-        .toList(growable: false);
-    final List<maplibre.CircleAnnotationOptions> circles = markers
-        .map(
-          (Map<String, dynamic> marker) => maplibre.CircleAnnotationOptions(
-            geometry: _mapPoint(
-              double.parse(marker['latitude'].toString()),
-              double.parse(marker['longitude'].toString()),
-            ),
-            circleColor: _mapMarkerColor(marker).toARGB32(),
-            circleRadius: 7,
-            circleStrokeColor: Colors.white.toARGB32(),
-            circleStrokeWidth: 3,
-          ),
-        )
-        .toList(growable: false);
-    await circleManager.createMulti(circles);
+    final markerTextColor = AppTheme.resolve(
+      context,
+      const Color(0xFF342E2E),
+    ).toARGB32();
+    final List<maplibre.PointAnnotationOptions> options = await Future.wait(
+      markers
+          .map(
+            (Map<String, dynamic> marker) async =>
+                maplibre.PointAnnotationOptions(
+                  geometry: _mapPoint(
+                    double.parse(marker['latitude'].toString()),
+                    double.parse(marker['longitude'].toString()),
+                  ),
+                  image: await _markerIcons.image(_mapMarkerKind(marker)),
+                  iconSize: 0.48,
+                  iconAnchor: maplibre.IconAnchor.center,
+                  textField: (marker['label'] ?? 'Logistics center').toString(),
+                  textAnchor: maplibre.TextAnchor.bottom,
+                  textOffset: <double?>[0, -0.7],
+                  textSize: 11,
+                  textColor: markerTextColor,
+                  textHaloColor: Colors.white.toARGB32(),
+                  textHaloWidth: 2,
+                ),
+          )
+          .toList(growable: false),
+    );
+    if (!mounted || !identical(_map, map)) return;
     await manager.createMulti(options);
     unawaited(_syncRoadRoute(markers));
     final List<maplibre.Point> points = markers
@@ -470,7 +471,10 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
         );
       } else {
         previous.geometry = routeLineGeometry;
-        previous.lineColor = AppTheme.resolve(context, ShopColors.accent).toARGB32();
+        previous.lineColor = AppTheme.resolve(
+          context,
+          ShopColors.accent,
+        ).toARGB32();
         previous.lineWidth = 4;
         previous.lineOpacity = 0.85;
         await manager.update(previous);
@@ -546,7 +550,7 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
                     if (_error != null) ...<Widget>[
                       const SizedBox(height: 12),
                       _infoCard(
-                         Icon(
+                        Icon(
                           Icons.error_outline,
                           color: AppTheme.resolve(context, Color(0xFFB42318)),
                         ),
@@ -591,13 +595,19 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _infoCard(
-           Icon(Icons.local_shipping_rounded, color: AppTheme.resolve(context, ShopColors.accent)),
+          Icon(
+            Icons.local_shipping_rounded,
+            color: AppTheme.resolve(context, ShopColors.accent),
+          ),
           'Tracking ${tracking['tracking_number'] ?? _trackingNumber.text.trim()}\n${_status(tracking['current_status'])}${shipmentContext.isEmpty ? '' : '\n$shipmentContext'}',
         ),
         if ((tracking['guidance'] ?? '').toString().isNotEmpty) ...<Widget>[
           const SizedBox(height: 12),
           _infoCard(
-             Icon(Icons.info_outline_rounded, color: AppTheme.resolve(context, ShopColors.accent)),
+            Icon(
+              Icons.info_outline_rounded,
+              color: AppTheme.resolve(context, ShopColors.accent),
+            ),
             '${tracking['guidance']}\nNext update: ${tracking['next_actor'] ?? 'Logistics team'}',
           ),
         ],
@@ -607,10 +617,12 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
         _section(
           'Shipment updates',
           events.isEmpty
-              ?  <Widget>[
+              ? <Widget>[
                   Text(
                     'No tracking updates yet.',
-                    style: TextStyle(color: AppTheme.resolve(context, ShopColors.muted)),
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.muted),
+                    ),
                   ),
                 ]
               : events
@@ -680,7 +692,7 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
                                   .join('  →  ')
                             : 'Map points will appear when the parcel is routed through a logistics center.',
                         textAlign: TextAlign.center,
-                        style:  TextStyle(
+                        style: TextStyle(
                           color: AppTheme.resolve(context, ShopColors.muted),
                           fontSize: 12,
                         ),
@@ -701,11 +713,14 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
                     ),
                     onMapCreated: _onMapCreated,
                   )
-                :  Center(
+                : Center(
                     child: Text(
                       'Map points will appear when the parcel is routed through a logistics center.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12),
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.muted),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
           ),
@@ -736,9 +751,13 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-         Padding(
+        Padding(
           padding: EdgeInsets.only(top: 4),
-          child: Icon(Icons.circle, size: 8, color: AppTheme.resolve(context, ShopColors.accent)),
+          child: Icon(
+            Icons.circle,
+            size: 8,
+            color: AppTheme.resolve(context, ShopColors.accent),
+          ),
         ),
         const SizedBox(width: 9),
         Expanded(
@@ -749,12 +768,18 @@ class _BuyerPublicTrackingScreenState extends State<BuyerPublicTrackingScreen> {
               if (notes.isNotEmpty)
                 Text(
                   notes,
-                  style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 12),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.muted),
+                    fontSize: 12,
+                  ),
                 ),
               if (time.isNotEmpty)
                 Text(
                   time,
-                  style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 10),
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, ShopColors.muted),
+                    fontSize: 10,
+                  ),
                 ),
             ],
           ),

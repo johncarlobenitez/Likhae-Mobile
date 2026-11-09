@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_motion.dart';
 import 'loading_skeleton.dart';
+import '../../core/api/api_client.dart';
 
 export 'loading_skeleton.dart' show LoadingLayout;
 
@@ -32,12 +33,16 @@ class AsyncRouteBuilder<T> extends StatefulWidget {
     required this.builder,
     this.requestKey,
     this.refreshOnActivate = false,
+    this.errorTitle,
+    this.onErrorBack,
   });
 
   final Future<T> Function() load;
   final AsyncWidgetBuilder<T> builder;
   final Object? requestKey;
   final bool refreshOnActivate;
+  final String? errorTitle;
+  final VoidCallback? onErrorBack;
 
   @override
   State<AsyncRouteBuilder<T>> createState() => _AsyncRouteBuilderState<T>();
@@ -137,7 +142,45 @@ class _AsyncRouteBuilderState<T> extends State<AsyncRouteBuilder<T>>
     children: [
       AppDataReveal(
         ready: _snapshot.hasData,
-        child: widget.builder(context, _snapshot),
+        child: _snapshot.hasError && widget.errorTitle != null
+            ? Scaffold(
+                appBar: AppBar(
+                  title: Text(widget.errorTitle!),
+                  leading: widget.onErrorBack == null
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: widget.onErrorBack,
+                        ),
+                ),
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          ApiClient.formatError(_snapshot.error!),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _loading
+                              ? null
+                              : () {
+                                  setState(() {
+                                    unawaited(_load(replace: true));
+                                  });
+                                },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            : widget.builder(context, _snapshot),
       ),
       if (_snapshot.hasData &&
           _snapshot.connectionState == ConnectionState.waiting)

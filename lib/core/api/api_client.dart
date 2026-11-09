@@ -219,6 +219,12 @@ class ApiClient {
       final Response<dynamic>? response = error.response;
       final dynamic payload = response?.data;
 
+      // Dio wraps response JSON decoding failures as an "unknown" exception
+      // with no response attached. Avoid exposing its parser trace in UI.
+      if (error.error is FormatException) {
+        return 'The server returned an invalid response. Please refresh and try again.';
+      }
+
       if (payload is Map<String, dynamic>) {
         final dynamic message = payload['message'];
         final dynamic errors = payload['errors'];

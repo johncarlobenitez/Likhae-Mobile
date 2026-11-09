@@ -1,6 +1,7 @@
 import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
+import '../../../shared/formatting/money_formatting.dart';
 
 class RiderEarningRowData {
   final String date;
@@ -27,9 +28,7 @@ class RiderEarningRowData {
   String get normalizedStatus =>
       status.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
 
-  double? get numericAmount => double.tryParse(
-    amount.replaceAll(RegExp(r'PHP|₱|,|\s', caseSensitive: false), ''),
-  );
+  double? get numericAmount => parseMoneyAmount(amount);
 
   bool get isPaid =>
       const {'paid', 'released', 'completed'}.contains(normalizedStatus);
@@ -88,12 +87,7 @@ class RiderEarningsSummary {
 }
 
 String _pesos(double amount) {
-  final parts = amount.toStringAsFixed(2).split('.');
-  final whole = parts.first.replaceAllMapped(
-    RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-    (match) => '${match[1]},',
-  );
-  return '₱$whole.${parts.last}';
+  return formatPesoCurrency(amount);
 }
 
 typedef RiderEarningsRefreshCallback = Future<void> Function();

@@ -2518,7 +2518,7 @@ class _WishlistProductCard
   static String _price(
     double value,
   ) {
-    return '₱${value.toStringAsFixed(2)}';
+    return formatPesoAmount(value);
   }
 }
 

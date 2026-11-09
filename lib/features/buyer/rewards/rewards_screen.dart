@@ -1313,8 +1313,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
   static String _formatMoney(double value) {
     final double safeValue = value < 0 ? 0 : value;
-
-    return '₱${safeValue.toStringAsFixed(2)}';
+    return formatPesoAmount(safeValue);
   }
 
   static String _formatPercentage(double rate) {

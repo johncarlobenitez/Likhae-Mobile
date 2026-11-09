@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/sized_network_image.dart';
+import '../../../shared/formatting/money_formatting.dart';
 import '../rider_product_image.dart';
 
 class RiderPickupStatsData {
@@ -283,7 +284,7 @@ class RiderPickupData {
     }
 
     if (value is num) {
-      return '₱${value.toDouble().toStringAsFixed(2)}';
+      return formatPesoCurrency(value);
     }
 
     final String raw = value.toString().trim();
@@ -292,16 +293,9 @@ class RiderPickupData {
       return '';
     }
 
-    if (raw.contains('₱') || raw.toUpperCase().contains('PHP')) {
-      return raw;
-    }
-
-    final double? parsed = double.tryParse(
-      raw.replaceAll(',', '').replaceAll(' ', ''),
-    );
-
+    final double? parsed = parseMoneyAmount(raw);
     if (parsed != null) {
-      return '₱${parsed.toStringAsFixed(2)}';
+      return formatPesoCurrency(parsed);
     }
 
     return raw;

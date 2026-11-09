@@ -1,4 +1,5 @@
 import '../rider_product_image.dart';
+import '../../../shared/formatting/money_formatting.dart';
 
 class RiderDeliveryData {
   final int id;
@@ -221,15 +222,7 @@ class RiderDeliveryData {
       return value.toDouble();
     }
 
-    String text = value.toString().trim();
-
-    text = text
-        .replaceAll('₱', '')
-        .replaceAll('PHP', '')
-        .replaceAll(',', '')
-        .trim();
-
-    return double.tryParse(text) ?? 0;
+    return parseMoneyAmount(value.toString()) ?? 0;
   }
 
   static double? _parseCoordinate(dynamic value) {
@@ -429,7 +422,7 @@ class RiderDeliveryTransitionRequest {
   }
 
   static bool isValidCollectedAmount(String? value) {
-    final text = value?.trim() ?? '';
+    final text = parseMoneyInput(value?.trim() ?? '');
     return RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) &&
         (double.tryParse(text)?.isFinite ?? false);
   }
@@ -448,5 +441,5 @@ typedef RiderExternalActionCallback =
     Future<void> Function(RiderDeliveryData delivery);
 
 String formatRiderMoney(double amount) {
-  return '₱${amount.toStringAsFixed(2)}';
+  return formatPesoCurrency(amount);
 }

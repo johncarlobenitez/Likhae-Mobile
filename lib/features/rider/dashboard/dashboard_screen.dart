@@ -203,39 +203,19 @@ class RiderDashboardScreen extends StatelessWidget {
   Widget _topBar(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppTheme.resolve(context, _maroon, fill: true),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(
-            Icons.two_wheeler_rounded,
-            color: Colors.white,
-            size: 24,
-          ),
-        ),
-        const SizedBox(width: 10),
-         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'LIKHAE',
-                style: TextStyle(
-                  color: AppTheme.resolve(context, _text),
-                  fontSize: 17,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                'Rider dashboard',
-                style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11),
-              ),
-            ],
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Image.asset(
+              Theme.of(context).brightness == Brightness.dark
+                  ? 'assets/logistics/logistics-dark.png'
+                  : 'assets/logistics/logistics-light.png',
+              width: 150,
+              height: 50,
+              fit: BoxFit.contain,
+              alignment: Alignment.centerLeft,
+              semanticLabel: 'LIKHAE Logistics',
+            ),
           ),
         ),
         IconButton(
@@ -261,8 +241,6 @@ class RiderDashboardScreen extends StatelessWidget {
   }
 
   Widget _welcomeCard(BuildContext context) {
-    final name = riderName.trim();
-    final firstName = name.isEmpty ? '' : name.split(RegExp(r'\s+')).first;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
@@ -285,9 +263,7 @@ class RiderDashboardScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            firstName.isEmpty
-                ? 'YOUR DAY AT A GLANCE'
-                : 'HELLO, ${firstName.toUpperCase()}',
+            'RIDER WORKSPACE',
             style:  TextStyle(
               color: AppTheme.resolve(context, Color(0xFFEBD5BF)),
               fontSize: 11,
@@ -297,7 +273,7 @@ class RiderDashboardScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Every stop\ncounts.',
+            'Rider Operations',
             style: TextStyle(
               color: Colors.white,
               fontSize: 34,
@@ -308,7 +284,7 @@ class RiderDashboardScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
            Text(
-            'Your pickups, deliveries, and progress\nin one place.',
+            'Real pickup and delivery work assigned to your active rider account.',
             style: TextStyle(
               color: AppTheme.resolve(context, Color(0xFFEBD5BF)),
               fontSize: 12.5,

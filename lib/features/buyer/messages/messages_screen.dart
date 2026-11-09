@@ -3237,7 +3237,7 @@ class _ProductInquiryCard extends StatelessWidget {
                         const SizedBox(height: 4),
 
                         Text(
-                          '₱${product.price!.toStringAsFixed(2)}',
+                          formatPesoAmount(product.price!),
                           style: TextStyle(
                             color: AppTheme.resolve(context, Color(0xFFFFE7D9)),
                             fontSize: 12,

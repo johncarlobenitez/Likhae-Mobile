@@ -1,6 +1,7 @@
 import 'package:likhae/core/theme/app_theme.dart';
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,8 @@ import '../../../core/api/api_client.dart';
 import '../../../services/buyer_mobile_service.dart';
 import '../../../services/realtime_service.dart';
 import 'orders_screen.dart';
+import 'buyer_tracking_navigation.dart';
+import 'buyer_map_marker_icons.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final BuyerOrderData order;
@@ -38,6 +41,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   static const Duration _locationRefreshInterval = Duration(seconds: 10);
   static const Duration _minimumRouteRefreshInterval = Duration(seconds: 45);
   static const double _minimumRerouteDistanceMeters = 100;
+  static const Duration _maximumRiderRouteAge = Duration(minutes: 2);
+  static const Duration _riderRouteRetryDelay = Duration(seconds: 30);
+  static const double _riderRouteOffPathMeters = 100;
   static const double _minimumRiderMapUpdateMeters = 5;
 
   static const Color _maroon = ShopColors.accent;
@@ -57,9 +63,22 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   maplibre.PolylineAnnotationManager? _routeLines;
   final Map<String, maplibre.PolylineAnnotation> _roadRouteSegments =
       <String, maplibre.PolylineAnnotation>{};
+  final BuyerMapMarkerIcons _markerIcons = BuyerMapMarkerIcons();
   List<maplibre.Position> _roadRoutePositions = <maplibre.Position>[];
   List<BuyerOrderLocation> _roadRouteStops = <BuyerOrderLocation>[];
   double _confirmedRouteProgress = 0;
+  BuyerTrackingNavigation? _navigation;
+  String? _guidanceKey;
+  LatLng? _lastGuidanceOrigin;
+  DateTime? _guidanceFetchedAt;
+  DateTime? _guidanceFailedAt;
+  List<maplibre.Position> _guidanceRoutePositions = <maplibre.Position>[];
+  double? _guidanceDistance;
+  double? _guidanceDuration;
+  DateTime? _guidanceArrivalAt;
+  bool _guidanceUnavailable = false;
+  bool _guidanceInProgress = false;
+  int _mapGeneration = 0;
   List<maplibre.CircleAnnotation> _circleAnnotations =
       <maplibre.CircleAnnotation>[];
   List<maplibre.PointAnnotation> _pointAnnotations =
@@ -73,6 +92,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   bool _refreshingLocation = false;
   bool _refreshingShipmentMap = false;
   bool _hasLoadedShipmentMap = false;
+  bool _sellerPinUnavailable = false;
+  bool _riderGpsPending = false;
+  bool _shipmentMapUnavailable = false;
   bool _locationRefreshErrorShown = false;
   bool _syncingMapAnnotations = false;
   bool _mapSyncQueued = false;
@@ -82,6 +104,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   DateTime? _lastRouteRequestAt;
   String? _lastRouteTopologyKey;
   bool _roadRouteUnavailable = false;
+  bool _straightRouteFallback = false;
   bool _mapExpanded = false;
   double? _roadDistanceMeters;
   double? _roadDurationSeconds;
@@ -224,6 +247,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             WidgetsBinding.instance.lifecycleState ==
                 AppLifecycleState.resumed &&
             ModalRoute.of(context)?.isCurrent != false) {
+          setState(() {});
           unawaited(_refreshOrderLocation());
           unawaited(_refreshShipmentMap());
         }
@@ -497,13 +521,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       return;
     }
     _refreshingLocation = true;
+    final shipmentId = order.shipmentId;
     try {
       final BuyerRiderSnapshot riderSnapshot =
           await BuyerMobileService.fetchRiderSnapshot(
             order.id,
             shipmentId: order.shipmentId,
           );
-      if (!mounted) {
+      if (!mounted || order.shipmentId != shipmentId) {
         return;
       }
       await _applyRiderLocation(riderSnapshot.location);
@@ -531,14 +556,25 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     _refreshingShipmentMap = true;
+    final generation = _mapGeneration;
     try {
       final Map<String, dynamic> trackingData =
           await BuyerMobileService.fetchShipmentMap(trackingNumber);
-      if (!mounted || order.tracking?.trim() != trackingNumber) return;
+      if (!mounted ||
+          generation != _mapGeneration ||
+          order.tracking?.trim() != trackingNumber) {
+        return;
+      }
 
+      final Map<String, dynamic> mapPayload =
+          BuyerTrackingNavigation.normalizePayload(trackingData);
+      final bool firstMapLoad = !_hasLoadedShipmentMap;
       final dynamic rawMarkers =
-          trackingData['map_markers'] ?? trackingData['markers'];
-      if (rawMarkers is! List) return;
+          mapPayload['map_markers'] ?? mapPayload['markers'];
+      if (rawMarkers is! List) {
+        if (mounted) setState(() => _shipmentMapUnavailable = true);
+        return;
+      }
       final List<Map<String, dynamic>> markers = rawMarkers
           .whereType<Map>()
           .map((Map marker) => Map<String, dynamic>.from(marker))
@@ -556,7 +592,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           marker['target_kind'] == 'seller' || marker['kind'] == 'seller';
       bool isBuyer(Map<String, dynamic> marker) =>
           marker['target_kind'] == 'buyer' || marker['kind'] == 'destination';
-      bool isRider(Map<String, dynamic> marker) => marker['kind'] == 'rider';
       bool isHub(Map<String, dynamic> marker) =>
           marker['target_kind'] == 'logistics' || marker['kind'] == 'center';
 
@@ -578,7 +613,21 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
       final BuyerOrderLocation? sellerLocation = locationFor(isSeller);
       final BuyerOrderLocation? buyerLocation = locationFor(isBuyer);
-      final BuyerOrderLocation? riderLocation = locationFor(isRider);
+      final navigation = BuyerTrackingNavigation.fromPayload(mapPayload);
+      final BuyerOrderLocation? riderLocation = navigation.rider;
+      final bool sellerPinUnavailable =
+          sellerLocation == null && order.sellerLocation == null;
+      final bool riderGpsPending = markers.any(
+        (Map<String, dynamic> marker) =>
+            marker['kind'] == 'rider' && marker['location_pending'] == true,
+      );
+      setState(() {
+        _hasLoadedShipmentMap = true;
+        _shipmentMapUnavailable = false;
+        _navigation = navigation;
+        _sellerPinUnavailable = sellerPinUnavailable;
+        _riderGpsPending = riderGpsPending;
+      });
       final List<Map<String, dynamic>> hubMarkers = markers
           .where(isHub)
           .toList(growable: true);
@@ -609,24 +658,21 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         if (stop == null) continue;
         final int existingIndex = routeStops.indexWhere(
           (BuyerOrderLocation existing) =>
-              existing.latitude == stop.latitude &&
-              existing.longitude == stop.longitude,
+              sameBuyerOrderLogisticsStop(existing, stop),
         );
         if (existingIndex < 0) {
           routeStops.add(stop);
         } else {
           final BuyerOrderLocation existing = routeStops[existingIndex];
-          routeStops[existingIndex] = existing.copyWith(
-            id: existing.id ?? stop.id,
-            transferLegIds: <String>{
-              ...existing.transferLegIds,
-              ...stop.transferLegIds,
-            }.toList(growable: false),
-            sequenceNo: stop.sequenceNo ?? existing.sequenceNo,
-            centerRole: stop.centerRole ?? existing.centerRole,
-            progressStatus: stop.progressStatus ?? existing.progressStatus,
-          );
+          routeStops[existingIndex] = deduplicateBuyerOrderLogisticsStops(
+            <BuyerOrderLocation>[existing, stop],
+          ).first;
         }
+      }
+      // Keep route pins already supplied with the buyer's order when an older
+      // map endpoint returns buyer/rider markers but omits sorting centers.
+      if (routeStops.isEmpty) {
+        routeStops.addAll(order.shipmentRouteStops);
       }
       routeStops.sort((BuyerOrderLocation first, BuyerOrderLocation second) {
         final int sequence = (first.sequenceNo ?? 1 << 30).compareTo(
@@ -641,13 +687,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             };
         return roleOrder(first).compareTo(roleOrder(second));
       });
-
-      if (sellerLocation == null &&
-          buyerLocation == null &&
-          riderLocation == null &&
-          routeStops.isEmpty) {
-        return;
-      }
 
       final BuyerOrderLocation? nextSeller =
           sellerLocation ?? order.sellerLocation;
@@ -706,11 +745,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         });
       }
 
-      final bool recenter = !_hasLoadedShipmentMap || routeChanged;
-      _hasLoadedShipmentMap = true;
+      final bool recenter = firstMapLoad || routeChanged;
       await _syncMapLibreMarkers(recenter: recenter);
     } catch (_) {
       // The live map keeps the last known route if tracking data is offline.
+      if (mounted && !_shipmentMapUnavailable) {
+        setState(() => _shipmentMapUnavailable = true);
+      }
     } finally {
       _refreshingShipmentMap = false;
     }
@@ -753,7 +794,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   Future<void> _applyRiderLocation(BuyerOrderLocation? riderLocation) async {
-    if (!mounted || _sameRiderLocation(order.riderLocation, riderLocation)) {
+    if (!mounted ||
+        _navigation != null ||
+        _sameRiderLocation(order.riderLocation, riderLocation)) {
       return;
     }
     setState(() {
@@ -793,6 +836,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     if (!mounted) return;
     setState(() {
       _selectedParcelId = parcelId;
+      _sellerPinUnavailable = false;
+      _riderGpsPending = false;
+      _shipmentMapUnavailable = false;
       _trackedOrder = _trackedOrder.copyWith(
         clearSellerLocation: true,
         shipmentRouteStops: const <BuyerOrderLocation>[],
@@ -803,7 +849,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       }
     });
     _hasLoadedShipmentMap = false;
+    _mapGeneration++;
+    _navigation = null;
+    _guidanceKey = null;
+    _lastGuidanceOrigin = null;
+    _guidanceFetchedAt = null;
+    _guidanceFailedAt = null;
+    _guidanceRoutePositions = <maplibre.Position>[];
+    _guidanceDistance = null;
+    _guidanceDuration = null;
+    _guidanceArrivalAt = null;
+    _guidanceUnavailable = false;
     _roadRouteUnavailable = false;
+    _straightRouteFallback = false;
     _roadDistanceMeters = null;
     _roadDurationSeconds = null;
     _roadRoutePositions = <maplibre.Position>[];
@@ -867,25 +925,61 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     return _defaultCenter;
   }
 
-  String? get _riderDistanceText {
-    final BuyerOrderLocation? rider = order.riderLocation;
-    final BuyerOrderLocation? destination = order.orderLocation;
-    if (rider == null || destination == null) {
-      return null;
-    }
+  static const List<String> _monthAbbreviations = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
-    final double meters = Geolocator.distanceBetween(
-      rider.latitude,
-      rider.longitude,
-      destination.latitude,
-      destination.longitude,
+  String _formatPhilippineArrival(DateTime utcArrival) {
+    final DateTime phTime = utcArrival.toUtc().add(const Duration(hours: 8));
+    final int hour = phTime.hour % 12 == 0 ? 12 : phTime.hour % 12;
+    final String minute = phTime.minute.toString().padLeft(2, '0');
+    final String period = phTime.hour >= 12 ? 'PM' : 'AM';
+    return '${_monthAbbreviations[phTime.month - 1]} ${phTime.day}, '
+        '$hour:$minute $period PHT';
+  }
+
+  String get _riderGuidanceText {
+    final navigation = _navigation;
+    if (navigation == null) {
+      return 'Rider location is shown. Waiting for the active route details.';
+    }
+    final String freshness = navigation.isLive ? 'Live GPS' : 'Last known GPS';
+    if (navigation.destination == null) {
+      return '$freshness • Active destination coordinates unavailable.';
+    }
+    final distance = _guidanceDistance;
+    final duration = _guidanceDuration;
+    final target = navigation.destination!.label;
+    if (_guidanceUnavailable) {
+      return '$freshness • Road route ETA unavailable; saved map locations remain visible.';
+    }
+    if (distance == null || duration == null || _guidanceArrivalAt == null) {
+      return '${navigation.navigationLabel} • $freshness • Calculating road route to $target.';
+    }
+    final distanceText = distance < 1000
+        ? '${distance.round()} m'
+        : '${(distance / 1000).toStringAsFixed(1)} km';
+    final double remainingSeconds = math.max(
+      0,
+      _guidanceArrivalAt!.difference(DateTime.now()).inSeconds.toDouble(),
     );
-
-    if (meters < 1000) {
-      return '${meters.round()} m away';
-    }
-
-    return '${(meters / 1000).toStringAsFixed(1)} km away';
+    final int remainingMinutes = (remainingSeconds / 60).ceil();
+    final String timeText = remainingMinutes < 60
+        ? '$remainingMinutes min'
+        : '${remainingMinutes ~/ 60}h ${remainingMinutes % 60}m';
+    return '${navigation.navigationLabel} • $freshness • $distanceText to $target'
+        ' • about $timeText • ETA ${_formatPhilippineArrival(_guidanceArrivalAt!)}';
   }
 
   @override
@@ -1353,14 +1447,55 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   _buildRouteLocation(
                     'Sorting center',
                     stop,
-                    const Color(0xFF258575),
+                    const Color(0xFF15803D),
                   ),
                 if (order.orderLocation != null)
                   _buildRouteLocation(
                     'Delivery address',
                     order.orderLocation!,
-                    _maroon,
+                    const Color(0xFF2563EB),
                   ),
+                if (!AppConfig.apiEnabled) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Live parcel, sorting-center, and rider locations are disabled in this build. Run or build with --dart-define=API_ENABLED=true.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.resolve(context, _muted),
+                    ),
+                  ),
+                ],
+                if (_shipmentMapUnavailable) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Live seller and rider locations could not be loaded. Showing saved order locations only.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.resolve(context, _muted),
+                    ),
+                  ),
+                ],
+                if (_hasLoadedShipmentMap && _sellerPinUnavailable) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Seller pickup pin is missing from tracking data. Check that the business address has saved map coordinates and that Laravel returns seller markers.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.resolve(context, _muted),
+                    ),
+                  ),
+                ],
+                if (_hasLoadedShipmentMap &&
+                    order.shipmentRouteStops.isEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'No sorting-center coordinates were returned for this parcel yet.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.resolve(context, _muted),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Text(
                   _locations.length >= 2
@@ -1374,7 +1509,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 if (!hasRider) ...[
                   const SizedBox(height: 6),
                   Text(
-                    'Rider GPS appears during active delivery when the rider is sharing a location.',
+                    _riderGpsPending
+                        ? 'Rider assigned. Waiting for the rider to share GPS.'
+                        : 'Rider GPS appears during active delivery when the rider is sharing a location.',
                     style: TextStyle(
                       fontSize: 11,
                       color: AppTheme.resolve(context, _muted),
@@ -1386,6 +1523,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   spacing: 14,
                   runSpacing: 8,
                   children: <Widget>[
+                    const _RouteLegend(
+                      color: Color(0xFF800000),
+                      label: 'Traveled',
+                    ),
+                    const _RouteLegend(
+                      color: Color(0xFFC2410C),
+                      label: 'Active hub transfer',
+                    ),
+                    const _RouteLegend(
+                      color: Color(0xFF9CA3AF),
+                      label: 'Remaining',
+                    ),
                     if (order.sellerLocation != null)
                       _LegendDot(
                         color: AppTheme.resolve(context, Color(0xFFB56B32)),
@@ -1394,7 +1543,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ...List<Widget>.generate(
                       order.shipmentRouteStops.length,
                       (int index) => _LegendDot(
-                        color: _routeStopColor(index),
+                        color: const Color(0xFF15803D),
                         label: order.shipmentRouteStops[index].label,
                       ),
                     ),
@@ -1404,8 +1553,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ),
                     if (hasRider)
                       _LegendDot(
-                        color: AppTheme.resolve(context, Color(0xFF1976D2)),
-                        label: 'Current rider',
+                        color: AppTheme.resolve(context, _maroon),
+                        label:
+                            _navigation?.riderLabel ??
+                            'Last known rider location',
                       ),
                   ],
                 ),
@@ -1424,11 +1575,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ],
             ),
           ),
-          if (order.riderLocation != null && order.orderLocation != null)
+          if (order.riderLocation != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Text(
-                '${order.shipmentRouteStops.isEmpty ? '$_roadRouteSummary\n' : ''}Rider is ${_riderDistanceText ?? 'nearby'} and on the way.',
+                _riderGuidanceText,
                 style: TextStyle(
                   color: AppTheme.resolve(context, _text),
                   fontSize: 12,
@@ -1510,15 +1661,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         padding: EdgeInsets.zero,
       ),
     );
-  }
-
-  static Color _routeStopColor(int index) {
-    const List<Color> colors = <Color>[
-      Color(0xFF27806E),
-      Color(0xFFD27A36),
-      Color(0xFF6756A5),
-    ];
-    return colors[index % colors.length];
   }
 
   static const Map<String, String> _timelineStatusLabels = <String, String>{
@@ -2105,43 +2247,53 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   List<_TrackingMapMarkerSpec> _buildMapMarkerSpecs() {
-    return _locations
-        .map((_location) {
-          final BuyerOrderLocation location = _location;
-          final bool isRider =
-              order.riderLocation != null &&
-              location.latitude == order.riderLocation!.latitude &&
-              location.longitude == order.riderLocation!.longitude;
-          final bool isSeller =
-              order.sellerLocation != null &&
-              location.latitude == order.sellerLocation!.latitude &&
-              location.longitude == order.sellerLocation!.longitude;
-          final bool isDestination =
-              order.orderLocation != null &&
-              location.latitude == order.orderLocation!.latitude &&
-              location.longitude == order.orderLocation!.longitude;
-          final int stopIndex = order.shipmentRouteStops.indexWhere(
-            (BuyerOrderLocation stop) =>
-                stop.latitude == location.latitude &&
-                stop.longitude == location.longitude,
-          );
-          final Color markerColor = isRider
-              ? AppTheme.resolve(context, const Color(0xFF1976D2))
-              : isSeller
-              ? AppTheme.resolve(context, const Color(0xFFB56B32))
-              : isDestination
-              ? AppTheme.resolve(context, _maroon)
-              : _routeStopColor(stopIndex < 0 ? 0 : stopIndex);
-          return _TrackingMapMarkerSpec(
-            latitude: location.latitude,
-            longitude: location.longitude,
-            color: markerColor.toARGB32(),
-            radius: isRider ? 10 : 11,
-            isRider: isRider,
-            label: isRider ? 'Current rider' : location.label,
-          );
-        })
-        .toList(growable: false);
+    _TrackingMapMarkerSpec marker(
+      BuyerOrderLocation location,
+      String label,
+      Color color, {
+      required BuyerMapMarkerKind kind,
+    }) => _TrackingMapMarkerSpec(
+      latitude: location.latitude,
+      longitude: location.longitude,
+      color: AppTheme.resolve(context, color).toARGB32(),
+      radius: kind == BuyerMapMarkerKind.rider ? 10 : 11,
+      kind: kind,
+      label: label,
+    );
+    return [
+      if (order.sellerLocation != null)
+        marker(
+          order.sellerLocation!,
+          'Seller: ${order.sellerLocation!.label}',
+          const Color(0xFFB56B32),
+          kind: BuyerMapMarkerKind.seller,
+        ),
+      for (final BuyerOrderLocation stop in deduplicateBuyerOrderLogisticsStops(
+        order.shipmentRouteStops,
+      ))
+        marker(
+          stop,
+          stop.label,
+          const Color(0xFF15803D),
+          kind: BuyerMapMarkerKind.hub,
+        ),
+      if (order.orderLocation != null)
+        marker(
+          order.orderLocation!,
+          'Buyer: ${order.orderLocation!.label}',
+          const Color(0xFF2563EB),
+          kind: BuyerMapMarkerKind.buyer,
+        ),
+      if (order.riderLocation != null)
+        marker(
+          order.riderLocation!,
+          _navigation?.riderLabel ?? 'Last known rider location',
+          _maroon,
+          kind: _navigation?.assignmentType == 'INTER_LOGISTICS'
+              ? BuyerMapMarkerKind.interHubRider
+              : BuyerMapMarkerKind.rider,
+        ),
+    ];
   }
 
   Future<void> _syncMapLibreMarkersOnce({required bool recenter}) async {
@@ -2154,7 +2306,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     final List<_TrackingMapMarkerSpec> specs = _buildMapMarkerSpecs();
+    final bool sameMarkerKinds =
+        _renderedMapMarkers.length == specs.length &&
+        List<bool>.generate(
+          specs.length,
+          (int index) => _renderedMapMarkers[index].kind == specs[index].kind,
+        ).every((bool matches) => matches);
     final bool canUpdateExisting =
+        sameMarkerKinds &&
         _circleAnnotations.length == specs.length &&
         _pointAnnotations.length == specs.length &&
         _renderedMapMarkers.length == specs.length;
@@ -2177,35 +2336,46 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               geometry: _toMapLibrePoint(LatLng(spec.latitude, spec.longitude)),
               circleColor: spec.color,
               circleRadius: spec.radius,
+              circleOpacity: 0.9,
               circleStrokeColor: Colors.white.toARGB32(),
-              circleStrokeWidth: 3,
+              circleStrokeWidth: 2,
               circleSortKey: spec.isRider ? 3 : 2,
             ),
           )
           .toList(growable: false);
-      final List<maplibre.PointAnnotationOptions> pointOptions = specs
-          .map(
-            (_TrackingMapMarkerSpec spec) => maplibre.PointAnnotationOptions(
-              geometry: _toMapLibrePoint(LatLng(spec.latitude, spec.longitude)),
-              textField: spec.label,
-              textAnchor: maplibre.TextAnchor.bottom,
-              textOffset: <double?>[0, -0.7],
-              textSize: 11,
-              textColor: AppTheme.resolve(
-                context,
-                const Color(0xFF342E2E),
-              ).toARGB32(),
-              textHaloColor: Colors.white.toARGB32(),
-              textHaloWidth: 2,
-              symbolSortKey: 10,
-            ),
-          )
-          .toList(growable: false);
+      final List<maplibre.PointAnnotationOptions> pointOptions =
+          <maplibre.PointAnnotationOptions>[];
+      final int markerTextColor = AppTheme.resolve(
+        context,
+        const Color(0xFF342E2E),
+      ).toARGB32();
+      for (final _TrackingMapMarkerSpec spec in specs) {
+        pointOptions.add(
+          maplibre.PointAnnotationOptions(
+            geometry: _toMapLibrePoint(LatLng(spec.latitude, spec.longitude)),
+            textField: spec.label,
+            textAnchor: maplibre.TextAnchor.bottom,
+            textOffset: <double?>[0, -0.7],
+            textSize: 11,
+            textColor: markerTextColor,
+            textHaloColor: Colors.white.toARGB32(),
+            textHaloWidth: 2,
+            image: await _markerIcons.image(spec.kind),
+            iconSize: 0.48,
+            iconAnchor: maplibre.IconAnchor.center,
+            symbolSortKey: 10,
+          ),
+        );
+      }
       final List<maplibre.CircleAnnotation?> createdCircles = await manager
           .createMulti(circleOptions);
       if (!mounted || !identical(_mapLibreMap, map)) return;
-      final List<maplibre.PointAnnotation?> createdLabels = await labels
-          .createMulti(pointOptions);
+      final List<maplibre.PointAnnotation?> createdLabels =
+          <maplibre.PointAnnotation?>[];
+      for (final maplibre.PointAnnotationOptions options in pointOptions) {
+        createdLabels.add(await labels.create(options));
+        if (!mounted || !identical(_mapLibreMap, map)) return;
+      }
       if (!mounted || !identical(_mapLibreMap, map)) return;
       _circleAnnotations = createdCircles
           .whereType<maplibre.CircleAnnotation>()
@@ -2233,6 +2403,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           annotation.geometry = geometry;
           annotation.circleColor = next.color;
           annotation.circleRadius = next.radius;
+          annotation.circleOpacity = 0.9;
+          annotation.circleStrokeColor = Colors.white.toARGB32();
+          annotation.circleStrokeWidth = 2;
           annotation.circleSortKey = next.isRider ? 3 : 2;
           await manager.update(annotation);
           if (!mounted || !identical(_mapLibreMap, map)) return;
@@ -2292,6 +2465,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   Future<void> _syncRoadRouteSafely() async {
     try {
       await _syncRoadRoute();
+      await _syncRiderGuidance();
     } catch (error) {
       if (kDebugMode) debugPrint('Order tracking route update failed: $error');
     }
@@ -2299,16 +2473,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Future<void> _syncRoadRoute() async {
     final maplibre.PolylineAnnotationManager? manager = _routeLines;
-    final BuyerOrderLocation? rider = order.riderLocation;
     final BuyerOrderLocation? destination = order.orderLocation;
     if (manager == null) return;
-    final bool delivered = const <String>{
-      'delivered',
-      'completed',
-      'complete',
-    }.contains(order.normalizedStatus);
-    final bool riderIsRouteStop =
-        rider != null && (order.shipmentRouteStops.isEmpty || !delivered);
     String coordinateKey(BuyerOrderLocation location) =>
         '${location.latitude},${location.longitude}';
     final String topologyKey = <String>[
@@ -2318,29 +2484,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         (BuyerOrderLocation stop) =>
             'hub:${stop.transferLegIds.join(',')}:${coordinateKey(stop)}',
       ),
-      'rider:$riderIsRouteStop',
       if (destination != null) 'buyer:${coordinateKey(destination)}',
     ].join('|');
-    final List<BuyerOrderLocation> routeStops = <BuyerOrderLocation>[
-      if (order.sellerLocation != null) order.sellerLocation!,
-      if (order.shipmentRouteStops.isEmpty && rider != null) rider,
-      ...order.shipmentRouteStops,
-      if (order.shipmentRouteStops.isNotEmpty && riderIsRouteStop) rider,
-      if (destination != null) destination,
-    ];
-    final List<BuyerOrderLocation> routePoints = <BuyerOrderLocation>[];
-    for (final BuyerOrderLocation stop in routeStops) {
-      if (!routePoints.any(
-        (BuyerOrderLocation existing) =>
-            existing.latitude == stop.latitude &&
-            existing.longitude == stop.longitude,
-      )) {
-        routePoints.add(stop);
-      }
-    }
+    final routePoints = buyerShipmentRouteStops(order);
     if (routePoints.length < 2) {
       _roadRoutePositions = <maplibre.Position>[];
       _roadRouteStops = <BuyerOrderLocation>[];
+      _straightRouteFallback = false;
       await _clearRoadRouteSegments(manager);
       _lastRouteTopologyKey = topologyKey;
       _lastRouteOrigin = null;
@@ -2358,7 +2508,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       return;
     }
 
-    final BuyerOrderLocation routeStart = rider ?? routePoints.first;
+    final BuyerOrderLocation routeStart = routePoints.first;
     final LatLng requestOrigin = LatLng(
       routeStart.latitude,
       routeStart.longitude,
@@ -2366,8 +2516,24 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final LatLng? previousOrigin = _lastRouteOrigin;
     final DateTime? previousRequestAt = _lastRouteRequestAt;
     final bool topologyChanged = _lastRouteTopologyKey != topologyKey;
-    if (!topologyChanged && _roadRoutePositions.isNotEmpty) {
+    if (topologyChanged) {
+      _roadRoutePositions = [];
+      _roadRouteStops = [];
+      _straightRouteFallback = false;
+      _confirmedRouteProgress = 0;
+      await _clearRoadRouteSegments(manager);
+      _guidanceKey = null;
+    }
+    final bool fallbackRetryDue =
+        _straightRouteFallback &&
+        (previousRequestAt == null ||
+            DateTime.now().difference(previousRequestAt) >=
+                _minimumRouteRefreshInterval);
+    if (!topologyChanged &&
+        _roadRoutePositions.isNotEmpty &&
+        !fallbackRetryDue) {
       await _renderRoadRouteSegments();
+      return;
     }
     final bool routeIntervalElapsed =
         previousRequestAt == null ||
@@ -2387,6 +2553,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       return;
     }
 
+    final generation = _mapGeneration;
     _routeRequestInProgress = true;
     _lastRouteOrigin = requestOrigin;
     _lastRouteRequestAt = DateTime.now();
@@ -2425,10 +2592,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         throw StateError('The driving route was incomplete.');
       }
 
+      if (!mounted ||
+          generation != _mapGeneration ||
+          !identical(manager, _routeLines)) {
+        return;
+      }
       _roadRoutePositions = positions;
       _roadRouteStops = List<BuyerOrderLocation>.from(routePoints);
+      _straightRouteFallback = false;
       await _renderRoadRouteSegments();
-      if (!mounted) return;
+      if (!mounted || generation != _mapGeneration) return;
 
       final double? distance = (route['distance'] as num?)?.toDouble();
       final double? duration = (route['duration'] as num?)?.toDouble();
@@ -2442,11 +2615,234 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         });
       }
     } catch (_) {
-      if (mounted && !_roadRouteUnavailable) {
-        setState(() => _roadRouteUnavailable = true);
+      if (mounted && generation == _mapGeneration) {
+        // Keep a visible waypoint-to-waypoint guide when the road-routing
+        // provider is offline. This is deliberately labeled approximate.
+        _roadRoutePositions = routePoints
+            .map(
+              (BuyerOrderLocation stop) =>
+                  maplibre.Position(stop.longitude, stop.latitude),
+            )
+            .toList(growable: false);
+        _roadRouteStops = List<BuyerOrderLocation>.from(routePoints);
+        _straightRouteFallback = _roadRoutePositions.length >= 2;
+        await _renderRoadRouteSegments();
+        if (mounted && generation == _mapGeneration) {
+          setState(() => _roadRouteUnavailable = true);
+        }
       }
     } finally {
       _routeRequestInProgress = false;
+    }
+  }
+
+  double _distanceToGuidanceRouteMeters(
+    BuyerOrderLocation location,
+    List<maplibre.Position> positions,
+  ) {
+    if (positions.length < 2) return double.infinity;
+    final double latitudeScale = 110540;
+    final double longitudeScale =
+        111320 * math.cos(location.latitude * math.pi / 180);
+    double nearest = double.infinity;
+    for (int index = 1; index < positions.length; index++) {
+      final maplibre.Position start = positions[index - 1];
+      final maplibre.Position end = positions[index];
+      final double ax = (start.lng - location.longitude) * longitudeScale;
+      final double ay = (start.lat - location.latitude) * latitudeScale;
+      final double bx = (end.lng - location.longitude) * longitudeScale;
+      final double by = (end.lat - location.latitude) * latitudeScale;
+      final double vx = bx - ax;
+      final double vy = by - ay;
+      final double lengthSquared = vx * vx + vy * vy;
+      final double ratio = lengthSquared == 0
+          ? 0
+          : ((-(ax * vx + ay * vy)) / lengthSquared).clamp(0, 1);
+      nearest = math.min(
+        nearest,
+        math.sqrt(math.pow(ax + vx * ratio, 2) + math.pow(ay + vy * ratio, 2)),
+      );
+    }
+    return nearest;
+  }
+
+  Future<void> _syncRiderGuidance() async {
+    final manager = _routeLines;
+    if (manager == null) return;
+    final navigation = _navigation;
+    final rider = navigation?.rider;
+    final destination = navigation?.destination;
+    if (navigation == null || rider == null || destination == null) {
+      if (_guidanceRoutePositions.isNotEmpty) {
+        await _setRoadRouteSegment(
+          manager,
+          'rider-guidance',
+          const <maplibre.Position>[],
+          _maroon,
+        );
+      }
+      _guidanceKey = null;
+      _lastGuidanceOrigin = null;
+      _guidanceFetchedAt = null;
+      _guidanceFailedAt = null;
+      _guidanceRoutePositions = <maplibre.Position>[];
+      if (mounted &&
+          (_guidanceDistance != null ||
+              _guidanceDuration != null ||
+              _guidanceArrivalAt != null ||
+              !_guidanceUnavailable)) {
+        setState(() {
+          _guidanceDistance = null;
+          _guidanceDuration = null;
+          _guidanceArrivalAt = null;
+          _guidanceUnavailable = rider != null && destination == null;
+        });
+      }
+      return;
+    }
+    final key =
+        '${order.tracking}:${navigation.assignmentId}:${navigation.destinationKind}:${destination.latitude},${destination.longitude}';
+    if (_guidanceInProgress) return;
+    final DateTime now = DateTime.now();
+    final bool sameRoute = _guidanceKey == key;
+    if (sameRoute &&
+        _guidanceFailedAt != null &&
+        now.difference(_guidanceFailedAt!) < _riderRouteRetryDelay) {
+      return;
+    }
+    final LatLng origin = LatLng(rider.latitude, rider.longitude);
+    final LatLng? previousOrigin = sameRoute ? _lastGuidanceOrigin : null;
+    final bool movedEnough =
+        previousOrigin == null ||
+        Geolocator.distanceBetween(
+              previousOrigin.latitude,
+              previousOrigin.longitude,
+              origin.latitude,
+              origin.longitude,
+            ) >=
+            _minimumRerouteDistanceMeters;
+    final bool routeIsOld =
+        !sameRoute ||
+        _guidanceFetchedAt == null ||
+        now.difference(_guidanceFetchedAt!) >= _maximumRiderRouteAge;
+    final bool riderIsOffRoute =
+        !sameRoute ||
+        _distanceToGuidanceRouteMeters(rider, _guidanceRoutePositions) >
+            _riderRouteOffPathMeters;
+    if (sameRoute && !movedEnough && !routeIsOld && !riderIsOffRoute) {
+      return;
+    }
+
+    final generation = _mapGeneration;
+    _guidanceInProgress = true;
+    try {
+      if (!sameRoute) {
+        await _setRoadRouteSegment(
+          manager,
+          'rider-guidance',
+          const <maplibre.Position>[],
+          _maroon,
+        );
+        _guidanceRoutePositions = <maplibre.Position>[];
+        _guidanceFetchedAt = null;
+        _guidanceFailedAt = null;
+        if (mounted) {
+          setState(() {
+            _guidanceDistance = null;
+            _guidanceDuration = null;
+            _guidanceArrivalAt = null;
+            _guidanceUnavailable = false;
+          });
+        }
+      }
+      final response = await ApiClient.get(
+        'maps/route',
+        queryParameters: {
+          'waypoints':
+              '${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}',
+        },
+      );
+      if (!mounted ||
+          generation != _mapGeneration ||
+          !identical(manager, _routeLines) ||
+          navigation.assignmentId != _navigation?.assignmentId ||
+          navigation.assignmentType != _navigation?.assignmentType ||
+          destination.latitude != _navigation?.destination?.latitude ||
+          destination.longitude != _navigation?.destination?.longitude) {
+        return;
+      }
+      final route = (response.data['routes'] as List).first as Map;
+      final positions = ((route['geometry'] as Map)['coordinates'] as List)
+          .whereType<List>()
+          .where((p) => p.length >= 2)
+          .map(
+            (p) => maplibre.Position(
+              (p[0] as num).toDouble(),
+              (p[1] as num).toDouble(),
+            ),
+          )
+          .toList();
+      if (positions.length < 2) throw StateError('Incomplete rider route');
+      final double? distance = (route['distance'] as num?)?.toDouble();
+      final double? duration = (route['duration'] as num?)?.toDouble();
+      if (distance == null ||
+          duration == null ||
+          !distance.isFinite ||
+          !duration.isFinite) {
+        throw StateError('Rider route distance and duration are unavailable.');
+      }
+      await _setRoadRouteSegment(manager, 'rider-guidance', positions, _maroon);
+      if (!mounted ||
+          generation != _mapGeneration ||
+          !identical(manager, _routeLines) ||
+          navigation.assignmentId != _navigation?.assignmentId ||
+          destination.latitude != _navigation?.destination?.latitude ||
+          destination.longitude != _navigation?.destination?.longitude) {
+        await _setRoadRouteSegment(
+          manager,
+          'rider-guidance',
+          const <maplibre.Position>[],
+          _maroon,
+        );
+        return;
+      }
+      _guidanceKey = key;
+      _lastGuidanceOrigin = origin;
+      _guidanceFetchedAt = DateTime.now();
+      _guidanceFailedAt = null;
+      _guidanceRoutePositions = positions;
+      if (mounted) {
+        setState(() {
+          _guidanceDistance = distance;
+          _guidanceDuration = duration;
+          _guidanceArrivalAt = DateTime.now().add(
+            Duration(seconds: duration.ceil()),
+          );
+          _guidanceUnavailable = false;
+        });
+      }
+    } catch (_) {
+      if (mounted &&
+          generation == _mapGeneration &&
+          identical(manager, _routeLines)) {
+        await _setRoadRouteSegment(
+          manager,
+          'rider-guidance',
+          const <maplibre.Position>[],
+          _maroon,
+        );
+        _guidanceKey = key;
+        _guidanceRoutePositions = <maplibre.Position>[];
+        _guidanceFailedAt = DateTime.now();
+        setState(() {
+          _guidanceDistance = null;
+          _guidanceDuration = null;
+          _guidanceArrivalAt = null;
+          _guidanceUnavailable = true;
+        });
+      }
+    } finally {
+      _guidanceInProgress = false;
     }
   }
 
@@ -2474,12 +2870,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     List<maplibre.Position> positions,
     List<double> cumulativeDistances,
     double totalDistance,
-    BuyerOrderLocation location,
-  ) {
+    BuyerOrderLocation location, {
+    double minimumProgress = 0,
+  }) {
     if (positions.isEmpty || totalDistance <= 0) return null;
     double nearestDistance = double.infinity;
     double nearestProgress = 0;
     for (int index = 0; index < positions.length; index++) {
+      if (cumulativeDistances[index] / totalDistance < minimumProgress)
+        continue;
       final maplibre.Position point = positions[index];
       final double distance = Geolocator.distanceBetween(
         location.latitude,
@@ -2663,6 +3062,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
 
     if ((status == 'OUTFORDELIVERY' || status == 'DELIVERYFAILED') &&
+        _navigation?.isLive == true &&
         order.riderLocation != null) {
       final ({double distanceMeters, double progress})? riderProgress =
           _nearestRoadProgress(
@@ -2670,6 +3070,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             cumulativeDistances,
             totalDistance,
             order.riderLocation!,
+            minimumProgress: lastCenterProgress,
           );
       if (riderProgress != null && riderProgress.distanceMeters <= 300) {
         progress = progress < riderProgress.progress
@@ -2783,6 +3184,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   String get _roadRouteSummary {
     final double? distance = _roadDistanceMeters;
     final double? duration = _roadDurationSeconds;
+    if (_straightRouteFallback) {
+      return 'Approximate guide between saved stops; road directions unavailable.';
+    }
     if (_roadRouteUnavailable && (distance == null || duration == null)) {
       return 'Road route unavailable; retrying.';
     }
@@ -2827,7 +3231,7 @@ class _TrackingMapMarkerSpec {
     required this.longitude,
     required this.color,
     required this.radius,
-    required this.isRider,
+    required this.kind,
     required this.label,
   });
 
@@ -2835,8 +3239,36 @@ class _TrackingMapMarkerSpec {
   final double longitude;
   final int color;
   final double radius;
-  final bool isRider;
+  final BuyerMapMarkerKind kind;
   final String label;
+
+  bool get isRider =>
+      kind == BuyerMapMarkerKind.rider ||
+      kind == BuyerMapMarkerKind.interHubRider;
+}
+
+class _RouteLegend extends StatelessWidget {
+  const _RouteLegend({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: <Widget>[
+      Container(
+        width: 18,
+        height: 3,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(99),
+        ),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: const TextStyle(fontSize: 10)),
+    ],
+  );
 }
 
 class _LegendDot extends StatelessWidget {

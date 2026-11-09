@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../../services/workspace_mobile_service.dart';
 import '../../shared/widgets/workflow_ui.dart';
+import '../../shared/widgets/shop_ui.dart';
 import 'attendance/rider_attendance_qr_image.dart';
 import 'scanner/rider_scanner_screen.dart';
 
@@ -289,7 +290,7 @@ class _RiderPayoutsScreenState extends State<RiderPayoutsScreen> {
                           ? _selected.add('${row['id']}')
                           : _selected.remove('${row['id']}'),
                     ),
-                    title: Text('PHP ${row['amount'] ?? '0.00'}'),
+                    title: Text(formatPesoValue(row['amount'], fallback: formatPesoAmount(0))),
                     subtitle: Text(
                       '${row['tracking_number'] ?? 'Delivery'} · share #${row['id']}',
                     ),
@@ -321,7 +322,7 @@ class _RiderPayoutsScreenState extends State<RiderPayoutsScreen> {
                 Card(
                   child: ListTile(
                     title: Text(
-                      'PHP ${row['amount'] ?? '0.00'} · ${_title(row['status'])}',
+                      '${formatPesoValue(row['amount'], fallback: formatPesoAmount(0))} · ${_title(row['status'])}',
                     ),
                     subtitle: Text(
                       '${row['reference'] ?? ''} · ${row['paid_at'] ?? ''}',
@@ -350,7 +351,7 @@ class _RiderPayoutsScreenState extends State<RiderPayoutsScreen> {
                                 fields: [
                                   WorkflowField(
                                     'amount_received',
-                                    'Amount received',
+                                    'Amount received (₱)',
                                     numeric: true,
                                     initial: '${row['amount'] ?? ''}',
                                   ),
@@ -575,7 +576,7 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              "${_todayAttendance!['hours'] ?? '0.00'}h / 8h · estimated PHP ${_todayAttendance!['pay_estimate'] ?? '0.00'}",
+                              "${_todayAttendance!['hours'] ?? '0.00'}h / 8h · estimated ${formatPesoValue(_todayAttendance!['pay_estimate'], fallback: formatPesoAmount(0))}",
                               textAlign: TextAlign.center,
                             ),
                           ],
@@ -610,7 +611,7 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
                   '${row['clock_in_at'] ?? ''} → ${row['clock_out_at'] ?? 'In progress'}',
                 ),
                 subtitle: Text(
-                  '${row['worked_minutes'] ?? 0} minutes · PHP ${row['gross_pay'] ?? '0.00'}',
+                  '${row['worked_minutes'] ?? 0} minutes · ${formatPesoValue(row['gross_pay'], fallback: formatPesoAmount(0))}',
                 ),
                 trailing:
                     row['payroll'] is Map &&

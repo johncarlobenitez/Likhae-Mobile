@@ -8,6 +8,7 @@ import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
 import '../features/rider/dashboard/dashboard_screen.dart';
 import '../features/rider/deliveries/rider_delivery_models.dart';
+import '../shared/formatting/money_formatting.dart';
 import '../features/rider/earnings/rider_earnings_screen.dart';
 import '../features/rider/earnings/rider_remittance_models.dart';
 import '../features/rider/history/rider_history_screen.dart';
@@ -378,7 +379,7 @@ class RiderMobileService {
       AppConfig.resolveApiUrl('rider/remittances'),
       {
         'collection_ids': [collectionId],
-        'submitted_amount': amount.trim(),
+        'submitted_amount': parseMoneyInput(amount.trim()),
         'notes': notes.trim(),
       },
     );
@@ -794,7 +795,9 @@ class RiderMobileService {
       }
     }
     if (action == 'delivery_success') {
-      fields['collected_amount'] = request.collectedAmount!.trim();
+      fields['collected_amount'] = parseMoneyInput(
+        request.collectedAmount!.trim(),
+      );
       fields['scanned_code'] = request.scannedCode!.trim();
       fields['scan_method'] = request.scanMethod;
     }

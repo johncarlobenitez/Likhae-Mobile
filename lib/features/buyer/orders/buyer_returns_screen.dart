@@ -527,7 +527,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
               ],
               const SizedBox(height: 10),
               Text(
-                'Refund amount requested: ₱${detail['refundable_amount'] ?? 0}',
+                'Refund amount requested: ${formatPesoValue(detail['refundable_amount'])}',
                 style: TextStyle(
                   color: AppTheme.resolve(context, _ink),
                   fontWeight: FontWeight.w700,
@@ -568,7 +568,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                   Padding(
                     padding: const EdgeInsets.only(top: 9),
                     child: Text(
-                      '${item['quantity'] ?? 0} × ${item['product_name'] ?? 'Item'} · ₱${item['amount'] ?? 0}',
+                      '${item['quantity'] ?? 0} × ${item['product_name'] ?? 'Item'} · ${formatPesoValue(item['amount'])}',
                       style: TextStyle(
                         color: AppTheme.resolve(context, _muted),
                         fontSize: 13,
@@ -739,7 +739,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
             ),
             const SizedBox(height: 7),
             Text(
-              'Requested ₱${sellerCase['requested_amount'] ?? 0} · Approved ₱${sellerCase['approved_amount'] ?? '—'}',
+              'Requested ${formatPesoValue(sellerCase['requested_amount'])} · Approved ${formatPesoValue(sellerCase['approved_amount'])}',
               style: TextStyle(
                 color: AppTheme.resolve(context, _muted),
                 fontSize: 12,
@@ -887,7 +887,7 @@ class _BuyerReturnsScreenState extends State<BuyerReturnsScreen> {
                           ),
                     icon: const Icon(Icons.receipt_long_outlined),
                     label: Text(
-                      'View payout proof - PHP ${payout['amount_sent'] ?? '—'}',
+                      'View payout proof - ${formatPesoValue(payout['amount_sent'])}',
                     ),
                   ),
                 ),
