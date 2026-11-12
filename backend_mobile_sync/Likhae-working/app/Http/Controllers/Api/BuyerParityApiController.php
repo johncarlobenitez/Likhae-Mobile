@@ -600,12 +600,12 @@ class BuyerParityApiController extends Controller
     {
         $this->authorizeBuyer($request);
         $reviews = Review::query()->where('buyer_user_id', $request->user()->id)
-            ->with(['orderItem.order', 'orderItem.product'])->latest()->paginate(min(max($request->integer('per_page', 20), 1), 50));
+            ->with(['orderItem.sellerOrder.order', 'orderItem.product.images'])->latest()->paginate(min(max($request->integer('per_page', 20), 1), 50));
         return response()->json(['success' => true, 'data' => $reviews->getCollection()->map(fn (Review $review): array => [
             'id' => (int) $review->id, 'rating' => (int) $review->rating, 'comment' => $review->comment,
             'created_at' => $review->created_at?->toIso8601String(),
-            'order_id' => (string) $review->orderItem?->order_id,
-            'order_number' => $review->orderItem?->order?->order_number,
+            'order_id' => (string) ($review->orderItem?->sellerOrder?->order_id ?? ''),
+            'order_number' => $review->orderItem?->sellerOrder?->order?->order_number,
             'product_id' => (int) ($review->orderItem?->product_id ?? 0),
             'product_name' => $review->orderItem?->product_name,
             'product_slug' => $review->orderItem?->product?->slug,

@@ -1,8 +1,13 @@
 import 'package:likhae/core/theme/app_theme.dart';
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../core/config/app_config.dart';
+import '../../../services/rider_mobile_service.dart';
 import '../deliveries/rider_delivery_models.dart';
+import '../profile/rider_profile_screen.dart';
 import '../rider_product_image.dart';
 
 class RiderDashboardStatData {
@@ -80,6 +85,7 @@ class RiderDashboardScreen extends StatelessWidget {
   final List<RiderDashboardStatData> stats;
   final List<RiderDashboardParcelData> recentParcels;
   final String riderName;
+  final RiderProfileData? availabilityProfile;
   final String? statusMessage;
   final RiderDashboardParcelCallback? onViewParcel;
   final VoidCallback? onViewAllShipments;
@@ -95,6 +101,7 @@ class RiderDashboardScreen extends StatelessWidget {
     this.stats = const [],
     this.recentParcels = const [],
     this.riderName = '',
+    this.availabilityProfile,
     this.statusMessage,
     this.onViewParcel,
     this.onViewAllShipments,
@@ -210,15 +217,19 @@ class RiderDashboardScreen extends StatelessWidget {
               Theme.of(context).brightness == Brightness.dark
                   ? 'assets/logistics/logistics-dark.png'
                   : 'assets/logistics/logistics-light.png',
-              width: 150,
-              height: 50,
+              width: 130,
+              height: 46,
               fit: BoxFit.contain,
               alignment: Alignment.centerLeft,
               semanticLabel: 'LIKHAE Logistics',
             ),
           ),
         ),
+        _RiderAvailabilityStatus(initialProfile: availabilityProfile),
+        const SizedBox(width: 5),
         IconButton(
+          constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+          padding: EdgeInsets.zero,
           tooltip: 'Messages',
           onPressed: onOpenMessages,
           icon:  Icon(
@@ -228,6 +239,8 @@ class RiderDashboardScreen extends StatelessWidget {
           ),
         ),
         IconButton(
+          constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+          padding: EdgeInsets.zero,
           tooltip: 'Notifications',
           onPressed: onOpenNotifications,
           icon:  Icon(
@@ -688,6 +701,114 @@ class RiderDashboardScreen extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderAvailabilityStatus extends StatefulWidget {
+  final RiderProfileData? initialProfile;
+
+  const _RiderAvailabilityStatus({this.initialProfile});
+
+  @override
+  State<_RiderAvailabilityStatus> createState() =>
+      _RiderAvailabilityStatusState();
+}
+
+class _RiderAvailabilityStatusState
+    extends State<_RiderAvailabilityStatus> {
+  late RiderProfileData? _profile;
+  late bool _loading;
+
+  @override
+  void initState() {
+    super.initState();
+    _profile = widget.initialProfile;
+    _loading = AppConfig.apiEnabled && _profile == null;
+    if (_loading) {
+      unawaited(_loadProfile());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RiderAvailabilityStatus oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialProfile != widget.initialProfile &&
+        widget.initialProfile != null) {
+      _profile = widget.initialProfile;
+      _loading = false;
+    }
+  }
+
+  Future<void> _loadProfile() async {
+    if (_loading && _profile != null) return;
+    setState(() {
+      _loading = true;
+    });
+    try {
+      final RiderProfileData profile =
+          await RiderMobileService.fetchProfile();
+      if (!mounted) return;
+      setState(() {
+        _profile = profile;
+      });
+    } catch (_) {
+      // Show an unknown status when the profile cannot be loaded.
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppConfig.apiEnabled) {
+      return const SizedBox.shrink();
+    }
+    if (_loading) {
+      return const SizedBox(
+        width: 24,
+        height: 30,
+        child: Center(
+          child: SizedBox.square(
+            dimension: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    final bool? isOnline = _profile?.isOnline;
+    final Color statusColor = isOnline == null
+        ? AppTheme.resolve(context, const Color(0xFF987865))
+        : isOnline
+        ? const Color(0xFF27856E)
+        : AppTheme.resolve(context, const Color(0xFF765A50));
+    final String statusLabel = isOnline == null
+        ? 'Unknown'
+        : isOnline
+        ? 'Online'
+        : 'Offline';
+
+    return Semantics(
+      label: 'Rider status: $statusLabel',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.circle, size: 7, color: statusColor),
+            const SizedBox(width: 6),
+            Text(
+              statusLabel,
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );

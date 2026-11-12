@@ -436,6 +436,9 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
             ? Map<String, dynamic>.from(body['today_attendance'] as Map)
             : null;
       });
+      // Logistics may have scanned the previous rider QR. Refresh history
+      // while renewing this QR so the new shift appears without leaving here.
+      _reload();
       _startQrExpiry(int.tryParse('${body['expires_in_seconds'] ?? 20}') ?? 20);
     } catch (e) {
       if (mounted) {
@@ -480,7 +483,12 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
       });
       _qrExpiryTimer?.cancel();
       if (!mounted) return;
-      setState(() => _message = body['message']?.toString());
+      setState(() {
+        _message = body['message']?.toString();
+        _todayAttendance = body['today_attendance'] is Map
+            ? Map<String, dynamic>.from(body['today_attendance'] as Map)
+            : _todayAttendance;
+      });
       _reload();
     } catch (e) {
       if (mounted) setState(() => _error = workflowError(e));
@@ -501,6 +509,20 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
             'Record attendance either way: scan the Logistics QR, or display your rider QR for Logistics to scan.',
           ),
           const SizedBox(height: 12),
+          if (_todayAttendance != null) ...[
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.access_time),
+                title: Text(
+                  "Today's attendance · ${_todayAttendance!['status'] ?? 'UNKNOWN'}",
+                ),
+                subtitle: Text(
+                  "${_todayAttendance!['hours'] ?? '0.00'}h / 8h · estimated ${formatPesoValue(_todayAttendance!['pay_estimate'], fallback: formatPesoAmount(0))}",
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           if (snapshot.hasError) Text(workflowError(snapshot.error!)),
           Wrap(
             spacing: 8,
@@ -555,34 +577,6 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
                       'Refreshes in $_qrSecondsRemaining ${_qrSecondsRemaining == 1 ? 'second' : 'seconds'}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    if (_todayAttendance != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              "Today's attendance · ${_todayAttendance!['status'] ?? 'UNKNOWN'}",
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              "${_todayAttendance!['hours'] ?? '0.00'}h / 8h · estimated ${formatPesoValue(_todayAttendance!['pay_estimate'], fallback: formatPesoAmount(0))}",
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                     TextButton(
                       onPressed: _loadingQr ? null : _timeInOut,
                       child: Text(_loadingQr ? 'Refreshing…' : 'Refresh QR'),
@@ -605,32 +599,106 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
           if (snapshot.hasData && snapshot.data!.isEmpty)
             const Text('No attendance shifts found.'),
           for (final row in snapshot.data ?? const <Map<String, dynamic>>[])
-            Card(
-              child: ListTile(
-                title: Text(
-                  '${row['clock_in_at'] ?? ''} → ${row['clock_out_at'] ?? 'In progress'}',
-                ),
-                subtitle: Text(
-                  '${row['worked_minutes'] ?? 0} minutes · ${formatPesoValue(row['gross_pay'], fallback: formatPesoAmount(0))}',
-                ),
-                trailing:
-                    row['payroll'] is Map &&
-                        (row['payroll'] as Map)['proof_available'] == true
-                    ? IconButton(
-                        icon: const Icon(Icons.receipt_long),
-                        onPressed: () => openWorkflowProof(
-                          context,
-                          'rider/attendance/payroll-items/${(row['payroll'] as Map)['id']}/proof',
-                        ),
-                      )
-                    : null,
-              ),
-            ),
+            _attendanceShiftCard(context, row),
         ],
       ),
     ),
   );
 }
+
+Widget _attendanceShiftCard(BuildContext context, Map<String, dynamic> row) {
+  final clockIn = _attendanceDateTime(row['clock_in_at']);
+  final clockOut = _attendanceDateTime(row['clock_out_at']);
+  final rate = _attendanceNumber(row['daily_rate_snapshot']);
+  final minutes = row['worked_minutes'] == null
+      ? (clockIn == null ? 0 : DateTime.now().difference(clockIn).inMinutes)
+      : _attendanceNumber(row['worked_minutes']).round();
+  final pay = row['gross_pay'] == null
+      ? rate * minutes / 480
+      : _attendanceNumber(row['gross_pay']);
+  final payroll = row['payroll'] is Map
+      ? Map<String, dynamic>.from(row['payroll'] as Map)
+      : null;
+  final timeInSource = _attendanceSource(row['clock_in_source']);
+  final timeOutSource = _attendanceSource(row['clock_out_source']);
+
+  return Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _attendanceDateLabel(clockIn) ?? 'Attendance shift',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text('Manifest · ${row['manifest_number'] ?? 'No manifest assigned'}'),
+          const SizedBox(height: 8),
+          Text(
+            'Time in · ${_attendanceTimeLabel(clockIn) ?? 'Unavailable'}${timeInSource == null ? '' : ' · $timeInSource'}',
+          ),
+          Text(
+            'Time out · ${_attendanceTimeLabel(clockOut) ?? 'On shift'}${timeOutSource == null ? '' : ' · $timeOutSource'}',
+          ),
+          const SizedBox(height: 8),
+          Text('Hours · ${(minutes / 60).toStringAsFixed(2)}h'),
+          Text(
+            'Daily rate · ${formatPesoValue(row['daily_rate_snapshot'], fallback: formatPesoAmount(0))} / day${row['region_type'] == null ? '' : ' · ${row['region_type']}'}',
+          ),
+          Text(
+            'Shift pay · ${formatPesoValue(pay, fallback: formatPesoAmount(0))}${row['gross_pay'] == null ? ' estimated' : ''}',
+          ),
+          Text('Payroll · ${payroll?['status'] ?? 'Not yet included'}'),
+          if (row['overtime_review'] == true)
+            const Text('Over 8 hours · review required'),
+          if (payroll?['payment_reference'] != null)
+            Text('Payment reference · ${payroll!['payment_reference']}'),
+          if (payroll?['proof_available'] == true) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => openWorkflowProof(
+                context,
+                'rider/attendance/payroll-items/${payroll!['id']}/proof',
+              ),
+              icon: const Icon(Icons.receipt_long),
+              label: const Text('View payroll proof'),
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+DateTime? _attendanceDateTime(dynamic value) => value == null
+    ? null
+    : DateTime.tryParse(value.toString())?.toLocal();
+
+String? _attendanceDateLabel(DateTime? value) {
+  if (value == null) return null;
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  return '${months[value.month - 1]} ${value.day}, ${value.year}';
+}
+
+String? _attendanceTimeLabel(DateTime? value) {
+  if (value == null) return null;
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$hour:$minute ${value.hour < 12 ? 'AM' : 'PM'}';
+}
+
+double _attendanceNumber(dynamic value) =>
+    value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+
+String? _attendanceSource(dynamic value) => switch (value) {
+  'LOGISTICS_QR' => 'Logistics QR',
+  'DRIVER_QR' => 'Rider QR',
+  _ => null,
+};
 
 class RiderProfileUpdatesScreen extends StatelessWidget {
   const RiderProfileUpdatesScreen({super.key});

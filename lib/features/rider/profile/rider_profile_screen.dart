@@ -375,6 +375,7 @@ class RiderProfileScreen extends StatefulWidget {
   final VoidCallback? onEditProfile;
   final VoidCallback? onReturns;
   final VoidCallback? onTrips;
+  final VoidCallback? onHistory;
   final VoidCallback? onAttendance;
   final VoidCallback? onProfileUpdates;
 
@@ -388,6 +389,7 @@ class RiderProfileScreen extends StatefulWidget {
     this.onEditProfile,
     this.onReturns,
     this.onTrips,
+    this.onHistory,
     this.onAttendance,
     this.onProfileUpdates,
   });
@@ -614,6 +616,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
               if (profile != null &&
                   (widget.onReturns != null ||
                       widget.onTrips != null ||
+                      widget.onHistory != null ||
                       widget.onAttendance != null ||
                       widget.onProfileUpdates != null)) ...<Widget>[
                 const SizedBox(height: 14),
@@ -721,6 +724,12 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           icon: Icons.route_outlined,
           title: 'Delivery trips',
           onTap: widget.onTrips!,
+        ),
+      if (widget.onHistory != null)
+        _workflowLink(
+          icon: Icons.history_outlined,
+          title: 'Delivery history',
+          onTap: widget.onHistory!,
         ),
       if (profile.isInterLogistics && widget.onAttendance != null)
         _workflowLink(

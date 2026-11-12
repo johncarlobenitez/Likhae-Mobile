@@ -23,27 +23,67 @@ class BuyerAiOfflineHelp {
         return const BuyerAiOfflineAnswer(
           reply:
               'Open Earnings in your Rider workspace to review recorded payouts and earnings. Live balances and trip details need an active connection.',
-          options: <String>['How do I view my assignments?'],
+          options: <String>[
+            'Where can I find pickup batches?',
+            'How do I view delivery assignments?',
+          ],
+        );
+      }
+      if (_containsAny(question, const <String>[
+        'history',
+        'completed',
+        'past',
+      ])) {
+        return const BuyerAiOfflineAnswer(
+          reply:
+              'Open Profile, then Rider Workflows > Delivery history to review completed pickup and delivery activity from your rider account.',
+          options: <String>[
+            'Where can I find pickup batches?',
+            'How do I view delivery assignments?',
+          ],
+        );
+      }
+      if (_containsAny(question, const <String>['pickup', 'scan', 'handoff'])) {
+        return const BuyerAiOfflineAnswer(
+          reply:
+              'Open Pickup in your Rider navigation to review seller pickup batches. Follow the parcel scan and confirmation steps shown for each batch.',
+          options: <String>[
+            'How do I view delivery assignments?',
+            'Where can I check my earnings?',
+          ],
+        );
+      }
+      if (_containsAny(question, const <String>['delivery', 'deliver'])) {
+        return const BuyerAiOfflineAnswer(
+          reply:
+              'Open Delivery in your Rider navigation to review active delivery assignments and update an outcome after the delivery attempt.',
+          options: <String>[
+            'Where can I find pickup batches?',
+            'Where can I check my earnings?',
+          ],
         );
       }
       if (_containsAny(question, const <String>[
         'assignment',
-        'pickup',
-        'delivery',
+        'shipment',
         'trip',
       ])) {
         return const BuyerAiOfflineAnswer(
           reply:
-              'Open Assignments in your Rider workspace to review assigned pickups and deliveries. Current assignment status needs an active connection.',
-          options: <String>['How do I check my earnings?'],
+              'Use Pickup to review seller pickup batches and Delivery to review active delivery assignments. Current assignment status needs an active connection.',
+          options: <String>[
+            'Where can I find pickup batches?',
+            'How do I view delivery assignments?',
+          ],
         );
       }
       return const BuyerAiOfflineAnswer(
         reply:
-            'I can help with rider assignments, pickups, deliveries, earnings, and account settings. Ask about one of those topics for guidance.',
+            'I can help with Rider Pickups, Deliveries, Delivery history, Earnings, and account settings. Ask about one of those topics for guidance.',
         options: <String>[
-          'How do I view my assignments?',
-          'How do I check my earnings?',
+          'Where can I find pickup batches?',
+          'How do I view delivery assignments?',
+          'Where can I check my earnings?',
         ],
       );
     }

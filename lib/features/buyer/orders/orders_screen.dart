@@ -754,6 +754,25 @@ String _formatParcelTime(DateTime value) {
   return '${months[local.month - 1]} ${local.day}, ${local.year} · $hour:$minute $period';
 }
 
+String _formatBuyerStatusLabel(String value) {
+  final String normalized = value
+      .trim()
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized.isEmpty || normalized != normalized.toUpperCase()) {
+    return normalized;
+  }
+
+  return normalized
+      .split(' ')
+      .map(
+        (String word) => word.isEmpty
+            ? word
+            : '${word[0]}${word.substring(1).toLowerCase()}',
+      )
+      .join(' ');
+}
+
 BuyerOrderLocation? parseBuyerOrderLogisticsStop(Map<String, dynamic> row) {
   final dynamic rawFacility =
       row['logistics_center'] ??
@@ -1984,7 +2003,7 @@ class BuyerOrderData {
   static String _formatOrderTimelineTime(dynamic value) {
     final DateTime? parsed = DateTime.tryParse(value?.toString() ?? '');
     if (parsed == null) {
-      return value?.toString() ?? '';
+      return (value?.toString() ?? '').replaceAll('\n', ' · ').trim();
     }
     final DateTime local = parsed.toLocal();
     const List<String> months = <String>[
@@ -2004,7 +2023,7 @@ class BuyerOrderData {
     final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
     final String minute = local.minute.toString().padLeft(2, '0');
     final String period = local.hour >= 12 ? 'PM' : 'AM';
-    return '${months[local.month - 1]} ${local.day}\n$hour:$minute $period';
+    return '${months[local.month - 1]} ${local.day} · $hour:$minute $period';
   }
 }
 
@@ -4620,6 +4639,8 @@ class _OrdersScreenState extends State<OrdersScreen>
                           latestEvent?.time.trim().isNotEmpty == true
                               ? latestEvent!.time
                               : 'Shipment update pending',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: AppTheme.resolve(context, ShopColors.muted),
                             fontSize: 11.5,
@@ -6453,6 +6474,7 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String placedDate = _placedLabel(order.createdAt);
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, ShopColors.surface, fill: true),
@@ -6464,38 +6486,38 @@ class _OrderCard extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 13, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 13),
             decoration: BoxDecoration(
               color: AppTheme.resolve(context, Color(0xFFFAF5EF), fill: true),
             ),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Order ${order.orderNumber?.trim().isNotEmpty == true ? order.orderNumber!.trim() : order.id}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppTheme.resolve(context, ShopColors.text),
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                Expanded(
+                  child: Text(
+                    'Order ${order.orderNumber?.trim().isNotEmpty == true ? order.orderNumber!.trim() : order.id}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppTheme.resolve(context, ShopColors.text),
+                      fontSize: 14.5,
+                      height: 1.25,
+                      fontWeight: FontWeight.w800,
                     ),
-                  ],
+                  ),
                 ),
-                if (_placedLabel(order.createdAt).isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                if (placedDate.isNotEmpty) ...[
+                  const SizedBox(width: 8),
                   Text(
-                    _placedLabel(order.createdAt),
+                    placedDate,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
                     style: TextStyle(
                       color: AppTheme.resolve(context, ShopColors.muted),
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
+                      height: 1.3,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -6505,48 +6527,66 @@ class _OrderCard extends StatelessWidget {
 
           if (order.sellerName?.trim().isNotEmpty == true)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 11),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.fromLTRB(16, 13, 16, 12),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.storefront_outlined,
-                        size: 17,
-                        color: AppTheme.resolve(context, ShopColors.accentDark),
+                  Icon(
+                    Icons.storefront_outlined,
+                    size: 17,
+                    color: AppTheme.resolve(context, ShopColors.accentDark),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      order.sellerName!.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppTheme.resolve(context, ShopColors.text),
+                        fontSize: 14,
+                        height: 1.25,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Text(
-                          order.sellerName!.trim(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppTheme.resolve(context, ShopColors.text),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                   if (onContactSeller != null || onViewStore != null) ...[
-                    const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 12,
-                      children: [
-                        if (onContactSeller != null)
-                          _SellerAction(
-                            text: 'Chat',
-                            onPressed: onContactSeller!,
-                          ),
-                        if (onViewStore != null)
-                          _SellerAction(
-                            text: 'View Shop',
-                            onPressed: onViewStore!,
-                          ),
-                      ],
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppTheme.resolve(
+                          context,
+                          ShopColors.soft,
+                          fill: true,
+                        ),
+                        border: Border.all(
+                          color: AppTheme.resolve(context, ShopColors.border),
+                        ),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (onContactSeller != null)
+                            _SellerAction(
+                              text: 'Chat',
+                              onPressed: onContactSeller!,
+                            ),
+                          if (onContactSeller != null && onViewStore != null)
+                            Container(
+                              width: 1,
+                              height: 16,
+                              color: AppTheme.resolve(
+                                context,
+                                ShopColors.borderStrong,
+                              ),
+                            ),
+                          if (onViewStore != null)
+                            _SellerAction(
+                              text: 'View Shop',
+                              onPressed: onViewStore!,
+                            ),
+                        ],
+                      ),
                     ),
                   ],
                 ],
@@ -6601,19 +6641,22 @@ class _OrderCard extends StatelessWidget {
             padding: const EdgeInsets.all(13),
             child: Column(
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${_itemCount(order)} ${_itemCount(order) == 1 ? 'item' : 'items'} - Total',
-                    style: TextStyle(
-                      color: AppTheme.resolve(context, ShopColors.muted),
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ),
                 Row(
                   children: [
                     Expanded(
+                      child: Text(
+                        '${_itemCount(order)} ${_itemCount(order) == 1 ? 'item' : 'items'} - Total',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, ShopColors.muted),
+                          fontSize: 12.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
                       child: Text.rich(
                         TextSpan(
                           children: [
@@ -6631,9 +6674,12 @@ class _OrderCard extends StatelessWidget {
                             ),
                           ],
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
                         style: TextStyle(
                           color: AppTheme.resolve(context, ShopColors.muted),
-                          fontSize: 12.5,
+                          fontSize: 13,
                           height: 1.4,
                         ),
                       ),
@@ -6778,9 +6824,11 @@ class _ParcelUpdateCard extends StatelessWidget {
     final BuyerOrderTimelineEvent? latestEvent = order.timeline.isEmpty
         ? null
         : order.timeline.last;
-    final String title = latestEvent?.label.trim().isNotEmpty == true
-        ? latestEvent!.label
-        : order.statusLabel;
+    final String title = _formatBuyerStatusLabel(
+      latestEvent?.label.trim().isNotEmpty == true
+          ? latestEvent!.label
+          : order.statusLabel,
+    );
     final String details = latestEvent?.details.trim().isNotEmpty == true
         ? latestEvent!.details
         : _fallbackDetails;
@@ -6815,11 +6863,12 @@ class _ParcelUpdateCard extends StatelessWidget {
                     if (trackingReference.isNotEmpty) ...[
                       Text(
                         'Parcel 1 - Tracking $trackingReference',
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: AppTheme.resolve(context, ShopColors.muted),
-                          fontSize: 10.5,
+                          fontSize: 11.5,
+                          height: 1.3,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -6831,7 +6880,8 @@ class _ParcelUpdateCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppTheme.resolve(context, Color(0xFF267B69)),
-                        fontSize: 14,
+                        fontSize: 13.5,
+                        height: 1.25,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -6842,17 +6892,20 @@ class _ParcelUpdateCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppTheme.resolve(context, ShopColors.muted),
-                        fontSize: 12,
-                        height: 1.35,
+                        fontSize: 12.5,
+                        height: 1.45,
                       ),
                     ),
                     if (latestEvent?.time.trim().isNotEmpty == true) ...[
                       const SizedBox(height: 5),
                       Text(
                         latestEvent!.time,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: AppTheme.resolve(context, Color(0xFF6F9188)),
-                          fontSize: 11,
+                          fontSize: 12,
+                          height: 1.3,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -6933,7 +6986,7 @@ class _OrderProductRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppTheme.resolve(context, ShopColors.text),
-                        fontSize: 13,
+                        fontSize: 14,
                         height: 1.3,
                         fontWeight: FontWeight.w800,
                       ),
@@ -6947,7 +7000,8 @@ class _OrderProductRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: AppTheme.resolve(context, ShopColors.muted),
-                          fontSize: 11.5,
+                          fontSize: 12.5,
+                          height: 1.3,
                         ),
                       ),
                     ],
@@ -6976,7 +7030,8 @@ class _OrderProductRow extends StatelessWidget {
                                 context,
                                 ShopColors.secondaryText,
                               ),
-                              fontSize: 10.5,
+                              fontSize: 11.5,
+                              height: 1.1,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -6989,7 +7044,8 @@ class _OrderProductRow extends StatelessWidget {
                               context,
                               ShopColors.accentDark,
                             ),
-                            fontSize: 12.5,
+                            fontSize: 13.5,
+                            height: 1.25,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -7022,14 +7078,15 @@ class _SellerAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(5),
+      borderRadius: BorderRadius.circular(9),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
         child: Text(
           text,
           style: TextStyle(
             color: AppTheme.resolve(context, ShopColors.accentDark),
-            fontSize: 11,
+            fontSize: 12,
+            height: 1.2,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -7075,7 +7132,11 @@ class _SmallActionButton extends StatelessWidget {
           ),
           child: Text(
             text,
-            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.15,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       );
@@ -7101,7 +7162,11 @@ class _SmallActionButton extends StatelessWidget {
         ),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+          style: const TextStyle(
+            fontSize: 12,
+            height: 1.15,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );

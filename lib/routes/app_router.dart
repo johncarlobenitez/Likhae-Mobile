@@ -58,6 +58,7 @@ import '../features/rider/deliveries/rider_delivery_models.dart';
 import '../features/rider/deliveries/rider_delivery_navigation_screen.dart';
 import '../features/rider/deliveries/rider_delivery_tracking_screen.dart';
 import '../features/rider/earnings/rider_earnings_screen.dart';
+import '../features/rider/earnings/rider_interhub_wallet_screen.dart';
 import '../features/rider/earnings/rider_remittances_screen.dart';
 import '../features/rider/history/rider_history_screen.dart';
 import '../features/rider/messages/rider_messages_screen.dart';
@@ -568,6 +569,7 @@ Widget _riderNavigationFrame(
   BuildContext context, {
   required int currentIndex,
   required Widget child,
+  Widget Function(RiderProfileData?)? profileAwarePageBuilder,
   _RiderOperationalRole? requiredRole,
   bool roleAwareHome = false,
 }) {
@@ -575,7 +577,7 @@ Widget _riderNavigationFrame(
     final bool isInterLogistics = profile?.isInterLogistics ?? false;
     final bool isLocalBarangay =
         profile?.isLocalBarangay ?? !AppConfig.apiEnabled;
-    Widget page = child;
+    Widget page = profileAwarePageBuilder?.call(profile) ?? child;
 
     if (AppConfig.apiEnabled && profile != null) {
       if (roleAwareHome && !profile.hasOperationalRole) {
@@ -614,9 +616,9 @@ Widget _riderNavigationFrame(
       currentIndex: navigationIndex,
       isInterLogistics: isInterLogistics,
       onDashboard: () => context.go('/rider/dashboard'),
-      onAssignments: () => context.go('/rider/pickups'),
+      onPickups: () => context.go('/rider/pickups'),
+      onDeliveries: () => context.go('/rider/assignments'),
       onTransfers: () => context.go('/rider/transfers'),
-      onHistory: () => context.go('/rider/history'),
       onEarnings: () => context.go('/rider/earnings'),
       onMessages: () => context.go('/rider/messages'),
       onProfile: () => context.go('/rider/profile'),
@@ -638,7 +640,7 @@ Widget _riderNavigationFrame(
       ),
     );
     if (isLocalBarangay) {
-      frame = RiderAvailabilityTracker(child: frame);
+      frame = RiderAvailabilityTracker(profile: profile, child: frame);
     }
     return _riderScreenPresentation(context, child: frame);
   }
@@ -679,9 +681,9 @@ int _riderNavigationIndex(int pageKey, {required bool isInterLogistics}) {
   return switch (pageKey) {
     0 => 0,
     1 => 1,
-    3 => 2,
+    2 => 2,
+    3 || 5 => 4,
     4 => 3,
-    5 => 4,
     _ => -1,
   };
 }
@@ -968,7 +970,7 @@ Future<void> _handleLogin(
         // Keep a successful login successful if credential saving fails.
       }
     }
-    _routeAuthenticatedMobileUser(context, payload);
+    await _routeAuthenticatedMobileUser(context, payload);
   } catch (error) {
     onError();
     if (context.mounted) {
@@ -981,10 +983,10 @@ Future<void> _handleLogin(
   }
 }
 
-void _routeAuthenticatedMobileUser(
+Future<void> _routeAuthenticatedMobileUser(
   BuildContext context,
   Map<String, dynamic> payload,
-) {
+) async {
   final dynamic responseData = payload['data'];
   final dynamic userPayload =
       payload['user'] ??
@@ -1006,10 +1008,13 @@ void _routeAuthenticatedMobileUser(
     );
     return;
   }
-  _routeAuthenticatedUser(context, user);
+  await _routeAuthenticatedUser(context, user);
 }
 
-void _routeAuthenticatedUser(BuildContext context, AuthUserModel user) {
+Future<void> _routeAuthenticatedUser(
+  BuildContext context,
+  AuthUserModel user,
+) async {
   final Set<String> mobileRoles = <String>{...user.mobileRoles, ...user.roles}
       .map((String role) => role.trim().toLowerCase().replaceAll('-', '_'))
       .toSet();
@@ -1023,7 +1028,34 @@ void _routeAuthenticatedUser(BuildContext context, AuthUserModel user) {
   }
 
   if (mobileRoles.contains('rider') && !mobileRoles.contains('buyer')) {
+    String? availabilityError;
+    if (AppConfig.apiEnabled) {
+      try {
+        final RiderProfileData profile =
+            await RiderMobileService.fetchProfile();
+        final String riderStatus = profile.status.trim().toLowerCase();
+        if (profile.supportsAvailabilityStatus &&
+            (riderStatus == 'active' || riderStatus == 'warned')) {
+          await RiderMobileService.updateAvailability(true);
+        }
+      } catch (error) {
+        availabilityError = error.toString().replaceFirst('Exception: ', '');
+      }
+    }
+    if (!context.mounted) return;
+    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
+      context,
+    );
     context.go('/rider/dashboard');
+    if (availabilityError != null) {
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not set your rider status online: $availabilityError',
+          ),
+        ),
+      );
+    }
     return;
   }
 
@@ -1085,7 +1117,7 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
           ),
         );
       } else {
-        _routeAuthenticatedUser(context, session.user);
+        await _routeAuthenticatedUser(context, session.user);
       }
     } on AuthSessionExpiredException {
       if (mounted) context.go('/login');
@@ -1191,8 +1223,6 @@ final GoRouter appRouter = GoRouter(
                   onBrowseProducts: () => context.push('/buyer/products'),
                   onViewOrders: () => _goBuyerTab(context, 1),
                   onWishlist: () => context.push('/buyer/wishlist'),
-                  onFollowingShops: () =>
-                      context.push('/buyer/following-shops'),
                   onCart: () => context.push('/buyer/cart'),
                   onNotifications: () => context.push('/buyer/notifications'),
                   onMessages: () => _goBuyerTab(context, 2),
@@ -1792,11 +1822,18 @@ final GoRouter appRouter = GoRouter(
                                 : null,
                             onSystemSettings: () =>
                                 context.push('/buyer/settings'),
-                            onRecentlyViewed: () => context.push('/buyer/recently-viewed'),
+                            onRecentlyViewed: () =>
+                                context.push('/buyer/recently-viewed'),
                             onVouchers: () => context.push('/buyer/rewards'),
+                            onFollowingStores: () =>
+                                context.push('/buyer/following-shops'),
                             onTabChanged: (BuyerAccountTab tab) {
                               if (tab == BuyerAccountTab.vouchers) {
                                 context.push('/buyer/rewards');
+                                return;
+                              }
+                              if (tab == BuyerAccountTab.followingStores) {
+                                context.push('/buyer/following-shops');
                                 return;
                               }
                               if (tab == BuyerAccountTab.settings) {
@@ -1855,7 +1892,8 @@ final GoRouter appRouter = GoRouter(
             await AuthService.logout();
             if (context.mounted) context.go('/login');
           },
-          onAccepted: () => _routeAuthenticatedUser(context, extra.user),
+          onAccepted: () =>
+              unawaited(_routeAuthenticatedUser(context, extra.user)),
         );
       },
     ),
@@ -1880,7 +1918,7 @@ final GoRouter appRouter = GoRouter(
             try {
               final Map<String, dynamic> payload =
                   await AuthService.signInWithGoogle();
-              _routeAuthenticatedMobileUser(context, payload);
+              await _routeAuthenticatedMobileUser(context, payload);
             } on GoogleRegistrationRequiredException catch (error) {
               if (context.mounted) {
                 context.push('/register', extra: error.profile);
@@ -3220,84 +3258,73 @@ final GoRouter appRouter = GoRouter(
       path: '/rider/dashboard',
       name: 'rider-dashboard',
       builder: (BuildContext context, GoRouterState state) {
+        Widget buildDashboard({
+          required RiderProfileData? profile,
+          RiderDashboardSnapshot? data,
+          Object? error,
+          Future<void> Function()? refresh,
+        }) => RiderDashboardScreen(
+          availabilityProfile: profile,
+          riderName: data?.riderName ?? '',
+          onOpenPickups: () => context.go('/rider/pickups'),
+          onOpenEarnings: () => context.go('/rider/earnings'),
+          stats: data?.stats ?? const <RiderDashboardStatData>[],
+          recentParcels:
+              data?.recentParcels ?? const <RiderDashboardParcelData>[],
+          statusMessage: error?.toString(),
+          onRefresh: refresh,
+          onOpenScanner: () => context.push('/rider/scanner'),
+          onOpenMessages: () => context.push('/rider/messages'),
+          onOpenNotifications: () => context.push('/rider/notifications'),
+          onViewAllShipments: () => context.go('/rider/assignments'),
+          onViewParcel: (RiderDashboardParcelData parcel) {
+            context.push(
+              '/rider/delivery-details',
+              extra: RiderDeliveryData(
+                id: parcel.id,
+                trackingCode: parcel.trackingCode,
+                buyerName: parcel.buyerName,
+                contact: parcel.contact,
+                address: parcel.address,
+                amount: parcel.amount,
+                status: parcel.status,
+                statusLabel: parcel.statusLabel,
+                imageUrl: parcel.imageUrl,
+                deliveryLatitude: parcel.deliveryLatitude,
+                deliveryLongitude: parcel.deliveryLongitude,
+                isPreview: parcel.isPreview,
+              ),
+            );
+          },
+        );
+
+        Widget dashboardPage(RiderProfileData? profile) {
+          if (!AppConfig.apiEnabled) {
+            return buildDashboard(profile: profile);
+          }
+          return RiderApiLoader<RiderDashboardSnapshot>(
+            load: RiderMobileService.fetchDashboard,
+            builder:
+                (
+                  BuildContext context,
+                  RiderDashboardSnapshot? data,
+                  Object? error,
+                  Future<void> Function() refresh,
+                ) => buildDashboard(
+                  profile: profile,
+                  data: data,
+                  error: error,
+                  refresh: refresh,
+                ),
+          );
+        }
+
         return _riderNavigationFrame(
           context,
           currentIndex: 0,
           roleAwareHome: true,
-          child: AppConfig.apiEnabled
-              ? RiderApiLoader<RiderDashboardSnapshot>(
-                  load: RiderMobileService.fetchDashboard,
-                  builder:
-                      (
-                        BuildContext context,
-                        RiderDashboardSnapshot? data,
-                        Object? error,
-                        Future<void> Function() refresh,
-                      ) => RiderDashboardScreen(
-                        riderName: data?.riderName ?? '',
-                        onOpenPickups: () => context.go('/rider/pickups'),
-                        onOpenEarnings: () => context.go('/rider/earnings'),
-                        stats: data?.stats ?? const <RiderDashboardStatData>[],
-                        recentParcels:
-                            data?.recentParcels ??
-                            const <RiderDashboardParcelData>[],
-                        statusMessage: error?.toString(),
-                        onRefresh: refresh,
-                        onOpenScanner: () => context.push('/rider/scanner'),
-                        onOpenMessages: () => context.push('/rider/messages'),
-                        onOpenNotifications: () =>
-                            context.push('/rider/notifications'),
-                        onViewAllShipments: () =>
-                            context.go('/rider/assignments'),
-                        onViewParcel: (RiderDashboardParcelData parcel) {
-                          context.push(
-                            '/rider/delivery-details',
-                            extra: RiderDeliveryData(
-                              id: parcel.id,
-                              trackingCode: parcel.trackingCode,
-                              buyerName: parcel.buyerName,
-                              contact: parcel.contact,
-                              address: parcel.address,
-                              amount: parcel.amount,
-                              status: parcel.status,
-                              statusLabel: parcel.statusLabel,
-                              imageUrl: parcel.imageUrl,
-                              deliveryLatitude: parcel.deliveryLatitude,
-                              deliveryLongitude: parcel.deliveryLongitude,
-                              isPreview: parcel.isPreview,
-                            ),
-                          );
-                        },
-                      ),
-                )
-              : RiderDashboardScreen(
-                  onOpenPickups: () => context.go('/rider/pickups'),
-                  onOpenEarnings: () => context.go('/rider/earnings'),
-                  onOpenScanner: () => context.push('/rider/scanner'),
-                  onOpenMessages: () => context.push('/rider/messages'),
-                  onOpenNotifications: () =>
-                      context.push('/rider/notifications'),
-                  onViewAllShipments: () => context.go('/rider/assignments'),
-                  onViewParcel: (RiderDashboardParcelData parcel) {
-                    context.push(
-                      '/rider/delivery-details',
-                      extra: RiderDeliveryData(
-                        id: parcel.id,
-                        trackingCode: parcel.trackingCode,
-                        buyerName: parcel.buyerName,
-                        contact: parcel.contact,
-                        address: parcel.address,
-                        amount: parcel.amount,
-                        status: parcel.status,
-                        statusLabel: parcel.statusLabel,
-                        imageUrl: parcel.imageUrl,
-                        deliveryLatitude: parcel.deliveryLatitude,
-                        deliveryLongitude: parcel.deliveryLongitude,
-                        isPreview: parcel.isPreview,
-                      ),
-                    );
-                  },
-                ),
+          child: dashboardPage(null),
+          profileAwarePageBuilder: dashboardPage,
         );
       },
     ),
@@ -3347,7 +3374,7 @@ final GoRouter appRouter = GoRouter(
       builder: (BuildContext context, GoRouterState state) {
         return _riderNavigationFrame(
           context,
-          currentIndex: 1,
+          currentIndex: 2,
           requiredRole: _RiderOperationalRole.localBarangay,
           child: AppConfig.apiEnabled
               ? RiderApiLoader<RiderAssignmentsSnapshot>(
@@ -3387,8 +3414,6 @@ final GoRouter appRouter = GoRouter(
                             );
                           }
                         },
-                        onBack: () =>
-                            safeBack(context, fallback: '/rider/dashboard'),
                         onViewDelivery: (RiderDeliveryData delivery) {
                           context.push(
                             '/rider/delivery-details',
@@ -3398,7 +3423,6 @@ final GoRouter appRouter = GoRouter(
                       ),
                 )
               : RiderDeliveriesScreen(
-                  onBack: () => safeBack(context, fallback: '/rider/dashboard'),
                   onViewDelivery: (RiderDeliveryData delivery) {
                     context.push('/rider/delivery-details', extra: delivery);
                   },
@@ -3435,8 +3459,6 @@ final GoRouter appRouter = GoRouter(
                             ),
                         statusMessage: error?.toString(),
                         onRefresh: refresh,
-                        onViewDeliveries: () =>
-                            context.push('/rider/assignments'),
                         onViewPickup: (RiderPickupData pickup) async {
                           final bool? changed = await context.push<bool>(
                             '/rider/pickup-details',
@@ -3447,7 +3469,6 @@ final GoRouter appRouter = GoRouter(
                       ),
                 )
               : RiderPickupsScreen(
-                  onViewDeliveries: () => context.push('/rider/assignments'),
                   onViewPickup: (RiderPickupData pickup) async {
                     await context.push<bool>(
                       '/rider/pickup-details',
@@ -3553,7 +3574,7 @@ final GoRouter appRouter = GoRouter(
       builder: (BuildContext context, GoRouterState state) {
         return _riderNavigationFrame(
           context,
-          currentIndex: 3,
+          currentIndex: 5,
           requiredRole: _RiderOperationalRole.localBarangay,
           child: AppConfig.apiEnabled
               ? RiderApiLoader<List<RiderHistoryData>>(
@@ -3622,36 +3643,44 @@ final GoRouter appRouter = GoRouter(
       path: '/rider/earnings',
       name: 'rider-earnings',
       builder: (BuildContext context, GoRouterState state) {
+        Widget earningsPage(RiderProfileData? profile) {
+          if (AppConfig.apiEnabled && profile?.isInterLogistics == true) {
+            return RiderInterhubWalletScreen(
+              onBackToDashboard: () => context.go('/rider/dashboard'),
+            );
+          }
+          if (!AppConfig.apiEnabled) return const RiderEarningsScreen();
+          return RiderApiLoader<RiderEarningsSnapshot>(
+            load: RiderMobileService.fetchEarnings,
+            builder:
+                (
+                  BuildContext context,
+                  RiderEarningsSnapshot? data,
+                  Object? error,
+                  Future<void> Function() refresh,
+                ) => RiderEarningsScreen(
+                  earningsRows: data?.rows ?? const <RiderEarningRowData>[],
+                  onOpenRemittances: () async {
+                    await context.push('/rider/remittances');
+                    await refresh();
+                  },
+                  onOpenPayouts: () => context.push('/rider/payouts'),
+                  summary: data?.summary,
+                  riderName: data?.riderName ?? '',
+                  earningsNotice:
+                      error?.toString() ??
+                      data?.notice ??
+                      'No earnings records are available.',
+                  onRefresh: refresh,
+                ),
+          );
+        }
+
         return _riderNavigationFrame(
           context,
           currentIndex: 4,
-          child: AppConfig.apiEnabled
-              ? RiderApiLoader<RiderEarningsSnapshot>(
-                  load: RiderMobileService.fetchEarnings,
-                  builder:
-                      (
-                        BuildContext context,
-                        RiderEarningsSnapshot? data,
-                        Object? error,
-                        Future<void> Function() refresh,
-                      ) => RiderEarningsScreen(
-                        earningsRows:
-                            data?.rows ?? const <RiderEarningRowData>[],
-                        onOpenRemittances: () async {
-                          await context.push('/rider/remittances');
-                          await refresh();
-                        },
-                        onOpenPayouts: () => context.push('/rider/payouts'),
-                        summary: data?.summary,
-                        riderName: data?.riderName ?? '',
-                        earningsNotice:
-                            error?.toString() ??
-                            data?.notice ??
-                            'No earnings records are available.',
-                        onRefresh: refresh,
-                      ),
-                )
-              : const RiderEarningsScreen(),
+          child: earningsPage(null),
+          profileAwarePageBuilder: earningsPage,
         );
       },
     ),
@@ -3689,6 +3718,7 @@ final GoRouter appRouter = GoRouter(
                         onSystemSettings: () => context.push('/rider/settings'),
                         onReturns: () => context.push('/rider/returns'),
                         onTrips: () => context.push('/rider/trips'),
+                        onHistory: () => context.go('/rider/history'),
                         onAttendance: () => context.push('/rider/attendance'),
                         onProfileUpdates: () =>
                             context.push('/rider/profile/updates'),
@@ -3746,6 +3776,7 @@ final GoRouter appRouter = GoRouter(
                           },
                           onSystemSettings: () =>
                               context.push('/rider/settings'),
+                          onHistory: () => context.go('/rider/history'),
                         );
                       },
                 ),

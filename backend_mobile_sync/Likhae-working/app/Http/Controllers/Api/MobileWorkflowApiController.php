@@ -109,12 +109,17 @@ class MobileWorkflowApiController extends Controller
     {
         $id = $request->user()->riderProfile->id;
         abort_unless(Schema::hasTable('interhub_attendance_sessions') && Schema::hasTable('interhub_payroll_items'), 503, 'Attendance is not installed.');
-        $rows = InterhubAttendanceSession::where('rider_profile_id', $id)->with('payrollItem')->latest('clock_in_at')->paginate(20);
+        $rows = InterhubAttendanceSession::where('rider_profile_id', $id)->with(['manifest', 'payrollItem'])->latest('clock_in_at')->paginate(20);
         return $this->page($rows, fn ($row) => [
             'id' => $row->id, 'clock_in_at' => $row->clock_in_at, 'clock_out_at' => $row->clock_out_at,
             'worked_minutes' => $row->worked_minutes, 'gross_pay' => $row->gross_pay,
+            'daily_rate_snapshot' => $row->daily_rate_snapshot, 'region_type' => $row->region_type,
+            'overtime_review' => $row->overtime_review,
+            'clock_in_source' => $row->clock_in_source, 'clock_out_source' => $row->clock_out_source,
+            'manifest_number' => $row->manifest?->manifest_number,
             'payroll' => $row->payrollItem ? [
                 'id' => $row->payrollItem->id, 'amount' => $row->payrollItem->amount, 'status' => $row->payrollItem->status,
+                'payment_reference' => $row->payrollItem->payment_reference, 'paid_at' => $row->payrollItem->paid_at,
                 'proof_available' => filled($row->payrollItem->proof_path),
             ] : null,
         ]);

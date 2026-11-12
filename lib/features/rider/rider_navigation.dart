@@ -7,9 +7,9 @@ class RiderNavigationFrame extends StatelessWidget {
   final int currentIndex;
   final bool isInterLogistics;
   final VoidCallback onDashboard;
-  final VoidCallback onAssignments;
+  final VoidCallback onPickups;
+  final VoidCallback onDeliveries;
   final VoidCallback onTransfers;
-  final VoidCallback onHistory;
   final VoidCallback onEarnings;
   final VoidCallback onMessages;
   final VoidCallback onProfile;
@@ -20,9 +20,9 @@ class RiderNavigationFrame extends StatelessWidget {
     required this.currentIndex,
     required this.isInterLogistics,
     required this.onDashboard,
-    required this.onAssignments,
+    required this.onPickups,
+    required this.onDeliveries,
     required this.onTransfers,
-    required this.onHistory,
     required this.onEarnings,
     required this.onMessages,
     required this.onProfile,
@@ -35,9 +35,9 @@ class RiderNavigationFrame extends StatelessWidget {
         currentIndex: currentIndex,
         isInterLogistics: isInterLogistics,
         onDashboard: onDashboard,
-        onAssignments: onAssignments,
+        onPickups: onPickups,
+        onDeliveries: onDeliveries,
         onTransfers: onTransfers,
-        onHistory: onHistory,
         onEarnings: onEarnings,
         onMessages: onMessages,
         onProfile: onProfile,
@@ -51,9 +51,9 @@ class RiderBottomNavigation extends StatelessWidget {
   final int currentIndex;
   final bool isInterLogistics;
   final VoidCallback onDashboard;
-  final VoidCallback onAssignments;
+  final VoidCallback onPickups;
+  final VoidCallback onDeliveries;
   final VoidCallback onTransfers;
-  final VoidCallback onHistory;
   final VoidCallback onEarnings;
   final VoidCallback onMessages;
   final VoidCallback onProfile;
@@ -63,9 +63,9 @@ class RiderBottomNavigation extends StatelessWidget {
     required this.currentIndex,
     required this.isInterLogistics,
     required this.onDashboard,
-    required this.onAssignments,
+    required this.onPickups,
+    required this.onDeliveries,
     required this.onTransfers,
-    required this.onHistory,
     required this.onEarnings,
     required this.onMessages,
     required this.onProfile,
@@ -110,14 +110,14 @@ class RiderBottomNavigation extends StatelessWidget {
             GlassNavigationDestination(
               icon: Icons.inventory_2_outlined,
               selectedIcon: Icons.inventory_2_rounded,
-              label: 'Tasks',
-              onTap: onAssignments,
+              label: 'Pickup',
+              onTap: onPickups,
             ),
             GlassNavigationDestination(
-              icon: Icons.history_rounded,
-              selectedIcon: Icons.history_rounded,
-              label: 'History',
-              onTap: onHistory,
+              icon: Icons.local_shipping_outlined,
+              selectedIcon: Icons.local_shipping_rounded,
+              label: 'Delivery',
+              onTap: onDeliveries,
             ),
             GlassNavigationDestination(
               icon: Icons.account_balance_wallet_outlined,

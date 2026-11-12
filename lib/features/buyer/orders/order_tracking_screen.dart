@@ -1403,25 +1403,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Wrap(
-                  spacing: 14,
-                  runSpacing: 8,
-                  children: const <Widget>[
-                    _RouteLineLegend(
-                      color: Color(0xFF800000),
-                      label: 'Confirmed / traveled',
-                    ),
-                    _RouteLineLegend(
-                      color: Color(0xFFC2410C),
-                      label: 'Hub transfer active',
-                    ),
-                    _RouteLineLegend(
-                      color: Color(0xFF9CA3AF),
-                      label: 'Remaining road',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
                 Text(
                   'Route updates refresh every 10 seconds while this screen is open.',
                   style: TextStyle(
@@ -1506,7 +1487,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     color: AppTheme.resolve(context, _muted),
                   ),
                 ),
-                if (!hasRider) ...[
+                if (!hasRider && !_shipmentMapUnavailable) ...[
                   const SizedBox(height: 6),
                   Text(
                     _riderGpsPending
@@ -1560,18 +1541,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       ),
                   ],
                 ),
-                if (order.shipmentRouteStops.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Route: ${<String>[if (order.sellerLocation != null) order.sellerLocation!.label, ...order.shipmentRouteStops.map((BuyerOrderLocation stop) => stop.label), order.orderLocation?.label ?? 'Delivery destination'].join(' -> ')}',
-                    style: TextStyle(
-                      color: AppTheme.resolve(context, _text),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

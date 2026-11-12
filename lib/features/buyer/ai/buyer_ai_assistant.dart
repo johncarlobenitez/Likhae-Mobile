@@ -52,18 +52,37 @@ class _BuyerAiAssistantState extends State<BuyerAiAssistant> {
   @override
   void initState() {
     super.initState();
-    _messages.add(
-      _BuyerAiMessage(
-        text: widget.workspace == 'rider'
-            ? "Hi! I'm your LIKHAE Rider Assistant. I can help with assignments, trips, payouts, attendance, and rider settings."
-            : "Hi! I'm your LIKHAE Buyer AI Assistant. I can help with products, cart, orders, delivery updates, vouchers, and account features.",
-        fromBuyer: false,
-        options: <String>[
-          'How do I track my order?',
-          'How do I check out?',
-          'Where are my vouchers?',
-        ],
-      ),
+    _messages.add(_welcomeMessage());
+  }
+
+  @override
+  void didUpdateWidget(covariant BuyerAiAssistant oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.workspace != widget.workspace) {
+      _messages
+        ..clear()
+        ..add(_welcomeMessage());
+    }
+  }
+
+  _BuyerAiMessage _welcomeMessage() {
+    final bool isRider = widget.workspace == 'rider';
+    return _BuyerAiMessage(
+      text: isRider
+          ? "Hi! I'm your LIKHAE Rider Assistant. I can help with pickups, delivery assignments, rider history, earnings, and account settings."
+          : "Hi! I'm your LIKHAE Buyer AI Assistant. I can help with products, cart, orders, delivery updates, vouchers, and account features.",
+      fromBuyer: false,
+      options: isRider
+          ? const <String>[
+              'Where can I find pickup batches?',
+              'How do I view delivery assignments?',
+              'Where can I check my earnings?',
+            ]
+          : const <String>[
+              'How do I track my order?',
+              'How do I check out?',
+              'Where are my vouchers?',
+            ],
     );
   }
 

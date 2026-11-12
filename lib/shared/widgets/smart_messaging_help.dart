@@ -48,6 +48,7 @@ class SmartMessagingHelpDialog extends StatefulWidget {
 
 class _SmartMessagingHelpDialogState extends State<SmartMessagingHelpDialog> {
   final TextEditingController _question = TextEditingController();
+  final ScrollController _contentScrollController = ScrollController();
   List<_SmartHelpSuggestion> _suggestions = const <_SmartHelpSuggestion>[];
   bool _loadingSuggestions = true;
   bool _busy = false;
@@ -71,6 +72,7 @@ class _SmartMessagingHelpDialogState extends State<SmartMessagingHelpDialog> {
   @override
   void dispose() {
     _question.dispose();
+    _contentScrollController.dispose();
     super.dispose();
   }
 
@@ -136,6 +138,7 @@ class _SmartMessagingHelpDialogState extends State<SmartMessagingHelpDialog> {
         }.contains(status);
         _loadingSuggestions = false;
       });
+      if (_hasAnswer) _scrollToLatest();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -163,6 +166,7 @@ class _SmartMessagingHelpDialogState extends State<SmartMessagingHelpDialog> {
         (text?.isNotEmpty != true)) {
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _busy = true;
       _error = null;
@@ -186,6 +190,7 @@ class _SmartMessagingHelpDialogState extends State<SmartMessagingHelpDialog> {
         _hasAnswer = _answer?.isNotEmpty == true;
         _question.clear();
       });
+      if (_hasAnswer) _scrollToLatest();
     } catch (error) {
       if (mounted) setState(() => _error = _clean(error));
     } finally {
@@ -245,6 +250,17 @@ class _SmartMessagingHelpDialogState extends State<SmartMessagingHelpDialog> {
   String _clean(Object error) =>
       error.toString().replaceFirst('Exception: ', '');
 
+  void _scrollToLatest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_contentScrollController.hasClients) return;
+      _contentScrollController.animateTo(
+        _contentScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   String? _optionalString(dynamic value) {
     final String text = value?.toString().trim() ?? '';
     return text.isEmpty ? null : text;
@@ -253,190 +269,231 @@ class _SmartMessagingHelpDialogState extends State<SmartMessagingHelpDialog> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
+    final MediaQueryData media = MediaQuery.of(context);
+    final double availableHeight =
+        (media.size.height - media.padding.vertical - media.viewInsets.vertical)
+            .clamp(280.0, double.infinity)
+            .toDouble();
+    final double maxContentHeight = (availableHeight - 170)
+        .clamp(120.0, 640.0)
+        .toDouble();
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+      contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      buttonPadding: EdgeInsets.zero,
       title: Text(
         _recipientName == null
             ? 'Smart messaging help'
             : 'Help with $_recipientName',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          height: 1.2,
+        ),
       ),
       content: SizedBox(
         width: 460,
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.68,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                if (_contextLabel != null) ...<Widget>[
-                  Text(
-                    'Context: $_contextLabel',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (_welcomeMessage != null)
-                  _HelpCard(
-                    color: colors.surfaceContainerHighest,
-                    child: Text(_welcomeMessage!),
-                  ),
-                if (_loadingSuggestions)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(
-                      child: Column(
-                        children: <Widget>[
-                          CircularProgressIndicator(),
-                          SizedBox(height: 10),
-                          Text('Loading suggested questions...'),
-                        ],
-                      ),
+          constraints: BoxConstraints(maxHeight: maxContentHeight),
+          child: Scrollbar(
+            controller: _contentScrollController,
+            child: SingleChildScrollView(
+              controller: _contentScrollController,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  if (_contextLabel != null) ...<Widget>[
+                    Text(
+                      'Context: $_contextLabel',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
-                  )
-                else if (!_humanHandoff) ...<Widget>[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Suggested questions',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                    const SizedBox(height: 8),
+                  ],
+                  if (_welcomeMessage != null)
+                    _HelpCard(
+                      color: colors.surfaceContainerHighest,
+                      child: Text(_welcomeMessage!),
                     ),
-                  ),
-                  if (_suggestions.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        'You can ask a question below.',
-                        style: Theme.of(context).textTheme.bodySmall,
+                  if (_loadingSuggestions)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Column(
+                          children: <Widget>[
+                            CircularProgressIndicator(),
+                            SizedBox(height: 10),
+                            Text('Loading suggested questions...'),
+                          ],
+                        ),
                       ),
                     )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: Wrap(
-                        spacing: 7,
-                        runSpacing: 2,
-                        children: _suggestions
-                            .map(
-                              (suggestion) => ActionChip(
-                                label: Text(
-                                  suggestion.question,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onPressed: _busy
-                                    ? null
-                                    : () => _askSuggestion(suggestion),
-                              ),
-                            )
-                            .toList(growable: false),
+                  else if (!_humanHandoff) ...<Widget>[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Suggested questions',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _question,
-                    maxLength: 300,
-                    maxLines: 2,
-                    enabled: !_busy,
-                    textInputAction: TextInputAction.send,
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: (String text) => _ask(questionText: text),
-                    decoration: const InputDecoration(
-                      labelText: 'Ask in your own words',
-                      hintText: 'Type a question for the seller or support',
-                      border: OutlineInputBorder(),
-                      alignLabelWithHint: true,
+                    if (_suggestions.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'You can ask a question below.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Wrap(
+                          spacing: 7,
+                          runSpacing: 2,
+                          children: _suggestions
+                              .map(
+                                (suggestion) => ActionChip(
+                                  label: Text(
+                                    suggestion.question,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _askSuggestion(suggestion),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _question,
+                      maxLength: 300,
+                      maxLines: 2,
+                      enabled: !_busy,
+                      textInputAction: TextInputAction.send,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (String text) => _ask(questionText: text),
+                      decoration: const InputDecoration(
+                        labelText: 'Ask in your own words',
+                        hintText: 'Type a question for the seller or support',
+                        border: OutlineInputBorder(),
+                        alignLabelWithHint: true,
+                      ),
                     ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _busy || _question.text.trim().isEmpty
-                          ? null
-                          : () => _ask(questionText: _question.text),
-                      icon: const Icon(Icons.send_rounded, size: 16),
-                      label: Text(_busy ? 'Please wait...' : 'Ask question'),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _busy || _question.text.trim().isEmpty
+                            ? null
+                            : () => _ask(questionText: _question.text),
+                        icon: const Icon(Icons.send_rounded, size: 16),
+                        label: Text(_busy ? 'Please wait...' : 'Ask question'),
+                      ),
                     ),
-                  ),
-                ],
-                if (_answer != null) ...<Widget>[
-                  const SizedBox(height: 12),
-                  _HelpCard(
-                    color: colors.surface,
-                    outlined: true,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ],
+                  if (_answer != null) ...<Widget>[
+                    const SizedBox(height: 12),
+                    _HelpCard(
+                      color: colors.surface,
+                      outlined: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          if (_answerQuestion != null) ...<Widget>[
+                            Text(
+                              _answerQuestion!,
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 7),
+                          ],
+                          if (_answerSource != null) ...<Widget>[
+                            Text(
+                              _answerSource!,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(color: colors.primary),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          Text(_answer!),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_hasAnswer &&
+                      !_humanHandoff &&
+                      _feedback == null) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text('Did this answer help?'),
+                    Wrap(
+                      spacing: 6,
                       children: <Widget>[
-                        if (_answerQuestion != null) ...<Widget>[
-                          Text(
-                            _answerQuestion!,
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 7),
-                        ],
-                        if (_answerSource != null) ...<Widget>[
-                          Text(
-                            _answerSource!,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: colors.primary),
-                          ),
-                          const SizedBox(height: 4),
-                        ],
-                        Text(_answer!),
+                        TextButton(
+                          onPressed: _busy ? null : () => _rate('RESOLVED'),
+                          child: const Text('Yes, thanks'),
+                        ),
+                        TextButton(
+                          onPressed: _busy ? null : () => _rate('UNRESOLVED'),
+                          child: const Text('I still need help'),
+                        ),
                       ],
                     ),
-                  ),
-                ],
-                if (_hasAnswer &&
-                    !_humanHandoff &&
-                    _feedback == null) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text('Did this answer help?'),
-                  Wrap(
-                    spacing: 6,
-                    children: <Widget>[
-                      TextButton(
-                        onPressed: _busy ? null : () => _rate('RESOLVED'),
-                        child: const Text('Yes, thanks'),
+                  ],
+                  if (_feedback != null && !_humanHandoff)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _feedback == 'RESOLVED'
+                            ? 'Marked helpful. You can ask another question or continue chatting.'
+                            : 'Thanks for letting us know. You can request live help here.',
                       ),
-                      TextButton(
-                        onPressed: _busy ? null : () => _rate('UNRESOLVED'),
-                        child: const Text('I still need help'),
+                    ),
+                  if (_humanHandoff)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: _HelpCard(
+                        color: colors.secondaryContainer,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Icon(
+                              Icons.support_agent_rounded,
+                              size: 20,
+                              color: colors.onSecondaryContainer,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Live help was requested. Continue in this conversation.',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: colors.onSecondaryContainer,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ],
-                if (_feedback != null && !_humanHandoff)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      _feedback == 'RESOLVED'
-                          ? 'Marked helpful. You can ask another question or continue chatting.'
-                          : 'Thanks for letting us know. You can request live help here.',
                     ),
-                  ),
-                if (_humanHandoff)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: Text(
-                      'Live help was requested. Continue in this conversation.',
+                  if (!_humanHandoff) ...<Widget>[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _requestHuman,
+                      icon: const Icon(Icons.support_agent_rounded),
+                      label: const Text('Request live help'),
                     ),
-                  ),
-                if (!_humanHandoff) ...<Widget>[
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _requestHuman,
-                    icon: const Icon(Icons.support_agent_rounded),
-                    label: const Text('Request live help'),
-                  ),
+                  ],
+                  if (_error != null) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(_error!, style: TextStyle(color: colors.error)),
+                  ],
                 ],
-                if (_error != null) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Text(_error!, style: TextStyle(color: colors.error)),
-                ],
-              ],
+              ),
             ),
           ),
         ),

@@ -220,6 +220,9 @@ class InterhubTimekeepingController extends Controller
                 'message' => $session->clock_out_at
                     ? 'Time Out recorded at '.$session->clock_out_at->format('M j, Y g:i A').'. Shift: '.intdiv((int) $session->worked_minutes, 60).'h '.((int) $session->worked_minutes % 60).'m · PHP '.number_format((float) $session->gross_pay, 2).'.'
                     : 'Time In recorded at '.$session->clock_in_at->format('M j, Y g:i A').'. Your hours and pay estimate will update in today’s attendance.',
+                'today_attendance' => $scannerRole === 'RIDER' && $request->user()->riderProfile
+                    ? $this->timekeeping->todayAttendanceData($request->user()->riderProfile)
+                    : null,
             ]);
         } catch (RuntimeException $exception) {
             return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);

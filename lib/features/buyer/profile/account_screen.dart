@@ -23,6 +23,7 @@ enum BuyerAccountTab {
   profile,
   addresses,
   vouchers,
+  followingStores,
   wallet,
   password,
   recentlyViewed,
@@ -41,6 +42,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.vouchers:
         return 'Vouchers';
+
+      case BuyerAccountTab.followingStores:
+        return 'Following Stores';
 
       case BuyerAccountTab.wallet:
         return 'Wallet';
@@ -69,6 +73,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
       case BuyerAccountTab.vouchers:
         return 'Discounts and deals';
 
+      case BuyerAccountTab.followingStores:
+        return 'Stores you follow';
+
       case BuyerAccountTab.wallet:
         return 'Refund destination';
 
@@ -95,6 +102,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
 
       case BuyerAccountTab.vouchers:
         return Icons.confirmation_number_outlined;
+
+      case BuyerAccountTab.followingStores:
+        return Icons.storefront_outlined;
 
       case BuyerAccountTab.wallet:
         return Icons.account_balance_wallet_outlined;
@@ -562,6 +572,7 @@ class AccountScreen extends StatefulWidget {
   final VoidCallback? onRecentlyViewed;
 
   final VoidCallback? onVouchers;
+  final VoidCallback? onFollowingStores;
 
   /// Shows the horizontal account navigation tiles above the active section.
   final bool showNavigationTabs;
@@ -613,6 +624,7 @@ class AccountScreen extends StatefulWidget {
     this.onSystemSettings,
     this.onRecentlyViewed,
     this.onVouchers,
+    this.onFollowingStores,
     this.showNavigationTabs = true,
     this.showBackButton = false,
     this.onRefresh,
@@ -3088,7 +3100,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final List<BuyerAccountTab> tabs = BuyerAccountTab.values;
 
     return SizedBox(
-      height: 62,
+      height: 58,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -3096,6 +3108,11 @@ class _AccountScreenState extends State<AccountScreen> {
             for (int index = 0; index < tabs.length; index++) ...[
               if (index > 0) const SizedBox(width: 8),
               _buildTab(tabs[index]),
+              if (tabs[index] == BuyerAccountTab.vouchers &&
+                  widget.onReviewHistory != null) ...[
+                const SizedBox(width: 8),
+                _buildReviewHistoryTab(),
+              ],
             ],
           ],
         ),
@@ -3108,16 +3125,19 @@ class _AccountScreenState extends State<AccountScreen> {
 
     return Material(
       key: _tabKeys[tab],
-      color: selected
-          ? AppTheme.resolve(context, ShopColors.accentSoft, fill: true)
-          : AppTheme.resolve(context, _surface, fill: true),
-      borderRadius: BorderRadius.circular(100),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: () {
           if (selected) return;
 
           if (tab == BuyerAccountTab.vouchers && widget.onVouchers != null) {
             widget.onVouchers!();
+            return;
+          }
+          if (tab == BuyerAccountTab.followingStores &&
+              widget.onFollowingStores != null) {
+            widget.onFollowingStores!();
             return;
           }
           if (tab == BuyerAccountTab.settings &&
@@ -3136,17 +3156,33 @@ class _AccountScreenState extends State<AccountScreen> {
           }
           _changeTab(tab);
         },
-        borderRadius: BorderRadius.circular(100),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 54),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(100),
+            color: selected
+                ? AppTheme.resolve(context, _maroon, fill: true)
+                : AppTheme.resolve(context, _surface, fill: true),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: selected
-                  ? AppTheme.resolve(context, _tan)
+                  ? AppTheme.resolve(context, _maroon)
                   : AppTheme.resolve(context, _border),
             ),
+            boxShadow: selected
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: AppTheme.resolve(context, _maroon).withValues(
+                        alpha: 0.16,
+                      ),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : const <BoxShadow>[],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -3154,21 +3190,64 @@ class _AccountScreenState extends State<AccountScreen> {
               Icon(
                 tab.icon,
                 color: selected
-                    ? AppTheme.resolve(context, _maroon)
+                    ? AppTheme.resolve(context, Colors.white)
                     : AppTheme.resolve(context, _muted),
-                size: 20,
+                size: 18,
               ),
-              const SizedBox(width: 7),
+              const SizedBox(width: 8),
               Text(
                 tab.label,
                 maxLines: 1,
                 softWrap: false,
                 style: TextStyle(
                   color: selected
-                      ? AppTheme.resolve(context, _maroon)
+                      ? AppTheme.resolve(context, Colors.white)
                       : AppTheme.resolve(context, _text),
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReviewHistoryTab() {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: widget.onReviewHistory,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          constraints: const BoxConstraints(minHeight: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          decoration: BoxDecoration(
+            color: AppTheme.resolve(context, _surface, fill: true),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppTheme.resolve(context, _border)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.rate_review_outlined,
+                color: AppTheme.resolve(context, _muted),
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'My review history',
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _text),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -3195,6 +3274,18 @@ class _AccountScreenState extends State<AccountScreen> {
             onPressed: widget.onVouchers,
             icon: const Icon(Icons.open_in_new_rounded),
             label: const Text('Open Vouchers'),
+          ),
+        );
+
+      case BuyerAccountTab.followingStores:
+        return _AccountPanel(
+          title: 'Following Stores',
+          subtitle: 'Browse the stores you follow.',
+          icon: Icons.storefront_outlined,
+          child: FilledButton.icon(
+            onPressed: widget.onFollowingStores,
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: const Text('Open Following Stores'),
           ),
         );
 
@@ -4212,14 +4303,6 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
               ),
             ),
-            if (widget.onReviewHistory != null) ...[
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: widget.onReviewHistory,
-                icon: const Icon(Icons.rate_review_outlined),
-                label: const Text('My review history'),
-              ),
-            ],
           ],
         ),
       ),

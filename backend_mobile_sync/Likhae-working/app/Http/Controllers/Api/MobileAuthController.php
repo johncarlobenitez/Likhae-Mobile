@@ -88,10 +88,13 @@ class MobileAuthController extends Controller
         $application = $workflow->submit($request, $registrationOverrides);
         $policies->recordRegistrationAcceptances($application->user, $acceptedPolicies, $request);
         Cache::forget($this->emailVerificationTokenCacheKey($email));
+        $isBuyer = $application->user?->isAccountType(User::TYPE_BUYER) ?? false;
 
         return response()->json([
             'success' => true,
-            'message' => 'Registration submitted. Wait for account approval before signing in.',
+            'message' => $isBuyer
+                ? 'Your Buyer account is active. Sign in to start using LIKHAE.'
+                : 'Registration submitted. Wait for account approval before signing in.',
             'data' => [
                 'application_number' => $application->application_number,
                 'status' => $application->status,

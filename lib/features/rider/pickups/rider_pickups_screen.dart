@@ -398,8 +398,6 @@ class RiderPickupsScreen extends StatefulWidget {
 
   final RiderPickupRefreshCallback? onRefresh;
 
-  final VoidCallback? onViewDeliveries;
-
   const RiderPickupsScreen({
     super.key,
     this.pickups = const <RiderPickupData>[],
@@ -407,7 +405,6 @@ class RiderPickupsScreen extends StatefulWidget {
     this.statusMessage,
     this.onViewPickup,
     this.onRefresh,
-    this.onViewDeliveries,
   });
 
   @override
@@ -449,58 +446,8 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.resolve(context, _background, fill: true),
-      appBar: AppBar(
-        backgroundColor: AppTheme.resolve(context, _background, fill: true),
-        foregroundColor: AppTheme.resolve(context, _text),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        title:  Text(
-          'Pickups',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: AppTheme.resolve(context, _text),
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        actions: <Widget>[
-          if (widget.onViewDeliveries != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: FilledButton(
-                onPressed: widget.onViewDeliveries,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.resolve(context, _maroon, fill: true),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 38),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      'Deliveries',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(width: 6),
-                    Icon(Icons.arrow_forward_rounded, size: 16),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
       body: SafeArea(
-        top: false,
+        top: true,
         child: RefreshIndicator(
           color: AppTheme.resolve(context, _maroon),
           onRefresh: _refresh,

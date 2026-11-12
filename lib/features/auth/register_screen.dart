@@ -2157,11 +2157,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             items: const [
               DropdownMenuItem(value: 'motorcycle', child: Text('Motorcycle')),
-              DropdownMenuItem(value: 'tricycle', child: Text('Tricycle')),
-              DropdownMenuItem(value: 'van', child: Text('Van')),
-              DropdownMenuItem(value: 'closed_van', child: Text('Closed Van')),
-              DropdownMenuItem(value: 'truck', child: Text('Truck')),
               DropdownMenuItem(value: 'car', child: Text('Car')),
+              DropdownMenuItem(value: 'van', child: Text('Van')),
+              DropdownMenuItem(value: 'truck', child: Text('Truck')),
             ],
             onChanged: (String? value) {
               setState(() {

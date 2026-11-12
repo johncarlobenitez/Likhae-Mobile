@@ -13,7 +13,6 @@ class RiderDeliveriesScreen extends StatefulWidget {
   final RiderDeliveryCallback? onViewDelivery;
   final Future<void> Function(List<RiderDeliveryData> deliveries)? onAcceptAll;
   final RiderDeliveryRefreshCallback? onRefresh;
-  final VoidCallback? onBack;
 
   const RiderDeliveriesScreen({
     super.key,
@@ -24,7 +23,6 @@ class RiderDeliveriesScreen extends StatefulWidget {
     this.onViewDelivery,
     this.onAcceptAll,
     this.onRefresh,
-    this.onBack,
   });
 
   @override
@@ -198,26 +196,9 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: <Widget>[
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate(<Widget>[
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        tooltip: 'Back',
-                        onPressed:
-                            widget.onBack ??
-                            () => Navigator.of(context).maybePop(),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: AppTheme.resolve(context, _text),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
                     if (widget.statusMessage?.trim().isNotEmpty ==
                         true) ...<Widget>[
                       _StatusNotice(message: widget.statusMessage!),

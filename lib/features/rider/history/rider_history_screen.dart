@@ -7,6 +7,7 @@ import '../rider_product_image.dart';
 
 class RiderHistoryData {
   final int? id;
+  final String assignmentType;
   final String trackingCode;
   final String buyerName;
   final String statusLabel;
@@ -16,6 +17,7 @@ class RiderHistoryData {
 
   const RiderHistoryData({
     this.id,
+    this.assignmentType = '',
     required this.trackingCode,
     required this.buyerName,
     required this.statusLabel,
@@ -25,17 +27,113 @@ class RiderHistoryData {
   });
 
   factory RiderHistoryData.fromApi(Map<String, dynamic> json) {
+    final dynamic updatedValue = json['updated'] ?? json['updated_at'];
     return RiderHistoryData(
       id: _parseInt(json['id']),
+      assignmentType: _assignmentType(json),
       trackingCode: (json['tracking'] ?? json['tracking_code'] ?? '')
           .toString(),
       buyerName: (json['buyer'] ?? json['buyer_name'] ?? '').toString(),
-      statusLabel: (json['status_label'] ?? json['status'] ?? '').toString(),
-      updatedLabel: (json['updated'] ?? json['updated_at'] ?? '').toString(),
+      statusLabel: _formatStatusLabel(
+        json['status_label'] ?? json['status'],
+      ),
+      updatedLabel: _formatUpdatedLabel(updatedValue),
       failureReason: _nullableString(json['failure_reason']),
       imageUrl: riderProductImageUrl(json),
     );
   }
+
+  static String _formatUpdatedLabel(dynamic value) {
+    final String raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return 'Date unavailable';
+
+    final DateTime? parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+
+    final DateTime local = parsed.toLocal();
+    const List<String> months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final String minute = local.minute.toString().padLeft(2, '0');
+    final String period = local.hour >= 12 ? 'PM' : 'AM';
+    final String date = '${months[local.month - 1]} ${local.day}, ${local.year}';
+    return '$date, $hour:$minute $period';
+  }
+
+  static String _formatStatusLabel(dynamic value) {
+    final String raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return 'Unknown';
+
+    final String normalized = raw.replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    final String compact = normalized.toUpperCase().replaceAll(' ', '');
+    const Map<String, String> knownLabels = <String, String>{
+      'ATSORTINGCENTER': 'At Sorting Center',
+      'READYFORPICKUP': 'Ready for Pickup',
+      'PICKEDUP': 'Picked Up',
+      'OUTFORDELIVERY': 'Out for Delivery',
+      'DELIVERYFAILED': 'Delivery Failed',
+      'DELIVERED': 'Delivered',
+      'RETURNED': 'Returned',
+      'FAILED': 'Failed',
+      'COMPLETED': 'Completed',
+      'REJECTED': 'Rejected',
+      'CANCELLED': 'Cancelled',
+    };
+    final String? knownLabel = knownLabels[compact];
+    if (knownLabel != null) return knownLabel;
+
+    return normalized
+        .split(RegExp(r'\s+'))
+        .where((String word) => word.isNotEmpty)
+        .map(
+          (String word) =>
+              '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
+  static String _assignmentType(Map<String, dynamic> json) {
+    final dynamic rawType =
+        json['assignment_type'] ??
+        json['assignmentType'] ??
+        json['job_type'] ??
+        json['jobType'] ??
+        json['type'];
+    final String type = rawType?.toString().trim().toUpperCase() ?? '';
+    if (type.contains('PICKUP')) return 'PICKUP';
+    if (type.contains('DELIVERY')) return 'DELIVERY';
+
+    final String status = (json['status_label'] ?? json['status'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]+'), '_');
+    if (status.contains('PICKUP') ||
+        status == 'PICKED_UP' ||
+        status.contains('SORTING_CENTER')) {
+      return 'PICKUP';
+    }
+    if (status.contains('DELIVERY') || status == 'DELIVERED') {
+      return 'DELIVERY';
+    }
+    return '';
+  }
+
+  bool get isPickup => assignmentType == 'PICKUP';
+
+  bool get isDelivery => assignmentType == 'DELIVERY';
 
   bool get hasFailureReason {
     return failureReason?.trim().isNotEmpty == true;
@@ -72,6 +170,8 @@ typedef RiderHistoryRefreshCallback = Future<void> Function();
 
 typedef RiderHistoryItemCallback = void Function(RiderHistoryData history);
 
+enum _RiderHistoryFilter { all, pickup, delivery }
+
 class RiderHistoryScreen extends StatefulWidget {
   final List<RiderHistoryData> history;
 
@@ -94,6 +194,8 @@ class RiderHistoryScreen extends StatefulWidget {
 }
 
 class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
+  _RiderHistoryFilter _selectedFilter = _RiderHistoryFilter.all;
+
   static const Color _background = Color(0xFFFBF7F2);
 
   static const Color _surface = Color(0xFFFFFDF9);
@@ -122,18 +224,23 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
     await callback();
   }
 
+  List<RiderHistoryData> get _visibleHistory {
+    return switch (_selectedFilter) {
+      _RiderHistoryFilter.all => widget.history,
+      _RiderHistoryFilter.pickup =>
+        widget.history.where((RiderHistoryData row) => row.isPickup).toList(),
+      _RiderHistoryFilter.delivery => widget.history
+          .where((RiderHistoryData row) => row.isDelivery)
+          .toList(),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.resolve(context, _background, fill: true),
-      appBar: AppBar(
-        backgroundColor: AppTheme.resolve(context, _background, fill: true),
-        foregroundColor: AppTheme.resolve(context, _text),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-      ),
       body: SafeArea(
-        top: false,
+        top: true,
         child: RefreshIndicator(
           color: AppTheme.resolve(context, _maroon),
           onRefresh: _refresh,
@@ -188,7 +295,7 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
         SizedBox(height: 9),
 
         Text(
-          'Completed, failed, returned, and sorting-center handoff records from the deliveries table.',
+          'Completed, failed, returned, and sorting-center handoff records for your pickup and delivery assignments.',
           style: TextStyle(
             color: AppTheme.resolve(context, _muted),
             fontSize: 13.5,
@@ -200,6 +307,7 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
   }
 
   Widget _buildHistorySection() {
+    final List<RiderHistoryData> visibleHistory = _visibleHistory;
     return Container(
       width: double.infinity,
       clipBehavior: Clip.antiAlias,
@@ -235,6 +343,62 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
                     height: 1.45,
                   ),
                 ),
+                const SizedBox(height: 13),
+                DropdownButtonFormField<_RiderHistoryFilter>(
+                  initialValue: _selectedFilter,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Filter history',
+                    prefixIcon: Icon(
+                      Icons.filter_list_rounded,
+                      color: AppTheme.resolve(context, _maroon),
+                    ),
+                    filled: true,
+                    fillColor: AppTheme.resolve(context, _background, fill: true),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppTheme.resolve(context, _border),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppTheme.resolve(context, _border),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppTheme.resolve(context, _maroon),
+                      ),
+                    ),
+                  ),
+                  dropdownColor: AppTheme.resolve(context, _surface, fill: true),
+                  items: const <DropdownMenuItem<_RiderHistoryFilter>>[
+                    DropdownMenuItem(
+                      value: _RiderHistoryFilter.all,
+                      child: Text('All'),
+                    ),
+                    DropdownMenuItem(
+                      value: _RiderHistoryFilter.pickup,
+                      child: Text('Pickup'),
+                    ),
+                    DropdownMenuItem(
+                      value: _RiderHistoryFilter.delivery,
+                      child: Text('Delivery'),
+                    ),
+                  ],
+                  onChanged: (_RiderHistoryFilter? filter) {
+                    if (filter != null) {
+                      setState(() => _selectedFilter = filter);
+                    }
+                  },
+                ),
               ],
             ),
           ),
@@ -245,11 +409,11 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
             color: AppTheme.resolve(context, _border),
           ),
 
-          if (widget.history.isEmpty)
+          if (visibleHistory.isEmpty)
             _buildEmptyState()
           else
-            ...List<Widget>.generate(widget.history.length, (int index) {
-              final RiderHistoryData parcel = widget.history[index];
+            ...List<Widget>.generate(visibleHistory.length, (int index) {
+              final RiderHistoryData parcel = visibleHistory[index];
 
               return Column(
                 children: <Widget>[
@@ -262,7 +426,7 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
                           },
                   ),
 
-                  if (index != widget.history.length - 1)
+                  if (index != visibleHistory.length - 1)
                     Divider(
                       height: 1,
                       thickness: 1,
@@ -300,7 +464,7 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
             SizedBox(height: 14),
 
             Text(
-              'No rider history found yet.',
+              _emptyStateTitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppTheme.resolve(context, _text),
@@ -312,7 +476,7 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
             SizedBox(height: 6),
 
             Text(
-              'Your completed and previous pickup or delivery assignments will appear here.',
+              _emptyStateMessage,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppTheme.resolve(context, _muted),
@@ -325,6 +489,21 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
       ),
     );
   }
+
+  String get _emptyStateTitle => switch (_selectedFilter) {
+    _RiderHistoryFilter.all => 'No rider history found yet.',
+    _RiderHistoryFilter.pickup => 'No pickup history found yet.',
+    _RiderHistoryFilter.delivery => 'No delivery history found yet.',
+  };
+
+  String get _emptyStateMessage => switch (_selectedFilter) {
+    _RiderHistoryFilter.all =>
+      'Your completed and previous pickup or delivery assignments will appear here.',
+    _RiderHistoryFilter.pickup =>
+      'Your completed and previous pickup assignments will appear here.',
+    _RiderHistoryFilter.delivery =>
+      'Your completed and previous delivery assignments will appear here.',
+  };
 
   Widget _buildStatusMessage(String message) {
     return Container(
@@ -410,7 +589,7 @@ class _HistoryItem extends StatelessWidget {
                           parcel.trackingCode.trim().isEmpty
                               ? 'No tracking code'
                               : parcel.trackingCode,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: AppTheme.resolve(context, _text),
@@ -424,7 +603,7 @@ class _HistoryItem extends StatelessWidget {
 
                         Text(
                           'Buyer: ${parcel.buyerName}',
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: AppTheme.resolve(context, _muted),
@@ -435,13 +614,27 @@ class _HistoryItem extends StatelessWidget {
 
                         const SizedBox(height: 4),
 
-                        Text(
-                          '${parcel.statusLabel} - ${parcel.updatedLabel}',
-                          style: TextStyle(
-                            color: AppTheme.resolve(context, _muted),
-                            fontSize: 12,
-                            height: 1.4,
-                          ),
+                        Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.schedule_rounded,
+                              size: 13,
+                              color: AppTheme.resolve(context, _muted),
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                parcel.updatedLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AppTheme.resolve(context, _muted),
+                                  fontSize: 11.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -493,6 +686,31 @@ class _HistoryItem extends StatelessWidget {
 
               Row(
                 children: <Widget>[
+                  if (parcel.assignmentType.isNotEmpty) ...<Widget>[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.resolve(
+                          context,
+                          const Color(0xFFF5EEE7),
+                          fill: true,
+                        ),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        parcel.isPickup ? 'Pickup' : 'Delivery',
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _muted),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -504,10 +722,13 @@ class _HistoryItem extends StatelessWidget {
                     ),
                     child: Text(
                       parcel.statusLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppTheme.resolve(context, _maroon),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
+                        fontSize: 11.5,
+                        letterSpacing: 0,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),

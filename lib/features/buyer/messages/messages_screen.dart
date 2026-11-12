@@ -42,6 +42,30 @@ extension _MessagesPalette on BuildContext {
   Color get messagesTan => _messagesDark ? AppTheme.darkTan : ShopColors.tan;
   Color get messagesDanger =>
       _messagesDark ? AppTheme.darkDanger : const Color(0xFFB42318);
+  Color get messagesChatBackground => _messagesDark
+      ? AppTheme.darkBackground
+      : const Color(0xFFFBF7F2);
+  Color get messagesChatBackgroundSoft => _messagesDark
+      ? AppTheme.darkSurfaceStrong
+      : const Color(0xFFF6EFE7);
+  Color get messagesChatSurface => _messagesDark
+      ? AppTheme.darkSurface
+      : const Color(0xFFFFFDF9);
+  Color get messagesChatBorder => _messagesDark
+      ? AppTheme.darkBorder
+      : const Color(0xFFEADCCC);
+  Color get messagesChatAccent => _messagesDark
+      ? AppTheme.darkMaroonDark
+      : const Color(0xFF561C17);
+  Color get messagesChatAccentLight => _messagesDark
+      ? const Color(0xFF73423A)
+      : const Color(0xFF642920);
+  Color get messagesChatText =>
+      _messagesDark ? AppTheme.darkText : const Color(0xFF3B211B);
+  Color get messagesChatMuted =>
+      _messagesDark ? AppTheme.darkMuted : const Color(0xFF987865);
+  Color get messagesChatMutedSoft =>
+      _messagesDark ? const Color(0xFFC8B7AD) : const Color(0xFFA99386);
 }
 
 typedef LoadConversationMessagesCallback =
@@ -1631,7 +1655,6 @@ class _MessagesScreenState extends State<MessagesScreen>
   static const List<_DemoConversation> _demoConversations = <_DemoConversation>[
     _DemoConversation(
       name: 'Aurelia Jewelry',
-      initials: 'AJ',
       lastMessage: 'Yes, the pearl necklace is still available.',
       time: '2m',
       unread: 2,
@@ -1669,7 +1692,6 @@ class _MessagesScreenState extends State<MessagesScreen>
     ),
     _DemoConversation(
       name: 'Mira Studio',
-      initials: 'MS',
       lastMessage: 'We can prepare the item today.',
       time: '18m',
       unread: 1,
@@ -1700,7 +1722,6 @@ class _MessagesScreenState extends State<MessagesScreen>
     ),
     _DemoConversation(
       name: 'Page & Pixel Books',
-      initials: 'PP',
       lastMessage: 'Softcover is available.',
       time: '1h',
       unread: 0,
@@ -1726,7 +1747,6 @@ class _MessagesScreenState extends State<MessagesScreen>
     ),
     _DemoConversation(
       name: 'Craft & Clay Studio',
-      initials: 'CC',
       lastMessage: 'Thank you for your message.',
       time: 'Yesterday',
       unread: 0,
@@ -1842,32 +1862,54 @@ class _MessagesScreenState extends State<MessagesScreen>
     required bool mobile,
   }) {
     return Container(
-      color: _background,
+      color: context.messagesChatBackgroundSoft,
       child: Column(
         children: [
           Container(
-            padding: EdgeInsets.fromLTRB(mobile ? 4 : 12, 4, 12, 4),
-            constraints: const BoxConstraints(minHeight: 56),
+            padding: EdgeInsets.fromLTRB(
+              mobile ? 8 : 18,
+              10,
+              mobile ? 8 : 18,
+              10,
+            ),
+            constraints: const BoxConstraints(minHeight: 64),
             decoration: BoxDecoration(
-              color: _surface,
-              border: Border(bottom: BorderSide(color: _border)),
+              color: context.messagesChatSurface,
+              border: Border(
+                bottom: BorderSide(color: context.messagesChatBorder),
+              ),
             ),
             child: Row(
               children: [
                 if (mobile)
-                  IconButton(
-                    tooltip: 'Back to conversations',
-                    onPressed: () {
-                      setState(() {
-                        _demoConversationIndex = null;
-                      });
-                    },
-                    icon: Icon(Icons.chevron_left, color: _text),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Tooltip(
+                      message: 'Back to chats',
+                      child: OutlinedButton(
+                        onPressed: () {
+                          setState(() {
+                            _demoConversationIndex = null;
+                          });
+                        },
+                        style: OutlinedButton.styleFrom(
+                          fixedSize: const Size(34, 34),
+                          padding: EdgeInsets.zero,
+                          foregroundColor: context.messagesChatAccent,
+                          backgroundColor: context.messagesChatSurface,
+                          side: BorderSide(color: context.messagesChatBorder),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                        ),
+                        child: const Icon(Icons.arrow_back_rounded, size: 17),
+                      ),
+                    ),
                   ),
 
-                _DemoAvatar(initials: conversation.initials, size: 38),
+                _DemoAvatar(size: mobile ? 36 : 42),
 
-                const SizedBox(width: 10),
+                SizedBox(width: mobile ? 8 : 12),
 
                 Expanded(
                   child: Column(
@@ -1878,9 +1920,9 @@ class _MessagesScreenState extends State<MessagesScreen>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _text,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                          color: context.messagesChatText,
+                          fontSize: mobile ? 12 : 14,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1889,8 +1931,8 @@ class _MessagesScreenState extends State<MessagesScreen>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _muted,
-                          fontSize: 11.5,
+                          color: context.messagesChatMuted,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -1904,15 +1946,15 @@ class _MessagesScreenState extends State<MessagesScreen>
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: _backgroundSoft,
+                    color: context.messagesChatBackgroundSoft,
                     borderRadius: BorderRadius.circular(100),
-                    border: Border.all(color: _border),
+                    border: Border.all(color: context.messagesChatBorder),
                   ),
                   child: Text(
                     'PREVIEW',
                     style: TextStyle(
-                      color: _maroon,
-                      fontSize: 10.5,
+                      color: context.messagesChatAccent,
+                      fontSize: 10,
                       letterSpacing: 0.4,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1931,14 +1973,61 @@ class _MessagesScreenState extends State<MessagesScreen>
                       const <_DemoMessage>[]),
                 ];
 
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
-                  itemCount: messages.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final _DemoMessage message = messages[index];
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: Theme.of(context).brightness == Brightness.dark
+                          ? const <Color>[
+                              Color(0xFF161210),
+                              Color(0xFF1E1A17),
+                            ]
+                          : const <Color>[
+                              Color(0xFFFBF7F2),
+                              Color(0xFFF6EFE7),
+                            ],
+                    ),
+                  ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                    itemCount: messages.length + 1,
+                    itemBuilder: (BuildContext context, int index) {
+                      if (index == 0) {
+                        return Center(
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 18),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.messagesChatSurface.withValues(
+                                alpha: 0.88,
+                              ),
+                              border: Border.all(
+                                color: context.messagesChatBorder,
+                              ),
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              'Conversation',
+                              style: TextStyle(
+                                color: context.messagesChatMuted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
 
-                    return _DemoMessageBubble(message: message);
-                  },
+                      return _DemoMessageBubble(
+                        message: messages[index - 1],
+                        sellerName: conversation.name,
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -1952,7 +2041,7 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   Widget _buildDemoComposer(_DemoConversation conversation) {
     return _buildMessageBox(
-      hintText: 'Message ${conversation.name}...',
+      hintText: 'Type your message to ${conversation.name}...',
       onSend: () => _sendDemoMessage(conversation),
     );
   }
@@ -1965,7 +2054,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     }
 
     return Container(
-      color: _background,
+      color: context.messagesChatBackground,
       child: Column(
         children: [
           _buildChatHeader(seller, mobile: mobile),
@@ -1973,7 +2062,13 @@ class _MessagesScreenState extends State<MessagesScreen>
           if (seller.orderContext != null)
             _OrderContextStrip(orderContext: seller.orderContext!),
 
-          Expanded(child: _buildMessageStream(seller)),
+          Expanded(child: _buildMessageStream(seller, mobile: mobile)),
+
+          if (widget.messageStreamBuilder != null)
+            _LiveChatStatus(
+              sellerName: seller.name,
+              connected: _realtimeConnected,
+            ),
 
           _buildComposer(seller),
         ],
@@ -1985,29 +2080,56 @@ class _MessagesScreenState extends State<MessagesScreen>
     BuyerConversationData seller, {
     required bool mobile,
   }) {
+    final String? statusLabel = seller.statusLabel?.trim().isNotEmpty == true
+        ? seller.statusLabel!.trim()
+        : seller.isOnline == null
+        ? null
+        : seller.isOnline == true
+        ? 'Online'
+        : 'Offline';
+
     return Container(
-      padding: EdgeInsets.fromLTRB(mobile ? 4 : 12, 4, 12, 4),
-      constraints: const BoxConstraints(minHeight: 56),
+      padding: EdgeInsets.fromLTRB(mobile ? 8 : 18, 10, mobile ? 8 : 18, 10),
+      constraints: const BoxConstraints(minHeight: 64),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border(bottom: BorderSide(color: _border)),
+        color: context.messagesChatSurface,
+        border: Border(bottom: BorderSide(color: context.messagesChatBorder)),
       ),
       child: Row(
         children: [
           if (mobile)
-            IconButton(
-              tooltip: 'Back to conversations',
-              onPressed: () {
-                setState(() {
-                  _mobileShowingChat = false;
-                });
-              },
-              icon: Icon(Icons.chevron_left, color: _text),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Tooltip(
+                message: 'Back to chats',
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      _mobileShowingChat = false;
+                    });
+                  },
+                  style: OutlinedButton.styleFrom(
+                    fixedSize: const Size(34, 34),
+                    padding: EdgeInsets.zero,
+                    foregroundColor: context.messagesChatAccent,
+                    backgroundColor: context.messagesChatSurface,
+                    side: BorderSide(color: context.messagesChatBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                  ),
+                  child: const Icon(Icons.arrow_back_rounded, size: 17),
+                ),
+              ),
             ),
 
-          _SellerAvatar(seller: seller, size: 38),
+          _SellerAvatar(
+            seller: seller,
+            size: mobile ? 36 : 42,
+            showPresence: false,
+          ),
 
-          const SizedBox(width: 10),
+          SizedBox(width: mobile ? 8 : 12),
 
           Expanded(
             child: Column(
@@ -2018,29 +2140,18 @@ class _MessagesScreenState extends State<MessagesScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: _text,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    color: context.messagesChatText,
+                    fontSize: mobile ? 12 : 14,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
 
-                if (seller.statusLabel?.trim().isNotEmpty == true) ...[
+                if (statusLabel != null) ...[
                   const SizedBox(height: 3),
 
                   _SellerStatus(
-                    label: seller.statusLabel!,
+                    label: statusLabel,
                     isOnline: seller.isOnline,
-                  ),
-                ] else if (widget.messageStreamBuilder != null) ...[
-                  const SizedBox(height: 3),
-
-                  Text(
-                    _realtimeConnected
-                        ? 'Live messages connected'
-                        : 'Live messages reconnecting...',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: _muted, fontSize: 11),
                   ),
                 ],
               ],
@@ -2048,64 +2159,119 @@ class _MessagesScreenState extends State<MessagesScreen>
           ),
 
           if (widget.onViewStore != null) ...[
-            const SizedBox(width: 7),
+            SizedBox(width: mobile ? 5 : 10),
             SizedBox(
-              height: 38,
-              child: OutlinedButton.icon(
+              height: 36,
+              child: OutlinedButton(
                 onPressed: () => widget.onViewStore!(seller),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _maroon,
-                  side: BorderSide(color: _border),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  foregroundColor: context.messagesChatAccent,
+                  backgroundColor: context.messagesChatSurface,
+                  side: const BorderSide(color: Color(0xFFC19771)),
+                  padding: EdgeInsets.symmetric(horizontal: mobile ? 9 : 13),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(11),
                   ),
                 ),
-                icon: const Icon(Icons.storefront_outlined, size: 15),
-                label: Text(
+                child: Text(
                   mobile ? 'Store' : 'View Store',
                   style: const TextStyle(
-                    fontSize: 11.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ),
           ],
-          if (seller.conversationId.trim().isNotEmpty)
-            IconButton(
-              tooltip: 'Smart messaging help',
-              onPressed: () => showSmartMessagingHelp(
-                context,
-                workspace: 'buyer',
-                conversationId: seller.conversationId,
-                productId: _activeProductReference?.productId,
+          if (seller.conversationId.trim().isNotEmpty) ...[
+            SizedBox(width: mobile ? 2 : 6),
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: IconButton(
+                tooltip: 'Smart messaging help',
+                onPressed: () => showSmartMessagingHelp(
+                  context,
+                  workspace: 'buyer',
+                  conversationId: seller.conversationId,
+                  productId: _activeProductReference?.productId,
+                ),
+                style: IconButton.styleFrom(
+                  foregroundColor: context.messagesChatAccent,
+                  padding: EdgeInsets.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                    side: BorderSide(color: context.messagesChatBorder),
+                  ),
+                ),
+                icon: const Icon(Icons.support_agent_outlined, size: 18),
               ),
-              icon: Icon(Icons.support_agent_outlined, color: _maroon),
             ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildMessageStream(BuyerConversationData seller) {
+  Widget _buildMessageStream(
+    BuyerConversationData seller, {
+    required bool mobile,
+  }) {
     if (_loadingMessages && _messages.isEmpty) {
       return Center(
         child: SizedBox(
           width: 25,
           height: 25,
-          child: CircularProgressIndicator(strokeWidth: 2, color: _maroon),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: context.messagesChatAccent,
+          ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      color: _maroon,
-      onRefresh: _refreshChat,
-      child: ListView.builder(
+    final bool dark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: dark
+              ? const <Color>[Color(0xFF161210), Color(0xFF1E1A17)]
+              : const <Color>[Color(0xFFFBF7F2), Color(0xFFF6EFE7)],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (!dark)
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.82, -0.88),
+                    radius: 1.25,
+                    colors: <Color>[
+                      const Color(0xFFC19771).withValues(alpha: 0.10),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          RefreshIndicator(
+            color: context.messagesChatAccent,
+            onRefresh: _refreshChat,
+            child: ListView.builder(
         controller: _messageScrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+        padding: EdgeInsets.fromLTRB(
+          mobile ? 12 : 20,
+          mobile ? 12 : 20,
+          mobile ? 12 : 20,
+          16,
+        ),
         itemCount: _messages.length + 1,
         itemBuilder: (context, index) {
           if (index > 0) {
@@ -2130,6 +2296,29 @@ class _MessagesScreenState extends State<MessagesScreen>
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.messagesChatSurface.withValues(alpha: 0.88),
+                    border: Border.all(color: context.messagesChatBorder),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    'Conversation',
+                    style: TextStyle(
+                      color: context.messagesChatMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+
               if (_activeProductReference != null) ...[
                 const SizedBox(height: 4),
 
@@ -2194,7 +2383,11 @@ class _MessagesScreenState extends State<MessagesScreen>
               if (_messages.isEmpty) ...[
                 const SizedBox(height: 35),
 
-                Icon(Icons.forum_outlined, size: 42, color: _tan),
+                Icon(
+                  Icons.forum_outlined,
+                  size: 42,
+                  color: context.messagesTan,
+                ),
 
                 const SizedBox(height: 11),
 
@@ -2202,7 +2395,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                   'No messages yet',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: _text,
+                    color: context.messagesChatText,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2213,19 +2406,25 @@ class _MessagesScreenState extends State<MessagesScreen>
                 Text(
                   'Send the first message to ${seller.name}.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: _muted, fontSize: 12),
+                  style: TextStyle(
+                    color: context.messagesChatMuted,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ],
           );
-        },
+            },
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildComposer(BuyerConversationData seller) {
     return _buildMessageBox(
-      hintText: 'Message ${seller.name}...',
+      hintText: 'Type your message to ${seller.name}...',
       onSend: _sendMessage,
     );
   }
@@ -2240,10 +2439,10 @@ class _MessagesScreenState extends State<MessagesScreen>
       // BuyerNavigationFrame already reserves space for the floating bottom
       // navigation. Adding another clearance here creates the large empty
       // gap visible between the composer and the navigation bar.
-      padding: const EdgeInsets.fromLTRB(11, 8, 11, 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       decoration: BoxDecoration(
-        color: _surface,
-        border: Border(top: BorderSide(color: _border)),
+        color: context.messagesChatSurface,
+        border: Border(top: BorderSide(color: context.messagesChatBorder)),
       ),
       child: SafeArea(
         top: false,
@@ -2256,9 +2455,9 @@ class _MessagesScreenState extends State<MessagesScreen>
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: _backgroundSoft,
+                  color: context.messagesChatBackgroundSoft,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _border),
+                  border: Border.all(color: context.messagesChatBorder),
                 ),
                 child: Row(
                   children: [
@@ -2278,11 +2477,11 @@ class _MessagesScreenState extends State<MessagesScreen>
                               return Container(
                                 width: 48,
                                 height: 48,
-                                color: _surface,
+                                color: context.messagesChatSurface,
                                 alignment: Alignment.center,
                                 child: Icon(
                                   Icons.image_outlined,
-                                  color: _muted2,
+                                  color: context.messagesChatMutedSoft,
                                 ),
                               );
                             },
@@ -2308,7 +2507,10 @@ class _MessagesScreenState extends State<MessagesScreen>
                             attachment.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: _muted, fontSize: 11),
+                            style: TextStyle(
+                              color: context.messagesChatMuted,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
@@ -2336,9 +2538,12 @@ class _MessagesScreenState extends State<MessagesScreen>
                         ? null
                         : _pickAttachment,
                     style: IconButton.styleFrom(
-                      backgroundColor: _surface,
-                      foregroundColor: _maroon,
-                      shape: CircleBorder(side: BorderSide(color: _border)),
+                      backgroundColor: context.messagesChatSurface,
+                      foregroundColor: context.messagesChatAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                        side: BorderSide(color: context.messagesChatBorder),
+                      ),
                     ),
                     icon: _pickingAttachment
                         ? SizedBox(
@@ -2346,7 +2551,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: _maroon,
+                            color: context.messagesChatAccent,
                             ),
                           )
                         : const Icon(Icons.attach_file_rounded, size: 20),
@@ -2371,25 +2576,35 @@ class _MessagesScreenState extends State<MessagesScreen>
                     },
                     decoration: InputDecoration(
                       hintText: hintText,
-                      hintStyle: TextStyle(color: _muted2, fontSize: 13),
+                      hintStyle: TextStyle(
+                        color: context.messagesChatMutedSoft,
+                        fontSize: 12,
+                      ),
                       counterText: '',
                       filled: true,
-                      fillColor: _surface,
+                      fillColor: context.messagesChatSurface,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 12,
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: _border),
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: context.messagesChatBorder,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: _border),
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: context.messagesChatBorder,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide(color: _tan, width: 1.3),
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(
+                          color: Color(0xFFC19771),
+                          width: 1.3,
+                        ),
                       ),
                     ),
                   ),
@@ -2398,26 +2613,35 @@ class _MessagesScreenState extends State<MessagesScreen>
                 const SizedBox(width: 8),
 
                 SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: IconButton.filled(
-                    tooltip: 'Send message',
+                  height: 42,
+                  child: FilledButton.icon(
                     onPressed: _sendingMessage ? null : onSend,
-                    style: IconButton.styleFrom(
-                      backgroundColor: _maroon,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(88, 42),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      backgroundColor: context.messagesChatAccent,
                       foregroundColor: Colors.white,
-                      shape: const CircleBorder(),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     icon: _sendingMessage
                         ? const SizedBox(
-                            width: 19,
-                            height: 19,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.send_rounded, size: 19),
+                        : const Icon(Icons.send_rounded, size: 16),
+                    label: const Text(
+                      'Send',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -2480,7 +2704,6 @@ class _MessagesScreenState extends State<MessagesScreen>
 
 class _DemoConversation {
   final String name;
-  final String initials;
   final String lastMessage;
   final String time;
   final int unread;
@@ -2489,7 +2712,6 @@ class _DemoConversation {
 
   const _DemoConversation({
     required this.name,
-    required this.initials,
     required this.lastMessage,
     required this.time,
     required this.unread,
@@ -2534,7 +2756,7 @@ class _DemoConversationTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _DemoAvatar(initials: conversation.initials, size: 44),
+              _DemoAvatar(size: 44),
 
               const SizedBox(width: 12),
 
@@ -2630,91 +2852,149 @@ class _DemoConversationTile extends StatelessWidget {
 
 class _DemoMessageBubble extends StatelessWidget {
   final _DemoMessage message;
+  final String sellerName;
 
-  const _DemoMessageBubble({required this.message});
+  const _DemoMessageBubble({required this.message, required this.sellerName});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 9),
+      padding: const EdgeInsets.only(top: 14),
       child: Align(
         alignment: message.fromBuyer
             ? Alignment.centerRight
             : Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Flexible(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 285),
-                padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
-                decoration: BoxDecoration(
-                  color: message.fromBuyer
-                      ? context.messagesAccent
-                      : context.messagesSurface,
-                  border: Border.all(
-                    color: message.fromBuyer
-                        ? context.messagesAccent
-                        : context.messagesBorder,
-                  ),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Column(
-                  crossAxisAlignment: message.fromBuyer
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.94,
+          ),
+          child: message.fromBuyer
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [_buildBubble(context), _buildMeta(context)],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (message.attachmentPath != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.file(
-                          File(message.attachmentPath!),
-                          width: 220,
-                          height: 150,
-                          fit: BoxFit.cover,
-                          errorBuilder:
-                              (
-                                BuildContext context,
-                                Object error,
-                                StackTrace? stackTrace,
-                              ) {
-                                return const SizedBox.shrink();
-                              },
-                        ),
-                      ),
-                      if (message.body.trim().isNotEmpty)
-                        const SizedBox(height: 8),
-                    ],
-                    if (message.body.trim().isNotEmpty)
-                      Text(
-                        message.body,
-                        style: TextStyle(
-                          color: message.fromBuyer
-                              ? Colors.white
-                              : context.messagesText,
-                          fontSize: 14,
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-
-                    const SizedBox(height: 5),
-
-                    Text(
-                      message.time,
-                      style: TextStyle(
-                        color: message.fromBuyer
-                            ? Colors.white70
-                            : context.messagesMuted,
-                        fontSize: 10,
+                    _DemoAvatar(size: 28),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 1, bottom: 6),
+                            child: Text(
+                              sellerName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.messagesChatText,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          _buildBubble(context),
+                          _buildMeta(context),
+                        ],
                       ),
                     ),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBubble(BuildContext context) {
+    final BorderRadius borderRadius = BorderRadius.only(
+      topLeft: Radius.circular(message.fromBuyer ? 18 : 6),
+      topRight: Radius.circular(message.fromBuyer ? 6 : 18),
+      bottomLeft: const Radius.circular(18),
+      bottomRight: const Radius.circular(18),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: message.fromBuyer ? null : context.messagesChatSurface,
+        gradient: message.fromBuyer
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[
+                  context.messagesChatAccent,
+                  context.messagesChatAccentLight,
+                ],
+              )
+            : null,
+        border: Border.all(
+          color: message.fromBuyer
+              ? context.messagesChatAccent
+              : context.messagesChatBorder,
+        ),
+        borderRadius: borderRadius,
+        boxShadow: [
+          BoxShadow(
+            color: context.messagesChatAccent.withValues(
+              alpha: message.fromBuyer ? 0.16 : 0.055,
+            ),
+            blurRadius: message.fromBuyer ? 24 : 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (message.attachmentPath != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(
+                File(message.attachmentPath!),
+                width: 220,
+                height: 150,
+                fit: BoxFit.cover,
+                errorBuilder:
+                    (BuildContext context, Object error, StackTrace? stackTrace) {
+                      return const SizedBox.shrink();
+                    },
               ),
             ),
+            if (message.body.trim().isNotEmpty) const SizedBox(height: 8),
           ],
+          if (message.body.trim().isNotEmpty)
+            Text(
+              message.body,
+              style: TextStyle(
+                color: message.fromBuyer
+                    ? Colors.white
+                    : context.messagesChatText,
+                fontSize: 12,
+                height: 1.65,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMeta(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Text(
+        message.time,
+        style: TextStyle(
+          color: message.fromBuyer
+              ? const Color(0xFFD6A58D)
+              : context.messagesChatMutedSoft,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -2722,10 +3002,9 @@ class _DemoMessageBubble extends StatelessWidget {
 }
 
 class _DemoAvatar extends StatelessWidget {
-  final String initials;
   final double size;
 
-  const _DemoAvatar({required this.initials, required this.size});
+  const _DemoAvatar({required this.size});
 
   @override
   Widget build(BuildContext context) {
@@ -2733,25 +3012,22 @@ class _DemoAvatar extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: context.messagesAccent,
-        border: Border.all(color: Colors.white, width: 2),
+        color: context.messagesSurface,
+        border: Border.all(color: context.messagesBorder, width: 1),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: context.messagesAccent.withValues(alpha: 0.12),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: context.messagesAccent.withValues(alpha: 0.10),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Text(
-        initials,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: size >= 44 ? 14 : 10,
-          fontWeight: FontWeight.w800,
-        ),
+      child: _MessagesAvatarMark(
+        isPerson: false,
+        size: size * 0.62,
       ),
     );
   }
@@ -2907,110 +3183,186 @@ class _MessageBubble extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final double maxBubbleWidth = constraints.maxWidth * 0.78;
+        final double rowMaxWidth =
+            constraints.maxWidth * (constraints.maxWidth < 600 ? 0.94 : 0.82);
 
         return Padding(
-          padding: const EdgeInsets.only(top: 9),
+          padding: const EdgeInsets.only(top: 14),
           child: Align(
             alignment: message.fromBuyer
                 ? Alignment.centerRight
                 : Alignment.centerLeft,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: message.fromBuyer
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(13, 11, 13, 9),
-                    decoration: BoxDecoration(
-                      color: message.fromBuyer
-                          ? context.messagesAccent
-                          : context.messagesSurface,
-                      border: Border.all(
-                        color: message.fromBuyer
-                            ? context.messagesAccent
-                            : context.messagesBorder,
-                      ),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: message.fromBuyer
-                          ? CrossAxisAlignment.end
-                          : CrossAxisAlignment.start,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: rowMaxWidth),
+              child: message.fromBuyer
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [_buildBubble(context), _buildMeta(context)],
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (message.hasAttachment) ...[
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: _MessageAttachmentImage(
-                              AppConfig.resolveMediaUrl(message.attachmentUrl!),
-                            ),
+                        _SellerAvatar(
+                          seller: seller,
+                          size: 28,
+                          showPresence: false,
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 1,
+                                  bottom: 6,
+                                ),
+                                child: Text(
+                                  seller.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: context.messagesChatText,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              _buildBubble(context),
+                              _buildMeta(context),
+                            ],
                           ),
-                          if (message.body.trim().isNotEmpty &&
-                              !message.isAttachmentPlaceholder)
-                            const SizedBox(height: 8),
-                        ],
-                        if (message.body.trim().isNotEmpty &&
-                            !message.isAttachmentPlaceholder)
-                          Text(
-                            message.body,
-                            style: TextStyle(
-                              color: message.fromBuyer
-                                  ? Colors.white
-                                  : context.messagesText,
-                              fontSize: 14,
-                              height: 1.45,
-                            ),
-                          ),
-
-                        if (message.time.trim().isNotEmpty) ...[
-                          const SizedBox(height: 5),
-
-                          Text(
-                            message.time,
-                            style: TextStyle(
-                              color: message.fromBuyer
-                                  ? Colors.white70
-                                  : context.messagesMuted,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
-                ),
-                if (message.fromBuyer && showReceipt) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (hasBeenSeen) ...[
-                        _ReceiptAvatar(seller: seller),
-                        const SizedBox(width: 5),
-                      ],
-                      Text(
-                        hasBeenSeen
-                            ? 'Seen'
-                            : seller.isOnline == true
-                            ? 'Delivered'
-                            : 'Sent',
-                        style: TextStyle(
-                          color: context.messagesMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildBubble(BuildContext context) {
+    final BorderRadius borderRadius = BorderRadius.only(
+      topLeft: Radius.circular(message.fromBuyer ? 18 : 6),
+      topRight: Radius.circular(message.fromBuyer ? 6 : 18),
+      bottomLeft: const Radius.circular(18),
+      bottomRight: const Radius.circular(18),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: message.fromBuyer ? null : context.messagesChatSurface,
+        gradient: message.fromBuyer
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: <Color>[
+                  context.messagesChatAccent,
+                  context.messagesChatAccentLight,
+                ],
+              )
+            : null,
+        border: Border.all(
+          color: message.fromBuyer
+              ? context.messagesChatAccent
+              : context.messagesChatBorder,
+        ),
+        borderRadius: borderRadius,
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: context.messagesChatAccent.withValues(
+              alpha: message.fromBuyer ? 0.16 : 0.055,
+            ),
+            blurRadius: message.fromBuyer ? 24 : 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: message.fromBuyer
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          if (message.hasAttachment) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _MessageAttachmentImage(
+                AppConfig.resolveMediaUrl(message.attachmentUrl!),
+              ),
+            ),
+            if (message.body.trim().isNotEmpty &&
+                !message.isAttachmentPlaceholder)
+              const SizedBox(height: 8),
+          ],
+          if (message.body.trim().isNotEmpty &&
+              !message.isAttachmentPlaceholder)
+            Text(
+              message.body,
+              style: TextStyle(
+                color: message.fromBuyer
+                    ? Colors.white
+                    : context.messagesChatText,
+                fontSize: 12,
+                height: 1.65,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMeta(BuildContext context) {
+    final bool showStatus = message.fromBuyer && showReceipt;
+    final String receiptLabel = hasBeenSeen
+        ? 'Seen'
+        : seller.isOnline == true
+        ? 'Delivered'
+        : 'Sent';
+
+    if (message.time.trim().isEmpty && !showStatus) {
+      return const SizedBox.shrink();
+    }
+
+    final Color metaColor = message.fromBuyer
+        ? const Color(0xFFD6A58D)
+        : context.messagesChatMutedSoft;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (message.time.trim().isNotEmpty)
+            Text(
+              message.time,
+              style: TextStyle(
+                color: metaColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (showStatus) ...[
+            if (message.time.trim().isNotEmpty) const SizedBox(width: 7),
+            Text(
+              receiptLabel,
+              style: TextStyle(
+                color: metaColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (hasBeenSeen) ...[
+              const SizedBox(width: 4),
+              _ReceiptAvatar(seller: seller),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }
@@ -3023,7 +3375,14 @@ class _ReceiptAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String? url = seller.avatarUrl?.trim();
-    final String initial = seller.initials.isEmpty ? '?' : seller.initials[0];
+    final String identity = '${seller.name} ${seller.slug} ${seller.sellerId}'
+        .toLowerCase();
+    final bool isPerson =
+        identity.contains('support') || identity.contains('assistant');
+
+    Widget fallback() => Center(
+      child: _MessagesAvatarMark(isPerson: isPerson, size: 11),
+    );
 
     return Container(
       width: 16,
@@ -3034,29 +3393,11 @@ class _ReceiptAvatar extends StatelessWidget {
         color: context.messagesBackgroundSoft,
       ),
       child: url == null || url.isEmpty
-          ? Center(
-              child: Text(
-                initial,
-                style: TextStyle(
-                  color: context.messagesAccent,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            )
+          ? fallback()
           : SizedNetworkImage(
               url: AppConfig.resolveMediaUrl(url),
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Center(
-                child: Text(
-                  initial,
-                  style: TextStyle(
-                    color: context.messagesAccent,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
+              errorBuilder: (context, error, stackTrace) => fallback(),
             ),
     );
   }
@@ -3433,8 +3774,8 @@ class _SellerStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color textColor = isOnline == true
-        ? AppTheme.resolve(context, const Color(0xFF256F4A))
-        : context.messagesMuted;
+        ? const Color(0xFF256F4A)
+        : const Color(0xFF7B716B);
 
     return Row(
       children: [
@@ -3444,12 +3785,8 @@ class _SellerStatus extends StatelessWidget {
             height: 7,
             decoration: BoxDecoration(
               color: isOnline == true
-                  ? AppTheme.resolve(
-                      context,
-                      const Color(0xFF256F4A),
-                      fill: true,
-                    )
-                  : context.messagesFaint,
+                  ? const Color(0xFF256F4A)
+                  : const Color(0xFFA99E98),
               shape: BoxShape.circle,
             ),
           ),
@@ -3464,7 +3801,7 @@ class _SellerStatus extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: textColor,
-              fontSize: 11.5,
+            fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -3474,33 +3811,83 @@ class _SellerStatus extends StatelessWidget {
   }
 }
 
+class _LiveChatStatus extends StatelessWidget {
+  final String sellerName;
+  final bool connected;
+
+  const _LiveChatStatus({required this.sellerName, required this.connected});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color dotColor = connected
+        ? const Color(0xFF2EAA60)
+        : context.messagesChatMutedSoft;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 9),
+      decoration: BoxDecoration(
+        color: context.messagesChatBackgroundSoft,
+        border: Border(top: BorderSide(color: context.messagesChatBorder)),
+      ),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 3,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          Text(
+            connected ? 'Live chat with $sellerName' : 'Reconnecting to $sellerName',
+            style: TextStyle(
+              color: context.messagesChatText,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            'Replies appear in this conversation.',
+            style: TextStyle(
+              color: context.messagesChatMuted,
+              fontSize: 9,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SellerAvatar extends StatelessWidget {
   final BuyerConversationData seller;
 
   final double size;
+  final bool showPresence;
 
-  const _SellerAvatar({required this.seller, required this.size});
+  const _SellerAvatar({
+    required this.seller,
+    required this.size,
+    this.showPresence = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     final String? url = seller.avatarUrl?.trim();
     final String identity = '${seller.name} ${seller.slug} ${seller.sellerId}'
         .toLowerCase();
-    final bool isSupport = identity.contains('support');
-    final IconData fallbackIcon = isSupport
-        ? Icons.person_rounded
-        : Icons.storefront_outlined;
-    final Color fallbackColor = context.messagesAccentText;
+    final bool isPerson =
+        identity.contains('support') || identity.contains('assistant');
 
-    return Container(
+    Widget avatar = Container(
       width: size,
       height: size,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: url == null || url.isEmpty
-            ? context.messagesBackgroundSoft
-            : context.messagesAccent,
+        color: context.messagesSurface,
         border: Border.all(color: context.messagesBorder, width: 1),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -3511,7 +3898,12 @@ class _SellerAvatar extends StatelessWidget {
         ],
       ),
       child: url == null || url.isEmpty
-          ? Icon(fallbackIcon, color: fallbackColor, size: size * 0.52)
+          ? Center(
+              child: _MessagesAvatarMark(
+                isPerson: isPerson,
+                size: size * 0.62,
+              ),
+            )
           : SizedNetworkImage(
               url: url,
               fit: BoxFit.cover,
@@ -3527,17 +3919,174 @@ class _SellerAvatar extends StatelessWidget {
               ),
               errorBuilder:
                   (BuildContext context, Object error, StackTrace? stackTrace) {
-                    return Container(
-                      color: context.messagesBackgroundSoft,
-                      alignment: Alignment.center,
-                      child: Icon(
-                        fallbackIcon,
-                        color: fallbackColor,
-                        size: size * 0.52,
+                    return Center(
+                      child: _MessagesAvatarMark(
+                        isPerson: isPerson,
+                        size: size * 0.62,
                       ),
                     );
                   },
             ),
     );
+
+    if (!showPresence || seller.isOnline == null) {
+      return avatar;
+    }
+
+    final Color presenceColor = seller.isOnline == true
+        ? const Color(0xFF3D9A68)
+        : context.messagesFaint;
+
+    return SizedBox(
+      width: size + 2,
+      height: size + 2,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          avatar,
+          Positioned(
+            right: -1,
+            bottom: -1,
+            child: Container(
+              width: size * 0.26,
+              height: size * 0.26,
+              decoration: BoxDecoration(
+                color: presenceColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: context.messagesSurface, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MessagesAvatarMark extends StatelessWidget {
+  final bool isPerson;
+  final double size;
+
+  const _MessagesAvatarMark({required this.isPerson, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: _MessagesAvatarPainter(
+        isPerson: isPerson,
+        outline: context.messagesAccentText,
+        awning: context.messagesAccent,
+        warmLight: const Color(0xFFF0D8C8),
+        facade: const Color(0xFFFFF9F3),
+      ),
+    );
+  }
+}
+
+class _MessagesAvatarPainter extends CustomPainter {
+  final bool isPerson;
+  final Color outline;
+  final Color awning;
+  final Color warmLight;
+  final Color facade;
+
+  const _MessagesAvatarPainter({
+    required this.isPerson,
+    required this.outline,
+    required this.awning,
+    required this.warmLight,
+    required this.facade,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double scale = size.width / 24;
+    canvas.save();
+    canvas.scale(scale);
+
+    final Paint fill = Paint()..style = PaintingStyle.fill;
+    final Paint stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.35
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..color = outline;
+
+    if (isPerson) {
+      fill.color = warmLight;
+      canvas.drawCircle(const Offset(12, 7.3), 4.1, fill);
+      fill.color = awning;
+      final Path shoulders = Path()
+        ..moveTo(3.3, 21)
+        ..lineTo(4.1, 17.2)
+        ..cubicTo(4.7, 14.5, 7.3, 12.7, 10, 12.7)
+        ..lineTo(14, 12.7)
+        ..cubicTo(16.7, 12.7, 19.3, 14.5, 19.9, 17.2)
+        ..lineTo(20.7, 21)
+        ..close();
+      canvas.drawPath(shoulders, fill);
+      canvas.drawPath(shoulders, stroke);
+    } else {
+      // Store awning with alternating warm stripes.
+      final Path awningShape = Path()
+        ..moveTo(3.4, 8)
+        ..lineTo(5.5, 3.5)
+        ..lineTo(18.5, 3.5)
+        ..lineTo(20.6, 8)
+        ..lineTo(19.6, 10.6)
+        ..cubicTo(18.5, 11.5, 17.2, 11.1, 16.5, 10.1)
+        ..cubicTo(15.6, 11.3, 14.1, 11.3, 13.2, 10.1)
+        ..cubicTo(12.3, 11.3, 10.8, 11.3, 9.9, 10.1)
+        ..cubicTo(9, 11.3, 7.5, 11.3, 6.6, 10.1)
+        ..cubicTo(5.8, 11.1, 4.4, 11.5, 3.4, 10.6)
+        ..close();
+      fill.color = awning;
+      canvas.drawPath(awningShape, fill);
+      canvas.drawPath(awningShape, stroke);
+
+      fill.color = warmLight;
+      canvas.drawRect(const Rect.fromLTRB(6.5, 4.1, 9.1, 9.7), fill);
+      canvas.drawRect(const Rect.fromLTRB(12.1, 4.1, 14.7, 9.7), fill);
+      canvas.drawRect(const Rect.fromLTRB(17.7, 4.1, 19, 8.8), fill);
+
+      final RRect facadeShape = RRect.fromRectAndRadius(
+        const Rect.fromLTRB(5, 10.5, 19, 21),
+        const Radius.circular(0.8),
+      );
+      fill.color = facade;
+      canvas.drawRRect(facadeShape, fill);
+      canvas.drawRRect(facadeShape, stroke);
+
+      final RRect window = RRect.fromRectAndRadius(
+        const Rect.fromLTRB(7, 13, 11.3, 17.8),
+        const Radius.circular(0.5),
+      );
+      fill.color = warmLight;
+      canvas.drawRRect(window, fill);
+      canvas.drawRRect(window, stroke);
+      canvas.drawLine(const Offset(9.15, 13), const Offset(9.15, 17.8), stroke);
+
+      final RRect door = RRect.fromRectAndRadius(
+        const Rect.fromLTRB(13.3, 13, 17.2, 21),
+        const Radius.circular(1.4),
+      );
+      fill.color = warmLight;
+      canvas.drawRRect(door, fill);
+      canvas.drawRRect(door, stroke);
+      fill.color = outline;
+      canvas.drawCircle(const Offset(16, 17.2), 0.45, fill);
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_MessagesAvatarPainter oldDelegate) {
+    return isPerson != oldDelegate.isPerson ||
+        outline != oldDelegate.outline ||
+        awning != oldDelegate.awning ||
+        warmLight != oldDelegate.warmLight ||
+        facade != oldDelegate.facade;
   }
 }

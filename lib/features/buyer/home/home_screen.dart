@@ -387,7 +387,6 @@ class BuyerHomeScreen extends StatefulWidget {
   final VoidCallback? onBrowseProducts;
   final VoidCallback? onViewOrders;
   final VoidCallback? onWishlist;
-  final VoidCallback? onFollowingShops;
   final VoidCallback? onMessages;
   final VoidCallback? onProfile;
   final VoidCallback? onVouchers;
@@ -424,7 +423,6 @@ class BuyerHomeScreen extends StatefulWidget {
     this.onBrowseProducts,
     this.onViewOrders,
     this.onWishlist,
-    this.onFollowingShops,
     this.onMessages,
     this.onProfile,
     this.onVouchers,
@@ -1927,10 +1925,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         onTap: widget.onWishlist,
       ),
       _BuyerQuickAction(
-        label: 'Following',
-        description: 'Your favorite stores',
-        icon: Icons.storefront_outlined,
-        onTap: widget.onFollowingShops,
+        label: 'Flash Deals',
+        description: 'Limited-time offers',
+        icon: Icons.bolt_outlined,
+        onTap: widget.onViewFlashDeals,
       ),
       _BuyerQuickAction(
         label: 'Vouchers',
