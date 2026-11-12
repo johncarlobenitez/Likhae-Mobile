@@ -47,12 +47,18 @@ flutter {
 
 // Keep Flutter's standard APK output and add a project-friendly release name.
 val flutterApkOutputDirectory = layout.buildDirectory.dir("outputs/flutter-apk")
-tasks.named("assembleRelease") {
+val copyReleaseApkAsLikhae = tasks.register("copyReleaseApkAsLikhae") {
     doLast {
         val outputDirectory = flutterApkOutputDirectory.get().asFile
         val releaseApk = outputDirectory.resolve("app-release.apk")
         if (releaseApk.isFile) {
             releaseApk.copyTo(outputDirectory.resolve("Likhae.apk"), overwrite = true)
         }
+    }
+}
+
+tasks.configureEach {
+    if (name == "assembleRelease") {
+        finalizedBy(copyReleaseApkAsLikhae)
     }
 }
