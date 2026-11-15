@@ -23,6 +23,15 @@ class BuyerAiService {
     String workspace = 'buyer',
   }) async {
     final String normalizedWorkspace = workspace == 'rider' ? 'rider' : 'buyer';
+    if (normalizedWorkspace == 'buyer' &&
+        BuyerAiOfflineHelp.isVoucherLocationQuestion(message)) {
+      final BuyerAiOfflineAnswer answer = BuyerAiOfflineHelp.answer(
+        message,
+        workspace: normalizedWorkspace,
+      );
+      return BuyerAiResponse(reply: answer.reply, options: answer.options);
+    }
+
     if (!AppConfig.apiEnabled) {
       final BuyerAiOfflineAnswer answer = BuyerAiOfflineHelp.answer(
         message,

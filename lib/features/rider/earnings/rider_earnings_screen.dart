@@ -2,6 +2,7 @@ import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
 import '../../../shared/formatting/money_formatting.dart';
+import '../rider_navigation.dart';
 
 class RiderEarningRowData {
   final String date;
@@ -129,6 +130,7 @@ class RiderEarningsScreen extends StatelessWidget {
         foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
+        leading: const RiderMenuButton(fallbackToBack: true),
         title: const Text(
           'My Earnings',
           style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),

@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../core/api/api_client.dart';
+import '../core/config/app_config.dart';
 import '../core/storage/token_storage.dart';
 import '../features/buyer/products/product_details_screen.dart';
 import 'auth_service.dart';
@@ -47,6 +50,7 @@ class RecentlyViewedService {
 
   static Future<void> record(ProductDetailData product) async {
     if (product.id <= 0) return;
+    unawaited(_recordRemoteView(product.id));
     try {
       final id = await _buyerId();
       final next = _queue.catchError((Object _) {}).then((_) async {
@@ -61,6 +65,17 @@ class RecentlyViewedService {
     } catch (_) {
       // History must never prevent a product from opening.
       _buyer = null;
+    }
+  }
+
+  static Future<void> _recordRemoteView(int productId) async {
+    if (!AppConfig.apiEnabled) return;
+    try {
+      await ApiClient.post('buyer/product-views', <String, int>{
+        'product_id': productId,
+      });
+    } catch (_) {
+      // Product history remains device-local if the mobile API is unavailable.
     }
   }
 

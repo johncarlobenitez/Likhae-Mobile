@@ -3,6 +3,8 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../rider_navigation.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/api/api_client.dart';
@@ -145,7 +147,10 @@ class _RiderRemittancesScreenState extends State<RiderRemittancesScreen>
         data?.available == true && !_submitting && !_loading && _error == null;
     return Scaffold(
       backgroundColor: AppTheme.resolve(context, const Color(0xFFFBF7F2), fill: true),
-      appBar: AppBar(title: const Text('Cash remittances')),
+      appBar: AppBar(
+        leading: const RiderMenuButton(fallbackToBack: true),
+        title: const Text('Cash remittances'),
+      ),
       body: RefreshIndicator(
         onRefresh: _submitting ? () async {} : _refresh,
         child: ListView(

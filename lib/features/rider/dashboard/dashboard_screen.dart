@@ -8,6 +8,7 @@ import '../../../core/config/app_config.dart';
 import '../../../services/rider_mobile_service.dart';
 import '../deliveries/rider_delivery_models.dart';
 import '../profile/rider_profile_screen.dart';
+import '../rider_navigation.dart';
 import '../rider_product_image.dart';
 
 class RiderDashboardStatData {
@@ -210,6 +211,8 @@ class RiderDashboardScreen extends StatelessWidget {
   Widget _topBar(BuildContext context) {
     return Row(
       children: [
+        const RiderMenuButton(),
+        const SizedBox(width: 7),
         Expanded(
           child: Align(
             alignment: Alignment.centerLeft,
@@ -226,29 +229,6 @@ class RiderDashboardScreen extends StatelessWidget {
           ),
         ),
         _RiderAvailabilityStatus(initialProfile: availabilityProfile),
-        const SizedBox(width: 5),
-        IconButton(
-          constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-          padding: EdgeInsets.zero,
-          tooltip: 'Messages',
-          onPressed: onOpenMessages,
-          icon:  Icon(
-            Icons.chat_bubble_outline_rounded,
-            color: AppTheme.resolve(context, _maroon),
-            size: 22,
-          ),
-        ),
-        IconButton(
-          constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-          padding: EdgeInsets.zero,
-          tooltip: 'Notifications',
-          onPressed: onOpenNotifications,
-          icon:  Icon(
-            Icons.notifications_none_rounded,
-            color: AppTheme.resolve(context, _maroon),
-            size: 24,
-          ),
-        ),
       ],
     );
   }

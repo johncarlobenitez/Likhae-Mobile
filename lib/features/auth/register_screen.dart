@@ -8,7 +8,12 @@ import 'package:go_router/go_router.dart';
 
 enum MobileAccountType { buyer, rider }
 
-enum RegistrationDocumentType { validId, vehicleOrCr, driversLicense }
+enum RegistrationDocumentType {
+  profilePicture,
+  validId,
+  vehicleOrCr,
+  driversLicense,
+}
 
 class AddressOption {
   final String code;
@@ -70,7 +75,8 @@ class RegisterFormData {
   final int? targetLogisticsCenterId;
   final String? driversLicenseNumber;
 
-  final RegistrationDocument validId;
+  final RegistrationDocument? validId;
+  final RegistrationDocument? profilePicture;
   final RegistrationDocument? vehicleOrCr;
   final RegistrationDocument? driversLicense;
 
@@ -103,6 +109,7 @@ class RegisterFormData {
     required this.targetLogisticsCenterId,
     required this.driversLicenseNumber,
     required this.validId,
+    this.profilePicture,
     required this.vehicleOrCr,
     required this.driversLicense,
     required this.password,
@@ -260,6 +267,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   int _postalLookupGeneration = 0;
 
   RegistrationDocument? _validId;
+  RegistrationDocument? _profilePicture;
   RegistrationDocument? _vehicleOrCr;
   RegistrationDocument? _driversLicense;
 
@@ -703,12 +711,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       if (document.sizeBytes > 5 * 1024 * 1024) {
-        _showMessage('Each document must be 5 MB or smaller.', error: true);
+        _showMessage(
+          type == RegistrationDocumentType.profilePicture
+              ? 'Profile picture must be 5 MB or smaller.'
+              : 'Each document must be 5 MB or smaller.',
+          error: true,
+        );
         return;
       }
 
       setState(() {
         switch (type) {
+          case RegistrationDocumentType.profilePicture:
+            _profilePicture = document;
+            break;
+
           case RegistrationDocumentType.validId:
             _validId = document;
             break;
@@ -803,7 +820,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return false;
     }
 
-    if (_validId == null) {
+    if (_accountType == MobileAccountType.rider && _validId == null) {
       _showMessage('Please upload your valid ID.', error: true);
 
       return false;
@@ -887,7 +904,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _province == null ||
         _municipality == null ||
         _barangay == null ||
-        _validId == null) {
+        (_accountType == MobileAccountType.rider && _validId == null)) {
       return;
     }
 
@@ -931,7 +948,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         driversLicenseNumber: _accountType == MobileAccountType.rider
             ? _driversLicenseNumberController.text.trim()
             : null,
-        validId: _validId!,
+        validId: _validId,
+        profilePicture: _accountType == MobileAccountType.buyer
+            ? _profilePicture
+            : null,
         vehicleOrCr: _accountType == MobileAccountType.rider
             ? _vehicleOrCr
             : null,
@@ -2232,14 +2252,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _stepHeader(
             number: stepNumber,
             title: 'Account Verification',
-            subtitle: 'Upload the required documents and secure your account.',
+            subtitle: _accountType == MobileAccountType.buyer
+                ? 'Add an optional profile picture and secure your account.'
+                : 'Upload the required documents and secure your account.',
             icon: Icons.verified_user_outlined,
           ),
+
+          if (_accountType == MobileAccountType.buyer) ...[
+            _DocumentUploadCard(
+              title: 'Profile Picture (optional)',
+              description: 'JPG, JPEG, PNG or WEBP · up to 5 MB',
+              required: false,
+              document: _profilePicture,
+              icon: Icons.account_circle_outlined,
+              onTap: () {
+                _pickDocument(RegistrationDocumentType.profilePicture);
+              },
+            ),
+
+            const SizedBox(height: 12),
+          ],
 
           _DocumentUploadCard(
             title: 'Valid ID',
             description: 'JPG, JPEG, PNG, WEBP or PDF · up to 5 MB',
-            required: true,
+            required: _accountType == MobileAccountType.rider,
             document: _validId,
             icon: Icons.badge_outlined,
             onTap: () {
@@ -2351,55 +2388,69 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           const SizedBox(height: 22),
 
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppTheme.resolve(context, const Color(0xFFFFF7E8), fill: true),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: AppTheme.resolve(context, const Color(0xFFF2DFC0))),
-            ),
-            child:  Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  color: AppTheme.resolve(context, Color(0xFF8B6425)),
-                  size: 20,
+          if (_accountType == MobileAccountType.rider) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.resolve(
+                  context,
+                  const Color(0xFFFFF7E8),
+                  fill: true,
                 ),
-
-                SizedBox(width: 10),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Administrator approval required',
-                        style: TextStyle(
-                          color: AppTheme.resolve(context, Color(0xFF6E4C18)),
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-
-                      SizedBox(height: 4),
-
-                      Text(
-                        'After submitting your registration, wait for administrator approval before signing in.',
-                        style: TextStyle(
-                          color: AppTheme.resolve(context, Color(0xFF846B45)),
-                          fontSize: 10.5,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: AppTheme.resolve(context, const Color(0xFFF2DFC0)),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    color: AppTheme.resolve(context, const Color(0xFF8B6425)),
+                    size: 20,
                   ),
-                ),
-              ],
-            ),
-          ),
 
-          const SizedBox(height: 18),
+                  const SizedBox(width: 10),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Administrator approval required',
+                          style: TextStyle(
+                            color: AppTheme.resolve(
+                              context,
+                              const Color(0xFF6E4C18),
+                            ),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        Text(
+                          'After submitting your registration, wait for administrator approval before signing in.',
+                          style: TextStyle(
+                            color: AppTheme.resolve(
+                              context,
+                              const Color(0xFF846B45),
+                            ),
+                            fontSize: 10.5,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 18),
+          ],
 
           InkWell(
             borderRadius: BorderRadius.circular(12),
@@ -2505,7 +2556,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _isLastStep
                               ? _accountType == MobileAccountType.rider
                                     ? 'Submit Rider Application'
-                                    : 'Submit Buyer Application'
+                                    : 'Create Buyer Account'
                               : 'Continue',
                           textAlign: TextAlign.center,
                           style: const TextStyle(

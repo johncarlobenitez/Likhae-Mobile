@@ -2041,7 +2041,7 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   Widget _buildDemoComposer(_DemoConversation conversation) {
     return _buildMessageBox(
-      hintText: 'Type your message to ${conversation.name}...',
+      hintText: 'Type a message...',
       onSend: () => _sendDemoMessage(conversation),
     );
   }
@@ -2424,7 +2424,7 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   Widget _buildComposer(BuyerConversationData seller) {
     return _buildMessageBox(
-      hintText: 'Type your message to ${seller.name}...',
+      hintText: 'Type a message...',
       onSend: _sendMessage,
     );
   }
@@ -2439,7 +2439,7 @@ class _MessagesScreenState extends State<MessagesScreen>
       // BuyerNavigationFrame already reserves space for the floating bottom
       // navigation. Adding another clearance here creates the large empty
       // gap visible between the composer and the navigation bar.
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      padding: const EdgeInsets.fromLTRB(12, 7, 12, 8),
       decoration: BoxDecoration(
         color: context.messagesChatSurface,
         border: Border(top: BorderSide(color: context.messagesChatBorder)),
@@ -2530,8 +2530,8 @@ class _MessagesScreenState extends State<MessagesScreen>
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 SizedBox(
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   child: IconButton(
                     tooltip: 'Attach photo',
                     onPressed: _sendingMessage || _pickingAttachment
@@ -2541,7 +2541,7 @@ class _MessagesScreenState extends State<MessagesScreen>
                       backgroundColor: context.messagesChatSurface,
                       foregroundColor: context.messagesChatAccent,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(13),
+                        borderRadius: BorderRadius.circular(12),
                         side: BorderSide(color: context.messagesChatBorder),
                       ),
                     ),
@@ -2583,9 +2583,10 @@ class _MessagesScreenState extends State<MessagesScreen>
                       counterText: '',
                       filled: true,
                       fillColor: context.messagesChatSurface,
+                      isDense: true,
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
+                        horizontal: 12,
+                        vertical: 9,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
@@ -2613,16 +2614,16 @@ class _MessagesScreenState extends State<MessagesScreen>
                 const SizedBox(width: 8),
 
                 SizedBox(
-                  height: 42,
+                  height: 40,
                   child: FilledButton.icon(
                     onPressed: _sendingMessage ? null : onSend,
                     style: FilledButton.styleFrom(
-                      minimumSize: const Size(88, 42),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: const Size(82, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       backgroundColor: context.messagesChatAccent,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     icon: _sendingMessage

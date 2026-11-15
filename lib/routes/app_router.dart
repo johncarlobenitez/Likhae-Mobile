@@ -73,11 +73,13 @@ import '../features/rider/rider_navigation.dart';
 import '../features/rider/rider_api_loader.dart';
 import '../features/rider/scanner/rider_scanner_screen.dart';
 import '../features/logistics/logistics_dashboard_screen.dart';
+import '../features/logistics/logistics_incoming_transfers_screen.dart';
 import '../services/rider_mobile_service.dart';
 import '../shared/widgets/buyer_navigation.dart';
 import '../shared/widgets/buyer_navigation_badges.dart';
 import '../shared/widgets/async_route_builder.dart';
 import '../shared/widgets/opening_animation_screen.dart';
+import '../shared/widgets/shop_ui.dart';
 
 void safeBack(BuildContext context, {String fallback = '/login'}) {
   if (context.canPop()) {
@@ -612,16 +614,33 @@ Widget _riderNavigationFrame(
       currentIndex,
       isInterLogistics: isInterLogistics,
     );
+    final int mobileNavigationIndex = _riderMobileNavigationIndex(
+      currentIndex,
+      isInterLogistics: isInterLogistics,
+    );
     Widget frame = RiderNavigationFrame(
       currentIndex: navigationIndex,
+      mobileCurrentIndex: mobileNavigationIndex,
       isInterLogistics: isInterLogistics,
       onDashboard: () => context.go('/rider/dashboard'),
       onPickups: () => context.go('/rider/pickups'),
       onDeliveries: () => context.go('/rider/assignments'),
+      onScanner: () => context.push('/rider/scanner'),
       onTransfers: () => context.go('/rider/transfers'),
       onEarnings: () => context.go('/rider/earnings'),
       onMessages: () => context.go('/rider/messages'),
       onProfile: () => context.go('/rider/profile'),
+      onReturns: () => context.push('/rider/returns'),
+      onHistory: () => context.go('/rider/history'),
+      onRemittances: () => context.push('/rider/remittances'),
+      onNotifications: () => context.push('/rider/notifications'),
+      onSettings: () => context.push('/rider/settings'),
+      onPayouts: () => context.push('/rider/payouts'),
+      onAttendance: () => context.push('/rider/attendance'),
+      onLogout: () async {
+        await AuthService.logout();
+        if (context.mounted) context.go('/login');
+      },
       child: AnimatedBuilder(
         animation: BuyerSystemSettingsController.instance,
         builder: (BuildContext context, Widget? child) => Stack(
@@ -684,6 +703,22 @@ int _riderNavigationIndex(int pageKey, {required bool isInterLogistics}) {
     2 => 2,
     3 || 5 => 4,
     4 => 3,
+    _ => -1,
+  };
+}
+
+int _riderMobileNavigationIndex(
+  int pageKey, {
+  required bool isInterLogistics,
+}) {
+  if (isInterLogistics) {
+    return _riderNavigationIndex(pageKey, isInterLogistics: true);
+  }
+  return switch (pageKey) {
+    0 => 0,
+    1 => 1,
+    2 => 3,
+    5 => 4,
     _ => -1,
   };
 }
@@ -874,6 +909,27 @@ CheckoutItemData _checkoutItemFromCart(CartItemData item) {
     price: item.price,
     quantity: item.quantity,
     imageUrl: item.imageUrl,
+  );
+}
+
+Future<void> _openOfferCheckout(
+  BuildContext context,
+  List<CartItemData> items,
+) async {
+  final List<CartItemData> checkoutItems = items
+      .where((CartItemData item) => int.tryParse(item.id) != null)
+      .toList(growable: false);
+  if (checkoutItems.isEmpty) {
+    throw const FormatException('The free gift checkout items are missing.');
+  }
+  await context.push<void>(
+    '/buyer/checkout',
+    extra: _BuyerCheckoutRouteData(
+      items: checkoutItems.map(_checkoutItemFromCart).toList(growable: false),
+      cartItemIds: checkoutItems
+          .map((CartItemData item) => int.parse(item.id))
+          .toList(growable: false),
+    ),
   );
 }
 
@@ -1184,9 +1240,13 @@ class _SessionRestoreScreenState extends State<_SessionRestoreScreen> {
 Future<RegistrationDocument?> _pickRegistrationDocument(
   RegistrationDocumentType type,
 ) async {
+  final List<String> allowedExtensions =
+      type == RegistrationDocumentType.profilePicture
+      ? <String>['jpg', 'jpeg', 'png', 'webp']
+      : <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'];
   final List<PlatformFile> files = await FilePicker.pickFiles(
     type: FileType.custom,
-    allowedExtensions: <String>['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+    allowedExtensions: allowedExtensions,
   );
   if (files.isEmpty) return null;
   final PlatformFile file = files.first;
@@ -1675,25 +1735,27 @@ final GoRouter appRouter = GoRouter(
               path: '/buyer/profile',
               name: 'buyer-profile',
               builder: (BuildContext context, GoRouterState state) {
+                final bool returnToSettings =
+                    state.uri.queryParameters['from'] == 'settings';
                 final bool separatePage = state.extra is BuyerAccountTab;
                 final BuyerAccountTab initialTab =
                     state.extra is BuyerAccountTab
                     ? state.extra! as BuyerAccountTab
                     : BuyerAccountTab.profile;
-                Future<List<Object>> loadBuyerAccount() async {
+                Future<List<Object?>> loadBuyerAccount() async {
                   if (AppConfig.apiEnabled) {
                     final List<dynamic> results =
                         await Future.wait<dynamic>(<Future<dynamic>>[
                           BuyerMobileService.fetchProfile(),
                           BuyerMobileService.fetchBuyerAddresses(),
                         ]);
-                    return <Object>[
+                    return <Object?>[
                       results[0] as BuyerProfileData,
                       results[1] as List<BuyerAddressData>,
                     ];
                   }
                   final AuthUserModel user = await AuthService.getCurrentUser();
-                  return <Object>[
+                  return <Object?>[
                     BuyerProfileData(
                       name: user.name,
                       email: user.email ?? '',
@@ -1706,13 +1768,13 @@ final GoRouter appRouter = GoRouter(
                 return _buyerNavigationFrame(
                   context,
                   currentIndex: 3,
-                  child: AsyncRouteBuilder<List<Object>>(
+                  child: AsyncRouteBuilder<List<Object?>>(
                     load: () => loadBuyerAccount(),
                     refreshOnActivate: true,
                     builder:
                         (
                           BuildContext context,
-                          AsyncSnapshot<List<Object>> snapshot,
+                          AsyncSnapshot<List<Object?>> snapshot,
                         ) {
                           if (snapshot.connectionState ==
                                   ConnectionState.waiting &&
@@ -1726,10 +1788,12 @@ final GoRouter appRouter = GoRouter(
                                 title: const Text('Profile'),
                                 leading: IconButton(
                                   icon: const Icon(Icons.arrow_back),
-                                  onPressed: () => safeBack(
-                                    context,
-                                    fallback: '/buyer/home',
-                                  ),
+                                  onPressed: returnToSettings
+                                      ? () => context.go('/buyer/settings')
+                                      : () => safeBack(
+                                          context,
+                                          fallback: '/buyer/home',
+                                        ),
                                 ),
                               ),
                               body: Center(
@@ -1744,15 +1808,21 @@ final GoRouter appRouter = GoRouter(
                               snapshot.data![0] as BuyerProfileData;
                           final List<BuyerAddressData> addresses =
                               snapshot.data![1] as List<BuyerAddressData>;
-
                           return AccountScreen(
                             profile: profile,
                             addresses: addresses,
                             initialTab: initialTab,
                             showNavigationTabs: true,
                             showBackButton: separatePage,
-                            onBack: () =>
-                                safeBack(context, fallback: '/buyer/home'),
+                            showProfileSettingsButton:
+                                !separatePage &&
+                                initialTab == BuyerAccountTab.profile,
+                            onBack: returnToSettings
+                                ? () => context.go('/buyer/settings')
+                                : () => safeBack(
+                                    context,
+                                    fallback: '/buyer/home',
+                                  ),
                             onPickProfilePhoto: _pickBuyerProfilePhoto,
                             onUpdateProfile: AppConfig.apiEnabled
                                 ? BuyerMobileService.updateProfile
@@ -1817,9 +1887,6 @@ final GoRouter appRouter = GoRouter(
                                 ? BuyerMobileService
                                       .mutateBuyerRefundDestination
                                 : null,
-                            onReviewHistory: AppConfig.apiEnabled
-                                ? () => context.push('/buyer/reviews')
-                                : null,
                             onSystemSettings: () =>
                                 context.push('/buyer/settings'),
                             onRecentlyViewed: () =>
@@ -1827,25 +1894,6 @@ final GoRouter appRouter = GoRouter(
                             onVouchers: () => context.push('/buyer/rewards'),
                             onFollowingStores: () =>
                                 context.push('/buyer/following-shops'),
-                            onTabChanged: (BuyerAccountTab tab) {
-                              if (tab == BuyerAccountTab.vouchers) {
-                                context.push('/buyer/rewards');
-                                return;
-                              }
-                              if (tab == BuyerAccountTab.followingStores) {
-                                context.push('/buyer/following-shops');
-                                return;
-                              }
-                              if (tab == BuyerAccountTab.settings) {
-                                context.push('/buyer/settings');
-                                return;
-                              }
-                              if (tab == BuyerAccountTab.recentlyViewed) {
-                                context.push('/buyer/recently-viewed');
-                                return;
-                              }
-                              context.push('/buyer/profile', extra: tab);
-                            },
                             onRefresh: AppConfig.apiEnabled
                                 ? BuyerMobileService.fetchAccountSnapshot
                                 : null,
@@ -2882,20 +2930,45 @@ final GoRouter appRouter = GoRouter(
                 ) {
                   if (snapshot.connectionState == ConnectionState.waiting &&
                       !snapshot.hasData) {
-                    return const RouteLoadingPage(title: 'My reviews');
+                    return Scaffold(
+                      body: SafeArea(
+                        bottom: false,
+                        child: Column(
+                          children: [
+                            ShopPageHeader(
+                              title: 'My review history',
+                              subtitle: 'Reviews you have written.',
+                              onBack: () => context.pop(),
+                            ),
+                            const Expanded(
+                              child: Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   }
                   if (snapshot.hasError) {
                     return Scaffold(
-                      appBar: AppBar(
-                        title: const Text('My reviews'),
-                        leading: IconButton(
-                          onPressed: () => context.pop(),
-                          icon: const Icon(Icons.arrow_back_rounded),
-                        ),
-                      ),
-                      body: Center(
-                        child: Text(
-                          'Unable to load reviews: ${snapshot.error}',
+                      body: SafeArea(
+                        bottom: false,
+                        child: Column(
+                          children: [
+                            ShopPageHeader(
+                              title: 'My review history',
+                              subtitle: 'Reviews you have written.',
+                              onBack: () => context.pop(),
+                            ),
+                            Expanded(
+                              child: Center(
+                                child: Text(
+                                  'Unable to load reviews: ${snapshot.error}',
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -2915,6 +2988,8 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/rewards',
       name: 'buyer-rewards',
       builder: (BuildContext context, GoRouterState state) {
+        final bool pointsOnly =
+            state.uri.queryParameters['section'] == 'points';
         RewardsScreen buildRewards(RewardsData data) => RewardsScreen(
           activeVouchers: data.activeVouchers,
           voucherHistory: data.voucherHistory,
@@ -2928,12 +3003,12 @@ final GoRouter appRouter = GoRouter(
           minimumPointsRedemption: data.minimumPointsRedemption,
           pointsPerPeso: data.pointsPerPeso,
           cashbackRate: data.cashbackRate,
+          pointsOnly: pointsOnly,
           onBack: () => safeBack(context, fallback: '/buyer/home'),
           onBrowseProducts: () => context.push('/buyer/products'),
           onViewSellerOffers: AppConfig.apiEnabled
               ? () => context.push('/buyer/seller-offers')
               : null,
-          onGoToCheckout: () => context.push('/buyer/cart'),
           onRefresh: AppConfig.apiEnabled
               ? BuyerMobileService.fetchRewards
               : null,
@@ -2975,6 +3050,7 @@ final GoRouter appRouter = GoRouter(
 
         if (!AppConfig.apiEnabled) {
           return RewardsScreen(
+            pointsOnly: pointsOnly,
             onBack: () => safeBack(context, fallback: '/buyer/home'),
             onBrowseProducts: () => context.push('/buyer/products'),
             onViewSellerOffers: AppConfig.apiEnabled
@@ -2988,19 +3064,50 @@ final GoRouter appRouter = GoRouter(
           builder: (BuildContext context, AsyncSnapshot<RewardsData> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
-              return const RouteLoadingPage(title: 'Rewards');
+              return Scaffold(
+                body: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      ShopPageHeader(
+                        title: pointsOnly ? 'Rewards' : 'Vouchers',
+                        subtitle: pointsOnly
+                            ? 'Your reward points balance and activity.'
+                            : 'Your available vouchers and discounts.',
+                        onBack: () =>
+                            safeBack(context, fallback: '/buyer/home'),
+                      ),
+                      const Expanded(
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             }
             if (snapshot.hasError || !snapshot.hasData) {
               return Scaffold(
-                appBar: AppBar(
-                  title: const Text('Rewards'),
-                  leading: IconButton(
-                    onPressed: () => safeBack(context, fallback: '/buyer/home'),
-                    icon: const Icon(Icons.arrow_back),
+                body: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      ShopPageHeader(
+                        title: pointsOnly ? 'Rewards' : 'Vouchers',
+                        subtitle: pointsOnly
+                            ? 'Your reward points balance and activity.'
+                            : 'Your available vouchers and discounts.',
+                        onBack: () =>
+                            safeBack(context, fallback: '/buyer/home'),
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            'Unable to load rewards: ${snapshot.error}',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                body: Center(
-                  child: Text('Unable to load rewards: ${snapshot.error}'),
                 ),
               );
             }
@@ -3048,7 +3155,10 @@ final GoRouter appRouter = GoRouter(
           _buyerNavigationFrame(
             context,
             currentIndex: 0,
-            child: const SellerOffersScreen(),
+            child: SellerOffersScreen(
+              onBuyNowItems: (List<CartItemData> items) =>
+                  _openOfferCheckout(context, items),
+            ),
           ),
     ),
 
@@ -3059,7 +3169,11 @@ final GoRouter appRouter = GoRouter(
           _buyerNavigationFrame(
             context,
             currentIndex: 0,
-            child: const SellerOffersScreen(offerType: 'BUNDLE'),
+            child: SellerOffersScreen(
+              offerType: 'BUNDLE',
+              onBuyNowItems: (List<CartItemData> items) =>
+                  _openOfferCheckout(context, items),
+            ),
           ),
     ),
 
@@ -3070,7 +3184,11 @@ final GoRouter appRouter = GoRouter(
           _buyerNavigationFrame(
             context,
             currentIndex: 0,
-            child: const SellerOffersScreen(offerType: 'BUY_X_GET_Y'),
+            child: SellerOffersScreen(
+              offerType: 'BUY_X_GET_Y',
+              onBuyNowItems: (List<CartItemData> items) =>
+                  _openOfferCheckout(context, items),
+            ),
           ),
     ),
 
@@ -3129,18 +3247,41 @@ final GoRouter appRouter = GoRouter(
       path: '/buyer/settings',
       name: 'buyer-settings',
       builder: (BuildContext context, GoRouterState state) {
+        unawaited(BuyerNavigationBadges.instance.refresh());
         unawaited(
           BuyerSystemSettingsController.instance.refreshServerSettings(),
         );
-        return _buyerNavigationFrame(
-          context,
-          currentIndex: 3,
-          aiPage: 'account',
-          aiPageTitle: 'System Settings',
-          child: BuyerSystemSettingsScreen(
-            onBack: () => safeBack(context, fallback: '/buyer/profile'),
-            onMyAccount: () => context.go('/buyer/profile'),
+        return BuyerSystemSettingsScreen(
+          onBack: () => safeBack(context, fallback: '/buyer/profile'),
+          onMyAccount: () => context.goNamed(
+            'buyer-profile',
+            queryParameters: const <String, String>{'from': 'settings'},
+            extra: BuyerAccountTab.accountSecurity,
           ),
+          onMyAddresses: () => context.goNamed(
+            'buyer-profile',
+            queryParameters: const <String, String>{'from': 'settings'},
+            extra: BuyerAccountTab.addresses,
+          ),
+          onWallet: () => context.goNamed(
+            'buyer-profile',
+            queryParameters: const <String, String>{'from': 'settings'},
+            extra: BuyerAccountTab.wallet,
+          ),
+          onRewards: () => context.pushNamed(
+            'buyer-rewards',
+            queryParameters: const <String, String>{'section': 'points'},
+          ),
+          onVouchers: () => context.pushNamed('buyer-rewards'),
+          onReviewHistory: () => context.pushNamed('buyer-review-history'),
+          onFollowingStores: () => context.pushNamed('buyer-following-shops'),
+          onRecentlyViewed: () => context.pushNamed('buyer-recently-viewed'),
+          onDangerZone: () => context.goNamed(
+            'buyer-profile',
+            queryParameters: const <String, String>{'from': 'settings'},
+            extra: BuyerAccountTab.dangerZone,
+          ),
+          onMessages: () => context.push('/buyer/messages'),
         );
       },
     ),
@@ -3154,6 +3295,12 @@ final GoRouter appRouter = GoRouter(
           staffName: staffName,
           onOpenScanner: () =>
               context.push<List<Map<String, String>>>('/logistics/scanner'),
+          onOpenIncomingTransfers: () async {
+            await context.push<void>('/logistics/transfers/receiving');
+          },
+          onOpenOutgoingTransfers: () async {
+            await context.push<void>('/logistics/transfers/releasing');
+          },
           onSignOut: () async {
             await AuthService.logout();
             if (context.mounted) context.go('/login');
@@ -3162,17 +3309,48 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/logistics/transfers/receiving',
+      name: 'logistics-incoming-transfers',
+      builder: (context, state) => const LogisticsTransfersScreen(),
+    ),
+    GoRoute(
+      path: '/logistics/transfers/receiving/:manifestId',
+      name: 'logistics-incoming-transfer-receive',
+      builder: (context, state) => LogisticsTransferDetailsScreen(
+        manifestId: int.tryParse(state.pathParameters['manifestId'] ?? '') ?? 0,
+      ),
+    ),
+    GoRoute(
+      path: '/logistics/transfers/releasing',
+      name: 'logistics-outgoing-transfers',
+      builder: (context, state) =>
+          const LogisticsTransfersScreen(outgoing: true),
+    ),
+    GoRoute(
+      path: '/logistics/transfers/releasing/:manifestId',
+      name: 'logistics-outgoing-transfer-release',
+      builder: (context, state) => LogisticsTransferDetailsScreen(
+        manifestId: int.tryParse(state.pathParameters['manifestId'] ?? '') ?? 0,
+        outgoing: true,
+      ),
+    ),
+    GoRoute(
       path: '/logistics/scanner',
       name: 'logistics-scanner',
-      builder: (BuildContext context, GoRouterState state) =>
-          _riderScreenPresentation(
-            context,
-            child: const RiderScannerScreen(
-              showSignOut: false,
-              returnScanDetails: true,
-              multiScan: true,
-            ),
+      builder: (BuildContext context, GoRouterState state) {
+        final String? expectedTrackingCode = state.extra is String
+            ? state.extra as String
+            : null;
+        return _riderScreenPresentation(
+          context,
+          child: RiderScannerScreen(
+            showSignOut: false,
+            returnScanDetails: true,
+            expectedTrackingCode: expectedTrackingCode,
+            multiScan: expectedTrackingCode == null,
           ),
+        );
+      },
     ),
 
     GoRoute(
@@ -3350,6 +3528,7 @@ final GoRouter appRouter = GoRouter(
                   return NotificationsScreen(
                     notifications:
                         snapshot.data ?? const <BuyerNotificationData>[],
+                    leading: const RiderMenuButton(fallbackToBack: true),
                     onBack: () =>
                         safeBack(context, fallback: '/rider/dashboard'),
                     onRefresh: AppConfig.apiEnabled
@@ -3729,12 +3908,6 @@ final GoRouter appRouter = GoRouter(
                           );
                           await refresh();
                         },
-                        onLogout: () async {
-                          await AuthService.logout();
-                          if (context.mounted) {
-                            context.go('/login');
-                          }
-                        },
                       ),
                 )
               : AsyncRouteBuilder<AuthUserModel>(
@@ -3768,12 +3941,6 @@ final GoRouter appRouter = GoRouter(
                                   status: user.status ?? 'Active',
                                   primaryRole: 'Rider',
                                 ),
-                          onLogout: () async {
-                            await AuthService.logout();
-                            if (context.mounted) {
-                              context.go('/login');
-                            }
-                          },
                           onSystemSettings: () =>
                               context.push('/rider/settings'),
                           onHistory: () => context.go('/rider/history'),
@@ -3897,6 +4064,7 @@ final GoRouter appRouter = GoRouter(
           context,
           requiredRole: _RiderOperationalRole.localBarangay,
           child: RiderScannerScreen(
+            showSignOut: false,
             onScanned: (code) async {
               if (!AppConfig.apiEnabled) {
                 throw const RiderApiException(

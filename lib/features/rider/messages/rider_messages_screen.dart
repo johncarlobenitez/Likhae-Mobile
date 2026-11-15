@@ -3,6 +3,8 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../rider_navigation.dart';
 import '../../../shared/widgets/smart_messaging_help.dart';
 
 class RiderConversationData {
@@ -524,6 +526,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
                 ],
               ),
               actions: <Widget>[
+                const RiderMenuButton(),
                 IconButton(
                   tooltip: 'Smart messaging help',
                   onPressed: () => showSmartMessagingHelp(
@@ -549,6 +552,8 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const RiderMenuButton(),
+          const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(

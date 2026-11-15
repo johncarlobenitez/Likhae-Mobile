@@ -10,6 +10,7 @@ class GlassNavigationDestination {
   final String label;
   final VoidCallback onTap;
   final int badgeCount;
+  final bool prominent;
 
   const GlassNavigationDestination({
     required this.icon,
@@ -17,6 +18,7 @@ class GlassNavigationDestination {
     required this.label,
     required this.onTap,
     this.badgeCount = 0,
+    this.prominent = false,
   });
 }
 
@@ -39,8 +41,12 @@ class GlassNavigationBar extends StatelessWidget {
         ? Duration.zero
         : AppMotion.standard;
     final labelSize = destinations.length > 4 ? 10.0 : 11.0;
+    final bool hasProminentDestination = destinations.any(
+      (GlassNavigationDestination destination) => destination.prominent,
+    );
     final height =
-        68 + (media.textScaler.scale(labelSize) - labelSize).clamp(0.0, 24.0);
+        (hasProminentDestination ? 82.0 : 68.0) +
+        (media.textScaler.scale(labelSize) - labelSize).clamp(0.0, 24.0);
     final Color navigationSurfaceTint = dark
         ? const Color(0xFF292225)
         : const Color(0xFFFFF5F1);
@@ -64,7 +70,8 @@ class GlassNavigationBar extends StatelessWidget {
                 currentIndex >= 0 && currentIndex < destinations.length;
             return Stack(
               children: [
-                if (hasSelectedDestination)
+                if (hasSelectedDestination &&
+                    !destinations[currentIndex].prominent)
                   Positioned(
                     left: 0,
                     top: 0,
@@ -127,23 +134,68 @@ class GlassNavigationBar extends StatelessWidget {
                                           MainAxisAlignment.center,
                                       children: [
                                         AnimatedScale(
-                                          scale: i == currentIndex ? 1.06 : 1,
+                                          scale:
+                                              i == currentIndex &&
+                                                  !destinations[i].prominent
+                                              ? 1.06
+                                              : 1,
                                           duration: duration,
                                           child: Badge.count(
                                             count: destinations[i].badgeCount,
                                             isLabelVisible:
                                                 destinations[i].badgeCount > 0,
-                                            child: Icon(
-                                              i == currentIndex
-                                                  ? destinations[i].selectedIcon
-                                                  : destinations[i].icon,
-                                              color: i == currentIndex
-                                                  ? colors.onPrimary
-                                                  : colors.onSurface.withValues(
-                                                      alpha: .60,
+                                            child: destinations[i].prominent
+                                                ? Container(
+                                                    width: 56,
+                                                    height: 56,
+                                                    alignment: Alignment.center,
+                                                    decoration: BoxDecoration(
+                                                      color: colors.primary,
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(
+                                                        color: colors.onPrimary
+                                                            .withValues(
+                                                              alpha: .24,
+                                                            ),
+                                                      ),
+                                                      boxShadow: <BoxShadow>[
+                                                        BoxShadow(
+                                                          color: colors.primary
+                                                              .withValues(
+                                                                alpha: dark
+                                                                    ? .32
+                                                                    : .22,
+                                                              ),
+                                                          blurRadius: 12,
+                                                          offset: const Offset(
+                                                            0,
+                                                            4,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
-                                              size: 23,
-                                            ),
+                                                    child: Icon(
+                                                      i == currentIndex
+                                                          ? destinations[i]
+                                                              .selectedIcon
+                                                          : destinations[i].icon,
+                                                      color: colors.onPrimary,
+                                                      size: 28,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    i == currentIndex
+                                                        ? destinations[i]
+                                                            .selectedIcon
+                                                        : destinations[i].icon,
+                                                    color: i == currentIndex
+                                                        ? colors.onPrimary
+                                                        : colors.onSurface
+                                                              .withValues(
+                                                                alpha: .60,
+                                                              ),
+                                                    size: 23,
+                                                  ),
                                           ),
                                         ),
                                         const SizedBox(height: 5),
@@ -157,10 +209,17 @@ class GlassNavigationBar extends StatelessWidget {
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: labelSize,
-                                              fontWeight: i == currentIndex
+                                              fontWeight:
+                                                  i == currentIndex ||
+                                                      destinations[i].prominent
                                                   ? FontWeight.w700
                                                   : FontWeight.w500,
-                                              color: i == currentIndex
+                                              color:
+                                                  destinations[i].prominent
+                                                  ? colors.onSurface.withValues(
+                                                      alpha: .70,
+                                                    )
+                                                  : i == currentIndex
                                                   ? colors.onPrimary
                                                   : colors.onSurface.withValues(
                                                       alpha: .65,

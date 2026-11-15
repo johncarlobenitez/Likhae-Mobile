@@ -147,8 +147,8 @@ void main() {
       },
     );
 
-    expect(message, contains('api/v1/maps/geocode'));
-    expect(message, contains('API_BASE_URL'));
+    expect(message, contains('temporarily unavailable'));
+    expect(message, contains('Tap the map to place your delivery pin'));
   });
 
   test('a no-match response allows the next query, but outages do not', () {

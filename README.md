@@ -70,6 +70,13 @@ web dashboard reads the same records and refreshes its summary every 15 seconds.
 Build with `API_BASE_URL` set to the same Laravel host used by the web portal
 when deploying to a non-default or local server.
 
+For inter-hub custody scans, use **Open outgoing transfers** at the origin to
+scan each parcel at handoff after the assigned driver accepts the manifest.
+Laravel records each transfer release and marks the manifest released after its
+last parcel. At the destination, use **Open incoming transfers** and scan each
+expected parcel to record receipt, mark the item and transfer leg received, and
+move the shipment to the destination sorting center.
+
 ### Rider API coverage
 
 With `API_ENABLED=true`, rider dashboard summaries, active pickup and delivery

@@ -2,6 +2,8 @@ import 'package:likhae/core/theme/app_theme.dart';
 
 import 'package:flutter/material.dart';
 
+import '../rider_navigation.dart';
+
 class RiderInterHubTransferItem {
   final int id;
   final String trackingCode;
@@ -285,37 +287,17 @@ class _RiderInterHubTransfersScreenState
   Widget _brandHeader() {
     return Row(
       children: <Widget>[
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppTheme.resolve(context, _maroon, fill: true),
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: const Icon(Icons.local_shipping_rounded, color: Colors.white),
-        ),
-        const SizedBox(width: 11),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'LIKHAE RIDER',
-              style: TextStyle(
-                color: AppTheme.resolve(context, _text),
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.6,
-              ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              'Inter-logistics workspace',
-              style: TextStyle(
-                color: AppTheme.resolve(context, _muted),
-                fontSize: 11,
-              ),
-            ),
-          ],
+        const RiderMenuButton(),
+        const SizedBox(width: 8),
+        Image.asset(
+          Theme.of(context).brightness == Brightness.dark
+              ? 'assets/logistics/logistics-dark.png'
+              : 'assets/logistics/logistics-light.png',
+          width: 142,
+          height: 44,
+          fit: BoxFit.contain,
+          alignment: Alignment.centerLeft,
+          semanticLabel: 'LIKHAE Logistics',
         ),
       ],
     );

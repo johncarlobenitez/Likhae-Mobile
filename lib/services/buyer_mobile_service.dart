@@ -207,6 +207,38 @@ class BuyerMobileService {
     return _cartItem(Map<String, dynamic>.from(item));
   }
 
+  static Future<List<CartItemData>> buyNowOffer({
+    required int promotionId,
+    required int sets,
+    int? rewardVariantId,
+  }) async {
+    final Response<dynamic> response = await ApiClient.post(
+      AppConfig.resolveApiUrl('buyer/checkout/buy-now/offers/$promotionId'),
+      <String, dynamic>{
+        'sets': sets,
+        if (rewardVariantId != null) 'reward_variant_id': rewardVariantId,
+      },
+    );
+    final dynamic rows = _requirePayload(response)['data'];
+    if (rows is! List) {
+      throw const FormatException(
+        'The server did not return the free gift checkout items.',
+      );
+    }
+    final List<CartItemData> items = rows
+        .whereType<Map>()
+        .map((Map row) => _cartItem(Map<String, dynamic>.from(row)))
+        .where((CartItemData item) => int.tryParse(item.id) != null)
+        .toList(growable: false);
+    if (items.isEmpty) {
+      throw const FormatException(
+        'The server did not return the free gift checkout items.',
+      );
+    }
+    _refreshNavigationBadges();
+    return items;
+  }
+
   static Future<void> updateCartQuantity(
     CartItemData item,
     int quantity,
@@ -1487,7 +1519,7 @@ class BuyerMobileService {
             sentAt: DateTime.tryParse(
               (row['sent_at'] ?? '').toString(),
             )?.toLocal(),
-            fromBuyer: row['from_buyer'] == true,
+            fromBuyer: parseApiBool(row['from_buyer'], defaultValue: false),
             attachmentUrl: _messageAttachmentUrl(row),
             attachmentName: row['attachment_name']?.toString(),
             seenByRecipient: _messageSeenState(row),
@@ -1499,6 +1531,7 @@ class BuyerMobileService {
   static Stream<BuyerMessageData> watchMessages(
     BuyerConversationData conversation,
   ) async* {
+    final int buyerId = (await AuthService.getCurrentUser()).id;
     final Set<String> knownIds = <String>{};
     RealtimeSubscription? subscription;
     try {
@@ -1516,7 +1549,8 @@ class BuyerMobileService {
           sentAt: DateTime.tryParse(
             (event.data['sent_at'] ?? '').toString(),
           )?.toLocal(),
-          fromBuyer: false,
+          fromBuyer:
+              (event.data['sender_id'] ?? '').toString() == buyerId.toString(),
           attachmentUrl: event.data['attachment_url']?.toString(),
           attachmentName: event.data['attachment_name']?.toString(),
           seenByRecipient: _messageSeenState(event.data),
@@ -1665,7 +1699,10 @@ class BuyerMobileService {
       sentAt: DateTime.tryParse(
         (message['sent_at'] ?? '').toString(),
       )?.toLocal(),
-      fromBuyer: message['from_buyer'] == true,
+      fromBuyer: parseApiBool(
+        message['from_buyer'],
+        defaultValue: false,
+      ),
       attachmentUrl: _messageAttachmentUrl(message),
       attachmentName: message['attachment_name']?.toString(),
       seenByRecipient: _messageSeenState(message),

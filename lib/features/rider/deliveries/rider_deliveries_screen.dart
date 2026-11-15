@@ -3,6 +3,7 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/sized_network_image.dart';
+import '../rider_navigation.dart';
 import 'rider_delivery_models.dart';
 
 class RiderDeliveriesScreen extends StatefulWidget {
@@ -227,6 +228,7 @@ class _RiderDeliveriesScreenState extends State<RiderDeliveriesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        const RiderMenuButton(),
         Text(
           'DELIVERY MANAGEMENT',
           style: TextStyle(

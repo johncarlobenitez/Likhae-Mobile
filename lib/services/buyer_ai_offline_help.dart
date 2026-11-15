@@ -9,6 +9,22 @@ class BuyerAiOfflineAnswer {
 class BuyerAiOfflineHelp {
   BuyerAiOfflineHelp._();
 
+  static bool isVoucherLocationQuestion(String message) {
+    final String question = message.toLowerCase();
+    return _containsAny(question, const <String>[
+          'voucher',
+          'coupon',
+          'promo code',
+        ]) &&
+        _containsAny(question, const <String>[
+          'where',
+          'find',
+          'view',
+          'see',
+          'access',
+        ]);
+  }
+
   static BuyerAiOfflineAnswer answer(
     String message, {
     String workspace = 'buyer',
@@ -113,15 +129,21 @@ class BuyerAiOfflineHelp {
         options: <String>['Where are my vouchers?', 'How do I track my order?'],
       );
     }
+    if (_containsAny(question, const <String>['reward', 'points'])) {
+      return const BuyerAiOfflineAnswer(
+        reply:
+            'Tap Account, then Vouchers to open Rewards and check your Reward Points balance and activity. You can redeem eligible points at checkout.',
+        options: <String>['How do I check out?', 'Where are my vouchers?'],
+      );
+    }
     if (_containsAny(question, const <String>[
       'voucher',
       'coupon',
       'discount',
-      'rewards',
     ])) {
       return const BuyerAiOfflineAnswer(
         reply:
-            'Open Rewards from your Buyer navigation to see available vouchers and points. You can apply eligible vouchers from Cart before checkout.',
+            'Tap Account in the bottom navigation, then open Vouchers to view your discounts. You can also open Home and tap Vouchers. Apply eligible vouchers in Cart before checkout.',
         options: <String>['How do I check out?', 'How do I track my order?'],
       );
     }

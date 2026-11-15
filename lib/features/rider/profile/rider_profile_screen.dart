@@ -3,6 +3,7 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/sized_network_image.dart';
+import '../rider_navigation.dart';
 
 class RiderProfileData {
   final int id;
@@ -359,16 +360,12 @@ class RiderResidentialAddressData {
 
 typedef RiderProfileRefreshCallback = Future<void> Function();
 
-typedef RiderLogoutCallback = Future<void> Function();
-
 class RiderProfileScreen extends StatefulWidget {
   final RiderProfileData? profile;
 
   final String? statusMessage;
 
   final RiderProfileRefreshCallback? onRefresh;
-
-  final RiderLogoutCallback? onLogout;
 
   final VoidCallback? onSystemSettings;
 
@@ -384,7 +381,6 @@ class RiderProfileScreen extends StatefulWidget {
     this.profile,
     this.statusMessage,
     this.onRefresh,
-    this.onLogout,
     this.onSystemSettings,
     this.onEditProfile,
     this.onReturns,
@@ -415,10 +411,6 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
 
   static const Color _danger = Color(0xFFB42318);
 
-  static const Color _dangerSoft = Color(0xFFFFF1F0);
-
-  bool _loggingOut = false;
-
   Future<void> _refresh() async {
     final RiderProfileRefreshCallback? callback = widget.onRefresh;
 
@@ -427,104 +419,6 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     }
 
     await callback();
-  }
-
-  Future<void> _confirmLogout() async {
-    if (_loggingOut) {
-      return;
-    }
-
-    final RiderLogoutCallback? callback = widget.onLogout;
-
-    if (callback == null) {
-      _showMessage('Sign out is not available right now.');
-
-      return;
-    }
-
-    final bool confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              backgroundColor: AppTheme.resolve(context, _surface, fill: true),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Text(
-                'Sign out?',
-                style: TextStyle(
-                  color: AppTheme.resolve(context, _text),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              content: Text(
-                'You will need to sign in again to access your rider account.',
-                style: TextStyle(
-                  color: AppTheme.resolve(context, _muted),
-                  height: 1.5,
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(false);
-                  },
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(true);
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.resolve(
-                      context,
-                      _danger,
-                      fill: true,
-                    ),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Sign Out'),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-
-    if (!confirmed || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _loggingOut = true;
-    });
-
-    try {
-      await callback();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      _showMessage('Unable to sign out: $error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loggingOut = false;
-        });
-      }
-    }
-  }
-
-  void _showMessage(String message) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -538,6 +432,7 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
         foregroundColor: AppTheme.resolve(context, _text),
         elevation: 0,
         scrolledUnderElevation: 0,
+        leading: const RiderMenuButton(fallbackToBack: true),
         title: Text(
           'My Profile',
           style: TextStyle(
@@ -554,7 +449,12 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           onRefresh: _refresh,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              10,
+              16,
+              profile?.isInterLogistics == true ? 72 : 16,
+            ),
             children: <Widget>[
               if (widget.statusMessage?.trim().isNotEmpty == true)
                 Padding(
@@ -616,21 +516,12 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
               if (profile != null &&
                   (widget.onReturns != null ||
                       widget.onTrips != null ||
-                      widget.onHistory != null ||
                       widget.onAttendance != null ||
                       widget.onProfileUpdates != null)) ...<Widget>[
                 const SizedBox(height: 14),
                 _buildWorkflowLinks(profile),
               ],
 
-              const SizedBox(height: 14),
-
-              _buildSystemSettings(),
-
-              if (profile != null) ...<Widget>[
-                const SizedBox(height: 14),
-                _buildAccountActions(),
-              ],
             ],
           ),
         ),
@@ -725,12 +616,6 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
           title: 'Delivery trips',
           onTap: widget.onTrips!,
         ),
-      if (widget.onHistory != null)
-        _workflowLink(
-          icon: Icons.history_outlined,
-          title: 'Delivery history',
-          onTap: widget.onHistory!,
-        ),
       if (profile.isInterLogistics && widget.onAttendance != null)
         _workflowLink(
           icon: Icons.schedule_outlined,
@@ -810,16 +695,19 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: profile.profilePhotoUrl?.trim().isNotEmpty == true
-                    ? ClipOval(
-                        child: SizedNetworkImage(
-                          url: profile.profilePhotoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Text(
-                            profile.initials,
-                            style: TextStyle(
-                              color: AppTheme.resolve(context, _maroon),
-                              fontSize: 25,
-                              fontWeight: FontWeight.w900,
+                    ? SizedBox.square(
+                        dimension: 88,
+                        child: ClipOval(
+                          child: SizedNetworkImage(
+                            url: profile.profilePhotoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Text(
+                              profile.initials,
+                              style: TextStyle(
+                                color: AppTheme.resolve(context, _maroon),
+                                fontSize: 25,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                         ),
@@ -967,145 +855,6 @@ class _RiderProfileScreenState extends State<RiderProfileScreen> {
     return _ProfileSection(title: 'Rider Information', items: details);
   }
 
-  Widget _buildSystemSettings() {
-    return Material(
-      color: AppTheme.resolve(context, _surface, fill: true),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: widget.onSystemSettings,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppTheme.resolve(context, _border)),
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppTheme.resolve(context, _maroonSoft, fill: true),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.tune_rounded,
-                  color: AppTheme.resolve(context, _maroon),
-                  size: 21,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'System Settings',
-                      style: TextStyle(
-                        color: AppTheme.resolve(context, _text),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Notifications, sounds, appearance, and language.',
-                      style: TextStyle(
-                        color: AppTheme.resolve(context, _muted),
-                        fontSize: 11.5,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: AppTheme.resolve(context, _muted),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccountActions() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        color: AppTheme.resolve(context, _dangerSoft, fill: true),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppTheme.resolve(context, const Color(0xFFF3C4C0)),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Account Actions',
-            style: TextStyle(
-              color: AppTheme.resolve(context, _danger),
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-
-          const SizedBox(height: 5),
-
-          Text(
-            'Sign out from your rider account.',
-            style: TextStyle(
-              color: AppTheme.resolve(context, Color(0xFFB85B54)),
-              fontSize: 12,
-              height: 1.45,
-            ),
-          ),
-
-          const SizedBox(height: 15),
-
-          SizedBox(
-            width: double.infinity,
-            height: 49,
-            child: OutlinedButton.icon(
-              onPressed: _loggingOut ? null : _confirmLogout,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.resolve(context, _danger),
-                disabledForegroundColor: AppTheme.resolve(context, _muted),
-                backgroundColor: AppTheme.resolve(
-                  context,
-                  _surface,
-                  fill: true,
-                ),
-                side: BorderSide(color: AppTheme.resolve(context, _danger)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
-              icon: _loggingOut
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppTheme.resolve(context, _danger),
-                      ),
-                    )
-                  : const Icon(Icons.logout_rounded),
-              label: Text(
-                _loggingOut ? 'Signing Out...' : 'Sign Out',
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 enum _ProfileBadgeType { primary, success }

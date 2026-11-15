@@ -364,6 +364,7 @@ class AuthService {
     }
 
     await addFile('valid_id', data.validId);
+    await addFile('profile_picture', data.profilePicture);
     await addFile('or_cr', data.vehicleOrCr);
     await addFile('drivers_license', data.driversLicense);
 

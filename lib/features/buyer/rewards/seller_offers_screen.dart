@@ -2,14 +2,17 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/config/app_config.dart';
+import '../../../services/buyer_mobile_service.dart';
 import '../../../shared/widgets/sized_network_image.dart';
 import '../../../services/workspace_mobile_service.dart';
 import '../../../shared/widgets/shop_ui.dart';
+import '../cart/cart_screen.dart';
 
 class SellerOffersScreen extends StatefulWidget {
   final String? offerType;
+  final Future<void> Function(List<CartItemData> items)? onBuyNowItems;
 
-  const SellerOffersScreen({super.key, this.offerType});
+  const SellerOffersScreen({super.key, this.offerType, this.onBuyNowItems});
   @override
   State<SellerOffersScreen> createState() => _SellerOffersScreenState();
 }
@@ -151,22 +154,34 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
       final int sets = maxSets == 0
           ? 1
           : requestedSets.clamp(1, maxSets).toInt();
-      final form = FormData()..fields.add(MapEntry('sets', '$sets'));
-      for (final choice in choices.entries) {
-        form.fields.add(MapEntry('choices[${choice.key}]', choice.value));
-      }
-      final path = offer['type'] == 'BUNDLE'
-          ? 'buyer/cart/bundles/${offer['id']}'
-          : 'buyer/cart/offers/${offer['id']}/claim';
-      if (rewardVariantId != null) {
-        form.fields.add(MapEntry('reward_variant_id', rewardVariantId));
-      }
-      final result = await WorkspaceMobileService.send(path, form);
-      if (mounted) {
-        setState(
-          () => _message =
-              result['message']?.toString() ?? 'Offer items added to cart.',
+      if (offer['type'] == 'BUNDLE') {
+        final form = FormData()..fields.add(MapEntry('sets', '$sets'));
+        for (final choice in choices.entries) {
+          form.fields.add(MapEntry('choices[${choice.key}]', choice.value));
+        }
+        final result = await WorkspaceMobileService.send(
+          'buyer/cart/bundles/${offer['id']}',
+          form,
         );
+        if (mounted) {
+          setState(
+            () => _message =
+                result['message']?.toString() ?? 'Bundle items added to cart.',
+          );
+        }
+      } else {
+        final List<CartItemData> items = await BuyerMobileService.buyNowOffer(
+          promotionId: int.parse(offerId),
+          sets: sets,
+          rewardVariantId: int.tryParse(rewardVariantId ?? ''),
+        );
+        if (!mounted) return;
+        final Future<void> Function(List<CartItemData>)? onBuyNowItems =
+            widget.onBuyNowItems;
+        if (onBuyNowItems == null) {
+          throw Exception('Free gift checkout is unavailable right now.');
+        }
+        await onBuyNowItems(items);
       }
     } catch (e) {
       if (mounted) {
@@ -177,8 +192,7 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
     }
   }
 
-  String _peso(double amount) =>
-      formatPesoAmount(amount);
+  String _peso(double amount) => formatPesoAmount(amount);
 
   Widget _offerPill(String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -265,11 +279,26 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
         child: imageUrl.isEmpty
             ? Container(
                 color: const Color(0xFFF3E9E2),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.image_outlined,
-                  color: Color(0xFF8B6757),
-                  size: 20,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.image_outlined,
+                      color: const Color(0xFF8B6757),
+                      size: size >= 64 ? 20 : 17,
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'PHOTO',
+                      style: TextStyle(
+                        color: Color(0xFF8B6757),
+                        fontSize: 7,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
                 ),
               )
             : SizedNetworkImage(
@@ -278,13 +307,53 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
                 errorBuilder: (context, error, stack) => Container(
                   color: const Color(0xFFF3E9E2),
                   alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.image_outlined,
-                    color: Color(0xFF8B6757),
-                    size: 20,
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.image_outlined,
+                        color: Color(0xFF8B6757),
+                        size: 20,
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'PHOTO',
+                        style: TextStyle(
+                          color: Color(0xFF8B6757),
+                          fontSize: 7,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _offerPhotoTile({required String? imagePath, required String label}) {
+    return SizedBox(
+      width: 76,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _productThumbnail(imagePath, size: 56),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF776B65),
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -377,10 +446,70 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
     final String dateEnd = _dateLabel(offer['ends_at']?.toString());
     final List<Map<String, dynamic>> previewItems = isBundle
         ? components
-        : <Map<String, dynamic>>[
-            if (buyItem != null) buyItem,
-            if (rewards.isNotEmpty) rewards.first,
-          ];
+        : <Map<String, dynamic>>[];
+    final Set<String> previewItemKeys = <String>{};
+    void addPreviewItem(dynamic value) {
+      if (value is! Map) return;
+      final Map<String, dynamic> item = Map<String, dynamic>.from(value);
+      final String key =
+          (item['id'] ??
+                  item['variant_id'] ??
+                  item['product_id'] ??
+                  item['product_name'] ??
+                  item['name'] ??
+                  item.hashCode)
+              .toString();
+      if (previewItemKeys.add(key)) previewItems.add(item);
+    }
+
+    if (!isBundle) {
+      addPreviewItem(buyItem);
+      for (final item in WorkspaceMobileService.maps(offer['preview_items'])) {
+        addPreviewItem(item);
+      }
+      for (final key in const <String>[
+        'buy_variant',
+        'qualifying_item',
+        'qualifying_product',
+        'buy_product',
+        'product_to_buy',
+        'eligible_product',
+        'reward_item',
+        'reward_product',
+        'reward_variant',
+        'gift_item',
+        'gift_product',
+      ]) {
+        addPreviewItem(offer[key]);
+      }
+      for (final key in const <String>[
+        'rewards',
+        'reward_items',
+        'reward_variants',
+        'gifts',
+      ]) {
+        for (final item in WorkspaceMobileService.maps(offer[key])) {
+          addPreviewItem(item);
+        }
+      }
+      for (final item in rewards) {
+        addPreviewItem(item);
+      }
+    }
+    final List<Map<String, dynamic>> previewComponents =
+        WorkspaceMobileService.maps(offer['preview_components']);
+    final List<Map<String, dynamic>> bundleItems = previewComponents.isNotEmpty
+        ? List<Map<String, dynamic>>.from(previewComponents)
+        : List<Map<String, dynamic>>.from(components);
+    if (bundleItems.isEmpty) {
+      for (final key in const <String>['bundle_items', 'items', 'products']) {
+        bundleItems.addAll(WorkspaceMobileService.maps(offer[key]));
+        if (bundleItems.isNotEmpty) break;
+      }
+    }
+    if (bundleItems.isEmpty && buyItem != null) {
+      bundleItems.add(buyItem);
+    }
 
     String productName(Map<String, dynamic>? item, {String fallback = 'item'}) {
       if (item == null) return fallback;
@@ -403,7 +532,11 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
     String productImage(Map<String, dynamic> item) {
       for (final key in const <String>[
         'image',
+        'product_image',
         'image_url',
+        'product_image_url',
+        'image_path',
+        'file_path',
         'thumbnail',
         'primary_image',
       ]) {
@@ -421,6 +554,18 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
         if (path.isNotEmpty) return path;
       }
 
+      final dynamic variants = item['variants'];
+      if (variants is List) {
+        for (final dynamic variant in variants) {
+          if (variant is Map) {
+            final String path = productImage(
+              Map<String, dynamic>.from(variant),
+            );
+            if (path.isNotEmpty) return path;
+          }
+        }
+      }
+
       for (final key in const <String>[
         'variant',
         'product_variant',
@@ -434,6 +579,125 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
       }
       return '';
     }
+
+    Widget bundlePhotoTile(Map<String, dynamic> item) {
+      return SizedBox(
+        width: 80,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _productThumbnail(productImage(item), size: 64),
+            const SizedBox(height: 4),
+            Text(
+              productName(item, fallback: 'Bundle item'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF776B65),
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final List<Map<String, dynamic>> bundlePhotoSources =
+        List<Map<String, dynamic>>.from(bundleItems);
+    if (bundlePhotoSources.isEmpty && buyItem != null) {
+      bundlePhotoSources.add(buyItem);
+    }
+    if (bundlePhotoSources.isEmpty && productImage(offer).isNotEmpty) {
+      bundlePhotoSources.add(offer);
+    }
+    if (isBundle && bundlePhotoSources.isEmpty) {
+      bundlePhotoSources.add(<String, dynamic>{'name': 'Bundle item'});
+    }
+
+    final Map<String, Map<String, dynamic>> bundlePhotos =
+        <String, Map<String, dynamic>>{};
+    final Map<String, bool> bundlePhotoAvailability = <String, bool>{};
+    for (int index = 0; index < bundlePhotoSources.length; index++) {
+      final Map<String, dynamic> component = bundlePhotoSources[index];
+      final dynamic rawVariant = component['variant'];
+      final Map<String, dynamic> variant = rawVariant is Map
+          ? Map<String, dynamic>.from(rawVariant)
+          : <String, dynamic>{};
+      final String choiceGroup = (component['choice_group'] ?? '').toString();
+      final String groupKey = choiceGroup.isNotEmpty
+          ? 'choice:$choiceGroup'
+          : 'component:${component['id'] ?? index}';
+      final int quantity =
+          int.tryParse((component['quantity'] ?? 1).toString()) ?? 1;
+      final int stock = int.tryParse((variant['stock'] ?? '').toString()) ?? 0;
+      final bool available = stock >= quantity;
+      if (!bundlePhotos.containsKey(groupKey) ||
+          (available && bundlePhotoAvailability[groupKey] != true)) {
+        bundlePhotos[groupKey] = component;
+        bundlePhotoAvailability[groupKey] = available;
+      }
+    }
+    final List<Map<String, dynamic>> bundlePhotoItems = bundlePhotos.values
+        .toList(growable: false);
+    Map<String, dynamic>? previewItemWithRole(String role) {
+      for (final Map<String, dynamic> item in previewItems) {
+        if ((item['role'] ?? '').toString().toUpperCase() == role) return item;
+      }
+      return null;
+    }
+
+    final Map<String, dynamic>? firstPreviewItem = previewItems.isNotEmpty
+        ? previewItems.first
+        : null;
+    final bool firstPreviewIsReward =
+        (firstPreviewItem?['role'] ?? '').toString().toUpperCase() == 'REWARD';
+    final Map<String, dynamic>? qualifyingPhotoItem =
+        buyItem ??
+        previewItemWithRole('QUALIFYING') ??
+        (firstPreviewIsReward ? null : firstPreviewItem);
+    final Map<String, dynamic>? rewardPhotoItem =
+        previewItemWithRole('REWARD') ??
+        (previewItems.length > 1 ? previewItems[1] : null) ??
+        (firstPreviewIsReward ? firstPreviewItem : null);
+    final Widget photoPanel = SizedBox(
+      width: 80,
+      child: isBundle
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (
+                  int index = 0;
+                  index < bundlePhotoItems.length && index < 3;
+                  index++
+                ) ...[
+                  bundlePhotoTile(bundlePhotoItems[index]),
+                  if (index < bundlePhotoItems.length - 1 && index < 2)
+                    const SizedBox(height: 8),
+                ],
+              ],
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _offerPhotoTile(
+                  imagePath: qualifyingPhotoItem == null
+                      ? null
+                      : productImage(qualifyingPhotoItem),
+                  label: 'Qualifying item',
+                ),
+                const SizedBox(height: 8),
+                _offerPhotoTile(
+                  imagePath: rewardPhotoItem == null
+                      ? null
+                      : productImage(rewardPhotoItem),
+                  label: 'Free gift',
+                ),
+              ],
+            ),
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -453,125 +717,129 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isBundle && previewItems.isNotEmpty) ...[
-            Row(
-              children: [
-                for (final item in previewItems.take(3)) ...[
-                  _productThumbnail(productImage(item), size: 48),
-                  const SizedBox(width: 8),
-                ],
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-          Text(
-            isBundle ? 'BUNDLE DEAL' : 'BUY X GET Y',
-            style: const TextStyle(
-              color: Color(0xFF7B2C23),
-              fontSize: 9,
-              letterSpacing: 1,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            name,
-            style: const TextStyle(
-              color: Color(0xFF241E1A),
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          if (isBundle)
-            Text.rich(
-              TextSpan(
-                style: const TextStyle(
-                  color: muted,
-                  fontSize: 12,
-                  height: 1.35,
+          Row(
+            crossAxisAlignment: isBundle
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
+            children: [
+              photoPanel,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isBundle ? 'BUNDLE DEAL' : 'BUY X GET Y',
+                      style: const TextStyle(
+                        color: Color(0xFF7B2C23),
+                        fontSize: 9,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Color(0xFF241E1A),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (isBundle)
+                      Text.rich(
+                        TextSpan(
+                          style: const TextStyle(
+                            color: muted,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                          children: [
+                            const TextSpan(
+                              text: 'Get all listed items together for ',
+                            ),
+                            TextSpan(
+                              text: bundlePrice == null
+                                  ? 'a special price.'
+                                  : _peso(bundlePrice) + '.',
+                              style: const TextStyle(
+                                color: maroon,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Text(
+                        'Buy ' +
+                            buyQuantity.toString() +
+                            ' x ' +
+                            productName(buyItem, fallback: 'qualifying item') +
+                            ', get ' +
+                            rewardQuantity.toString() +
+                            ' x ' +
+                            productName(
+                              rewards.isEmpty ? null : rewards.first,
+                              fallback: 'reward item',
+                            ) +
+                            (discount >= 100
+                                ? ' free.'
+                                : ' at ' +
+                                      discount.toStringAsFixed(0) +
+                                      '% off.'),
+                        style: const TextStyle(
+                          color: muted,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    if (isBundle && usualTotal != null && savings != null) ...[
+                      const SizedBox(height: 3),
+                      Text.rich(
+                        TextSpan(
+                          style: const TextStyle(color: muted, fontSize: 10),
+                          children: [
+                            const TextSpan(text: 'Usual total '),
+                            TextSpan(
+                              text: _peso(usualTotal),
+                              style: const TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '   Save ' + _peso(savings),
+                              style: const TextStyle(
+                                color: maroon,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (!isBundle &&
+                        int.tryParse(
+                              offer['max_per_buyer']?.toString() ?? '',
+                            ) !=
+                            null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Limit ' +
+                            offer['max_per_buyer'].toString() +
+                            ' redemption(s) per buyer.',
+                        style: const TextStyle(color: muted, fontSize: 10),
+                      ),
+                    ],
+                  ],
                 ),
-                children: [
-                  const TextSpan(text: 'Get all listed items together for '),
-                  TextSpan(
-                    text: bundlePrice == null
-                        ? 'a special price.'
-                        : _peso(bundlePrice) + '.',
-                    style: const TextStyle(
-                      color: maroon,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
               ),
-            )
-          else
-            Text(
-              'Buy ' +
-                  buyQuantity.toString() +
-                  ' x ' +
-                  productName(buyItem, fallback: 'qualifying item') +
-                  ', get ' +
-                  rewardQuantity.toString() +
-                  ' x ' +
-                  productName(
-                    rewards.isEmpty ? null : rewards.first,
-                    fallback: 'reward item',
-                  ) +
-                  (discount >= 100
-                      ? ' free.'
-                      : ' at ' + discount.toStringAsFixed(0) + '% off.'),
-              style: const TextStyle(color: muted, fontSize: 12, height: 1.35),
-            ),
-          if (isBundle && usualTotal != null && savings != null) ...[
-            const SizedBox(height: 3),
-            Text.rich(
-              TextSpan(
-                style: const TextStyle(color: muted, fontSize: 10),
-                children: [
-                  const TextSpan(text: 'Usual total '),
-                  TextSpan(
-                    text: _peso(usualTotal),
-                    style: const TextStyle(
-                      decoration: TextDecoration.lineThrough,
-                    ),
-                  ),
-                  TextSpan(
-                    text: '   Save ' + _peso(savings),
-                    style: const TextStyle(
-                      color: maroon,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (isBundle && components.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                for (final item in components.take(3)) ...[
-                  _productThumbnail(productImage(item), size: 48),
-                  const SizedBox(width: 8),
-                ],
-              ],
-            ),
-          ],
-          if (!isBundle &&
-              int.tryParse(offer['max_per_buyer']?.toString() ?? '') !=
-                  null) ...[
-            const SizedBox(height: 3),
-            Text(
-              'Limit ' +
-                  offer['max_per_buyer'].toString() +
-                  ' redemption(s) per buyer.',
-              style: const TextStyle(color: muted, fontSize: 10),
-            ),
-          ],
-          if (isBundle && components.isNotEmpty) ...[
+            ],
+          ),
+          if (isBundle && bundleItems.isNotEmpty) ...[
             const SizedBox(height: 9),
-            for (final item in components)
+            for (final item in bundleItems)
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(
@@ -630,13 +898,11 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
                     ),
                     child: Text(
                       _busy
-                          ? 'Adding...'
+                          ? (isBundle ? 'Adding...' : 'Starting checkout...')
                           : canAdd
-                          ? (isBundle
-                                ? 'Add Bundle to Cart'
-                                : 'Add Items & Claim')
+                          ? 'Buy Now'
                           : (maximum == 0
-                                ? 'Offer fully redeemed'
+                                ? 'Offer limit reached'
                                 : 'Reward unavailable'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -725,7 +991,7 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
                 widget.offerType == 'BUNDLE'
                     ? 'Shop selected items together at one bundle price. Available combinations and stock are confirmed in your cart.'
                     : widget.offerType == 'BUY_X_GET_Y'
-                    ? 'See what qualifies, choose eligible reward variations, and add the offer through the existing cart flow.'
+                    ? 'See what qualifies, choose a reward variation, and check out the qualifying item and reward together.'
                     : 'Explore seller bundle deals and Buy X Get Y rewards.',
                 style: const TextStyle(
                   color: Color(0xFF8A6656),
@@ -787,7 +1053,7 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
               ),
               const SizedBox(height: 2),
               const Text(
-                'Offer prices are checked against available stock and confirmed at checkout.',
+                'Offer eligibility, stock, and reward prices are confirmed at checkout.',
                 style: TextStyle(
                   color: Color(0xFF625751),
                   fontSize: 11,

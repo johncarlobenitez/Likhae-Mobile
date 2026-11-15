@@ -87,11 +87,11 @@ class RiderProofWatermark {
       ),
       ..._wrapText(
         'GPS: ${position.latitude.toStringAsFixed(6)}, '
-            '${position.longitude.toStringAsFixed(6)}',
+        '${position.longitude.toStringAsFixed(6)}',
         font,
         maxTextWidth,
       ),
-      ..._wrapText('RIDER: $name', font, maxTextWidth),
+      ..._wrapText('DELIVERED BY: $name', font, maxTextWidth),
     ];
 
     final int lineHeight = font.lineHeight;

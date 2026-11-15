@@ -82,11 +82,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Scan parcel barcode / QR'), findsOneWidget);
+    expect(find.text('Scan all parcel barcodes'), findsOneWidget);
     expect(
       tester
           .widget<OutlinedButton>(
-            find.widgetWithText(OutlinedButton, 'Scan parcel barcode / QR'),
+            find.widgetWithText(OutlinedButton, 'Scan all parcel barcodes'),
           )
           .onPressed,
       isNull,
@@ -96,7 +96,7 @@ void main() {
     expect(
       tester
           .widget<OutlinedButton>(
-            find.widgetWithText(OutlinedButton, 'Scan parcel barcode / QR'),
+            find.widgetWithText(OutlinedButton, 'Scan all parcel barcodes'),
           )
           .onPressed,
       isNotNull,
@@ -289,7 +289,7 @@ void main() {
       expect(
         tester
             .widget<OutlinedButton>(
-              find.widgetWithText(OutlinedButton, 'Scan parcel barcode / QR'),
+              find.widgetWithText(OutlinedButton, 'Scan all parcel barcodes'),
             )
             .onPressed,
         isNotNull,

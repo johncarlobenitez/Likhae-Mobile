@@ -21,6 +21,7 @@ import '../../auth/register_screen.dart'
 
 enum BuyerAccountTab {
   profile,
+  accountSecurity,
   addresses,
   vouchers,
   followingStores,
@@ -36,6 +37,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
     switch (this) {
       case BuyerAccountTab.profile:
         return 'Profile';
+
+      case BuyerAccountTab.accountSecurity:
+        return 'Account & Security';
 
       case BuyerAccountTab.addresses:
         return 'Addresses';
@@ -67,6 +71,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
       case BuyerAccountTab.profile:
         return 'Personal information';
 
+      case BuyerAccountTab.accountSecurity:
+        return 'Edit your information and password';
+
       case BuyerAccountTab.addresses:
         return 'Delivery locations';
 
@@ -96,6 +103,9 @@ extension BuyerAccountTabInfo on BuyerAccountTab {
     switch (this) {
       case BuyerAccountTab.profile:
         return Icons.person_outline_rounded;
+
+      case BuyerAccountTab.accountSecurity:
+        return Icons.lock_outline_rounded;
 
       case BuyerAccountTab.addresses:
         return Icons.location_on_outlined;
@@ -566,19 +576,20 @@ class AccountScreen extends StatefulWidget {
 
   final BuyerRefundDestinationMutationCallback? onMutateRefundDestination;
 
-  final VoidCallback? onReviewHistory;
-
   final VoidCallback? onSystemSettings;
   final VoidCallback? onRecentlyViewed;
 
   final VoidCallback? onVouchers;
   final VoidCallback? onFollowingStores;
 
-  /// Shows the horizontal account navigation tiles above the active section.
+  /// Uses the compact Buyer Center header used by account pages.
   final bool showNavigationTabs;
 
   /// Shows a back button when this section was opened as a dedicated page.
   final bool showBackButton;
+
+  /// Shows the Settings icon only on the main Profile tab.
+  final bool showProfileSettingsButton;
 
   final RefreshBuyerAccountCallback? onRefresh;
 
@@ -588,8 +599,6 @@ class AccountScreen extends StatefulWidget {
   final ValueChanged<BuyerProfileData>? onProfileChanged;
 
   final ValueChanged<List<BuyerAddressData>>? onAddressesChanged;
-
-  final ValueChanged<BuyerAccountTab>? onTabChanged;
 
   const AccountScreen({
     super.key,
@@ -620,18 +629,17 @@ class AccountScreen extends StatefulWidget {
     this.onDeleteAccount,
     this.onLoadRefundDestinations,
     this.onMutateRefundDestination,
-    this.onReviewHistory,
     this.onSystemSettings,
     this.onRecentlyViewed,
     this.onVouchers,
     this.onFollowingStores,
     this.showNavigationTabs = true,
     this.showBackButton = false,
+    this.showProfileSettingsButton = false,
     this.onRefresh,
     this.onLogout,
     this.onProfileChanged,
     this.onAddressesChanged,
-    this.onTabChanged,
   });
 
   @override
@@ -665,18 +673,11 @@ class _AccountScreenState extends State<AccountScreen> {
 
   static const LatLng _defaultAddressMapCenter = LatLng(14.5995, 120.9842);
 
-  static const int _maxProfilePhotoBytes = 2 * 1024 * 1024;
-
   late BuyerProfileData _profile;
 
   late List<BuyerAddressData> _addresses;
 
   late BuyerAccountTab _activeTab;
-
-  SelectedProfilePhoto? _selectedPhoto;
-
-  bool _savingProfile = false;
-  bool _removingPhoto = false;
 
   bool _addingAddress = false;
   String? _editingAddressId;
@@ -709,21 +710,25 @@ class _AccountScreenState extends State<AccountScreen> {
   bool _deletingAccount = false;
   String? _deleteAccountError;
 
-  final GlobalKey<FormState> _profileFormKey = GlobalKey<FormState>();
-
   final GlobalKey<FormState> _addressFormKey = GlobalKey<FormState>();
+
+  final GlobalKey<FormState> _accountSecurityFormKey = GlobalKey<FormState>();
 
   final GlobalKey<FormState> _passwordFormKey = GlobalKey<FormState>();
 
-  late final TextEditingController _nameController;
+  late final TextEditingController _securityNameController;
 
-  late final TextEditingController _emailController;
+  late final TextEditingController _securityEmailController;
 
-  late final TextEditingController _phoneController;
+  late final TextEditingController _securityPhoneController;
 
-  DateTime? _birthday;
+  SelectedProfilePhoto? _securitySelectedPhoto;
 
-  BuyerGender? _gender;
+  DateTime? _securityBirthday;
+
+  BuyerGender? _securityGender;
+
+  bool _savingAccountSecurity = false;
 
   late final TextEditingController _addressLabelController;
 
@@ -791,10 +796,6 @@ class _AccountScreenState extends State<AccountScreen> {
   bool _showNewPassword = false;
   bool _showConfirmPassword = false;
 
-  final Map<BuyerAccountTab, GlobalKey> _tabKeys = <BuyerAccountTab, GlobalKey>{
-    for (final BuyerAccountTab tab in BuyerAccountTab.values) tab: GlobalKey(),
-  };
-
   @override
   void initState() {
     super.initState();
@@ -805,27 +806,23 @@ class _AccountScreenState extends State<AccountScreen> {
 
     _activeTab = widget.initialTab;
 
+    _securityNameController = TextEditingController(text: _profile.name);
+
+    _securityEmailController = TextEditingController(text: _profile.email);
+
+    _securityPhoneController = TextEditingController(text: _profile.phone);
+
+    _securityBirthday = _profile.birthday;
+
+    _securityGender = _profile.gender;
+
     _newAddressIsDefault = _addresses.isEmpty;
-
-    _nameController = TextEditingController(text: _profile.name);
-
-    _emailController = TextEditingController(text: _profile.email);
-
-    _phoneController = TextEditingController(text: _profile.phone);
-
-    _birthday = _profile.birthday;
-
-    _gender = _profile.gender;
 
     _addressLabelController = TextEditingController(text: 'Home');
 
     _recipientNameController = TextEditingController(text: _profile.name);
 
     _addressPhoneController = TextEditingController(text: _profile.phone);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureActiveTabVisible();
-    });
 
     if (_activeTab == BuyerAccountTab.addresses) {
       unawaited(_loadAddressRegions());
@@ -844,21 +841,23 @@ class _AccountScreenState extends State<AccountScreen> {
 
       _profile = widget.profile;
 
-      if (_nameController.text == previousProfile.name) {
-        _nameController.text = _profile.name;
+      if (_securityNameController.text.trim() == previousProfile.name.trim()) {
+        _securityNameController.text = _profile.name;
       }
-
-      if (_emailController.text == previousProfile.email) {
-        _emailController.text = _profile.email;
+      if (_securityEmailController.text.trim() ==
+          previousProfile.email.trim()) {
+        _securityEmailController.text = _profile.email;
       }
-
-      if (_phoneController.text == previousProfile.phone) {
-        _phoneController.text = _profile.phone;
+      if (_securityPhoneController.text.trim() ==
+          previousProfile.phone.trim()) {
+        _securityPhoneController.text = _profile.phone;
       }
-
-      if (_birthday == previousProfile.birthday) _birthday = _profile.birthday;
-
-      if (_gender == previousProfile.gender) _gender = _profile.gender;
+      if (_securityBirthday == previousProfile.birthday) {
+        _securityBirthday = _profile.birthday;
+      }
+      if (_securityGender == previousProfile.gender) {
+        _securityGender = _profile.gender;
+      }
 
       if (_recipientNameController.text.trim().isEmpty ||
           _recipientNameController.text.trim() == previousProfile.name.trim()) {
@@ -879,9 +878,6 @@ class _AccountScreenState extends State<AccountScreen> {
 
     if (oldWidget.initialTab != widget.initialTab) {
       _activeTab = widget.initialTab;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _ensureActiveTabVisible();
-      });
       if (_activeTab == BuyerAccountTab.addresses) {
         unawaited(_loadAddressRegions());
       }
@@ -893,10 +889,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-
+    _securityNameController.dispose();
+    _securityEmailController.dispose();
+    _securityPhoneController.dispose();
     _addressLabelController.dispose();
     _recipientNameController.dispose();
     _addressPhoneController.dispose();
@@ -1558,12 +1553,6 @@ class _AccountScreenState extends State<AccountScreen> {
       setState(() {
         _profile = snapshot.profile;
         _addresses = List<BuyerAddressData>.from(snapshot.addresses);
-        _nameController.text = snapshot.profile.name;
-        _emailController.text = snapshot.profile.email;
-        _phoneController.text = snapshot.profile.phone;
-        _birthday = snapshot.profile.birthday;
-        _gender = snapshot.profile.gender;
-        _selectedPhoto = null;
       });
       widget.onProfileChanged?.call(snapshot.profile);
       widget.onAddressesChanged?.call(_addresses);
@@ -1576,730 +1565,6 @@ class _AccountScreenState extends State<AccountScreen> {
         });
       }
     }
-  }
-
-  void _changeTab(BuyerAccountTab tab) {
-    if (_activeTab == tab) {
-      widget.onTabChanged?.call(tab);
-      return;
-    }
-
-    FocusScope.of(context).unfocus();
-
-    setState(() {
-      _activeTab = tab;
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureActiveTabVisible();
-    });
-
-    if (tab == BuyerAccountTab.addresses) {
-      unawaited(_loadAddressRegions());
-    }
-    if (tab == BuyerAccountTab.wallet) {
-      unawaited(_loadRefundDestinations());
-    }
-
-    widget.onTabChanged?.call(tab);
-  }
-
-  void _ensureActiveTabVisible() {
-    if (!mounted || !widget.showNavigationTabs) return;
-
-    final BuildContext? tabContext = _tabKeys[_activeTab]?.currentContext;
-    if (tabContext == null) return;
-
-    unawaited(
-      Scrollable.ensureVisible(
-        tabContext,
-        alignment: 0.5,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      ),
-    );
-  }
-
-  Future<void> _pickPhoto() async {
-    if (_savingProfile || _removingPhoto) {
-      return;
-    }
-
-    final PickProfilePhotoCallback? callback = widget.onPickProfilePhoto;
-
-    if (callback == null) {
-      _showMessage('Profile photo selection will be connected later.');
-
-      return;
-    }
-
-    try {
-      final SelectedProfilePhoto? photo = await callback();
-
-      if (!mounted || photo == null) {
-        return;
-      }
-
-      if (photo.bytes.isEmpty) {
-        _showMessage('The selected image is empty.', error: true);
-
-        return;
-      }
-
-      if (photo.sizeInBytes > _maxProfilePhotoBytes) {
-        _showMessage('Profile photo must not exceed 2 MB.', error: true);
-
-        return;
-      }
-
-      setState(() {
-        _selectedPhoto = photo;
-      });
-    } catch (error) {
-      _showMessage(_errorText(error), error: true);
-    }
-  }
-
-  Future<void> _saveProfile() async {
-    FocusScope.of(context).unfocus();
-
-    if (_savingProfile || _removingPhoto) {
-      return;
-    }
-
-    if (!(_profileFormKey.currentState?.validate() ?? false)) {
-      return;
-    }
-
-    final SelectedProfilePhoto? photo = _selectedPhoto;
-
-    if (photo != null && photo.sizeInBytes > _maxProfilePhotoBytes) {
-      _showMessage('Profile photo must not exceed 2 MB.', error: true);
-
-      return;
-    }
-
-    final UpdateBuyerProfileCallback? callback = widget.onUpdateProfile;
-
-    if (callback == null) {
-      _showMessage('Profile saving will be connected to Laravel later.');
-
-      return;
-    }
-
-    setState(() {
-      _savingProfile = true;
-    });
-
-    try {
-      final BuyerProfileData previousProfile = _profile;
-      UpdateBuyerProfileRequest request = UpdateBuyerProfileRequest(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        phone: _phoneController.text.trim(),
-        birthday: _birthday,
-        gender: _gender,
-        profilePhoto: _selectedPhoto,
-      );
-      if (request.email.toLowerCase() != _profile.email.toLowerCase()) {
-        final RequestBuyerEmailChangeCallback? requestEmail =
-            widget.onRequestEmailChange;
-        if (requestEmail == null || widget.onVerifyEmailChange == null) {
-          throw Exception('Email verification is not available right now.');
-        }
-        await requestEmail(request.email);
-        final BuyerProfileData? verified = await _verifyEmailChange();
-        if (verified == null) return;
-        setState(() {
-          _profile = verified;
-          _emailController.text = verified.email;
-        });
-        widget.onProfileChanged?.call(verified);
-        request = UpdateBuyerProfileRequest(
-          name: request.name,
-          email: verified.email,
-          phone: request.phone,
-          birthday: request.birthday,
-          gender: request.gender,
-          profilePhoto: request.profilePhoto,
-        );
-      }
-      late final BuyerProfileData updated;
-
-      try {
-        updated = await callback(request);
-      } on BuyerProfileVerificationRequiredException catch (verification) {
-        final BuyerProfileData? verified = await _verifyMobileChange(
-          callback,
-          request,
-          verification,
-        );
-        if (verified == null) {
-          return;
-        }
-        updated = verified;
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _profile = updated;
-
-        _selectedPhoto = null;
-
-        _nameController.text = updated.name;
-
-        _emailController.text = updated.email;
-
-        _phoneController.text = updated.phone;
-
-        _birthday = updated.birthday;
-
-        _gender = updated.gender;
-
-        if (_recipientNameController.text.trim().isEmpty ||
-            _recipientNameController.text.trim() ==
-                previousProfile.name.trim()) {
-          _recipientNameController.text = updated.name;
-        }
-
-        if (_addressPhoneController.text.trim().isEmpty ||
-            _addressPhoneController.text.trim() ==
-                previousProfile.phone.trim()) {
-          _addressPhoneController.text = updated.phone;
-        }
-      });
-
-      widget.onProfileChanged?.call(updated);
-
-      _showMessage('Profile updated.');
-    } catch (error) {
-      _showMessage(_errorText(error), error: true);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _savingProfile = false;
-        });
-      }
-    }
-  }
-
-  Future<BuyerProfileData?> _verifyEmailChange() async {
-    final VerifyBuyerEmailChangeCallback? verify = widget.onVerifyEmailChange;
-    if (verify == null) return null;
-    final TextEditingController codeController = TextEditingController();
-    bool submitting = false;
-    bool resending = false;
-    String? error;
-    String? notice;
-    try {
-      return await showDialog<BuyerProfileData>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) => StatefulBuilder(
-          builder: (BuildContext context, StateSetter setDialogState) {
-            Future<void> submit() async {
-              if (submitting || codeController.text.trim().length != 6) {
-                setDialogState(() => error = 'Enter the six-digit code.');
-                return;
-              }
-              setDialogState(() {
-                submitting = true;
-                error = null;
-              });
-              try {
-                final BuyerProfileData result = await verify(
-                  codeController.text.trim(),
-                );
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop(result);
-                }
-              } catch (exception) {
-                if (dialogContext.mounted) {
-                  setDialogState(() {
-                    submitting = false;
-                    error = _errorText(exception);
-                  });
-                }
-              }
-            }
-
-            Future<void> resend() async {
-              final ResendBuyerMobileChangeCodeCallback? callback =
-                  widget.onResendEmailChangeCode;
-              if (callback == null || resending) return;
-              setDialogState(() {
-                resending = true;
-                error = null;
-                notice = null;
-              });
-              try {
-                await callback();
-                if (dialogContext.mounted) {
-                  setDialogState(() {
-                    resending = false;
-                    notice = 'A new code was sent to the new email address.';
-                  });
-                }
-              } catch (exception) {
-                if (dialogContext.mounted) {
-                  setDialogState(() {
-                    resending = false;
-                    error = _errorText(exception);
-                  });
-                }
-              }
-            }
-
-            return AlertDialog(
-              title: const Text('Verify new email'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const Text(
-                    'Enter the six-digit code sent to your new email address.',
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: codeController,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Verification code',
-                    ),
-                  ),
-                  if (notice != null)
-                    Text(notice!, style: const TextStyle(color: Colors.green)),
-                  if (error != null)
-                    Text(error!, style: const TextStyle(color: Colors.red)),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: resending ? null : resend,
-                      child: Text(resending ? 'Sending…' : 'Resend code'),
-                    ),
-                  ),
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: submitting
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: submitting ? null : submit,
-                  child: submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Verify email'),
-                ),
-              ],
-            );
-          },
-        ),
-      );
-    } finally {
-      codeController.dispose();
-    }
-  }
-
-  Future<BuyerProfileData?> _verifyMobileChange(
-    UpdateBuyerProfileCallback callback,
-    UpdateBuyerProfileRequest request,
-    BuyerProfileVerificationRequiredException verification,
-  ) async {
-    final TextEditingController codeController = TextEditingController();
-    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
-    bool submitting = false;
-    bool resending = false;
-    String? dialogError;
-    String? dialogNotice;
-
-    try {
-      return await showDialog<BuyerProfileData>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              Future<void> submitCode() async {
-                if (submitting ||
-                    !(formKey.currentState?.validate() ?? false)) {
-                  return;
-                }
-                setDialogState(() {
-                  submitting = true;
-                  dialogError = null;
-                });
-                try {
-                  final BuyerProfileData updated = await callback(
-                    UpdateBuyerProfileRequest(
-                      name: request.name,
-                      email: request.email,
-                      phone: request.phone,
-                      birthday: request.birthday,
-                      gender: request.gender,
-                      profilePhoto: request.profilePhoto,
-                      mobileChangeCode: codeController.text.trim(),
-                    ),
-                  );
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop(updated);
-                  }
-                } catch (error) {
-                  if (dialogContext.mounted) {
-                    setDialogState(() {
-                      submitting = false;
-                      dialogError = _errorText(error);
-                    });
-                  }
-                }
-              }
-
-              Future<void> resendCode() async {
-                final ResendBuyerMobileChangeCodeCallback? resend =
-                    widget.onResendMobileChangeCode;
-                if (resending || resend == null) {
-                  return;
-                }
-                setDialogState(() {
-                  resending = true;
-                  dialogError = null;
-                  dialogNotice = null;
-                });
-                try {
-                  await resend();
-                  if (dialogContext.mounted) {
-                    setDialogState(() {
-                      resending = false;
-                      dialogNotice = 'A new verification code was sent.';
-                    });
-                  }
-                } catch (error) {
-                  if (dialogContext.mounted) {
-                    setDialogState(() {
-                      resending = false;
-                      dialogError = _errorText(error);
-                    });
-                  }
-                }
-              }
-
-              return AlertDialog(
-                backgroundColor: AppTheme.resolve(
-                  context,
-                  _surface,
-                  fill: true,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                title: Text(
-                  'Verify mobile number',
-                  style: TextStyle(
-                    color: AppTheme.resolve(context, _text),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                content: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        verification.message.isEmpty
-                            ? 'Enter the six-digit code sent to ${verification.target}.'
-                            : verification.message,
-                        style: TextStyle(
-                          color: AppTheme.resolve(context, _muted),
-                          fontSize: 14,
-                          height: 1.45,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      TextFormField(
-                        controller: codeController,
-                        autofocus: true,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: <TextInputFormatter>[
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        maxLength: 6,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppTheme.resolve(context, _text),
-                          fontSize: 22,
-                          letterSpacing: 8,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: '------',
-                          counterText: '',
-                          filled: true,
-                          fillColor: AppTheme.resolve(
-                            context,
-                            Colors.white,
-                            fill: true,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(13),
-                            borderSide: BorderSide(
-                              color: AppTheme.resolve(context, _border),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(13),
-                            borderSide: BorderSide(
-                              color: AppTheme.resolve(context, _border),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(13),
-                            borderSide: BorderSide(
-                              color: AppTheme.resolve(context, _maroon),
-                            ),
-                          ),
-                        ),
-                        validator: (String? value) {
-                          final String code = value?.trim() ?? '';
-                          return RegExp(r'^\d{6}$').hasMatch(code)
-                              ? null
-                              : 'Enter the six-digit code.';
-                        },
-                        onFieldSubmitted: (_) => submitCode(),
-                      ),
-                      if (dialogError != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          dialogError!,
-                          style: TextStyle(
-                            color: AppTheme.resolve(context, _danger),
-                            fontSize: 12,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                      if (dialogNotice != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          dialogNotice!,
-                          style: TextStyle(
-                            color: AppTheme.resolve(context, _maroon),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          onPressed:
-                              resending ||
-                                  widget.onResendMobileChangeCode == null
-                              ? null
-                              : resendCode,
-                          child: Text(
-                            resending ? 'Sending…' : 'Resend code',
-                            style: TextStyle(
-                              color: AppTheme.resolve(context, _maroon),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: submitting
-                        ? null
-                        : () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  ElevatedButton(
-                    onPressed: submitting ? null : submitCode,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.resolve(
-                        context,
-                        _maroon,
-                        fill: true,
-                      ),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                    ),
-                    child: submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Verify and save'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      codeController.dispose();
-    }
-  }
-
-  Future<void> _removeProfilePhoto() async {
-    if (_removingPhoto || _savingProfile) {
-      return;
-    }
-
-    /*
-     * A newly selected local photo has not been sent to
-     * Laravel yet. Removing it only clears the local preview.
-     */
-    if (_selectedPhoto != null) {
-      setState(() {
-        _selectedPhoto = null;
-      });
-
-      return;
-    }
-
-    final String? remotePhoto = _profile.profilePhotoUrl?.trim();
-
-    if (remotePhoto == null || remotePhoto.isEmpty) {
-      return;
-    }
-
-    final RemoveProfilePhotoCallback? callback = widget.onRemoveProfilePhoto;
-
-    if (callback == null) {
-      _showMessage('Profile photo removal will be connected to Laravel later.');
-
-      return;
-    }
-
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: AppTheme.resolve(context, _surface, fill: true),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: Text(
-            'Remove profile photo?',
-            style: TextStyle(
-              color: AppTheme.resolve(context, _text),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          content: Text(
-            'Your account will use your initial when no profile photo is saved.',
-            style: TextStyle(
-              color: AppTheme.resolve(context, _muted),
-              fontSize: 15,
-              height: 1.55,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.resolve(context, _danger, fill: true),
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-              child: const Text('Remove'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _removingPhoto = true;
-    });
-
-    try {
-      final BuyerProfileData updated = await callback();
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _profile = updated;
-
-        _selectedPhoto = null;
-      });
-
-      widget.onProfileChanged?.call(updated);
-
-      _showMessage('Profile photo removed.');
-    } catch (error) {
-      _showMessage(_errorText(error), error: true);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _removingPhoto = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _selectBirthday() async {
-    final DateTime now = DateTime.now();
-
-    final DateTime fallback = DateTime(now.year - 18, now.month, now.day);
-
-    DateTime initialDate = _birthday ?? fallback;
-
-    if (initialDate.isAfter(now)) {
-      initialDate = fallback;
-    }
-
-    if (initialDate.isBefore(DateTime(1900))) {
-      initialDate = DateTime(1900);
-    }
-
-    final DateTime? selected = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(1900),
-      lastDate: now,
-      helpText: 'Select date of birth',
-    );
-
-    if (selected == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _birthday = selected;
-    });
   }
 
   Future<void> _addAddress() async {
@@ -2840,17 +2105,15 @@ class _AccountScreenState extends State<AccountScreen> {
 
                     _buildHeading(),
 
-                    const SizedBox(height: 16),
+                    SizedBox(height: widget.showBackButton ? 4 : 16),
 
-                    _buildAccountSummary(),
-
-                    const SizedBox(height: 14),
-
-                    if (widget.showNavigationTabs) ...[
-                      _buildTabs(),
-
-                      const SizedBox(height: 13),
-                    ],
+                    if (widget.initialTab != BuyerAccountTab.profile &&
+                        _activeTab != BuyerAccountTab.accountSecurity &&
+                        _activeTab != BuyerAccountTab.profile) ...[
+                      _buildAccountSummary(),
+                      const SizedBox(height: 14),
+                    ] else
+                      const SizedBox(height: 4),
 
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
@@ -2950,6 +2213,34 @@ class _AccountScreenState extends State<AccountScreen> {
     ];
 
     if (widget.showNavigationTabs) {
+      if (widget.showBackButton) {
+        final String title = switch (_activeTab) {
+          BuyerAccountTab.accountSecurity => 'Account & Security',
+          BuyerAccountTab.addresses => 'Address Management',
+          _ => _activeTab.label,
+        };
+        final String subtitle = switch (_activeTab) {
+          BuyerAccountTab.accountSecurity =>
+            'Edit your personal information and update your password.',
+          BuyerAccountTab.addresses =>
+            'Manage your saved delivery addresses and locations.',
+          BuyerAccountTab.profile =>
+            'View your account details and personal information.',
+          BuyerAccountTab.wallet => 'Manage your refund destination.',
+          BuyerAccountTab.vouchers => 'View your available vouchers.',
+          BuyerAccountTab.followingStores => 'Stores you follow.',
+          BuyerAccountTab.recentlyViewed => 'Products you viewed recently.',
+          BuyerAccountTab.password => 'Update your account password.',
+          BuyerAccountTab.settings => 'Manage your app preferences.',
+          BuyerAccountTab.dangerZone => 'Manage account deletion.',
+        };
+        return ShopPageHeader(
+          title: title,
+          subtitle: subtitle,
+          onBack: handleBack,
+        );
+      }
+
       if (actions.isEmpty && !widget.showBackButton) {
         return const SizedBox.shrink();
       }
@@ -2957,22 +2248,6 @@ class _AccountScreenState extends State<AccountScreen> {
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
         child: Row(
           children: [
-            if (widget.showBackButton)
-              IconButton(
-                tooltip: 'Back',
-                onPressed: handleBack,
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-            if (widget.showBackButton)
-              Text(
-                'BUYER CENTER',
-                style: TextStyle(
-                  color: AppTheme.resolve(context, _maroon),
-                  fontSize: 12,
-                  letterSpacing: 1.7,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
             const Spacer(),
             ...actions,
           ],
@@ -2981,7 +2256,9 @@ class _AccountScreenState extends State<AccountScreen> {
     }
 
     return ShopPageHeader(
-      title: _activeTab.label,
+      title: _activeTab == BuyerAccountTab.addresses
+          ? 'Address Management'
+          : _activeTab.label,
       subtitle: _activeTab.description,
       onBack: handleBack,
       actions: actions,
@@ -2989,37 +2266,72 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Widget _buildHeading() {
+    if (widget.showBackButton) {
+      return const SizedBox.shrink();
+    }
+
+    final String title = switch (_activeTab) {
+      BuyerAccountTab.accountSecurity => 'Account & Security',
+      BuyerAccountTab.addresses => 'Address Management',
+      _ => 'Account Management',
+    };
+    final String subtitle = switch (_activeTab) {
+      BuyerAccountTab.accountSecurity =>
+        'Edit your personal information and update your password.',
+      BuyerAccountTab.addresses =>
+        'Manage your saved delivery addresses and locations.',
+      _ =>
+        'View your account details, delivery addresses, and account security.',
+    };
+    final bool showSettingsIcon =
+        widget.showProfileSettingsButton &&
+        _activeTab == BuyerAccountTab.profile &&
+        widget.onSystemSettings != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!widget.showBackButton) ...[
-          Text(
-            'BUYER CENTER',
-            style: TextStyle(
-              color: AppTheme.resolve(context, _maroon),
-              fontSize: 12,
-              letterSpacing: 1.7,
-              fontWeight: FontWeight.w800,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: AppTheme.resolve(context, _text),
+                  fontSize: 30,
+                  height: 1.05,
+                  letterSpacing: -0.7,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 5),
-        ],
-
-        Text(
-          'Account Management',
-          style: TextStyle(
-            color: AppTheme.resolve(context, _text),
-            fontSize: 30,
-            height: 1.05,
-            letterSpacing: -0.7,
-            fontWeight: FontWeight.w800,
-          ),
+            if (showSettingsIcon)
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppTheme.resolve(context, _border)),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: IconButton(
+                  onPressed: widget.onSystemSettings,
+                  tooltip: 'Settings',
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.settings_outlined, size: 19),
+                  color: AppTheme.resolve(context, _maroon),
+                ),
+              ),
+          ],
         ),
-
-        SizedBox(height: 7),
-
+        const SizedBox(height: 7),
         Text(
-          'Manage your profile, delivery addresses, and account security.',
+          subtitle,
           style: TextStyle(
             color: AppTheme.resolve(context, _muted),
             fontSize: 13,
@@ -3040,11 +2352,7 @@ class _AccountScreenState extends State<AccountScreen> {
       ),
       child: Row(
         children: [
-          _ProfileAvatar(
-            profile: _profile,
-            selectedPhoto: _selectedPhoto,
-            size: 50,
-          ),
+          _ProfileAvatar(profile: _profile, selectedPhoto: null, size: 50),
 
           const SizedBox(width: 11),
 
@@ -3096,171 +2404,13 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  Widget _buildTabs() {
-    final List<BuyerAccountTab> tabs = BuyerAccountTab.values;
-
-    return SizedBox(
-      height: 58,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (int index = 0; index < tabs.length; index++) ...[
-              if (index > 0) const SizedBox(width: 8),
-              _buildTab(tabs[index]),
-              if (tabs[index] == BuyerAccountTab.vouchers &&
-                  widget.onReviewHistory != null) ...[
-                const SizedBox(width: 8),
-                _buildReviewHistoryTab(),
-              ],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTab(BuyerAccountTab tab) {
-    final bool selected = tab == _activeTab;
-
-    return Material(
-      key: _tabKeys[tab],
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: () {
-          if (selected) return;
-
-          if (tab == BuyerAccountTab.vouchers && widget.onVouchers != null) {
-            widget.onVouchers!();
-            return;
-          }
-          if (tab == BuyerAccountTab.followingStores &&
-              widget.onFollowingStores != null) {
-            widget.onFollowingStores!();
-            return;
-          }
-          if (tab == BuyerAccountTab.settings &&
-              widget.onSystemSettings != null) {
-            widget.onSystemSettings!();
-            return;
-          }
-          if (tab == BuyerAccountTab.recentlyViewed &&
-              widget.onRecentlyViewed != null) {
-            widget.onRecentlyViewed!();
-            return;
-          }
-          if (widget.onTabChanged != null) {
-            widget.onTabChanged!(tab);
-            return;
-          }
-          _changeTab(tab);
-        },
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppTheme.resolve(context, _maroon, fill: true)
-                : AppTheme.resolve(context, _surface, fill: true),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected
-                  ? AppTheme.resolve(context, _maroon)
-                  : AppTheme.resolve(context, _border),
-            ),
-            boxShadow: selected
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: AppTheme.resolve(context, _maroon).withValues(
-                        alpha: 0.16,
-                      ),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : const <BoxShadow>[],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                tab.icon,
-                color: selected
-                    ? AppTheme.resolve(context, Colors.white)
-                    : AppTheme.resolve(context, _muted),
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                tab.label,
-                maxLines: 1,
-                softWrap: false,
-                style: TextStyle(
-                  color: selected
-                      ? AppTheme.resolve(context, Colors.white)
-                      : AppTheme.resolve(context, _text),
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReviewHistoryTab() {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: widget.onReviewHistory,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          decoration: BoxDecoration(
-            color: AppTheme.resolve(context, _surface, fill: true),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppTheme.resolve(context, _border)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.rate_review_outlined,
-                color: AppTheme.resolve(context, _muted),
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'My review history',
-                maxLines: 1,
-                softWrap: false,
-                style: TextStyle(
-                  color: AppTheme.resolve(context, _text),
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildActiveContent() {
     switch (_activeTab) {
       case BuyerAccountTab.profile:
         return _buildProfileSection();
+
+      case BuyerAccountTab.accountSecurity:
+        return _buildAccountSecuritySection();
 
       case BuyerAccountTab.addresses:
         return _buildAddressesSection();
@@ -3938,375 +3088,551 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
+  Widget _buildReadOnlyProfileField(String label, String value) {
+    final String displayValue = value.trim().isEmpty
+        ? 'Not provided'
+        : value.trim();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppTheme.resolve(context, _soft, fill: true),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: AppTheme.resolve(context, _muted),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            displayValue,
+            style: TextStyle(
+              color: AppTheme.resolve(context, _text),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfileSection() {
-    return _AccountPanel(
-      title: 'Profile Information',
-      subtitle: 'Update your personal details and profile photo.',
-      icon: Icons.person_outline_rounded,
-      child: Form(
-        key: _profileFormKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppTheme.resolve(context, _soft, fill: true),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.resolve(context, _border)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AccountPanel(
+          title: 'Profile Information',
+          subtitle: 'Your buyer details are view-only.',
+          icon: Icons.person_outline_rounded,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: _ProfileAvatar(
+                  profile: _profile,
+                  selectedPhoto: null,
+                  size: 82,
+                ),
               ),
-              child: Column(
-                children: [
-                  _ProfileAvatar(
-                    profile: _profile,
-                    selectedPhoto: _selectedPhoto,
-                    size: 82,
-                  ),
+              const SizedBox(height: 16),
+              _buildReadOnlyProfileField('Full name', _profile.name),
+              _buildReadOnlyProfileField('Email address', _profile.email),
+              _buildReadOnlyProfileField('Mobile number', _profile.phone),
+              _buildReadOnlyProfileField(
+                'Middle initial',
+                _profile.middleInitial ?? '',
+              ),
+              _buildReadOnlyProfileField(
+                'Date of birth',
+                _profile.birthday == null
+                    ? ''
+                    : _formatDate(_profile.birthday!),
+              ),
+              _buildReadOnlyProfileField(
+                'Gender',
+                _profile.gender?.label ?? '',
+              ),
+              if (widget.accountActive != null)
+                _buildReadOnlyProfileField(
+                  'Account status',
+                  widget.accountActive! ? 'Active' : 'Inactive',
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
-                  const SizedBox(height: 12),
-
-                  Text(
-                    'Profile photo',
-                    style: TextStyle(
-                      color: AppTheme.resolve(context, _text),
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-
-                  const SizedBox(height: 4),
-
-                  Text(
-                    'Choose an image up to 2 MB. Laravel will perform the final image validation.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppTheme.resolve(context, _muted),
-                      fontSize: 12.5,
-                      height: 1.5,
-                    ),
-                  ),
-
-                  if (_selectedPhoto != null) ...[
-                    const SizedBox(height: 6),
-
-                    Text(
-                      '${_selectedPhoto!.fileName} · ${_formatFileSize(_selectedPhoto!.sizeInBytes)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppTheme.resolve(context, _brown),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 12),
-
-                  Row(
+  Widget _buildAccountSecuritySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AccountPanel(
+          title: 'Edit Information',
+          subtitle: 'Keep your contact and profile details up to date.',
+          icon: Icons.person_outline_rounded,
+          child: Form(
+            key: _accountSecurityFormKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _savingProfile || _removingPhoto
-                              ? null
-                              : _pickPhoto,
-                          style: ElevatedButton.styleFrom(
-                            elevation: 0,
-                            backgroundColor: AppTheme.resolve(
-                              context,
-                              _maroon,
-                              fill: true,
-                            ),
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size.fromHeight(44),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.photo_camera_outlined,
-                            size: 17,
-                          ),
-                          label: const Text(
-                            'Choose Photo',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
+                      _ProfileAvatar(
+                        profile: _profile,
+                        selectedPhoto: _securitySelectedPhoto,
+                        size: 82,
                       ),
-
-                      const SizedBox(width: 8),
-
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed:
-                              _removingPhoto ||
-                                  _savingProfile ||
-                                  (_selectedPhoto == null &&
-                                      (_profile.profilePhotoUrl == null ||
-                                          _profile.profilePhotoUrl!
-                                              .trim()
-                                              .isEmpty))
-                              ? null
-                              : _removeProfilePhoto,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.resolve(context, _brown),
-                            side: BorderSide(
-                              color: AppTheme.resolve(context, _border),
-                            ),
-                            minimumSize: const Size.fromHeight(44),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(11),
-                            ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _savingAccountSecurity
+                                ? null
+                                : _pickAccountSecurityPhoto,
+                            icon: const Icon(Icons.photo_camera_outlined),
+                            label: const Text('Change Photo'),
                           ),
-                          icon: _removingPhoto
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppTheme.resolve(context, _maroon),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.delete_outline_rounded,
-                                  size: 16,
-                                ),
-                          label: const Text(
-                            'Remove',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
+                          if (_securitySelectedPhoto != null ||
+                              (_profile.profilePhotoUrl?.isNotEmpty ?? false))
+                            TextButton.icon(
+                              onPressed: _savingAccountSecurity
+                                  ? null
+                                  : _removeAccountSecurityPhoto,
+                              icon: const Icon(Icons.delete_outline_rounded),
+                              label: const Text('Remove'),
                             ),
-                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'JPG, PNG, or WebP up to 2 MB.',
+                        style: TextStyle(
+                          color: AppTheme.resolve(context, _muted),
+                          fontSize: 11.5,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            const _AccountTip(
-              icon: Icons.person_outline_rounded,
-              title: 'Profile tip',
-              message:
-                  'Keep your name, email, and contact number updated so checkout details stay accurate.',
-            ),
-
-            const SizedBox(height: 18),
-
-            const _FieldLabel(text: 'Full name'),
-
-            const SizedBox(height: 7),
-
-            TextFormField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.words,
-              textInputAction: TextInputAction.next,
-              maxLength: 160,
-              decoration: _inputDecoration(
-                hintText: 'Full name',
-                prefixIcon: Icons.person_outline,
-              ).copyWith(counterText: ''),
-              validator: (String? value) {
-                final String name = value?.trim() ?? '';
-
-                if (name.isEmpty) {
-                  return 'Enter your full name.';
-                }
-
-                if (name.length > 160) {
-                  return 'Full name must not exceed 160 characters.';
-                }
-
-                return null;
-              },
-            ),
-
-            const SizedBox(height: 15),
-
-            const _FieldLabel(text: 'Email address'),
-
-            const SizedBox(height: 7),
-
-            TextFormField(
-              controller: _emailController,
-              readOnly:
-                  widget.onRequestEmailChange == null ||
-                  widget.onVerifyEmailChange == null,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              maxLength: 255,
-              autofillHints: const <String>[AutofillHints.email],
-              decoration:
-                  _inputDecoration(
+                ),
+                const SizedBox(height: 16),
+                const _FieldLabel(text: 'Full name', requiredField: true),
+                const SizedBox(height: 7),
+                TextFormField(
+                  controller: _securityNameController,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: _inputDecoration(
+                    hintText: 'First and last name',
+                    prefixIcon: Icons.person_outline_rounded,
+                  ),
+                  validator: (String? value) {
+                    final List<String> parts = (value ?? '')
+                        .trim()
+                        .split(RegExp(r'\s+'))
+                        .where((String part) => part.isNotEmpty)
+                        .toList(growable: false);
+                    if (parts.length < 2 ||
+                        parts.first.length < 2 ||
+                        parts.last.length < 2) {
+                      return 'Enter your first and last name.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                const _FieldLabel(text: 'Email address', requiredField: true),
+                const SizedBox(height: 7),
+                TextFormField(
+                  controller: _securityEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  decoration: _inputDecoration(
                     hintText: 'Email address',
                     prefixIcon: Icons.email_outlined,
-                  ).copyWith(
-                    counterText: '',
-                    helperText:
-                        widget.onRequestEmailChange == null ||
-                            widget.onVerifyEmailChange == null
-                        ? 'Email changes are not available in the mobile API.'
-                        : null,
                   ),
-              validator: (String? value) {
-                final String email = value?.trim() ?? '';
-
-                if (email.isEmpty) {
-                  return 'Enter your email address.';
-                }
-
-                if (email.length > 255) {
-                  return 'Email must not exceed 255 characters.';
-                }
-
-                final RegExp emailPattern = RegExp(
-                  r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                );
-
-                if (!emailPattern.hasMatch(email)) {
-                  return 'Enter a valid email address.';
-                }
-
-                return null;
-              },
-            ),
-
-            const SizedBox(height: 15),
-
-            const _FieldLabel(text: 'Mobile number', requiredField: false),
-
-            const SizedBox(height: 7),
-
-            TextFormField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.next,
-              maxLength: 40,
-              autofillHints: const <String>[AutofillHints.telephoneNumber],
-              decoration: _inputDecoration(
-                hintText: 'Contact number',
-                prefixIcon: Icons.phone_outlined,
-              ).copyWith(counterText: ''),
-              validator: (String? value) {
-                if ((value ?? '').trim().length > 40) {
-                  return 'Contact number must not exceed 40 characters.';
-                }
-
-                return null;
-              },
-            ),
-
-            const SizedBox(height: 15),
-
-            const _FieldLabel(text: 'Date of birth', requiredField: false),
-
-            const SizedBox(height: 7),
-
-            InkWell(
-              onTap: _savingProfile ? null : _selectBirthday,
-              borderRadius: BorderRadius.circular(13),
-              child: InputDecorator(
-                decoration: _inputDecoration(
-                  hintText: 'Select birthday',
-                  prefixIcon: Icons.calendar_today_outlined,
+                  validator: (String? value) {
+                    final String email = (value ?? '').trim();
+                    if (!RegExp(
+                      r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                    ).hasMatch(email)) {
+                      return 'Enter a valid email address.';
+                    }
+                    return null;
+                  },
                 ),
-                child: Text(
-                  _birthday == null
-                      ? 'Select birthday'
-                      : _formatDate(_birthday!),
-                  style: TextStyle(
-                    color: _birthday == null
-                        ? AppTheme.resolve(context, _muted2)
-                        : AppTheme.resolve(context, _text),
-                    fontSize: 14,
+                const SizedBox(height: 14),
+                const _FieldLabel(text: 'Mobile number', requiredField: true),
+                const SizedBox(height: 7),
+                TextFormField(
+                  controller: _securityPhoneController,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  decoration: _inputDecoration(
+                    hintText: '09XXXXXXXXX',
+                    prefixIcon: Icons.phone_outlined,
                   ),
+                  validator: (String? value) => (value ?? '').trim().isEmpty
+                      ? 'Enter your mobile number.'
+                      : null,
                 ),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            const _FieldLabel(text: 'Gender', requiredField: false),
-
-            const SizedBox(height: 7),
-
-            DropdownButtonFormField<BuyerGender?>(
-              initialValue: _gender,
-              isExpanded: true,
-              decoration: _inputDecoration(
-                hintText: 'Prefer not to say',
-                prefixIcon: Icons.wc_outlined,
-              ),
-              items: <DropdownMenuItem<BuyerGender?>>[
-                const DropdownMenuItem<BuyerGender?>(
-                  value: null,
-                  child: Text('Prefer not to say'),
-                ),
-                ...BuyerGender.values.map((BuyerGender gender) {
-                  return DropdownMenuItem<BuyerGender?>(
-                    value: gender,
-                    child: Text(gender.label),
-                  );
-                }),
-              ],
-              onChanged: _savingProfile
-                  ? null
-                  : (BuyerGender? value) {
-                      setState(() {
-                        _gender = value;
-                      });
-                    },
-            ),
-
-            const SizedBox(height: 20),
-
-            SizedBox(
-              height: 49,
-              child: ElevatedButton(
-                onPressed: _savingProfile || _removingPhoto
-                    ? null
-                    : _saveProfile,
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: AppTheme.resolve(
-                    context,
-                    _maroon,
-                    fill: true,
-                  ),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                ),
-                child: _savingProfile
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Save Changes',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w800,
+                const SizedBox(height: 14),
+                const _FieldLabel(text: 'Date of birth'),
+                const SizedBox(height: 7),
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: _pickAccountSecurityBirthday,
+                  child: InputDecorator(
+                    decoration: _inputDecoration(
+                      hintText: 'Choose date of birth',
+                      prefixIcon: Icons.calendar_month_outlined,
+                    ),
+                    child: Text(
+                      _securityBirthday == null
+                          ? 'Choose date of birth'
+                          : _formatDate(_securityBirthday!),
+                      style: TextStyle(
+                        color: AppTheme.resolve(
+                          context,
+                          _securityBirthday == null ? _muted2 : _text,
                         ),
                       ),
-              ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const _FieldLabel(text: 'Gender'),
+                const SizedBox(height: 7),
+                DropdownButtonFormField<BuyerGender>(
+                  value: _securityGender,
+                  isExpanded: true,
+                  decoration: _inputDecoration(
+                    hintText: 'Choose gender',
+                    prefixIcon: Icons.people_outline_rounded,
+                  ),
+                  items: BuyerGender.values
+                      .map(
+                        (BuyerGender gender) => DropdownMenuItem<BuyerGender>(
+                          value: gender,
+                          child: Text(gender.label),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (BuyerGender? value) {
+                    setState(() => _securityGender = value);
+                  },
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  height: 49,
+                  child: ElevatedButton(
+                    onPressed: _savingAccountSecurity
+                        ? null
+                        : _saveAccountSecurity,
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: AppTheme.resolve(
+                        context,
+                        _maroon,
+                        fill: true,
+                      ),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                    ),
+                    child: _savingAccountSecurity
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Save Information',
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(height: 14),
+        _buildPasswordSection(),
+      ],
     );
+  }
+
+  Future<void> _pickAccountSecurityPhoto() async {
+    final PickProfilePhotoCallback? callback = widget.onPickProfilePhoto;
+    if (callback == null) {
+      _showMessage('Profile photo editing is unavailable right now.');
+      return;
+    }
+    try {
+      final SelectedProfilePhoto? photo = await callback();
+      if (!mounted || photo == null) return;
+      if (photo.bytes.isEmpty || photo.sizeInBytes > 2 * 1024 * 1024) {
+        _showMessage('Choose an image up to 2 MB.', error: true);
+        return;
+      }
+      setState(() => _securitySelectedPhoto = photo);
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
+    }
+  }
+
+  Future<void> _removeAccountSecurityPhoto() async {
+    if (_securitySelectedPhoto != null) {
+      setState(() => _securitySelectedPhoto = null);
+      return;
+    }
+    final RemoveProfilePhotoCallback? callback = widget.onRemoveProfilePhoto;
+    if (callback == null) {
+      _showMessage('Profile photo removal is unavailable right now.');
+      return;
+    }
+    setState(() => _savingAccountSecurity = true);
+    try {
+      final BuyerProfileData updated = await callback();
+      if (!mounted) return;
+      _setSecurityProfile(updated);
+      _showMessage('Profile photo removed.');
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) setState(() => _savingAccountSecurity = false);
+    }
+  }
+
+  Future<void> _pickAccountSecurityBirthday() async {
+    final DateTime now = DateTime.now();
+    final DateTime initial = _securityBirthday == null ||
+            _securityBirthday!.isAfter(now)
+        ? DateTime(now.year - 18, now.month, now.day)
+        : _securityBirthday!;
+    final DateTime? birthday = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900),
+      lastDate: now,
+    );
+    if (birthday != null && mounted) {
+      setState(() => _securityBirthday = birthday);
+    }
+  }
+
+  Future<void> _saveAccountSecurity() async {
+    FocusScope.of(context).unfocus();
+    if (_savingAccountSecurity ||
+        !(_accountSecurityFormKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    final UpdateBuyerProfileCallback? callback = widget.onUpdateProfile;
+    if (callback == null) {
+      _showMessage(
+        'Profile editing is unavailable while the buyer API is disconnected.',
+      );
+      return;
+    }
+    setState(() => _savingAccountSecurity = true);
+    try {
+      final String requestedEmail = _securityEmailController.text.trim();
+      if (requestedEmail.toLowerCase() != _profile.email.trim().toLowerCase()) {
+        final RequestBuyerEmailChangeCallback? requestEmail =
+            widget.onRequestEmailChange;
+        final VerifyBuyerEmailChangeCallback? verifyEmail =
+            widget.onVerifyEmailChange;
+        if (requestEmail == null || verifyEmail == null) {
+          throw Exception('Email changes are unavailable right now.');
+        }
+        await requestEmail(requestedEmail);
+        final String? code = await _requestSecurityVerificationCode(
+          title: 'Verify email address',
+          message:
+              'Enter the six-digit code sent to $requestedEmail to confirm the new email address.',
+          onResend: widget.onResendEmailChangeCode,
+        );
+        if (code == null) return;
+        final BuyerProfileData updatedEmail = await verifyEmail(code);
+        if (!mounted) return;
+        setState(() {
+          _profile = updatedEmail;
+          _securityEmailController.text = updatedEmail.email;
+        });
+        widget.onProfileChanged?.call(updatedEmail);
+      }
+
+      final UpdateBuyerProfileRequest request = UpdateBuyerProfileRequest(
+        name: _securityNameController.text.trim(),
+        email: _profile.email,
+        phone: _securityPhoneController.text.trim(),
+        birthday: _securityBirthday,
+        gender: _securityGender,
+        profilePhoto: _securitySelectedPhoto,
+      );
+      late final BuyerProfileData updated;
+      try {
+        updated = await callback(request);
+      } on BuyerProfileVerificationRequiredException catch (verification) {
+        final String? code = await _requestSecurityVerificationCode(
+          title: 'Verify mobile number',
+          message: verification.message,
+          onResend: widget.onResendMobileChangeCode,
+        );
+        if (code == null) return;
+        updated = await callback(
+          UpdateBuyerProfileRequest(
+            name: request.name,
+            email: request.email,
+            phone: request.phone,
+            birthday: request.birthday,
+            gender: request.gender,
+            profilePhoto: request.profilePhoto,
+            mobileChangeCode: code,
+          ),
+        );
+      }
+      if (!mounted) return;
+      _setSecurityProfile(updated);
+      _showMessage('Account information updated.');
+    } catch (error) {
+      _showMessage(_errorText(error), error: true);
+    } finally {
+      if (mounted) setState(() => _savingAccountSecurity = false);
+    }
+  }
+
+  void _setSecurityProfile(BuyerProfileData profile) {
+    setState(() {
+      _profile = profile;
+      _securityNameController.text = profile.name;
+      _securityEmailController.text = profile.email;
+      _securityPhoneController.text = profile.phone;
+      _securityBirthday = profile.birthday;
+      _securityGender = profile.gender;
+      _securitySelectedPhoto = null;
+    });
+    widget.onProfileChanged?.call(profile);
+  }
+
+  Future<String?> _requestSecurityVerificationCode({
+    required String title,
+    required String message,
+    ResendBuyerMobileChangeCodeCallback? onResend,
+  }) async {
+    final TextEditingController codeController = TextEditingController();
+    bool resending = false;
+    String? resendMessage;
+    try {
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) => StatefulBuilder(
+          builder:
+              (BuildContext dialogContext, StateSetter setDialogState) =>
+                  AlertDialog(
+                    title: Text(title),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(message),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: codeController,
+                          autofocus: true,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: '6-digit verification code',
+                            counterText: '',
+                          ),
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                        if (resendMessage != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            resendMessage!,
+                            style: TextStyle(
+                              color: AppTheme.resolve(context, _muted),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: resending
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      if (onResend != null)
+                        TextButton(
+                          onPressed: resending
+                              ? null
+                              : () async {
+                                  setDialogState(() {
+                                    resending = true;
+                                    resendMessage = null;
+                                  });
+                                  try {
+                                    await onResend();
+                                    setDialogState(() {
+                                      resendMessage = 'A new code was sent.';
+                                    });
+                                  } catch (error) {
+                                    setDialogState(() {
+                                      resendMessage = _errorText(error);
+                                    });
+                                  } finally {
+                                    setDialogState(() => resending = false);
+                                  }
+                                },
+                          child: Text(resending ? 'Sending...' : 'Resend'),
+                        ),
+                      FilledButton(
+                        onPressed: codeController.text.trim().length == 6
+                            ? () => Navigator.of(
+                                dialogContext,
+                              ).pop(codeController.text.trim())
+                            : null,
+                        child: const Text('Verify'),
+                      ),
+                    ],
+                  ),
+        ),
+      );
+    } finally {
+      codeController.dispose();
+    }
   }
 
   Future<void> _deleteAccount() async {
@@ -5026,18 +4352,6 @@ class _AccountScreenState extends State<AccountScreen> {
     final String day = value.day.toString().padLeft(2, '0');
 
     return '${value.year}-$month-$day';
-  }
-
-  static String _formatFileSize(int bytes) {
-    if (bytes >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-
-    if (bytes >= 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-
-    return '$bytes B';
   }
 }
 

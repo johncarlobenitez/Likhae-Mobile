@@ -519,6 +519,7 @@ class NotificationsScreen extends StatefulWidget {
   final NotificationFilter initialFilter;
 
   final VoidCallback? onBack;
+  final Widget? leading;
 
   /// Handles notification navigation.
   ///
@@ -553,6 +554,7 @@ class NotificationsScreen extends StatefulWidget {
     this.notifications = const <BuyerNotificationData>[],
     this.initialFilter = NotificationFilter.all,
     this.onBack,
+    this.leading,
     this.onNotificationTap,
     this.onMarkAllAsRead,
     this.onMarkAsRead,
@@ -961,11 +963,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          GlassIconButton(
-            icon: Icons.arrow_back_rounded,
-            label: 'Back',
-            onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
-          ),
+          widget.leading ??
+              GlassIconButton(
+                icon: Icons.arrow_back_rounded,
+                label: 'Back',
+                onPressed:
+                    widget.onBack ?? () => Navigator.of(context).maybePop(),
+              ),
           const SizedBox(width: 12),
            Expanded(
             child: Column(

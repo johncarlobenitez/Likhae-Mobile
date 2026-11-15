@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/recently_viewed_service.dart';
 import '../../../shared/formatting/money_formatting.dart';
+import '../../../shared/widgets/shop_ui.dart';
 import '../../../shared/widgets/sized_network_image.dart';
 import 'product_details_screen.dart';
 
@@ -65,99 +66,125 @@ class _RecentlyViewedScreenState extends State<RecentlyViewedScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: IconButton(
-        onPressed: widget.onBack,
-        icon: const Icon(Icons.arrow_back),
-      ),
-      title: const Text('Recently Viewed'),
-      actions: [TextButton(onPressed: _clear, child: const Text('Clear'))],
-    ),
-    body: FutureBuilder<List<ProductDetailData>>(
-      future: _products,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Could not load viewing history.'),
-                TextButton(onPressed: _refresh, child: const Text('Retry')),
-              ],
-            ),
-          );
-        }
-        final products = snapshot.data ?? [];
-        if (products.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.visibility_outlined, size: 48),
-                  SizedBox(height: 16),
-                  Text(
-                    'No recently viewed products',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+    body: SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          ShopPageHeader(
+            title: 'Recently Viewed',
+            subtitle: 'Products you viewed recently.',
+            onBack: widget.onBack,
+          ),
+          Expanded(
+            child: FutureBuilder<List<ProductDetailData>>(
+            future: _products,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Could not load viewing history.'),
+                      TextButton(onPressed: _refresh, child: const Text('Retry')),
+                    ],
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Products you open will appear here.',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView.separated(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            itemCount: products.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final product = products[index];
-              return Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.all(12),
-                  leading: SizedBox(
-                    width: 64,
-                    height: 64,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: product.imageUrl == null
-                          ? const Icon(Icons.image_outlined)
-                          : SizedNetworkImage(
-                              url: product.imageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  const Icon(Icons.image_outlined),
-                            ),
+                );
+              }
+              final products = snapshot.data ?? [];
+              if (products.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 48),
+                        SizedBox(height: 16),
+                        Text(
+                          'No recently viewed products',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Products you open will appear here.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
                   ),
-                  title: Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                );
+              }
+              return Column(
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12, top: 4),
+                      child: TextButton.icon(
+                        onPressed: _clear,
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('Clear'),
+                      ),
+                    ),
                   ),
-                  subtitle: Text(formatPesoCurrency(product.price)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () async {
-                    await widget.onProductSelected(product);
-                    if (mounted) await _refresh();
-                  },
-                ),
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _refresh,
+                      child: ListView.separated(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        itemCount: products.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final product = products[index];
+                          return Card(
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.all(12),
+                              leading: SizedBox(
+                                width: 64,
+                                height: 64,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: product.imageUrl == null
+                                      ? const Icon(Icons.image_outlined)
+                                      : SizedNetworkImage(
+                                          url: product.imageUrl!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) =>
+                                              const Icon(Icons.image_outlined),
+                                        ),
+                                ),
+                              ),
+                              title: Text(
+                                product.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(formatPesoCurrency(product.price)),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () async {
+                                await widget.onProductSelected(product);
+                                if (mounted) await _refresh();
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
+            ),
           ),
-        );
-      },
+        ],
+      ),
     ),
   );
 }

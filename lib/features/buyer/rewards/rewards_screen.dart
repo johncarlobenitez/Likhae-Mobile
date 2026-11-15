@@ -4,36 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/shop_ui.dart';
 
-enum RewardsTab { vouchers, points, cashback }
-
-extension RewardsTabInfo on RewardsTab {
-  String get label {
-    switch (this) {
-      case RewardsTab.vouchers:
-        return 'My Vouchers';
-
-      case RewardsTab.points:
-        return 'Reward Points';
-
-      case RewardsTab.cashback:
-        return 'Cashback';
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case RewardsTab.vouchers:
-        return Icons.confirmation_number_outlined;
-
-      case RewardsTab.points:
-        return Icons.stars_outlined;
-
-      case RewardsTab.cashback:
-        return Icons.account_balance_wallet_outlined;
-    }
-  }
-}
-
 class RewardVoucherData {
   /// Existing display icon/text.
   ///
@@ -189,8 +159,6 @@ typedef RewardVoucherCallback = void Function(RewardVoucherData voucher);
 typedef RewardVoucherClaimCallback = Future<void> Function(int voucherId);
 
 class RewardsScreen extends StatefulWidget {
-  final RewardsTab initialTab;
-
   final List<RewardVoucherData> activeVouchers;
   final List<VoucherHistoryData> voucherHistory;
 
@@ -218,9 +186,6 @@ class RewardsScreen extends StatefulWidget {
   final VoidCallback? onBrowseProducts;
   final VoidCallback? onViewSellerOffers;
 
-  /// Opens the cart so buyers can redeem points during Checkout.
-  final VoidCallback? onGoToCheckout;
-
   /// Preferred behavior:
   ///
   /// The parent can take the buyer to products/cart/checkout
@@ -232,13 +197,11 @@ class RewardsScreen extends StatefulWidget {
 
   final RewardVoucherClaimCallback? onClaimVoucher;
 
-  final ValueChanged<RewardsTab>? onTabChanged;
-
   final RewardsRefreshCallback? onRefresh;
+  final bool pointsOnly;
 
   const RewardsScreen({
     super.key,
-    this.initialTab = RewardsTab.vouchers,
     this.activeVouchers = const <RewardVoucherData>[],
     this.voucherHistory = const <VoucherHistoryData>[],
     this.pointsBalance = 0,
@@ -254,11 +217,10 @@ class RewardsScreen extends StatefulWidget {
     this.onBack,
     this.onBrowseProducts,
     this.onViewSellerOffers,
-    this.onGoToCheckout,
     this.onUseVoucher,
     this.onClaimVoucher,
-    this.onTabChanged,
     this.onRefresh,
+    this.pointsOnly = false,
   });
 
   @override
@@ -294,7 +256,6 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
   static const Color _danger = Color(0xFFB42318);
 
-  late RewardsTab _activeTab;
   late RewardsData _data;
 
   bool _refreshing = false;
@@ -304,7 +265,6 @@ class _RewardsScreenState extends State<RewardsScreen> {
   void initState() {
     super.initState();
 
-    _activeTab = widget.initialTab;
     _data = _widgetData();
   }
 
@@ -312,9 +272,6 @@ class _RewardsScreenState extends State<RewardsScreen> {
   void didUpdateWidget(covariant RewardsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.initialTab != widget.initialTab) {
-      _activeTab = widget.initialTab;
-    }
     if (oldWidget.activeVouchers != widget.activeVouchers ||
         oldWidget.voucherHistory != widget.voucherHistory ||
         oldWidget.pointsBalance != widget.pointsBalance ||
@@ -323,7 +280,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
         oldWidget.pointsPerPeso != widget.pointsPerPeso ||
         oldWidget.availableCashback != widget.availableCashback ||
         oldWidget.pendingCashback != widget.pendingCashback ||
-        oldWidget.cashbackActivities != widget.cashbackActivities) {
+        oldWidget.cashbackActivities != widget.cashbackActivities ||
+        oldWidget.pointsOnly != widget.pointsOnly) {
       _data = _widgetData();
     }
   }
@@ -369,18 +327,6 @@ class _RewardsScreenState extends State<RewardsScreen> {
         });
       }
     }
-  }
-
-  void _changeTab(RewardsTab tab) {
-    if (_activeTab == tab) {
-      return;
-    }
-
-    setState(() {
-      _activeTab = tab;
-    });
-
-    widget.onTabChanged?.call(tab);
   }
 
   void _useVoucher(RewardVoucherData voucher) {
@@ -479,25 +425,13 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
                   children: [
-                    _buildHeader(),
-
-                    const SizedBox(height: 18),
-
-                    _buildOverviewCards(),
-
-                    const SizedBox(height: 18),
-
-                    _buildTabs(),
-
-                    const SizedBox(height: 18),
-
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: KeyedSubtree(
-                        key: ValueKey<RewardsTab>(_activeTab),
-                        child: _buildActiveTab(),
-                      ),
-                    ),
+                    if (widget.pointsOnly)
+                      _buildPoints()
+                    else ...[
+                      _buildHeader(),
+                      const SizedBox(height: 18),
+                      _buildVouchers(),
+                    ],
                   ],
                 ),
               ),
@@ -509,10 +443,194 @@ class _RewardsScreenState extends State<RewardsScreen> {
   }
 
   Widget _buildTopBar() => ShopPageHeader(
-    title: 'Little extras',
-    subtitle: 'Your rewards & vouchers.',
+    title: widget.pointsOnly ? 'Rewards' : 'Vouchers',
+    subtitle: widget.pointsOnly
+        ? 'Your reward points balance and activity.'
+        : 'Your available vouchers and discounts.',
     onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
   );
+
+  Widget _buildPoints() {
+    final String pointsPerOrder = '${_data.pointsPerCompletedOrder}';
+    final String pointsPerReview = '${_data.pointsPerReview}';
+    final String conversion =
+        '${_data.pointsPerPeso} points = PHP 1 checkout discount. '
+        'Minimum redemption: ${_data.minimumPointsRedemption} points.';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.resolve(context, ShopColors.accent, fill: true),
+                AppTheme.resolve(context, ShopColors.accentDark, fill: true),
+              ],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.stars_rounded,
+                    size: 17,
+                    color: AppTheme.resolve(context, ShopColors.tan, fill: true),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    'CURRENT BALANCE',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.84),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${_data.pointsBalance}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 36,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                'LIKHAE Reward Points',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                conversion,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 15),
+        _RewardPanel(
+          title: 'Earn points',
+          icon: Icons.stars_outlined,
+          child: Column(
+            children: [
+              _PointsRuleRow(
+                icon: Icons.task_alt_rounded,
+                label: 'Completed or delivered order',
+                points: pointsPerOrder,
+              ),
+              _PointsRuleRow(
+                icon: Icons.rate_review_outlined,
+                label: 'Product review',
+                points: pointsPerReview,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _RewardPanel(
+          title: 'Points activity',
+          icon: Icons.history_rounded,
+          child: _data.pointActivities.isEmpty
+              ? const _SimpleEmptyRow(
+                  title: 'No points activity yet',
+                  subtitle: 'Points earned or redeemed will appear here.',
+                )
+              : Column(
+                  children: _data.pointActivities.map((PointsActivityData item) {
+                    final String rawAmount = item.amount.trim();
+                    final String signedAmount = rawAmount.startsWith('+') ||
+                            rawAmount.startsWith('-')
+                        ? rawAmount
+                        : '${item.negative ? '-' : '+'}$rawAmount';
+                    final String amountLabel = rawAmount.toLowerCase().contains(
+                      'point',
+                    )
+                        ? signedAmount
+                        : '$signedAmount points';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            item.negative
+                                ? Icons.remove_circle_outline_rounded
+                                : Icons.add_circle_outline_rounded,
+                            size: 18,
+                            color: AppTheme.resolve(context, ShopColors.accent),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.label,
+                                  style: TextStyle(
+                                    color: AppTheme.resolve(
+                                      context,
+                                      ShopColors.text,
+                                    ),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (item.date.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    item.date,
+                                    style: TextStyle(
+                                      color: AppTheme.resolve(
+                                        context,
+                                        ShopColors.muted,
+                                      ),
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            amountLabel,
+                            style: TextStyle(
+                              color: AppTheme.resolve(
+                                context,
+                                ShopColors.accent,
+                              ),
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+        ),
+      ],
+    );
+  }
 
   Widget _buildHeader() {
     return Container(
@@ -565,7 +683,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
               const SizedBox(height: 7),
 
                Text(
-                'Rewards &\nVouchers',
+                'My Vouchers',
                 style: TextStyle(
                   color: AppTheme.resolve(context, _text),
                   fontSize: 30,
@@ -578,7 +696,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
               const SizedBox(height: 9),
 
                Text(
-                'Review your current benefits and reward activity from LIKHAE.',
+                'Browse available vouchers and discounts for your orders.',
                 style: TextStyle(color: AppTheme.resolve(context, _muted), fontSize: 11, height: 1.5),
               ),
 
@@ -642,142 +760,6 @@ class _RewardsScreenState extends State<RewardsScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildOverviewCards() {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = constraints.maxWidth >= 720
-            ? 3
-            : constraints.maxWidth >= 430
-            ? 3
-            : 1;
-
-        const double spacing = 9;
-
-        final double width = columns == 1
-            ? constraints.maxWidth
-            : (constraints.maxWidth - (spacing * (columns - 1))) / columns;
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: <Widget>[
-            SizedBox(
-              width: width,
-              child: _RewardStatCard(
-                icon: Icons.confirmation_number_outlined,
-                label: 'Active vouchers',
-                value: '${_data.activeVouchers.length}',
-              ),
-            ),
-            SizedBox(
-              width: width,
-              child: _RewardStatCard(
-                icon: Icons.stars_rounded,
-                label: 'Reward points',
-                value: _formatInteger(_data.pointsBalance),
-              ),
-            ),
-            SizedBox(
-              width: width,
-              child: _RewardStatCard(
-                icon: Icons.account_balance_wallet_outlined,
-                label: 'Cashback',
-                value: _formatMoney(_data.availableCashback),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTabs() {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double labelSize = constraints.maxWidth < 360 ? 9 : 10.5;
-
-        return Container(
-          height: 64,
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: AppTheme.resolve(context, _surface, fill: true),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: AppTheme.resolve(context, _border)),
-          ),
-          child: Row(
-            children: List<Widget>.generate(RewardsTab.values.length, (
-              int index,
-            ) {
-              final RewardsTab tab = RewardsTab.values[index];
-              final bool selected = tab == _activeTab;
-
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Material(
-                    color: selected ? AppTheme.resolve(context, _maroon, fill: true) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(11),
-                    child: InkWell(
-                      onTap: () => _changeTab(tab),
-                      borderRadius: BorderRadius.circular(11),
-                      child: Container(
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(11),
-                          border: Border.all(
-                            color: selected ? AppTheme.resolve(context, _maroon) : AppTheme.resolve(context, _border),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              tab.icon,
-                              size: 16,
-                              color: selected ? Colors.white : AppTheme.resolve(context, _brown),
-                            ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                tab.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: selected ? Colors.white : AppTheme.resolve(context, _brown),
-                                  fontSize: labelSize,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildActiveTab() {
-    switch (_activeTab) {
-      case RewardsTab.vouchers:
-        return _buildVouchers();
-
-      case RewardsTab.points:
-        return _buildPoints();
-
-      case RewardsTab.cashback:
-        return _buildCashback();
-    }
   }
 
   Widget _buildVouchers() {
@@ -943,467 +925,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     );
   }
 
-  Widget _buildPoints() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _SectionHeading(
-          kicker: 'LOYALTY',
-          title: 'Reward Points',
-          description: 'Reward points recorded from eligible buyer activity.',
-        ),
 
-        const SizedBox(height: 14),
-
-        Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(21),
-            gradient:  LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: <Color>[AppTheme.resolve(context, _maroon, fill: true), AppTheme.resolve(context, _maroon2, fill: true), AppTheme.resolve(context, _maroonDark, fill: true)],
-            ),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: AppTheme.resolve(context, _maroon).withValues(alpha: 0.18),
-                blurRadius: 28,
-                offset: const Offset(0, 13),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-               Row(
-                children: [
-                  Icon(Icons.stars_rounded, color: AppTheme.resolve(context, Color(0xFFE8C8B2)), size: 19),
-
-                  SizedBox(width: 7),
-
-                  Text(
-                    'Current points',
-                    style: TextStyle(
-                      color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              Text(
-                _formatInteger(_data.pointsBalance),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 42,
-                  height: 1,
-                  letterSpacing: -1.2,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-
-              const SizedBox(height: 5),
-
-               Text(
-                'LIKHAE Reward Points',
-                style: TextStyle(
-                  color: AppTheme.resolve(context, Color(0xFFF4DED4)),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-
-              const SizedBox(height: 19),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(top: 15),
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: Color(0x33FFFFFF))),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      color: AppTheme.resolve(context, Color(0xFFE8C8B2)),
-                      size: 16,
-                    ),
-
-                    SizedBox(width: 7),
-
-                    Expanded(
-                      child: Text(
-                        '${_formatInteger(_data.pointsPerPeso)} points = PHP 1 checkout discount; minimum ${_formatInteger(_data.minimumPointsRedemption)} points.',
-                        style:  TextStyle(
-                          color: AppTheme.resolve(context, Color(0xFFF4DED4)),
-                          fontSize: 9.5,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 13),
-
-        _RewardPanel(
-          title: 'How Points Are Earned',
-          icon: Icons.add_circle_outline,
-          child: Column(
-            children: [
-              _EarnPointCard(
-                value: '+${_data.pointsPerCompletedOrder}',
-                label: 'Completed / delivered order',
-                icon: Icons.check_circle_outline,
-              ),
-
-              const SizedBox(height: 9),
-
-              _EarnPointCard(
-                value: '+${_data.pointsPerReview}',
-                label: 'Product review',
-                icon: Icons.rate_review_outlined,
-              ),
-            ],
-          ),
-        ),
-
-        if (widget.onGoToCheckout != null) ...[
-          const SizedBox(height: 13),
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: OutlinedButton.icon(
-              onPressed: widget.onGoToCheckout,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.resolve(context, _maroon),
-                side:  BorderSide(color: AppTheme.resolve(context, _tan)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.shopping_bag_outlined, size: 17),
-              label: const Text(
-                'Use points at checkout',
-                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-
-        const SizedBox(height: 13),
-
-        _RewardPanel(
-          title: 'Points Activity',
-          icon: Icons.history_rounded,
-          child: _data.pointActivities.isEmpty
-              ? const _SimpleEmptyRow(
-                  title: 'No points activity yet',
-                  subtitle:
-                      'Eligible order and review activity will appear here.',
-                )
-              : Column(
-                  children: _data.pointActivities.map((
-                    PointsActivityData activity,
-                  ) {
-                    return _PointsActivityRow(activity: activity);
-                  }).toList(),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCashback() {
-    final double safeAvailable = _data.availableCashback < 0
-        ? 0
-        : _data.availableCashback;
-
-    final double safePending = _data.pendingCashback < 0
-        ? 0
-        : _data.pendingCashback;
-
-    final double safeRate = _data.cashbackRate < 0 ? 0 : _data.cashbackRate;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _SectionHeading(
-          kicker: 'BUYER SAVINGS',
-          title: 'Cashback',
-          description:
-              'Cashback recorded from eligible completed buyer orders.',
-        ),
-
-        const SizedBox(height: 14),
-
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppTheme.resolve(context, _surface, fill: true),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppTheme.resolve(context, _border)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-               Row(
-                children: [
-                  Icon(
-                    Icons.account_balance_wallet_outlined,
-                    color: AppTheme.resolve(context, _maroon),
-                    size: 19,
-                  ),
-
-                  SizedBox(width: 7),
-
-                  Text(
-                    'Earned cashback',
-                    style: TextStyle(
-                      color: AppTheme.resolve(context, _muted),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 9),
-
-              Text(
-                _formatMoney(safeAvailable),
-                style:  TextStyle(
-                  color: AppTheme.resolve(context, _maroon),
-                  fontSize: 32,
-                  height: 1,
-                  letterSpacing: -0.8,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-
-              const SizedBox(height: 11),
-
-              Text(
-                safeRate > 0
-                    ? 'Current cashback rate: ${_formatPercentage(safeRate)}'
-                    : 'Cashback rate is not currently available.',
-                style:  TextStyle(
-                  color: AppTheme.resolve(context, _muted),
-                  fontSize: 9.5,
-                  height: 1.4,
-                ),
-              ),
-
-              if (widget.onBrowseProducts != null) ...[
-                const SizedBox(height: 17),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 45,
-                  child: OutlinedButton.icon(
-                    onPressed: widget.onBrowseProducts,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.resolve(context, _maroon),
-                      side:  BorderSide(color: AppTheme.resolve(context, _tan)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: const Icon(Icons.shopping_bag_outlined, size: 17),
-                    label: const Text(
-                      'Browse Products',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 13),
-
-        _RewardPanel(
-          title: 'Cashback Status',
-          icon: Icons.savings_outlined,
-          child: Column(
-            children: [
-              _CashbackBalanceRow(
-                label: 'Earned cashback',
-                value: _formatMoney(safeAvailable),
-                icon: Icons.account_balance_wallet_outlined,
-                emphasized: true,
-              ),
-
-              const SizedBox(height: 10),
-
-              _CashbackBalanceRow(
-                label: 'Pending cashback',
-                value: _formatMoney(safePending),
-                icon: Icons.schedule_rounded,
-              ),
-
-              const SizedBox(height: 13),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.resolve(context, const Color(0xFFFFF6DE), fill: true),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.resolve(context, const Color(0xFFEAD39A))),
-                ),
-                child:  Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: AppTheme.resolve(context, _warning), size: 18),
-
-                    SizedBox(width: 8),
-
-                    Expanded(
-                      child: Text(
-                        'This page only displays cashback recorded by the rewards system. Checkout redemption should only be enabled when the backend explicitly supports it.',
-                        style: TextStyle(
-                          color: AppTheme.resolve(context, _warning),
-                          fontSize: 9,
-                          height: 1.45,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 13),
-
-        _RewardPanel(
-          title: 'Cashback Activity',
-          icon: Icons.history_rounded,
-          child: _data.cashbackActivities.isEmpty
-              ? const _SimpleEmptyRow(
-                  title: 'No cashback activity yet',
-                  subtitle: 'Eligible cashback activity will appear here.',
-                )
-              : Column(
-                  children: _data.cashbackActivities.map((
-                    CashbackActivityData activity,
-                  ) {
-                    return _CashbackActivityRow(activity: activity);
-                  }).toList(),
-                ),
-        ),
-      ],
-    );
-  }
-
-  static String _formatMoney(double value) {
-    final double safeValue = value < 0 ? 0 : value;
-    return formatPesoAmount(safeValue);
-  }
-
-  static String _formatPercentage(double rate) {
-    final double percentage = rate * 100;
-
-    if (percentage == percentage.roundToDouble()) {
-      return '${percentage.toStringAsFixed(0)}%';
-    }
-
-    return '${percentage.toStringAsFixed(2)}%';
-  }
-
-  static String _formatInteger(int value) {
-    final int safeValue = value < 0 ? 0 : value;
-
-    final String digits = safeValue.toString();
-
-    final StringBuffer result = StringBuffer();
-
-    for (int index = 0; index < digits.length; index++) {
-      final int remaining = digits.length - index;
-
-      result.write(digits[index]);
-
-      if (remaining > 1 && remaining % 3 == 1) {
-        result.write(',');
-      }
-    }
-
-    return result.toString();
-  }
-}
-
-class _RewardStatCard extends StatelessWidget {
-  final IconData icon;
-
-  final String label;
-  final String value;
-
-  const _RewardStatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 116),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 24),
-
-          const SizedBox(height: 8),
-
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style:  TextStyle(
-              color: AppTheme.resolve(context, ShopColors.text),
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-
-          const SizedBox(height: 2),
-
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppTheme.resolve(context, ShopColors.muted),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _SectionHeading extends StatelessWidget {
@@ -1730,6 +1252,52 @@ class _VoucherCard extends StatelessWidget {
   }
 }
 
+class _PointsRuleRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String points;
+
+  const _PointsRuleRow({
+    required this.icon,
+    required this.label,
+    required this.points,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: AppTheme.resolve(context, ShopColors.muted),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: AppTheme.resolve(context, ShopColors.secondaryText),
+                fontSize: 11,
+              ),
+            ),
+          ),
+          Text(
+            '+$points',
+            style: TextStyle(
+              color: AppTheme.resolve(context, ShopColors.accent),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RewardPanel extends StatelessWidget {
   final String title;
 
@@ -1851,276 +1419,6 @@ class _VoucherHistoryRow extends StatelessWidget {
               style:  TextStyle(color: AppTheme.resolve(context, ShopColors.faint), fontSize: 8.5),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _EarnPointCard extends StatelessWidget {
-  final String value;
-  final String label;
-
-  final IconData icon;
-
-  const _EarnPointCard({
-    required this.value,
-    required this.label,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppTheme.resolve(context, ShopColors.surface, fill: true),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 39,
-            height: 39,
-            decoration:  BoxDecoration(
-              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 18),
-          ),
-
-          const SizedBox(width: 11),
-
-          Expanded(
-            child: Text(
-              label,
-              style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 10),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          Text(
-            value,
-            style:  TextStyle(
-              color: AppTheme.resolve(context, ShopColors.accent),
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PointsActivityRow extends StatelessWidget {
-  final PointsActivityData activity;
-
-  const _PointsActivityRow({required this.activity});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration:  BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppTheme.resolve(context, Color(0xFFEFE1D5)))),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration:  BoxDecoration(
-              color: AppTheme.resolve(context, ShopColors.soft, fill: true),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              activity.negative ? Icons.remove_rounded : Icons.add_rounded,
-              color: activity.negative ? AppTheme.resolve(context, ShopColors.muted) : AppTheme.resolve(context, ShopColors.accent),
-              size: 17,
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  activity.label,
-                  style:  TextStyle(
-                    color: AppTheme.resolve(context, ShopColors.text),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                if (activity.date.trim().isNotEmpty) ...[
-                  const SizedBox(height: 3),
-
-                  Text(
-                    activity.date,
-                    style:  TextStyle(
-                      color: AppTheme.resolve(context, ShopColors.faint),
-                      fontSize: 8.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
-          Text(
-            activity.amount,
-            style: TextStyle(
-              color: activity.negative ? AppTheme.resolve(context, ShopColors.muted) : AppTheme.resolve(context, ShopColors.accent),
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CashbackBalanceRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  final IconData icon;
-
-  final bool emphasized;
-
-  const _CashbackBalanceRow({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.emphasized = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: emphasized ? AppTheme.resolve(context, ShopColors.soft, fill: true) : AppTheme.resolve(context, ShopColors.surface, fill: true),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: AppTheme.resolve(context, ShopColors.border)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration:  BoxDecoration(
-              color: AppTheme.resolve(context, ShopColors.accentSoft, fill: true),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: AppTheme.resolve(context, ShopColors.accent), size: 18),
-          ),
-
-          const SizedBox(width: 10),
-
-          Expanded(
-            child: Text(
-              label,
-              style:  TextStyle(
-                color: AppTheme.resolve(context, ShopColors.muted),
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          Text(
-            value,
-            style:  TextStyle(
-              color: AppTheme.resolve(context, ShopColors.accent),
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CashbackActivityRow extends StatelessWidget {
-  final CashbackActivityData activity;
-
-  const _CashbackActivityRow({required this.activity});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration:  BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppTheme.resolve(context, Color(0xFFEFE1D5)))),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  activity.order,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style:  TextStyle(
-                    color: AppTheme.resolve(context, ShopColors.text),
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              Text(
-                activity.amount,
-                style:  TextStyle(
-                  color: AppTheme.resolve(context, ShopColors.accent),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 5),
-
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  activity.type,
-                  style:  TextStyle(color: AppTheme.resolve(context, ShopColors.muted), fontSize: 9),
-                ),
-              ),
-
-              if (activity.date.trim().isNotEmpty)
-                Text(
-                  activity.date,
-                  style:  TextStyle(
-                    color: AppTheme.resolve(context, ShopColors.faint),
-                    fontSize: 8.5,
-                  ),
-                ),
-            ],
-          ),
         ],
       ),
     );

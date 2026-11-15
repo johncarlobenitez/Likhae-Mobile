@@ -34,22 +34,26 @@ class ShopPageHeader extends StatelessWidget {
       children: [
         Text(
           title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: colors.onSurface,
-            fontSize: 24,
+            fontSize: 22,
             height: 1.2,
-            letterSpacing: -.5,
-            fontWeight: FontWeight.w800,
+            letterSpacing: -.35,
+            fontWeight: FontWeight.w700,
           ),
         ),
         if (subtitle?.isNotEmpty == true) ...[
           const SizedBox(height: 5),
           Text(
             subtitle!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: colors.onSurfaceVariant,
-              fontSize: 13,
-              height: 1.45,
+              fontSize: 12.5,
+              height: 1.4,
             ),
           ),
         ],

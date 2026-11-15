@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/shop_colors.dart';
+import '../../../shared/widgets/shop_ui.dart';
 import '../../../shared/widgets/sized_network_image.dart';
 import 'store_screen.dart';
 
@@ -94,22 +95,23 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.resolve(context, ShopColors.canvas, fill: true),
-      appBar: AppBar(
-        leading: widget.onBack == null
-            ? null
-            : IconButton(
-                onPressed: widget.onBack,
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-        title: const Text('Following Shops'),
-      ),
-      body: FutureBuilder<List<StoreSellerData>>(
-        future: _shopsFuture,
-        builder:
-            (
-              BuildContext context,
-              AsyncSnapshot<List<StoreSellerData>> snapshot,
-            ) {
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            ShopPageHeader(
+              title: 'Following Stores',
+              subtitle: 'Stores you follow.',
+              onBack: widget.onBack,
+            ),
+            Expanded(
+              child: FutureBuilder<List<StoreSellerData>>(
+              future: _shopsFuture,
+              builder:
+                  (
+                    BuildContext context,
+                    AsyncSnapshot<List<StoreSellerData>> snapshot,
+                  ) {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
@@ -221,7 +223,11 @@ class _FollowingShopsScreenState extends State<FollowingShopsScreen> {
                   },
                 ),
               );
-            },
+                  },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

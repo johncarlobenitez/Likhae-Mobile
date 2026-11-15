@@ -3,6 +3,7 @@ import 'package:likhae/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/sized_network_image.dart';
+import '../rider_navigation.dart';
 import '../rider_product_image.dart';
 
 class RiderHistoryData {
@@ -269,6 +270,7 @@ class _RiderHistoryScreenState extends State<RiderHistoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        const RiderMenuButton(),
         Text(
           'RIDER HISTORY',
           style: TextStyle(

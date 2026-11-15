@@ -172,7 +172,7 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
       return;
     }
 
-    final String code = rawCode.trim();
+    String code = rawCode.trim();
 
     if (code.isEmpty) {
       setState(() {
@@ -191,24 +191,30 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
 
     try {
       final String? expected = widget.expectedTrackingCode?.trim();
+      if (expected != null && expected.isNotEmpty) {
+        final String? matchedCode = _matchExpectedTrackingCode(code, expected);
+        if (matchedCode == null) {
+          await _scannerController.stop();
 
-      if (expected != null && expected.isNotEmpty && code != expected) {
-        await _scannerController.stop();
+          if (!mounted) {
+            return;
+          }
 
-        if (!mounted) {
+          setState(() {
+            _scannerPaused = true;
+
+            _scannedCode = code;
+
+            _errorMessage =
+                'The scanned tracking number does not match this parcel.';
+          });
+
           return;
         }
 
-        setState(() {
-          _scannerPaused = true;
-
-          _scannedCode = code;
-
-          _errorMessage =
-              'The scanned tracking number does not match this pickup assignment.';
-        });
-
-        return;
+        // Submit the canonical tracking number. QR labels can contain a URL or
+        // a larger payload, while Laravel validates the exact parcel code.
+        code = matchedCode;
       }
 
       await _scannerController.stop();
@@ -264,6 +270,30 @@ class _RiderScannerScreenState extends State<RiderScannerScreen> {
         });
       }
     }
+  }
+
+  String? _matchExpectedTrackingCode(
+    String scannedValue,
+    String expectedValue,
+  ) {
+    String normalize(String value) =>
+        value.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+
+    final String expected = normalize(expectedValue);
+    if (normalize(scannedValue) == expected) return expectedValue.trim();
+
+    final RegExp trackingCodePattern = RegExp(
+      r'TRK-\d{8}-[A-Z0-9]+',
+      caseSensitive: false,
+    );
+    for (final RegExpMatch match in trackingCodePattern.allMatches(
+      scannedValue,
+    )) {
+      if (normalize(match.group(0) ?? '') == expected) {
+        return expectedValue.trim();
+      }
+    }
+    return null;
   }
 
   Future<void> _submitManualCode() async {

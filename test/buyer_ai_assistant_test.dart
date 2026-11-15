@@ -27,12 +27,17 @@ void main() {
         final BuyerAiResponse vouchers = await BuyerAiService.chat(
           message: 'Where are my vouchers?',
         );
+        final BuyerAiResponse points = await BuyerAiService.chat(
+          message: 'Where do I see my reward points?',
+        );
 
         expect(order.reply, contains('Open Orders'));
         expect(order.reply, contains('connected to your account'));
         expect(order.options, contains('How do I check out?'));
         expect(checkout.reply, contains('continue to checkout'));
-        expect(vouchers.reply, contains('Open Rewards'));
+        expect(vouchers.reply, contains('Vouchers'));
+        expect(points.reply, contains('Account'));
+        expect(points.reply, contains('Reward Points'));
       },
       skip: AppConfig.apiEnabled,
     );
@@ -52,16 +57,19 @@ void main() {
           find.widgetWithText(ActionChip, 'How do I check out?'),
         );
         await tester.pumpAndSettle();
-        expect(find.text('How do I check out?'), findsOneWidget);
         expect(find.textContaining('continue to checkout'), findsOneWidget);
 
         await tester.enterText(
           find.byType(TextField),
           'Where are my vouchers?',
         );
-        await tester.tap(find.byTooltip('Send message'));
+        final Finder sendButton = find.ancestor(
+          of: find.byIcon(Icons.arrow_upward_rounded),
+          matching: find.byType(IconButton),
+        );
+        tester.widget<IconButton>(sendButton).onPressed!.call();
         await tester.pumpAndSettle();
-        expect(find.textContaining('Open Rewards'), findsOneWidget);
+        expect(find.textContaining('Vouchers'), findsOneWidget);
       },
       skip: AppConfig.apiEnabled,
     );

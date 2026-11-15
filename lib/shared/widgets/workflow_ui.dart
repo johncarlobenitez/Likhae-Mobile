@@ -320,13 +320,17 @@ class _WorkflowFormState extends State<WorkflowForm> {
 class WorkflowList extends StatefulWidget {
   final String title, endpoint, emptyMessage;
   final Widget Function(BuildContext, Map<String, dynamic>, VoidCallback) item;
+  final Widget? leading;
   final Widget? header;
+  final Widget? footer;
   const WorkflowList({
     super.key,
     required this.title,
     required this.endpoint,
     required this.item,
+    this.leading,
     this.header,
+    this.footer,
     this.emptyMessage = 'Nothing to show yet.',
   });
   @override
@@ -348,6 +352,7 @@ class _WorkflowListState extends State<WorkflowList> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      leading: widget.leading,
       title: Text(widget.title),
       actions: [
         IconButton(
@@ -381,6 +386,7 @@ class _WorkflowListState extends State<WorkflowList> {
                   ),
                 for (final row in snapshot.data ?? <Map<String, dynamic>>[])
                   widget.item(context, row, _reload),
+                if (widget.footer != null) widget.footer!,
               ],
             ),
           );

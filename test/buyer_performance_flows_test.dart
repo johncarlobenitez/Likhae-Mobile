@@ -145,11 +145,13 @@ void main() {
           email: 'buyer@example.test',
           phone: '09123456789',
         ),
+        initialTab: BuyerAccountTab.accountSecurity,
         showNavigationTabs: false,
       ),
     );
     await tester.pumpWidget(page('Saved Name'));
     final nameField = find.byType(TextFormField).first;
+    await tester.ensureVisible(nameField);
     await tester.enterText(nameField, 'Unsaved Name');
     await tester.pumpWidget(page('Updated Server Name'));
     expect(find.text('Unsaved Name'), findsOneWidget);

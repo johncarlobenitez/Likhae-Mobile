@@ -5009,6 +5009,7 @@ class _OrdersScreenState extends State<OrdersScreen>
               .expand((BuyerSellerOrderData sellerOrder) => sellerOrder.parcels)
               .toList(growable: false);
     return _BuyerDetailCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -5016,19 +5017,24 @@ class _OrdersScreenState extends State<OrdersScreen>
             'PARCELS',
             style: TextStyle(
               color: AppTheme.resolve(context, ShopColors.muted),
-              fontSize: 10,
-              letterSpacing: 1,
+              fontSize: 9,
+              letterSpacing: 0.8,
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           for (int index = 0; index < shipments.length; index++) ...<Widget>[
             if (index > 0) Divider(color: AppTheme.resolve(context, _border)),
             ListTile(
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -2),
               contentPadding: EdgeInsets.zero,
+              minLeadingWidth: 28,
+              horizontalTitleGap: 8,
               leading: Icon(
                 Icons.local_shipping_outlined,
                 color: AppTheme.resolve(context, ShopColors.accent),
+                size: 18,
               ),
               title: Text(
                 shipments[index].trackingNumber?.trim().isNotEmpty == true
@@ -5036,12 +5042,26 @@ class _OrdersScreenState extends State<OrdersScreen>
                     : 'Parcel ${index + 1}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.15,
+                  letterSpacing: -0.15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               subtitle: Text(
-                shipments[index].statusLabel.trim().isNotEmpty
-                    ? shipments[index].statusLabel
-                    : shipments[index].status,
+                _formatBuyerStatusLabel(
+                  shipments[index].statusLabel.trim().isNotEmpty
+                      ? shipments[index].statusLabel
+                      : shipments[index].status,
+                ),
+                style: TextStyle(
+                  color: AppTheme.resolve(context, ShopColors.muted),
+                  fontSize: 10.5,
+                  height: 1.2,
+                  letterSpacing: 0,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
               trailing:
                   _isDeliveredShipment(shipments[index]) &&
@@ -5193,20 +5213,32 @@ class _OrdersScreenState extends State<OrdersScreen>
   }
 
   Widget? _buildDetailsBottomBar(BuyerOrderData order) {
+    final bool canConfirmDeliveryPin =
+        widget.onConfirmDeliveryPin != null &&
+        (order.canConfirmDeliveryPin ||
+            _confirmingDeliveryPinOrderIds.contains(order.id));
+    final int actionCount = <bool>[
+      order.canCancel,
+      order.canRequestReturn,
+      canConfirmDeliveryPin,
+      order.canMarkReceived,
+      order.canReview,
+    ].where((bool available) => available).length;
+    final double actionHeight = actionCount == 1 ? 64 : 48;
     final List<Widget> actions = <Widget>[
       if (order.canCancel)
         _BuyerDetailBottomButton(
           label: 'Cancel Order',
           onPressed: () => _showCancelDialog(order),
+          height: actionHeight,
         ),
       if (order.canRequestReturn)
         _BuyerDetailBottomButton(
           label: 'Return/Refund',
           onPressed: () => _openReturn(order),
+          height: actionHeight,
         ),
-      if (widget.onConfirmDeliveryPin != null &&
-          (order.canConfirmDeliveryPin ||
-              _confirmingDeliveryPinOrderIds.contains(order.id)))
+      if (canConfirmDeliveryPin)
         _BuyerDetailBottomButton(
           label: _confirmingDeliveryPinOrderIds.contains(order.id)
               ? 'Confirming...'
@@ -5215,18 +5247,21 @@ class _OrdersScreenState extends State<OrdersScreen>
           onPressed: _confirmingDeliveryPinOrderIds.contains(order.id)
               ? null
               : () => _confirmDeliveryPin(order),
+          height: actionHeight,
         ),
       if (order.canMarkReceived)
         _BuyerDetailBottomButton(
           label: _receivingOrder ? 'Updating...' : 'Order Received',
           filled: true,
           onPressed: _receivingOrder ? null : () => _markReceived(order),
+          height: actionHeight,
         ),
       if (order.canReview)
         _BuyerDetailBottomButton(
           label: 'Rate & Review',
           filled: true,
           onPressed: () => _openReview(order),
+          height: actionHeight,
         ),
     ];
 
@@ -5246,8 +5281,11 @@ class _OrdersScreenState extends State<OrdersScreen>
         ),
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final double buttonWidth = (constraints.maxWidth - 9) / 2;
+            final double buttonWidth = actions.length == 1
+                ? (constraints.maxWidth < 310 ? constraints.maxWidth : 310)
+                : (constraints.maxWidth - 9) / 2;
             return Wrap(
+              alignment: WrapAlignment.center,
               spacing: 9,
               runSpacing: 8,
               children: actions
@@ -6475,6 +6513,12 @@ class _OrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String placedDate = _placedLabel(order.createdAt);
+    final String paymentMethod = order.payment.trim();
+    final String paymentLabel =
+        paymentMethod.toLowerCase() == 'cod' ||
+            paymentMethod.toLowerCase() == 'cash on delivery'
+        ? 'COD'
+        : paymentMethod;
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.resolve(context, ShopColors.surface, fill: true),
@@ -6644,24 +6688,13 @@ class _OrderCard extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        '${_itemCount(order)} ${_itemCount(order) == 1 ? 'item' : 'items'} - Total',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: AppTheme.resolve(context, ShopColors.muted),
-                          fontSize: 12.5,
-                          height: 1.3,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
                       child: Text.rich(
                         TextSpan(
                           children: [
-                            TextSpan(text: order.payment),
-                            const TextSpan(text: ' - '),
+                            TextSpan(
+                              text:
+                                  '${_itemCount(order)} ${_itemCount(order) == 1 ? 'item' : 'items'} · Total · $paymentLabel - ',
+                            ),
                             TextSpan(
                               text: _price(order.total),
                               style: TextStyle(
@@ -6676,11 +6709,10 @@ class _OrderCard extends StatelessWidget {
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
                         style: TextStyle(
                           color: AppTheme.resolve(context, ShopColors.muted),
-                          fontSize: 13,
-                          height: 1.4,
+                          fontSize: 12.5,
+                          height: 1.3,
                         ),
                       ),
                     ),
@@ -6688,7 +6720,6 @@ class _OrderCard extends StatelessWidget {
                 ),
 
                 if (onOpen != null ||
-                    onTrack != null ||
                     onCancel != null ||
                     onReceive != null ||
                     onReview != null ||
@@ -6746,15 +6777,6 @@ class _OrderCard extends StatelessWidget {
                             text: receiving ? 'Updating...' : 'Order Received',
                             onPressed: receiving ? null : onReceive,
                             filled: true,
-                          ),
-
-                        if (onTrack != null &&
-                            (order.tracking?.trim().isNotEmpty == true ||
-                                order.shipmentId?.trim().isNotEmpty == true))
-                          _SmallActionButton(
-                            text: 'Track Parcel',
-                            onPressed: onTrack,
-                            filled: onReceive == null,
                           ),
 
                         if (onOpen != null)
@@ -7287,11 +7309,13 @@ class _BuyerDetailBottomButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final bool filled;
+  final double height;
 
   const _BuyerDetailBottomButton({
     required this.label,
     required this.onPressed,
     this.filled = false,
+    this.height = 48,
   });
 
   @override
@@ -7325,17 +7349,33 @@ class _BuyerDetailBottomButton extends StatelessWidget {
           );
 
     return SizedBox(
-      height: 48,
+      height: height,
       child: filled
           ? ElevatedButton(
               onPressed: onPressed,
               style: style,
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: height > 48 ? 17 : null,
+                  fontWeight: height > 48 ? FontWeight.w700 : null,
+                ),
+              ),
             )
           : OutlinedButton(
               onPressed: onPressed,
               style: style,
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: height > 48 ? 17 : null,
+                  fontWeight: height > 48 ? FontWeight.w700 : null,
+                ),
+              ),
             ),
     );
   }

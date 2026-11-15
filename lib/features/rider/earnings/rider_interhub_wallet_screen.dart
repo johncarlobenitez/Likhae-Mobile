@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../rider_navigation.dart';
+
 import '../../../services/workspace_mobile_service.dart';
 import '../../../shared/formatting/money_formatting.dart';
 import '../../../shared/widgets/workflow_ui.dart' show openWorkflowProof;
@@ -267,6 +269,8 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
             children: [
+              const RiderMenuButton(),
+              const SizedBox(height: 10),
               Text(
                 'INTERHUB DRIVER WALLET',
                 style: TextStyle(

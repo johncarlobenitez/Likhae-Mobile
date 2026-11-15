@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/sized_network_image.dart';
 import '../../../shared/formatting/money_formatting.dart';
+import '../rider_navigation.dart';
 import '../rider_product_image.dart';
 
 class RiderPickupStatsData {
@@ -481,6 +482,8 @@ class _RiderPickupsScreenState extends State<RiderPickupsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        const RiderMenuButton(),
+
          Text(
           'PICKUP MANAGEMENT',
           style: TextStyle(

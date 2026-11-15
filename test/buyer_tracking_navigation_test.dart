@@ -98,7 +98,7 @@ void main() {
     );
     expect(navigation.rider, isNotNull);
     expect(navigation.live, isFalse);
-    expect(navigation.riderLabel, 'Last known rider location');
+    expect(navigation.riderLabel, 'Last known delivery rider');
   });
 
   test('pending active rider does not fall back to previous assignment', () {

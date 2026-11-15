@@ -5,6 +5,7 @@ import '../../services/workspace_mobile_service.dart';
 import '../../shared/widgets/workflow_ui.dart';
 import '../../shared/widgets/shop_ui.dart';
 import 'attendance/rider_attendance_qr_image.dart';
+import 'rider_navigation.dart';
 import 'scanner/rider_scanner_screen.dart';
 
 class RiderReturnsScreen extends StatelessWidget {
@@ -13,6 +14,7 @@ class RiderReturnsScreen extends StatelessWidget {
   Widget build(BuildContext context) => WorkflowList(
     title: 'Return parcels',
     endpoint: 'rider/returns',
+    leading: const RiderMenuButton(fallbackToBack: true),
     emptyMessage: 'No return parcels are assigned to you.',
     item: (context, row, reload) {
       final actions = (row['actions'] as List? ?? const []).cast<String>();
@@ -81,6 +83,7 @@ class RiderTripsScreen extends StatelessWidget {
   Widget build(BuildContext context) => WorkflowList(
     title: 'Delivery trips',
     endpoint: 'rider/trips',
+    leading: const RiderMenuButton(fallbackToBack: true),
     emptyMessage: 'No delivery trips are assigned.',
     item: (context, row, reload) {
       final items = WorkspaceMobileService.maps(row['items']);
@@ -228,6 +231,7 @@ class _RiderPayoutsScreenState extends State<RiderPayoutsScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      leading: const RiderMenuButton(fallbackToBack: true),
       title: const Text('Rider payouts'),
       actions: [
         IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
@@ -499,7 +503,10 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Inter-hub attendance')),
+    appBar: AppBar(
+      leading: const RiderMenuButton(fallbackToBack: true),
+      title: const Text('Inter-hub attendance'),
+    ),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: _future,
       builder: (context, snapshot) => ListView(
@@ -706,8 +713,9 @@ class RiderProfileUpdatesScreen extends StatelessWidget {
   Widget build(BuildContext context) => WorkflowList(
     title: 'Vehicle & document review',
     endpoint: 'rider/profile/updates',
-    header: Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+    leading: const RiderMenuButton(fallbackToBack: true),
+    footer: Padding(
+      padding: const EdgeInsets.only(top: 12),
       child: FilledButton.icon(
         onPressed: () async {
           final done = await showWorkflowForm(

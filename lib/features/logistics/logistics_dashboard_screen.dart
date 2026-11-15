@@ -6,17 +6,23 @@ import '../../core/theme/shop_colors.dart';
 import '../../services/logistics_mobile_service.dart';
 
 typedef OpenLogisticsScanner = Future<List<Map<String, String>>?> Function();
+typedef OpenLogisticsIncomingTransfers = Future<void> Function();
+typedef OpenLogisticsOutgoingTransfers = Future<void> Function();
 typedef LogisticsSignOut = Future<void> Function();
 
 class LogisticsDashboardScreen extends StatefulWidget {
   final String staffName;
   final OpenLogisticsScanner onOpenScanner;
+  final OpenLogisticsIncomingTransfers? onOpenIncomingTransfers;
+  final OpenLogisticsOutgoingTransfers? onOpenOutgoingTransfers;
   final LogisticsSignOut onSignOut;
 
   const LogisticsDashboardScreen({
     super.key,
     this.staffName = '',
     required this.onOpenScanner,
+    this.onOpenIncomingTransfers,
+    this.onOpenOutgoingTransfers,
     required this.onSignOut,
   });
 
@@ -167,6 +173,16 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
     }
   }
 
+  Future<void> _openIncomingTransfers() async {
+    await widget.onOpenIncomingTransfers?.call();
+    if (mounted) await _loadDashboard(showLoading: false);
+  }
+
+  Future<void> _openOutgoingTransfers() async {
+    await widget.onOpenOutgoingTransfers?.call();
+    if (mounted) await _loadDashboard(showLoading: false);
+  }
+
   Future<void> _signOut() async {
     if (_signingOut) return;
     setState(() => _signingOut = true);
@@ -270,6 +286,14 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
               ],
               const SizedBox(height: 22),
               _scanCard(),
+              if (widget.onOpenIncomingTransfers != null) ...[
+                const SizedBox(height: 12),
+                _interHubTransferCard(outgoing: false),
+              ],
+              if (widget.onOpenOutgoingTransfers != null) ...[
+                const SizedBox(height: 12),
+                _interHubTransferCard(outgoing: true),
+              ],
               const SizedBox(height: 18),
               _summaryCard(),
               const SizedBox(height: 24),
@@ -496,6 +520,83 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 textStyle: const TextStyle(fontWeight: FontWeight.w800),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _interHubTransferCard({required bool outgoing}) {
+    final VoidCallback? onOpen = outgoing
+        ? (widget.onOpenOutgoingTransfers == null
+              ? null
+              : _openOutgoingTransfers)
+        : (widget.onOpenIncomingTransfers == null
+              ? null
+              : _openIncomingTransfers);
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: AppTheme.resolve(context, _surface, fill: true),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.resolve(context, _border)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            outgoing ? Icons.outbox_outlined : Icons.move_to_inbox_outlined,
+            color: AppTheme.resolve(context, _brand),
+            size: 25,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  outgoing
+                      ? 'Release inter-hub parcels'
+                      : 'Receive inter-hub parcels',
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _ink),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  outgoing
+                      ? 'Scan parcels at handoff to the accepted transfer driver and mark them released.'
+                      : 'Scan parcels against an incoming transfer manifest to record destination receipt.',
+                  style: TextStyle(
+                    color: AppTheme.resolve(context, _muted),
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 11),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onOpen,
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    label: Text(
+                      outgoing
+                          ? 'Open outgoing transfers'
+                          : 'Open incoming transfers',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.resolve(context, _brand),
+                      side: BorderSide(
+                        color: AppTheme.resolve(context, _border),
+                      ),
+                      alignment: Alignment.centerLeft,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

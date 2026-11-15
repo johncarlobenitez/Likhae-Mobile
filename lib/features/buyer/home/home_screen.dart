@@ -8,6 +8,7 @@ import '../../../shared/widgets/app_motion.dart';
 import '../../../shared/widgets/loading_skeleton.dart';
 import 'package:likhae/core/theme/app_theme.dart';
 import 'package:likhae/core/config/app_config.dart';
+import 'package:likhae/core/storage/token_storage.dart';
 import 'package:likhae/core/utils/api_value_parsers.dart';
 import 'package:likhae/services/product_service.dart';
 import 'package:likhae/services/buyer_mobile_service.dart';
@@ -520,6 +521,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   final Set<int> _wishlistIds = <int>{};
   final Set<int> _wishlistLoading = <int>{};
   List<BuyerHomeProduct> _loadedProducts = <BuyerHomeProduct>[];
+  List<BuyerHomeProduct> _loadedFeaturedProducts = <BuyerHomeProduct>[];
+  List<BuyerHomeProduct> _loadedRecommendedProducts = <BuyerHomeProduct>[];
+  bool _featuredSectionLoaded = false;
+  bool _recommendedSectionLoaded = false;
   List<BuyerHomeProduct> _bestSellingProducts = <BuyerHomeProduct>[];
   List<BuyerHomeProduct> _dealProducts = <BuyerHomeProduct>[];
   List<BuyerHomeCategory> _loadedCategories = <BuyerHomeCategory>[];
@@ -537,6 +542,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   bool _visible = true;
   DateTime? _loadedAt;
   int _loadedRevision = -1;
+  int _sectionTokenRevision = -1;
 
   @override
   void initState() {
@@ -647,6 +653,15 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   }
 
   Future<void> _loadHomeContent() async {
+    final int tokenRevision = TokenStorage.revision;
+    if (_sectionTokenRevision != tokenRevision) {
+      _sectionTokenRevision = tokenRevision;
+      _loadedFeaturedProducts = <BuyerHomeProduct>[];
+      _loadedRecommendedProducts = <BuyerHomeProduct>[];
+      _featuredSectionLoaded = false;
+      _recommendedSectionLoaded = false;
+      _invalidateProductCaches();
+    }
     _loadedRevision = ApiClient.dataRevision;
     setState(() {
       _loadingProducts = true;
@@ -666,8 +681,38 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Unable to load products right now.')),
           );
-      } finally {
-        if (mounted) setState(() => _loadingProducts = false);
+      }
+    }
+
+    Future<void> featured() async {
+      if (!AppConfig.apiEnabled) return;
+      try {
+        final fetched = await ProductService.fetchFeaturedHomeProducts();
+        if (!mounted) return;
+        setState(() {
+          _loadedFeaturedProducts = fetched;
+          _featuredSectionLoaded = true;
+          _invalidateProductCaches();
+        });
+        _syncWishlistState();
+      } catch (_) {
+        // Keep the catalog-derived section when the buyer endpoint is unavailable.
+      }
+    }
+
+    Future<void> recommendations() async {
+      if (!AppConfig.apiEnabled) return;
+      try {
+        final fetched = await ProductService.fetchRecommendedHomeProducts();
+        if (!mounted) return;
+        setState(() {
+          _loadedRecommendedProducts = fetched;
+          _recommendedSectionLoaded = true;
+          _invalidateProductCaches();
+        });
+        _syncWishlistState();
+      } catch (_) {
+        // Keep the catalog-derived section when the buyer endpoint is unavailable.
       }
     }
 
@@ -721,11 +766,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
 
     await Future.wait([
       products(),
+      featured(),
+      recommendations(),
       bestSellers(),
       deals(),
       events(),
       categories(),
     ]);
+    if (mounted) setState(() => _loadingProducts = false);
     _loadedAt = DateTime.now();
   }
 
@@ -756,6 +804,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   Iterable<BuyerHomeProduct> get _allKnownProducts sync* {
     yield* widget.products;
     yield* _loadedProducts;
+    yield* _loadedFeaturedProducts;
+    yield* _loadedRecommendedProducts;
     yield* _bestSellingProducts;
     yield* _dealProducts;
     yield* widget.featuredProducts;
@@ -868,12 +918,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     late final List<BuyerHomeProduct> result;
     final List<BuyerHomeProduct> source = widget.featuredProducts.isNotEmpty
         ? widget.featuredProducts
+        : _featuredSectionLoaded
+        ? _loadedFeaturedProducts
         : widget.products.isNotEmpty
         ? widget.products
         : _loadedProducts;
     result = source
         .where((BuyerHomeProduct product) => product.isVisibleInCatalog)
-        .take(4)
+        .take(12)
         .toList(growable: false);
     return _featuredProductsCache = result;
   }
@@ -886,7 +938,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     if (widget.recommendedProducts.isNotEmpty) {
       result = widget.recommendedProducts
           .where((BuyerHomeProduct product) => product.isVisibleInCatalog)
-          .take(4)
+          .take(6)
+          .toList(growable: false);
+    } else if (_recommendedSectionLoaded) {
+      result = _loadedRecommendedProducts
+          .where((BuyerHomeProduct product) => product.isVisibleInCatalog)
+          .take(6)
           .toList(growable: false);
     } else {
       final List<BuyerHomeProduct> source = widget.products.isNotEmpty
@@ -895,7 +952,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       result = source
           .where((BuyerHomeProduct product) => product.isVisibleInCatalog)
           .skip(4)
-          .take(4)
+          .take(6)
           .toList(growable: false);
     }
     return _recommendedProductsCache = result;
@@ -1137,7 +1194,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         'Curated',
         'Featured Products',
         'Top picks from trusted sellers.',
-        'See All',
+        'Explore',
         widget.onViewFeatured,
       ),
       const SizedBox(height: 16),
@@ -1164,8 +1221,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         'Live seller discounts',
         'Flash Sale',
         'Shop available products at their current discounted variant prices.',
-        'See All',
-        widget.onViewFlashDeals ?? widget.onShopDeals,
+        'Explore',
+        widget.onViewAllCategories ??
+            widget.onViewFlashDeals ??
+            widget.onShopDeals,
       ),
       const SizedBox(height: 12),
       if (currentDealProducts.isNotEmpty)
@@ -1189,7 +1248,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         'For You',
         'Recommended For You',
         'Products based on popular buyer choices.',
-        'See All',
+        'Explore',
         widget.onViewRecommended,
       ),
       const SizedBox(height: 16),
@@ -1873,7 +1932,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           'Browse',
           'Shop by Category',
           'Explore products from different collections.',
-          'View All',
+          'Explore',
           widget.onViewAllCategories,
         ),
         const SizedBox(height: 12),

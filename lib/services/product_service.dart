@@ -1,7 +1,11 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 
 import '../core/api/api_client.dart';
 import '../core/config/app_config.dart';
+import '../core/storage/token_storage.dart';
 import '../features/buyer/home/home_screen.dart';
 import '../features/buyer/products/product_details_screen.dart';
 
@@ -26,6 +30,19 @@ class ProductSearchSuggestion {
 }
 
 class ProductService {
+  static Future<String> _catalogShuffleSeed() async {
+    final String token = (await TokenStorage.readToken())?.trim() ?? '';
+    final DateTime now = DateTime.now();
+    final String day =
+        '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    final String sessionIdentity = token.isEmpty ? 'guest' : token;
+    return sha256
+        .convert(utf8.encode('$sessionIdentity|$day'))
+        .toString();
+  }
+
   static List<BuyerHomeProduct> _demoProducts() {
     final List<BuyerHomeProduct> products = <BuyerHomeProduct>[
       const BuyerHomeProduct(
@@ -188,6 +205,61 @@ class ProductService {
         .toList(growable: false);
   }
 
+  static Future<List<BuyerHomeProduct>> fetchFeaturedHomeProducts({
+    int limit = 12,
+  }) {
+    return _fetchBuyerHomeSection(
+      'buyer/home/featured-products',
+      <String, dynamic>{'limit': limit.clamp(1, 12)},
+    );
+  }
+
+  static Future<List<BuyerHomeProduct>> fetchRecommendedHomeProducts({
+    int page = 1,
+    int perPage = 6,
+  }) {
+    return _fetchBuyerHomeSection(
+      'buyer/home/recommendations',
+      <String, dynamic>{
+        'page': page < 1 ? 1 : page,
+        'per_page': perPage.clamp(1, 36),
+      },
+    );
+  }
+
+  static Future<List<BuyerHomeProduct>> _fetchBuyerHomeSection(
+    String endpoint,
+    Map<String, dynamic> queryParameters,
+  ) async {
+    if (!AppConfig.apiEnabled) return const <BuyerHomeProduct>[];
+
+    final Response<dynamic> response = await ApiClient.get(
+      AppConfig.resolveApiUrl(endpoint),
+      queryParameters: queryParameters,
+    );
+    final int statusCode = response.statusCode ?? 500;
+    if (statusCode < 200 || statusCode >= 300) {
+      final dynamic payload = response.data;
+      final String message = payload is Map && payload['message'] != null
+          ? payload['message'].toString()
+          : 'Unable to load homepage products (HTTP $statusCode).';
+      throw Exception(message);
+    }
+
+    final dynamic rows = _extractRows(response.data);
+    if (rows is! List) {
+      throw const FormatException('Invalid buyer home section response.');
+    }
+
+    return rows
+        .whereType<Map>()
+        .map(
+          (Map row) => BuyerHomeProduct.fromApi(Map<String, dynamic>.from(row)),
+        )
+        .where((BuyerHomeProduct product) => product.id > 0)
+        .toList(growable: false);
+  }
+
   static Future<List<BuyerHomeCategory>> fetchCategories({
     bool refresh = false,
   }) async {
@@ -323,12 +395,18 @@ class ProductService {
   }
 
   static Future<List<Map<String, dynamic>>> fetchProductRows({
-    int perPage = 100,
+    int perPage = 24,
     int? sellerProfileId,
     String? categorySlug,
     bool dealsOnly = false,
     String? searchQuery,
     String? sort,
+    double? minimumPrice,
+    double? maximumPrice,
+    double? minimumRating,
+    String? location,
+    String? province,
+    String? municipality,
     int? maxPages,
   }) async {
     if (!AppConfig.apiEnabled) {
@@ -357,6 +435,22 @@ class ProductService {
     }
 
     final int pageSize = perPage.clamp(1, 50).toInt();
+    final String normalizedSort = sort?.trim() ?? '';
+    final bool isUnfilteredBrowse =
+        (searchQuery == null || searchQuery.trim().isEmpty) &&
+        (categorySlug == null || categorySlug.trim().isEmpty) &&
+        sellerProfileId == null &&
+        !dealsOnly &&
+        minimumPrice == null &&
+        maximumPrice == null &&
+        minimumRating == null &&
+        (location == null || location.trim().isEmpty) &&
+        (province == null || province.trim().isEmpty) &&
+        (municipality == null || municipality.trim().isEmpty);
+    final bool useShuffle =
+        normalizedSort == 'shuffle' ||
+        (normalizedSort.isEmpty && isUnfilteredBrowse);
+    final String? shuffleSeed = useShuffle ? await _catalogShuffleSeed() : null;
     final List<Map<String, dynamic>> products = <Map<String, dynamic>>[];
     final Set<String> seenIds = <String>{};
     int page = 1;
@@ -372,9 +466,19 @@ class ProductService {
           if (searchQuery != null && searchQuery.trim().isNotEmpty)
             'q': searchQuery.trim(),
           if (sort != null && sort.trim().isNotEmpty) 'sort': sort,
+          if (shuffleSeed != null) 'shuffle_seed': shuffleSeed,
           if (sellerProfileId != null) 'seller_profile_id': sellerProfileId,
           if (categorySlug != null && categorySlug.trim().isNotEmpty)
             'category': categorySlug.trim(),
+          if (minimumPrice != null) 'min_price': minimumPrice,
+          if (maximumPrice != null) 'max_price': maximumPrice,
+          if (minimumRating != null) 'rating': minimumRating,
+          if (location != null && location.trim().isNotEmpty)
+            'location': location.trim(),
+          if (province != null && province.trim().isNotEmpty)
+            'province': province.trim(),
+          if (municipality != null && municipality.trim().isNotEmpty)
+            'municipality': municipality.trim(),
         },
       );
       final int statusCode = response.statusCode ?? 500;

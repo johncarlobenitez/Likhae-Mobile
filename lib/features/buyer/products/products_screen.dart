@@ -41,6 +41,7 @@ class BuyerProduct {
   final double price;
   final double? highestVariantPrice;
   final double? originalPrice;
+  final DateTime? createdAt;
 
   final double? rating;
   final int soldCount;
@@ -79,6 +80,7 @@ class BuyerProduct {
     this.sellerUserId,
     this.imageUrl,
     this.originalPrice,
+    this.createdAt,
     this.rating,
     this.soldCount = 0,
     this.stock,
@@ -331,6 +333,7 @@ class BuyerProduct {
       sellerName: sellerNameValue.isNotEmpty ? sellerNameValue : null,
       imageUrl: imageValue.isNotEmpty ? imageValue : null,
       price: double.tryParse(resolvedPrice.toString()) ?? parsedPrice,
+      createdAt: DateTime.tryParse(data['created_at']?.toString() ?? ''),
       highestVariantPrice: highestAvailableVariantPrice,
       originalPrice: variants.isEmpty
           ? originalPrice
@@ -434,6 +437,7 @@ class BuyerProduct {
     double? price,
     double? highestVariantPrice,
     double? originalPrice,
+    DateTime? createdAt,
     double? rating,
     int? soldCount,
     int? stock,
@@ -450,6 +454,7 @@ class BuyerProduct {
       sellerSlug: sellerSlug ?? this.sellerSlug,
       imageUrl: imageUrl ?? this.imageUrl,
       price: price ?? this.price,
+      createdAt: createdAt ?? this.createdAt,
       highestVariantPrice: highestVariantPrice ?? this.highestVariantPrice,
       originalPrice: originalPrice ?? this.originalPrice,
       rating: rating ?? this.rating,
@@ -559,6 +564,29 @@ class ProductsScreen extends StatefulWidget {
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
+  static const List<MapEntry<String, String>> _defaultCategoryEntries =
+      <MapEntry<String, String>>[
+        MapEntry<String, String>('books-and-media', 'Books and Media'),
+        MapEntry<String, String>(
+          'electronics-and-gadgets',
+          'Electronics and Gadgets',
+        ),
+        MapEntry<String, String>('food-and-gourmet', 'Food and Gourmet'),
+        MapEntry<String, String>(
+          'furniture-and-office-equipment',
+          'Furniture and Office Equipment',
+        ),
+        MapEntry<String, String>('handmade-goods', 'Handmade Goods'),
+        MapEntry<String, String>('health-and-beauty', 'Health and Beauty'),
+        MapEntry<String, String>('home-and-garden', 'Home and Garden'),
+        MapEntry<String, String>('jewelry-and-watches', 'Jewelry and Watches'),
+        MapEntry<String, String>('kids-and-baby', 'Kids and Baby'),
+        MapEntry<String, String>('mens-apparel', "Men's Apparel"),
+        MapEntry<String, String>('pet-supplies', 'Pet Supplies'),
+        MapEntry<String, String>('sports-and-outdoors', 'Sports and Outdoors'),
+        MapEntry<String, String>('womens-apparel', "Women's Apparel"),
+      ];
+
   static const Color _background = ShopColors.canvas;
 
   static const Color _surface = ShopColors.surface;
@@ -583,6 +611,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   late final FocusNode _searchFocusNode;
 
   late List<BuyerProduct> _products;
+  List<MapEntry<String, String>> _categoryEntries = _defaultCategoryEntries;
   List<BuyerProduct>? _remoteSearchProducts;
   List<ProductSearchSuggestion> _remoteTextSuggestions =
       <ProductSearchSuggestion>[];
@@ -609,7 +638,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   double? _minimumPrice;
   double? _maximumPrice;
   int _pageIndex = 0;
-  static const int _pageSize = 20;
+  static const int _pageSize = 24;
 
   final Set<int> _wishlistLoading = <int>{};
 
@@ -631,6 +660,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _searchController = TextEditingController(text: _searchQuery);
     _searchFocusNode = FocusNode()..addListener(_onSearchFocusChanged);
     unawaited(_loadSearchHistory());
+    unawaited(_loadCategories());
     WishlistService.recordKnownProducts(
       _products.map(
         (BuyerProduct product) =>
@@ -650,6 +680,24 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   void _onWishlistChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadCategories() async {
+    if (!AppConfig.apiEnabled) return;
+    try {
+      final categories = await ProductService.fetchCategories();
+      if (!mounted || categories.isEmpty) return;
+      setState(() {
+        _categoryEntries = categories
+            .map(
+              (category) =>
+                  MapEntry<String, String>(category.slug, category.name),
+            )
+            .toList(growable: false);
+      });
+    } catch (_) {
+      // Keep the same top-level categories available when the API is offline.
+    }
   }
 
   void _onSearchFocusChanged() {
@@ -1070,9 +1118,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
     if (_filterKey == key) return _filterResult;
 
+    final String query = _searchQuery.trim().toLowerCase();
     List<BuyerProduct> result = sourceProducts.where((BuyerProduct product) {
       if (!product.isVisibleInCatalog) return false;
-      final String query = _searchQuery.trim().toLowerCase();
 
       if (query.isEmpty || hasRemoteSearchResults) {
         return true;
@@ -1160,28 +1208,47 @@ class _ProductsScreenState extends State<ProductsScreen> {
           .toList();
     }
 
+    final bool hasCatalogFilters =
+        query.isNotEmpty ||
+        (categoryFilter != null && categoryFilter.isNotEmpty) ||
+        _minimumPrice != null ||
+        _maximumPrice != null ||
+        _minimumRating != null ||
+        (_location != null && _location!.isNotEmpty) ||
+        widget.dealsOnly ||
+        widget.flashDealsOnly;
+
+    void sortNewestFirst() {
+      result.sort((BuyerProduct a, BuyerProduct b) {
+        final DateTime dateA =
+            a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(a.id);
+        final DateTime dateB =
+            b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(b.id);
+        final int byDate = dateB.compareTo(dateA);
+        return byDate != 0 ? byDate : b.id.compareTo(a.id);
+      });
+    }
+
     switch (_sort) {
       case BuyerProductSort.recommended:
-        final String query = _searchQuery.trim().toLowerCase();
-        if (query.isEmpty) break;
-        final Map<int, int> originalPositions = <int, int>{
-          for (int index = 0; index < result.length; index++)
-            result[index].id: index,
-        };
-        result.sort((BuyerProduct a, BuyerProduct b) {
-          final int scoreDifference =
-              _relevanceScore(b, query) - _relevanceScore(a, query);
-          if (scoreDifference != 0) return scoreDifference;
-          return originalPositions[a.id]!.compareTo(originalPositions[b.id]!);
-        });
+        if (query.isNotEmpty && !AppConfig.apiEnabled) {
+          final Map<int, int> originalPositions = <int, int>{
+            for (int index = 0; index < result.length; index++)
+              result[index].id: index,
+          };
+          result.sort((BuyerProduct a, BuyerProduct b) {
+            final int scoreDifference =
+                _relevanceScore(b, query) - _relevanceScore(a, query);
+            if (scoreDifference != 0) return scoreDifference;
+            return originalPositions[a.id]!.compareTo(originalPositions[b.id]!);
+          });
+        } else if (hasCatalogFilters) {
+          sortNewestFirst();
+        }
         break;
 
       case BuyerProductSort.latest:
-        // Laravel returns its catalog newest first. The local demo catalog has
-        // no creation timestamp, so use its sequential IDs as a fallback.
-        if (!AppConfig.apiEnabled) {
-          result.sort((BuyerProduct a, BuyerProduct b) => b.id.compareTo(a.id));
-        }
+        sortNewestFirst();
         break;
 
       case BuyerProductSort.sold:
@@ -1258,9 +1325,20 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   List<BuyerProduct> get _pageProducts {
     final List<BuyerProduct> all = _filteredProducts;
-    final int start = (_pageIndex * _pageSize).clamp(0, all.length).toInt();
-    final int end = (start + _pageSize).clamp(0, all.length).toInt();
-    return all.sublist(start, end);
+    final int end = ((_pageIndex + 1) * _pageSize).clamp(0, all.length).toInt();
+    return all.sublist(0, end);
+  }
+
+  bool _onCatalogScroll(ScrollNotification notification) {
+    if (notification.depth == 0 &&
+        notification.metrics.axis == Axis.vertical &&
+        notification.metrics.extentAfter < 600) {
+      final int pageCount = (_filteredProducts.length / _pageSize).ceil();
+      if (_pageIndex < pageCount - 1) {
+        setState(() => _pageIndex++);
+      }
+    }
+    return false;
   }
 
   Future<void> _toggleWishlist(BuyerProduct product) async {
@@ -1463,80 +1541,84 @@ class _ProductsScreenState extends State<ProductsScreen> {
               child: RefreshIndicator(
                 color: AppTheme.resolve(context, _maroon),
                 onRefresh: _refreshProducts,
-                child: CustomScrollView(
-                  key: const PageStorageKey<String>('buyer-products-scroll'),
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  slivers: [
-                    SliverToBoxAdapter(child: _buildSearchArea()),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _onCatalogScroll,
+                  child: CustomScrollView(
+                    key: const PageStorageKey<String>('buyer-products-scroll'),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    slivers: [
+                      SliverToBoxAdapter(child: _buildSearchArea()),
 
-                    if (showSearchSuggestions) ...[
-                      if (_recentSearches.isNotEmpty)
-                        SliverToBoxAdapter(child: _buildSearchHistory()),
-                      SliverToBoxAdapter(child: _buildSearchSuggestions()),
-                    ] else ...[
-                      SliverToBoxAdapter(
-                        child: _buildCatalogHeader(allProducts.length),
-                      ),
+                      if (showSearchSuggestions) ...[
+                        if (_recentSearches.isNotEmpty)
+                          SliverToBoxAdapter(child: _buildSearchHistory()),
+                        SliverToBoxAdapter(child: _buildSearchSuggestions()),
+                      ] else ...[
+                        SliverToBoxAdapter(
+                          child: _buildCatalogHeader(allProducts.length),
+                        ),
 
-                      if (_isRemoteSearchLoading && allProducts.isEmpty)
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: ProductGridSkeleton(),
-                          ),
-                        )
-                      else if (_errorMessage != null && products.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.error_outline_rounded,
-                                  size: 52,
-                                  color: AppTheme.resolve(context, _maroon),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Could not load products',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(
-                                        color: AppTheme.resolve(context, _text),
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _errorMessage!,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: AppTheme.resolve(context, _muted),
-                                  ),
-                                ),
-                              ],
+                        if (_isRemoteSearchLoading && allProducts.isEmpty)
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: ProductGridSkeleton(),
                             ),
-                          ),
-                        )
-                      else if (allProducts.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: _buildEmptyState(),
-                        )
-                      else ...[
-                        _buildProductGrid(products),
-                        if (allProducts.length > _pageSize)
-                          SliverToBoxAdapter(
-                            child: _buildPagination(allProducts.length),
-                          ),
+                          )
+                        else if (_errorMessage != null && products.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.error_outline_rounded,
+                                    size: 52,
+                                    color: AppTheme.resolve(context, _maroon),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Could not load products',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: AppTheme.resolve(
+                                            context,
+                                            _text,
+                                          ),
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _errorMessage!,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: AppTheme.resolve(context, _muted),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else if (allProducts.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _buildEmptyState(),
+                          )
+                        else ...[
+                          _buildProductGrid(products),
+                        ],
                       ],
-                    ],
 
-                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                  ],
+                      const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1568,22 +1650,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
 
     final String? suggestion = _searchSuggestion;
-    final Map<String, String> categories = <String, String>{};
     final Set<String> locations = <String>{};
     for (final BuyerProduct product in _products) {
-      final String categoryKey = product.categorySlug?.trim().isNotEmpty == true
-          ? product.categorySlug!.trim()
-          : product.category?.trim() ?? '';
-      if (categoryKey.isNotEmpty)
-        categories[categoryKey] = product.category ?? categoryKey;
       final String location = product.sellerLocation?.trim() ?? '';
       if (location.isNotEmpty) locations.add(location);
     }
-    final List<MapEntry<String, String>> categoryEntries =
-        categories.entries.toList()..sort(
-          (MapEntry<String, String> a, MapEntry<String, String> b) =>
-              a.value.toLowerCase().compareTo(b.value.toLowerCase()),
-        );
+    final List<MapEntry<String, String>> categoryEntries = _categoryEntries;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Column(
@@ -1744,6 +1816,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 SizedBox(
                   height: 44,
                   child: SingleChildScrollView(
+                    key: const PageStorageKey<String>(
+                      'buyer-products-category-filters',
+                    ),
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: List<Widget>.generate(
@@ -2345,44 +2420,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
             }, childCount: (products.length / columns).ceil()),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildPagination(int itemCount) {
-    final int pageCount = (itemCount / _pageSize).ceil();
-    if (pageCount <= 1) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          OutlinedButton.icon(
-            onPressed: _pageIndex == 0
-                ? null
-                : () => setState(() => _pageIndex--),
-            icon: const Icon(Icons.chevron_left_rounded),
-            label: const Text('Previous'),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Text(
-              'Page ${_pageIndex + 1} of $pageCount',
-              style: TextStyle(
-                color: AppTheme.resolve(context, _muted),
-                fontSize: 11,
-              ),
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: _pageIndex >= pageCount - 1
-                ? null
-                : () => setState(() => _pageIndex++),
-            icon: const Icon(Icons.chevron_right_rounded),
-            label: const Text('Next'),
-            iconAlignment: IconAlignment.end,
-          ),
-        ],
       ),
     );
   }

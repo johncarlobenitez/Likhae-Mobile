@@ -6,19 +6,39 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../core/config/app_config.dart';
 import '../../../features/rider/profile/rider_profile_screen.dart';
+import '../../../features/rider/rider_navigation.dart';
 import '../../../services/notification_sound_service.dart';
 import '../../../services/rider_mobile_service.dart';
+import '../../../shared/widgets/buyer_navigation_badges.dart';
 import 'buyer_system_settings_controller.dart';
 
 class BuyerSystemSettingsScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final VoidCallback? onMyAccount;
+  final VoidCallback? onMyAddresses;
+  final VoidCallback? onWallet;
+  final VoidCallback? onMessages;
+  final VoidCallback? onRewards;
+  final VoidCallback? onVouchers;
+  final VoidCallback? onReviewHistory;
+  final VoidCallback? onFollowingStores;
+  final VoidCallback? onRecentlyViewed;
+  final VoidCallback? onDangerZone;
   final bool riderMode;
 
   const BuyerSystemSettingsScreen({
     super.key,
     this.onBack,
     this.onMyAccount,
+    this.onMyAddresses,
+    this.onWallet,
+    this.onMessages,
+    this.onRewards,
+    this.onVouchers,
+    this.onReviewHistory,
+    this.onFollowingStores,
+    this.onRecentlyViewed,
+    this.onDangerZone,
     this.riderMode = false,
   });
 
@@ -31,6 +51,10 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
             BuyerSystemSettingsController.instance;
         final ColorScheme colors = Theme.of(context).colorScheme;
 
+        if (!riderMode) {
+          return _buildBuyerSettingsPage(context, settings, colors);
+        }
+
         return Scaffold(
           backgroundColor: colors.surface,
           appBar: AppBar(
@@ -42,6 +66,7 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
                   ),
             title: const Text('System Settings'),
             actions: [
+              const RiderMenuButton(),
               if (onMyAccount != null)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -177,6 +202,430 @@ class BuyerSystemSettingsScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildBuyerSettingsPage(
+    BuildContext context,
+    BuyerSystemSettingsController settings,
+    ColorScheme colors,
+  ) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F4F4),
+      appBar: AppBar(
+        backgroundColor: colors.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: onBack == null
+            ? null
+            : IconButton(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+        title: const Text('Account Settings'),
+        actions: [
+          AnimatedBuilder(
+            animation: BuyerNavigationBadges.instance,
+            builder: (BuildContext context, Widget? child) {
+              final int unread = BuyerNavigationBadges.instance.messageCount;
+              return IconButton(
+                tooltip: 'Messages',
+                onPressed: onMessages,
+                icon: Badge(
+                  isLabelVisible: unread > 0,
+                  label: Text(unread > 99 ? '99+' : '$unread'),
+                  child: Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    color: colors.primary,
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const _SettingsGroupHeader(title: 'My Account'),
+            _SettingsMenuRow(title: 'Account & Security', onTap: onMyAccount),
+            _SettingsMenuRow(title: 'My Addresses', onTap: onMyAddresses),
+            _SettingsMenuRow(title: 'Wallet', onTap: onWallet),
+            _SettingsMenuRow(title: 'Vouchers', onTap: onVouchers),
+            _SettingsMenuRow(title: 'Rewards', onTap: onRewards),
+            _SettingsMenuRow(
+              title: 'My review history',
+              onTap: onReviewHistory,
+            ),
+            _SettingsMenuRow(
+              title: 'Following Stores',
+              onTap: onFollowingStores,
+            ),
+            _SettingsMenuRow(
+              title: 'Recently Viewed',
+              onTap: onRecentlyViewed,
+            ),
+            const _SettingsGroupHeader(title: 'Settings'),
+            _SettingsMenuRow(
+              title: 'Chat Settings',
+              onTap: () => _openSettingsSheet(
+                context,
+                'Chat Settings',
+                (
+                  BuildContext context,
+                  BuyerSystemSettingsController value,
+                ) => Column(
+                  children: [
+                    _SettingSwitch(
+                      title: 'Chat Notifications',
+                      description: 'Get alerts for new messages.',
+                      value: value.chatNotifications,
+                      onChanged: (bool enabled) =>
+                          value.update(chatNotifications: enabled),
+                    ),
+                    _SettingSwitch(
+                      title: 'Show Online Status',
+                      description:
+                          'Let sellers know when you are available in Messages.',
+                      value: value.showOnlineStatus,
+                      onChanged: (bool enabled) =>
+                          value.update(showOnlineStatus: enabled),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'Order Settings',
+              onTap: () => _openSettingsSheet(
+                context,
+                'Order Settings',
+                (
+                  BuildContext context,
+                  BuyerSystemSettingsController value,
+                ) => Column(
+                  children: [
+                    _SettingSwitch(
+                      title: 'Order Updates',
+                      description:
+                          'Order confirmation, processing, and status changes.',
+                      value: value.orderUpdates,
+                      onChanged: (bool enabled) =>
+                          value.update(orderUpdates: enabled),
+                    ),
+                    _SettingSwitch(
+                      title: 'Delivery Updates',
+                      description:
+                          'Pickup, sorting, rider, and delivery updates.',
+                      value: value.deliveryUpdates,
+                      onChanged: (bool enabled) =>
+                          value.update(deliveryUpdates: enabled),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'Notification Settings',
+              onTap: () => _openSettingsSheet(
+                context,
+                'Notification Settings',
+                (
+                  BuildContext context,
+                  BuyerSystemSettingsController value,
+                ) => Column(
+                  children: [
+                    _SettingSwitch(
+                      title: 'Promotions & Vouchers',
+                      description:
+                          'Eligible voucher, discount, and promotion updates.',
+                      value: value.promotionUpdates,
+                      onChanged: (bool enabled) =>
+                          value.update(promotionUpdates: enabled),
+                    ),
+                    _SettingSwitch(
+                      title: 'Notification Sounds',
+                      description: 'Play sounds for supported LIKHAE alerts.',
+                      value: value.notificationSounds,
+                      onChanged: (bool enabled) =>
+                          value.update(notificationSounds: enabled),
+                    ),
+                    for (final NotificationSoundOption sound
+                        in NotificationSoundService.catalog)
+                      _SoundPreviewRow(sound: sound),
+                  ],
+                ),
+                scrollContent: true,
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'Privacy Settings',
+              onTap: () => _openSettingsSheet(
+                context,
+                'Privacy Settings',
+                (
+                  BuildContext context,
+                  BuyerSystemSettingsController value,
+                ) => Column(
+                  children: [
+                    _SettingSwitch(
+                      title: 'Show Online Status',
+                      description:
+                          'Let sellers know when you are available in Messages.',
+                      value: value.showOnlineStatus,
+                      onChanged: (bool enabled) =>
+                          value.update(showOnlineStatus: enabled),
+                    ),
+                    _SettingSwitch(
+                      title: 'Show AI Assistant',
+                      description: 'Show the floating LIKHAE AI chat button.',
+                      value: value.showAiAssistant,
+                      onChanged: (bool enabled) =>
+                          value.update(showAiAssistant: enabled),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'Blocked Users',
+              onTap: () => _showSettingsInfo(
+                context,
+                'Blocked Users',
+                'Blocked-user management is not available yet.',
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'Language / 语言 / Wika',
+              subtitle: 'English',
+              onTap: () => _openSettingsSheet(
+                context,
+                'Language / Appearance',
+                (BuildContext context, BuyerSystemSettingsController value) =>
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Appearance',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Row(
+                          children: [
+                            _ThemeChoice(
+                              icon: Icons.light_mode_outlined,
+                              label: 'Light',
+                              selected: value.themeMode == ThemeMode.light,
+                              onTap: () => value.setTheme(ThemeMode.light),
+                            ),
+                            _ThemeChoice(
+                              icon: Icons.dark_mode_outlined,
+                              label: 'Dark',
+                              selected: value.themeMode == ThemeMode.dark,
+                              onTap: () => value.setTheme(ThemeMode.dark),
+                            ),
+                            _ThemeChoice(
+                              icon: Icons.brightness_auto_outlined,
+                              label: 'System',
+                              selected: value.themeMode == ThemeMode.system,
+                              onTap: () => value.setTheme(ThemeMode.system),
+                            ),
+                          ],
+                        ),
+                        const Divider(),
+                        const Text(
+                          'Display language',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        const ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('English'),
+                          trailing: Icon(Icons.check_rounded),
+                        ),
+                      ],
+                    ),
+              ),
+            ),
+            const _SettingsGroupHeader(title: 'Support'),
+            _SettingsMenuRow(
+              title: 'Help Centre',
+              onTap: () => _showSettingsInfo(
+                context,
+                'Help Centre',
+                'For help with an order or seller, open Messages from the bottom navigation.',
+                actionLabel: 'Open Messages',
+                onAction: onMessages,
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'Community Rules',
+              onTap: () => _showSettingsInfo(
+                context,
+                'Community Rules',
+                'Be respectful, provide accurate information, and use LIKHAE for lawful products and honest transactions.',
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'LIKHAE Policies',
+              onTap: () => _showSettingsInfo(
+                context,
+                'LIKHAE Policies',
+                'Current Terms & Conditions and Privacy Policy are shown during registration.',
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'Happy with LIKHAE? Rate us!',
+              onTap: () => _showSettingsInfo(
+                context,
+                'Rate LIKHAE',
+                'App-store ratings are not available yet. Thank you for supporting LIKHAE.',
+              ),
+            ),
+            _SettingsMenuRow(
+              title: 'About',
+              onTap: () => showAboutDialog(
+                context: context,
+                applicationName: 'LIKHAE',
+                applicationVersion: '1.0.0',
+                applicationLegalese: 'A marketplace for local finds.',
+              ),
+            ),
+            const _SettingsGroupHeader(title: 'Account'),
+            _SettingsMenuRow(title: 'Danger Zone', onTap: onDangerZone),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openSettingsSheet(
+    BuildContext context,
+    String title,
+    Widget Function(BuildContext, BuyerSystemSettingsController) content, {
+    bool scrollContent = false,
+  }) {
+    final BuyerSystemSettingsController settings =
+        BuyerSystemSettingsController.instance;
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: scrollContent,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheetContext) => AnimatedBuilder(
+        animation: settings,
+        builder: (BuildContext context, Widget? child) => ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 12, 8, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              if (scrollContent)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+                  ),
+                  child: ListView(
+                    primary: false,
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    children: [content(context, settings)],
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: content(context, settings),
+                ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        final bool synced = await settings.save(
+                          syncServer: true,
+                        );
+                        if (!sheetContext.mounted) return;
+                        ScaffoldMessenger.of(sheetContext).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              synced
+                                  ? 'Settings saved.'
+                                  : 'Device settings saved. Account sync is unavailable right now.',
+                            ),
+                          ),
+                        );
+                        Navigator.of(sheetContext).pop();
+                      },
+                      child: const Text('Save Settings'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSettingsInfo(
+    BuildContext context,
+    String title,
+    String message, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+          if (actionLabel != null && onAction != null)
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                onAction();
+              },
+              child: Text(actionLabel),
+            ),
+        ],
+      ),
     );
   }
 
@@ -567,14 +1016,16 @@ class _RiderAvailabilityCardState extends State<_RiderAvailabilityCard> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool interHubVan = _profile?.isVan == true;
     return _SettingsCard(
-      title: 'Rider Availability',
-      subtitle: _profile?.isVan == true
-          ? 'Choose whether your hub can assign new transfers to you.'
+      title: interHubVan ? 'Account Visibility' : 'Rider Availability',
+      subtitle: interHubVan
+          ? 'Choose whether your hub can see that you are available for inter-hub transfers.'
           : 'Choose whether dispatch can assign new deliveries to you.',
-      icon: Icons.wifi_tethering_rounded,
+      icon: interHubVan ? Icons.circle : Icons.wifi_tethering_rounded,
+      iconTile: interHubVan,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: EdgeInsets.symmetric(vertical: interHubVan ? 4 : 12),
         child: _loading
             ? const Center(
                 child: Padding(
@@ -614,6 +1065,47 @@ class _RiderAvailabilityCardState extends State<_RiderAvailabilityCard> {
                   color: colors.onSurface.withValues(alpha: 0.7),
                   fontSize: 12,
                 ),
+              )
+            : interHubVan
+            ? Column(
+                children: [
+                  _SettingSwitch(
+                    title: 'Show Online Status',
+                    description:
+                        'When off, your hub will not assign new transfers while you continue using LIKHAE.',
+                    value: _isOnline,
+                    onChanged: _saving ? null : _setAvailability,
+                  ),
+                  if (_savingMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _savingMessage!,
+                          style: TextStyle(
+                            color: colors.onSurface.withValues(alpha: 0.65),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_actionError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _actionError!,
+                          style: TextStyle(
+                            color: colors.error,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -704,16 +1196,99 @@ class _RiderAvailabilityCardState extends State<_RiderAvailabilityCard> {
   }
 }
 
+class _SettingsGroupHeader extends StatelessWidget {
+  final String title;
+
+  const _SettingsGroupHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFF3F3F3),
+      padding: const EdgeInsets.fromLTRB(15, 12, 15, 9),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.58),
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsMenuRow extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+
+  const _SettingsMenuRow({required this.title, this.subtitle, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surface,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: subtitle == null ? 14 : 10,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: const TextStyle(fontSize: 14)),
+                        if (subtitle != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle!,
+                            style: TextStyle(
+                              color: colors.onSurface.withValues(alpha: 0.58),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: colors.onSurface.withValues(alpha: 0.58),
+                    size: 21,
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, thickness: 0.7, color: const Color(0xFFECECEC)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
+  final bool iconTile;
   final Widget child;
 
   const _SettingsCard({
     required this.title,
     required this.subtitle,
     required this.icon,
+    this.iconTile = false,
     required this.child,
   });
 
@@ -734,7 +1309,19 @@ class _SettingsCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(icon, color: colors.primary),
+                if (iconTile)
+                  Container(
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, color: colors.onPrimary, size: 8),
+                  )
+                else
+                  Icon(icon, color: colors.primary),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -829,7 +1416,7 @@ class _SettingSwitch extends StatelessWidget {
   final String title;
   final String description;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   const _SettingSwitch({
     required this.title,
