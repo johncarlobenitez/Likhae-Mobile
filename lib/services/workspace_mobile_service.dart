@@ -68,7 +68,9 @@ class WorkspaceMobileService {
     var last = 1;
     do {
       final body = await get(path, query: {'page': page});
-      result.addAll(maps(body['data']));
+      result.addAll(
+        path == 'rider/attendance' ? attendanceRows(body) : maps(body['data']),
+      );
       last = int.tryParse('${body['meta']?['last_page'] ?? 1}') ?? 1;
       page++;
     } while (page <= last);
@@ -81,6 +83,26 @@ class WorkspaceMobileService {
             .map((row) => Map<String, dynamic>.from(row))
             .toList()
       : <Map<String, dynamic>>[];
+
+  /// Laravel's attendance endpoint returns a dashboard, not a flat collection.
+  static List<Map<String, dynamic>> attendanceRows(Map<String, dynamic> body) {
+    final data = body['data'];
+    if (data is List) return maps(data);
+    if (data is! Map || data['history'] is! List) {
+      throw const FormatException('Attendance history could not be loaded.');
+    }
+    final open = data['open_session'];
+    return maps(data['history']).map((row) {
+      final payroll = row['payroll'];
+      return <String, dynamic>{
+        ...row,
+        if (payroll == null && row['payroll_status'] != null)
+          'payroll': {'status': row['payroll_status']},
+        if (open is Map && '${open['id']}' == '${row['id']}')
+          'estimated_current_pay': data['estimated_current_pay'],
+      };
+    }).toList();
+  }
 
   static Future<({Uint8List bytes, String mime})> file(String path) async {
     final response = await ApiClient.get(

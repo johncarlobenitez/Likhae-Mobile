@@ -294,7 +294,12 @@ class _RiderPayoutsScreenState extends State<RiderPayoutsScreen> {
                           ? _selected.add('${row['id']}')
                           : _selected.remove('${row['id']}'),
                     ),
-                    title: Text(formatPesoValue(row['amount'], fallback: formatPesoAmount(0))),
+                    title: Text(
+                      formatPesoValue(
+                        row['amount'],
+                        fallback: formatPesoAmount(0),
+                      ),
+                    ),
                     subtitle: Text(
                       '${row['tracking_number'] ?? 'Delivery'} · share #${row['id']}',
                     ),
@@ -601,6 +606,14 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
             ),
           const SizedBox(height: 18),
           Text('Shift history', style: Theme.of(context).textTheme.titleLarge),
+          const Text(
+            'The saved rate snapshot protects completed and active shifts from later rate changes.',
+          ),
+          TextButton.icon(
+            onPressed: _reload,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Refresh history'),
+          ),
           if (snapshot.connectionState != ConnectionState.done)
             const Center(child: CircularProgressIndicator()),
           if (snapshot.hasData && snapshot.data!.isEmpty)
@@ -616,12 +629,20 @@ class _RiderAttendanceScreenState extends State<RiderAttendanceScreen> {
 Widget _attendanceShiftCard(BuildContext context, Map<String, dynamic> row) {
   final clockIn = _attendanceDateTime(row['clock_in_at']);
   final clockOut = _attendanceDateTime(row['clock_out_at']);
-  final rate = _attendanceNumber(row['daily_rate_snapshot']);
+  final rate = row['daily_rate_snapshot'] == null
+      ? null
+      : _attendanceNumber(row['daily_rate_snapshot']);
   final minutes = row['worked_minutes'] == null
-      ? (clockIn == null ? 0 : DateTime.now().difference(clockIn).inMinutes)
+      ? (clockIn == null
+            ? 0
+            : (clockOut ?? DateTime.now())
+                  .difference(clockIn)
+                  .inMinutes
+                  .clamp(0, 2147483647))
       : _attendanceNumber(row['worked_minutes']).round();
   final pay = row['gross_pay'] == null
-      ? rate * minutes / 480
+      ? (row['estimated_current_pay'] ??
+            (rate == null ? null : rate * minutes / 480))
       : _attendanceNumber(row['gross_pay']);
   final payroll = row['payroll'] is Map
       ? Map<String, dynamic>.from(row['payroll'] as Map)
@@ -640,7 +661,9 @@ Widget _attendanceShiftCard(BuildContext context, Map<String, dynamic> row) {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 4),
-          Text('Manifest · ${row['manifest_number'] ?? 'No manifest assigned'}'),
+          Text(
+            'Manifest · ${row['manifest_number'] ?? 'No manifest assigned'}',
+          ),
           const SizedBox(height: 8),
           Text(
             'Time in · ${_attendanceTimeLabel(clockIn) ?? 'Unavailable'}${timeInSource == null ? '' : ' · $timeInSource'}',
@@ -649,16 +672,26 @@ Widget _attendanceShiftCard(BuildContext context, Map<String, dynamic> row) {
             'Time out · ${_attendanceTimeLabel(clockOut) ?? 'On shift'}${timeOutSource == null ? '' : ' · $timeOutSource'}',
           ),
           const SizedBox(height: 8),
-          Text('Hours · ${(minutes / 60).toStringAsFixed(2)}h'),
           Text(
-            'Daily rate · ${formatPesoValue(row['daily_rate_snapshot'], fallback: formatPesoAmount(0))} / day${row['region_type'] == null ? '' : ' · ${row['region_type']}'}',
+            'Hours · ${row['worked_minutes'] == null ? '—' : '${(minutes / 60).toStringAsFixed(2)}h'}',
           ),
           Text(
-            'Shift pay · ${formatPesoValue(pay, fallback: formatPesoAmount(0))}${row['gross_pay'] == null ? ' estimated' : ''}',
+            'Daily rate · ${rate == null ? 'Unavailable' : '${formatPesoAmount(rate)} / day'}${row['region_type'] == null ? '' : ' · ${row['region_type']}'}',
           ),
-          Text('Payroll · ${payroll?['status'] ?? 'Not yet included'}'),
+          Text(
+            'Total shift estimate · ${formatPesoValue(pay, fallback: 'Unavailable')}${row['gross_pay'] == null && pay != null ? ' est.' : ''}',
+          ),
+          Text(
+            'Payroll · ${row['overtime_review'] == true && payroll?['status'] == 'REVIEW_REQUIRED' ? 'Base pay pending' : payroll?['status'] ?? 'Not yet included'}',
+          ),
           if (row['overtime_review'] == true)
-            const Text('Over 8 hours · review required'),
+            Text(
+              payroll?['overtime_paid_at'] != null
+                  ? 'Additional overtime ${formatPesoValue(payroll?['overtime_paid_amount'])} paid${payroll?['overtime_hours_paid'] == null ? '' : ' (${_attendanceNumber(payroll?['overtime_hours_paid']).toStringAsFixed(2)}h counted)'}'
+                  : 'Logistics can decide additional overtime pay',
+            ),
+          if (payroll?['overtime_payment_reference'] != null)
+            Text('Overtime ref: ${payroll!['overtime_payment_reference']}'),
           if (payroll?['payment_reference'] != null)
             Text('Payment reference · ${payroll!['payment_reference']}'),
           if (payroll?['proof_available'] == true) ...[
@@ -678,15 +711,24 @@ Widget _attendanceShiftCard(BuildContext context, Map<String, dynamic> row) {
   );
 }
 
-DateTime? _attendanceDateTime(dynamic value) => value == null
-    ? null
-    : DateTime.tryParse(value.toString())?.toLocal();
+DateTime? _attendanceDateTime(dynamic value) =>
+    value == null ? null : DateTime.tryParse(value.toString())?.toLocal();
 
 String? _attendanceDateLabel(DateTime? value) {
   if (value == null) return null;
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${months[value.month - 1]} ${value.day}, ${value.year}';
 }
