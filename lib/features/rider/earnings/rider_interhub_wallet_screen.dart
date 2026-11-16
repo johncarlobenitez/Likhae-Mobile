@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../rider_navigation.dart';
 
 import '../../../services/workspace_mobile_service.dart';
@@ -20,15 +21,26 @@ class RiderInterhubWalletScreen extends StatefulWidget {
 }
 
 class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
-  static const Color _background = Color(0xFFFBF7F2);
-  static const Color _surface = Color(0xFFFFFDF9);
-  static const Color _border = Color(0xFFEADCCC);
-  static const Color _maroon = Color(0xFF561C17);
-  static const Color _text = Color(0xFF3B211B);
-  static const Color _muted = Color(0xFF987865);
-  static const Color _green = Color(0xFF28724D);
-  static const Color _amber = Color(0xFF946514);
-  static const Color _danger = Color(0xFFB42318);
+  static const Color _lightBackground = Color(0xFFFBF7F2);
+  static const Color _lightSurface = Color(0xFFFFFDF9);
+  static const Color _lightBorder = Color(0xFFEADCCC);
+  static const Color _lightMaroon = Color(0xFF561C17);
+  static const Color _lightText = Color(0xFF3B211B);
+  static const Color _lightMuted = Color(0xFF987865);
+  static const Color _lightGreen = Color(0xFF28724D);
+  static const Color _lightAmber = Color(0xFF946514);
+  static const Color _lightDanger = Color(0xFFB42318);
+
+  Color get _background =>
+      AppTheme.resolve(context, _lightBackground, fill: true);
+  Color get _surface => AppTheme.resolve(context, _lightSurface, fill: true);
+  Color get _border => AppTheme.resolve(context, _lightBorder);
+  Color get _maroon => AppTheme.resolve(context, _lightMaroon);
+  Color get _text => AppTheme.resolve(context, _lightText);
+  Color get _muted => AppTheme.resolve(context, _lightMuted);
+  Color get _green => AppTheme.resolve(context, _lightGreen);
+  Color get _amber => AppTheme.resolve(context, _lightAmber);
+  Color get _danger => AppTheme.resolve(context, _lightDanger);
 
   List<Map<String, dynamic>> _rows = const <Map<String, dynamic>>[];
   DateTime? _fromDate;
@@ -287,7 +299,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                 spacing: 10,
                 runSpacing: 8,
                 children: [
-                  const Text(
+                  Text(
                     'Wallet & payroll',
                     style: TextStyle(
                       color: _text,
@@ -308,7 +320,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
-                        side: const BorderSide(color: _border),
+                        side: BorderSide(color: _border),
                       ),
                     ),
                     child: const Text(
@@ -319,7 +331,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Track shift pay, payroll status, and payment proof from your Logistics center. Your Interhub pay is based on recorded hours.',
                 style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
               ),
@@ -447,7 +459,11 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
               ),
               FilledButton(
                 style: FilledButton.styleFrom(
-                  backgroundColor: _maroon,
+                  backgroundColor: AppTheme.resolve(
+                    context,
+                    _lightMaroon,
+                    fill: true,
+                  ),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(0, 44),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -478,7 +494,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             color: _text,
             fontSize: 11,
             fontWeight: FontWeight.w700,
@@ -510,7 +526,11 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                       ),
                     ),
                   ),
-                  const Icon(Icons.calendar_today_outlined, size: 15),
+                  Icon(
+                    Icons.calendar_today_outlined,
+                    size: 15,
+                    color: _muted,
+                  ),
                 ],
               ),
             ),
@@ -541,7 +561,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
             label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _muted, fontSize: 11),
+            style: TextStyle(color: _muted, fontSize: 11),
           ),
           const SizedBox(height: 7),
           Text(
@@ -559,7 +579,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
             detail,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _muted, fontSize: 10, height: 1.35),
+            style: TextStyle(color: _muted, fontSize: 10, height: 1.35),
           ),
         ],
       ),
@@ -582,7 +602,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Shift and payment history',
                   style: TextStyle(
                     color: _text,
@@ -591,7 +611,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                   ),
                 ),
                 const SizedBox(height: 5),
-                const Text(
+                Text(
                   'Each row is a recorded shift. Paid items include the reference and proof provided by Logistics.',
                   style: TextStyle(color: _muted, fontSize: 11, height: 1.45),
                 ),
@@ -604,8 +624,8 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(18, 22, 18, 26),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 22, 18, 26),
               child: Center(
                 child: Text(
                   'No shifts match these dates yet.',
@@ -675,7 +695,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
     return Column(
       children: [
         for (int index = 0; index < rows.length; index++) ...[
-          if (index > 0) const Divider(height: 1, color: _border),
+          if (index > 0) Divider(height: 1, color: _border),
           _mobileHistoryCard(rows[index]),
         ],
       ],
@@ -700,7 +720,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                   children: [
                     Text(
                       _formatShiftDate(row['clock_in_at']),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _text,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
@@ -711,7 +731,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                       transfer,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _muted, fontSize: 11),
+                      style: TextStyle(color: _muted, fontSize: 11),
                     ),
                   ],
                 ),
@@ -731,7 +751,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
           const SizedBox(height: 9),
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Payment receipt',
                   style: TextStyle(color: _muted, fontSize: 10),
@@ -749,11 +769,11 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: _muted, fontSize: 10)),
+        Text(label, style: TextStyle(color: _muted, fontSize: 10)),
         const SizedBox(height: 3),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             color: _text,
             fontSize: 12,
             fontWeight: FontWeight.w700,
@@ -787,7 +807,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
   Widget _receiptAction(Map<String, dynamic> row) {
     final Map<String, dynamic>? payroll = _map(row['payroll']);
     if (payroll == null) {
-      return const Text('—', style: TextStyle(color: _muted, fontSize: 11));
+      return Text('—', style: TextStyle(color: _muted, fontSize: 11));
     }
     final String reference = (payroll['payment_reference'] ?? '')
         .toString()
@@ -813,10 +833,10 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
         reference,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: _muted, fontSize: 10),
+        style: TextStyle(color: _muted, fontSize: 10),
       );
     }
-    return const Text('—', style: TextStyle(color: _muted, fontSize: 11));
+    return Text('—', style: TextStyle(color: _muted, fontSize: 11));
   }
 
   Widget _messageCard({
@@ -828,9 +848,13 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F0),
+        color: AppTheme.resolve(
+          context,
+          const Color(0xFFFFF1F0),
+          fill: true,
+        ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF0D0CC)),
+        border: Border.all(color: _border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -843,7 +867,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: _text,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -852,7 +876,7 @@ class _RiderInterhubWalletScreenState extends State<RiderInterhubWalletScreen> {
                 const SizedBox(height: 4),
                 Text(
                   message,
-                  style: const TextStyle(color: _muted, fontSize: 11),
+                  style: TextStyle(color: _muted, fontSize: 11),
                 ),
                 if (action != null) action,
               ],

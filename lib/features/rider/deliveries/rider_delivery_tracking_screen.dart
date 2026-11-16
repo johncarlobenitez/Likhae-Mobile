@@ -1015,11 +1015,14 @@ class _RiderDeliveryTrackingScreenState
       final DateTime capturedAt = DateTime.now();
       final Position position =
           await RiderProofWatermark.requireCurrentPosition();
+      final String? location =
+          await RiderProofWatermark.resolveLocation(position);
       final String stampedPath = await RiderProofWatermark.stamp(
         imagePath: photo.path,
         riderName: riderName,
         capturedAt: capturedAt,
         position: position,
+        location: location,
       );
 
       if (!mounted) {

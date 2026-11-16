@@ -38,7 +38,7 @@ class _RecentlyViewedScreenState extends State<RecentlyViewedScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear recently viewed?'),
-        content: const Text('Remove your viewing history on this device?'),
+        content: const Text('Remove your viewing history for this account?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

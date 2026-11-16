@@ -186,7 +186,7 @@ class _RiderMessagesScreenState extends State<RiderMessagesScreen>
     if (widget.onPresenceHeartbeat != null) {
       unawaited(_touchPresence());
       _presenceHeartbeatTimer = Timer.periodic(
-        const Duration(seconds: 60),
+        const Duration(seconds: 20),
         (_) => unawaited(_touchPresence()),
       );
     }

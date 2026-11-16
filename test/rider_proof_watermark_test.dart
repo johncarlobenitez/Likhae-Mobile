@@ -40,6 +40,7 @@ void main() {
         riderName: name,
         capturedAt: capturedAt,
         position: position,
+        location: 'Manila, Philippines',
       );
 
       final String stampedPath = await RiderProofWatermark.stamp(
@@ -47,6 +48,7 @@ void main() {
         riderName: 'Rider Name',
         capturedAt: capturedAt,
         position: position,
+        location: 'Manila, Philippines',
       );
       final Directory stampedDirectory = File(stampedPath).parent;
       addTearDown(() => stampedDirectory.delete(recursive: true));

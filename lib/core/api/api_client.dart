@@ -12,6 +12,8 @@ class ApiClient {
 
   static const String _mapGeocodeFallbackUrl =
       'https://likhae.online/api/v1/maps/geocode';
+  static const String _mapReverseGeocodeFallbackUrl =
+      'https://likhae.online/api/v1/maps/reverse-geocode';
 
   static final _reads = AsyncCache<String, Response<dynamic>>();
   static bool _initialized = false;
@@ -143,6 +145,33 @@ class ApiClient {
     if (response.statusCode == 404 && message == 'api endpoint not found.') {
       return get(
         _mapGeocodeFallbackUrl,
+        queryParameters: queryParameters,
+        refresh: true,
+      );
+    }
+    return response;
+  }
+
+  static Future<Response<dynamic>> getMapReverseGeocode({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final Map<String, dynamic> queryParameters = <String, dynamic>{
+      'lat': latitude,
+      'lon': longitude,
+    };
+    final Response<dynamic> response = await get(
+      'maps/reverse-geocode',
+      queryParameters: queryParameters,
+      refresh: true,
+    );
+    final dynamic payload = response.data;
+    final String? message = payload is Map
+        ? payload['message']?.toString().trim().toLowerCase()
+        : null;
+    if (response.statusCode == 404 && message == 'api endpoint not found.') {
+      return get(
+        _mapReverseGeocodeFallbackUrl,
         queryParameters: queryParameters,
         refresh: true,
       );

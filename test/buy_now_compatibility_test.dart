@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:likhae/core/api/api_client.dart';
 import 'package:likhae/core/config/app_config.dart';
 import 'package:likhae/core/storage/token_storage.dart';
+import 'package:likhae/features/buyer/cart/cart_screen.dart';
 import 'package:likhae/services/buyer_mobile_service.dart';
+import 'package:likhae/services/product_service.dart';
 import 'package:likhae/shared/widgets/buyer_navigation_badges.dart';
 
 void main() {
@@ -17,12 +19,19 @@ void main() {
     () {
       late HttpServer server;
       late int routeStatus;
+      late int offerRouteStatus;
       late List<Map<String, dynamic>> cart;
+      late List<Map<String, dynamic>> productRows;
+      late Map<String, dynamic> productDetails;
       final writes =
           <({String method, String path, Map<String, dynamic> body})>[];
-      Map<String, dynamic> item(int variant, int quantity) => {
+      Map<String, dynamic> item(
+        int variant,
+        int quantity, {
+        int product = 20,
+      }) => {
         'id': '$variant',
-        'product_id': 20,
+        'product_id': product,
         'product_variant_id': variant,
         'name': 'Tshirt',
         'quantity': quantity,
@@ -35,7 +44,10 @@ void main() {
         await TokenStorage.writeToken('test-token');
         ApiClient.invalidateReads();
         routeStatus = 405;
+        offerRouteStatus = 405;
         cart = [item(7, 5), item(8, 3)];
+        productRows = <Map<String, dynamic>>[];
+        productDetails = <String, dynamic>{};
         writes.clear();
         server = await HttpServer.bind(InternetAddress.loopbackIPv4, base.port);
         server.listen((request) async {
@@ -48,7 +60,10 @@ void main() {
             writes.add((method: request.method, path: path, body: body));
           }
           dynamic data = <dynamic>[];
-          if (path.endsWith('/checkout/buy-now')) {
+          if (path.contains('/checkout/buy-now/offers/')) {
+            request.response.statusCode = offerRouteStatus;
+            data = <Map<String, dynamic>>[item(7, 4), item(8, 2, product: 30)];
+          } else if (path.endsWith('/checkout/buy-now')) {
             request.response.statusCode = routeStatus;
             data = item(7, 2);
           } else if (path.endsWith('/buyer/cart')) {
@@ -56,11 +71,17 @@ void main() {
               data = item(
                 body['product_variant_id'] as int,
                 body['quantity'] as int,
+                product: body['product_id'] as int,
               );
               cart.add(data as Map<String, dynamic>);
             } else {
               data = cart;
             }
+          } else if (request.method == 'GET' &&
+              path.endsWith('/products/earbuds')) {
+            data = productDetails;
+          } else if (request.method == 'GET' && path.endsWith('/products')) {
+            data = productRows;
           } else if (request.method == 'PATCH') {
             final row = cart.singleWhere(
               (row) => path.endsWith('/${row['id']}'),
@@ -117,6 +138,117 @@ void main() {
         );
         expect(selected.quantity, 2);
         expect(writes, hasLength(1));
+      });
+      test('405 on an offer route adds both offer lines with set quantities', () async {
+        cart = [item(9, 1)];
+
+        final List<CartItemData> selected =
+            await BuyerMobileService.buyNowOffer(
+              promotionId: 77,
+              sets: 2,
+              rewardVariantId: 8,
+              qualifyingProductId: 20,
+              qualifyingVariantId: 7,
+              qualifyingQuantity: 2,
+              rewardProductId: 30,
+              rewardQuantity: 1,
+            );
+
+        expect(selected.map((row) => row.productVariationId), [7, 8]);
+        expect(selected.map((row) => row.quantity), [4, 2]);
+        expect(cart.map((row) => row['quantity']), [1, 4, 2]);
+        expect(writes, hasLength(3));
+        expect(writes.first.path, endsWith('/checkout/buy-now/offers/77'));
+        expect(writes[1].body, {
+          'product_id': 20,
+          'product_variant_id': 7,
+          'quantity': 4,
+        });
+        expect(writes[2].body, {
+          'product_id': 30,
+          'product_variant_id': 8,
+          'quantity': 2,
+        });
+      });
+      test('supported offer endpoint does not write extra cart lines', () async {
+        offerRouteStatus = 201;
+
+        final List<CartItemData> selected =
+            await BuyerMobileService.buyNowOffer(
+              promotionId: 77,
+              sets: 2,
+              rewardVariantId: 8,
+              qualifyingProductId: 20,
+              qualifyingVariantId: 7,
+              qualifyingQuantity: 2,
+              rewardProductId: 30,
+              rewardQuantity: 1,
+            );
+
+        expect(selected.map((row) => row.productVariationId), [7, 8]);
+        expect(writes, hasLength(1));
+        expect(writes.single.path, endsWith('/checkout/buy-now/offers/77'));
+        expect(cart, hasLength(2));
+      });
+      test('finds a missing product ID from its exact catalog variant', () async {
+        productRows = <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 30,
+            'name': 'Wireless Bluetooth Earbuds',
+            'variants': <Map<String, dynamic>>[
+              <String, dynamic>{'id': 8},
+            ],
+          },
+        ];
+
+        expect(
+          await ProductService.findProductIdForVariant(
+            8,
+            productName: 'Wireless Bluetooth Earbuds',
+          ),
+          30,
+        );
+      });
+      test('checks product details when search rows omit variants', () async {
+        productRows = <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 30,
+            'slug': 'earbuds',
+            'name': 'Wireless Bluetooth Earbuds',
+          },
+        ];
+        productDetails = <String, dynamic>{
+          'id': 30,
+          'variations': <Map<String, dynamic>>[
+            <String, dynamic>{'id': 8},
+          ],
+        };
+
+        expect(
+          await ProductService.findProductIdForVariant(
+            8,
+            productName: 'Wireless Bluetooth Earbuds',
+          ),
+          30,
+        );
+      });
+      test('405 without product IDs reports missing offer details', () async {
+        await expectLater(
+          BuyerMobileService.buyNowOffer(
+            promotionId: 77,
+            sets: 1,
+            rewardVariantId: 8,
+          ),
+          throwsA(
+            isA<Exception>().having(
+              (error) => error.toString(),
+              'message',
+              contains('missing product details'),
+            ),
+          ),
+        );
+        expect(writes, hasLength(1));
+        expect(cart, hasLength(2));
       });
       for (final status in [422, 500]) {
         test('$status does not retry a rejected or ambiguous write', () async {

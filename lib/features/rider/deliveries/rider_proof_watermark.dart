@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
+import 'package:likhae/core/api/api_client.dart';
 
 class RiderProofWatermark {
   static const Duration _lastLocationMaxAge = Duration(minutes: 2);
@@ -47,11 +48,34 @@ class RiderProofWatermark {
     }
   }
 
+  static Future<String?> resolveLocation(Position position) async {
+    try {
+      final response = await ApiClient.getMapReverseGeocode(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      ).timeout(const Duration(seconds: 8));
+      if ((response.statusCode ?? 500) < 200 ||
+          (response.statusCode ?? 500) >= 300) {
+        return null;
+      }
+
+      final dynamic payload = response.data;
+      final String location = payload is Map
+          ? (payload['location']?.toString().trim() ?? '')
+          : '';
+      return location.isEmpty ? null : location;
+    } catch (_) {
+      // GPS coordinates remain on the photo when reverse geocoding is offline.
+      return null;
+    }
+  }
+
   static Future<String> stamp({
     required String imagePath,
     required String riderName,
     required DateTime capturedAt,
     required Position position,
+    required String? location,
   }) async {
     final String name = riderName.trim();
     if (name.isEmpty) {
@@ -80,6 +104,7 @@ class RiderProofWatermark {
         .clamp(1, image.width)
         .toInt();
     final List<String> lines = <String>[
+      ..._wrapText('LIKHAE | DELIVERY PROOF', font, maxTextWidth),
       ..._wrapText(
         'DATE & TIME: ${_formatDateTime(capturedAt)}',
         font,
@@ -88,6 +113,11 @@ class RiderProofWatermark {
       ..._wrapText(
         'GPS: ${position.latitude.toStringAsFixed(6)}, '
         '${position.longitude.toStringAsFixed(6)}',
+        font,
+        maxTextWidth,
+      ),
+      ..._wrapText(
+        'LOCATION: ${location?.isNotEmpty == true ? location : 'Unavailable'}',
         font,
         maxTextWidth,
       ),

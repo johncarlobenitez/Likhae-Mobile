@@ -215,16 +215,60 @@ class ProductService {
   }
 
   static Future<List<BuyerHomeProduct>> fetchRecommendedHomeProducts({
-    int page = 1,
-    int perPage = 6,
-  }) {
-    return _fetchBuyerHomeSection(
-      'buyer/home/recommendations',
-      <String, dynamic>{
-        'page': page < 1 ? 1 : page,
-        'per_page': perPage.clamp(1, 36),
-      },
-    );
+    int perPage = 36,
+  }) async {
+    if (!AppConfig.apiEnabled) return const <BuyerHomeProduct>[];
+
+    final int pageSize = perPage.clamp(1, 36).toInt();
+    final List<BuyerHomeProduct> products = <BuyerHomeProduct>[];
+    final Set<int> seenIds = <int>{};
+    int page = 1;
+    int? lastPage;
+
+    while (page <= (lastPage ?? 100)) {
+      final Response<dynamic> response = await ApiClient.get(
+        AppConfig.resolveApiUrl('buyer/home/recommendations'),
+        queryParameters: <String, dynamic>{
+          'page': page,
+          'per_page': pageSize,
+        },
+      );
+      final int statusCode = response.statusCode ?? 500;
+      if (statusCode < 200 || statusCode >= 300) {
+        final dynamic payload = response.data;
+        final String message = payload is Map && payload['message'] != null
+            ? payload['message'].toString()
+            : 'Unable to load homepage recommendations (HTTP $statusCode).';
+        throw Exception(message);
+      }
+
+      final dynamic rows = _extractRows(response.data);
+      if (rows is! List) {
+        if (page == 1) {
+          throw const FormatException(
+            'Invalid buyer recommendations response.',
+          );
+        }
+        break;
+      }
+
+      int newCount = 0;
+      for (final Map row in rows.whereType<Map>()) {
+        final BuyerHomeProduct product = BuyerHomeProduct.fromApi(
+          Map<String, dynamic>.from(row),
+        );
+        if (product.id <= 0 || !seenIds.add(product.id)) continue;
+        products.add(product);
+        newCount++;
+      }
+
+      lastPage ??= _extractLastPage(response.data);
+      if (lastPage != null && page >= lastPage) break;
+      if (newCount == 0) break;
+      page++;
+    }
+
+    return products;
   }
 
   static Future<List<BuyerHomeProduct>> _fetchBuyerHomeSection(
@@ -547,6 +591,90 @@ class ProductService {
     }
 
     return ProductDetailData.fromApi(Map<String, dynamic>.from(product));
+  }
+
+  /// Finds the parent product for a concrete variant when an offer response
+  /// includes the variant ID but omits its product ID. Search results and
+  /// product details are both checked against the exact variant ID before a
+  /// product ID is returned.
+  static Future<int?> findProductIdForVariant(
+    int variantId, {
+    String? productName,
+    String? slug,
+  }) async {
+    if (!AppConfig.apiEnabled || variantId <= 0) return null;
+
+    final Set<String> checkedSlugs = <String>{};
+    Future<int?> productIdFromSlug(String? rawSlug) async {
+      final String normalized = rawSlug?.trim() ?? '';
+      if (normalized.isEmpty || !checkedSlugs.add(normalized)) return null;
+      try {
+        final ProductDetailData product = await fetchProductDetails(normalized);
+        if (product.id > 0 &&
+            product.variations.any(
+              (ProductVariationData variation) => variation.id == variantId,
+            )) {
+          return product.id;
+        }
+      } catch (_) {
+        // Offer previews are sometimes stale; continue with the catalog search.
+      }
+      return null;
+    }
+
+    final int? directMatch = await productIdFromSlug(slug);
+    if (directMatch != null) return directMatch;
+
+    final String query = productName?.trim() ?? '';
+    if (query.isEmpty) return null;
+
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await fetchProductRows(
+        perPage: 50,
+        searchQuery: query,
+        maxPages: 2,
+      );
+    } catch (_) {
+      return null;
+    }
+
+    for (final Map<String, dynamic> row in rows) {
+      final int? productId = int.tryParse(
+        (row['id'] ?? row['product_id'] ?? row['productId'] ?? row['db_id'] ?? '')
+            .toString(),
+      );
+      if (productId == null || productId <= 0) continue;
+
+      final dynamic variants = row['variants'] ?? row['variations'];
+      if (_variantCollectionContains(variants, variantId)) return productId;
+
+      final int? detailMatch = await productIdFromSlug(
+        row['slug']?.toString(),
+      );
+      if (detailMatch == productId) return productId;
+    }
+
+    return null;
+  }
+
+  static bool _variantCollectionContains(dynamic value, int variantId) {
+    if (value is List) {
+      return value.any(
+        (dynamic item) => _variantCollectionContains(item, variantId),
+      );
+    }
+    if (value is! Map) return false;
+
+    final dynamic rawId =
+        value['id'] ?? value['product_variant_id'] ?? value['variant_id'];
+    if (int.tryParse(rawId?.toString() ?? '') == variantId) return true;
+
+    return value.values.any(
+      (dynamic child) =>
+          (child is List || child is Map) &&
+          _variantCollectionContains(child, variantId),
+    );
   }
 
   static dynamic _extractRows(dynamic payload) {

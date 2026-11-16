@@ -94,6 +94,14 @@ typedef BuyerConversationPresenceRefreshCallback =
 
 typedef BuyerPresenceHeartbeatCallback = Future<void> Function();
 
+typedef BuyerConversationPresenceStreamBuilder = Stream<bool> Function(
+  BuyerConversationData seller,
+);
+
+typedef BuyerConversationPresenceHeartbeatCallback = Future<void> Function(
+  BuyerConversationData? seller,
+);
+
 typedef RefreshConversationsCallback =
     Future<List<BuyerConversationData>> Function();
 
@@ -109,6 +117,11 @@ class BuyerConversationData {
 
   final String name;
   final String slug;
+  final String? recipientAccountType;
+
+  bool get isSupport => recipientAccountType != null
+      ? recipientAccountType!.toUpperCase() == 'ADMIN'
+      : name.trim().toLowerCase() == 'likhae support';
 
   final String? avatarUrl;
 
@@ -144,6 +157,7 @@ class BuyerConversationData {
     required this.name,
     required this.slug,
     this.conversationId = '',
+    this.recipientAccountType,
     this.avatarUrl,
     this.lastMessage = '',
     this.time = '',
@@ -164,6 +178,7 @@ class BuyerConversationData {
   }) {
     return BuyerConversationData(
       sellerId: sellerId,
+      recipientAccountType: recipientAccountType,
       name: name,
       slug: slug,
       conversationId: conversationId ?? this.conversationId,
@@ -272,6 +287,11 @@ class MessagesScreen extends StatefulWidget {
 
   final BuyerPresenceHeartbeatCallback? onPresenceHeartbeat;
 
+  final BuyerConversationPresenceStreamBuilder? presenceStreamBuilder;
+
+  final BuyerConversationPresenceHeartbeatCallback?
+  onConversationPresenceHeartbeat;
+
   /// Keep this configurable in case Laravel validation
   /// changes later.
   final int maxMessageLength;
@@ -295,6 +315,8 @@ class MessagesScreen extends StatefulWidget {
     this.onRefreshConversations,
     this.onRefreshConversationPresence,
     this.onPresenceHeartbeat,
+    this.presenceStreamBuilder,
+    this.onConversationPresenceHeartbeat,
     this.maxMessageLength = 1000,
   });
 
@@ -344,11 +366,15 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   StreamSubscription<BuyerMessageData>? _messageSubscription;
 
+  StreamSubscription<bool>? _presenceSubscription;
+
   Timer? _reconnectTimer;
 
   Timer? _presenceTimer;
 
   bool _mobileShowingChat = false;
+
+  bool? _messagesTabWasActive;
 
   bool _loadingMessages = false;
 
@@ -377,13 +403,9 @@ class _MessagesScreenState extends State<MessagesScreen>
 
     _replaceMessages(widget.initialMessages, notify: false);
 
-    /*
-     * On mobile, open directly into the chat only when a
-     * specific seller was intentionally supplied.
-     */
-    _mobileShowingChat =
-        _activeSeller != null &&
-        (widget.initialSellerSlug != null || widget.initialSeller != null);
+    // On mobile, open the active conversation when Messages is entered. The
+    // inbox back button still lets the buyer browse threads.
+    _mobileShowingChat = _activeSeller != null;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -410,7 +432,11 @@ class _MessagesScreenState extends State<MessagesScreen>
         previousActive,
       );
 
-      if (resolved?.sellerId != previousActive?.sellerId) {
+      final bool activeConversationChanged =
+          resolved?.sellerId != previousActive?.sellerId ||
+          resolved?.conversationId != previousActive?.conversationId;
+
+      if (activeConversationChanged) {
         _activeSeller = resolved;
 
         _messages = <BuyerMessageData>[];
@@ -458,6 +484,10 @@ class _MessagesScreenState extends State<MessagesScreen>
       reconnectNeeded = true;
     }
 
+    if (oldWidget.presenceStreamBuilder != widget.presenceStreamBuilder) {
+      reconnectNeeded = true;
+    }
+
     if (reconnectNeeded) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
@@ -484,6 +514,8 @@ class _MessagesScreenState extends State<MessagesScreen>
 
     _messageSubscription?.cancel();
 
+    _presenceSubscription?.cancel();
+
     _messageController.dispose();
 
     _messageScrollController.dispose();
@@ -491,6 +523,25 @@ class _MessagesScreenState extends State<MessagesScreen>
     WidgetsBinding.instance.removeObserver(this);
 
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final bool tabIsActive = TickerMode.valuesOf(context).enabled;
+    final bool returnedToMessages =
+        _messagesTabWasActive == false && tabIsActive;
+    _messagesTabWasActive = tabIsActive;
+
+    if (returnedToMessages &&
+        MediaQuery.sizeOf(context).width < _desktopBreakpoint &&
+        _activeSeller != null &&
+        !_mobileShowingChat) {
+      setState(() {
+        _mobileShowingChat = true;
+      });
+    }
   }
 
   @override
@@ -503,6 +554,7 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   void _startPresencePolling() {
     if (widget.onPresenceHeartbeat == null &&
+        widget.onConversationPresenceHeartbeat == null &&
         widget.onRefreshConversationPresence == null) {
       return;
     }
@@ -523,7 +575,13 @@ class _MessagesScreenState extends State<MessagesScreen>
     _refreshingPresence = true;
     try {
       try {
-        await widget.onPresenceHeartbeat?.call();
+        final BuyerConversationPresenceHeartbeatCallback?
+        conversationHeartbeat = widget.onConversationPresenceHeartbeat;
+        if (conversationHeartbeat != null) {
+          await conversationHeartbeat(_activeSeller);
+        } else {
+          await widget.onPresenceHeartbeat?.call();
+        }
       } catch (_) {
         // Receipt polling can still work when a presence heartbeat fails.
       }
@@ -790,7 +848,8 @@ class _MessagesScreenState extends State<MessagesScreen>
       return false;
     }
 
-    return _sameSeller(active, seller);
+    return _sameSeller(active, seller) &&
+        active.conversationId == seller.conversationId;
   }
 
   void _markConversationReadLocally(BuyerConversationData seller) {
@@ -857,13 +916,19 @@ class _MessagesScreenState extends State<MessagesScreen>
 
     await _messageSubscription?.cancel();
 
+    await _presenceSubscription?.cancel();
+
     _messageSubscription = null;
+
+    _presenceSubscription = null;
 
     if (mounted) {
       setState(() {
         _realtimeConnected = false;
       });
     }
+
+    _connectRealtimePresence(seller);
 
     final ConversationMessageStreamBuilder? builder =
         widget.messageStreamBuilder;
@@ -937,8 +1002,65 @@ class _MessagesScreenState extends State<MessagesScreen>
     }
   }
 
+  void _connectRealtimePresence(BuyerConversationData seller) {
+    final BuyerConversationPresenceStreamBuilder? builder =
+        widget.presenceStreamBuilder;
+    if (builder == null ||
+        seller.conversationId.isEmpty ||
+        !mounted ||
+        !_isActiveSeller(seller)) {
+      return;
+    }
+
+    try {
+      _presenceSubscription = builder(seller).listen(
+        (bool isOnline) => _applyRealtimePresence(seller, isOnline),
+        onError: (Object _, StackTrace __) {
+          if (mounted && _isActiveSeller(seller)) {
+            _scheduleRealtimeReconnect(seller);
+          }
+        },
+        onDone: () {
+          if (mounted && _isActiveSeller(seller)) {
+            _scheduleRealtimeReconnect(seller);
+          }
+        },
+        cancelOnError: true,
+      );
+    } catch (_) {
+      _scheduleRealtimeReconnect(seller);
+    }
+  }
+
+  void _applyRealtimePresence(BuyerConversationData seller, bool isOnline) {
+    if (!mounted || !_isActiveSeller(seller)) return;
+    final String statusLabel = isOnline ? 'Online' : 'Offline';
+    final int conversationIndex = _conversations.indexWhere(
+      (BuyerConversationData current) => _sameSeller(current, seller),
+    );
+    if (_activeSeller?.isOnline == isOnline &&
+        _activeSeller?.statusLabel == statusLabel &&
+        (conversationIndex < 0 ||
+            (_conversations[conversationIndex].isOnline == isOnline &&
+                _conversations[conversationIndex].statusLabel == statusLabel))) {
+      return;
+    }
+
+    setState(() {
+      _activeSeller = _activeSeller?.copyWith(
+        isOnline: isOnline,
+        statusLabel: statusLabel,
+      );
+      if (conversationIndex >= 0) {
+        _conversations[conversationIndex] = _conversations[conversationIndex]
+            .copyWith(isOnline: isOnline, statusLabel: statusLabel);
+      }
+    });
+  }
+
   void _scheduleRealtimeReconnect(BuyerConversationData seller) {
-    if (widget.messageStreamBuilder == null ||
+    if ((widget.messageStreamBuilder == null &&
+            widget.presenceStreamBuilder == null) ||
         !mounted ||
         !_isActiveSeller(seller)) {
       return;
@@ -962,7 +1084,11 @@ class _MessagesScreenState extends State<MessagesScreen>
 
     await _messageSubscription?.cancel();
 
+    await _presenceSubscription?.cancel();
+
     _messageSubscription = null;
+
+    _presenceSubscription = null;
 
     if (mounted && _realtimeConnected) {
       setState(() {
@@ -2158,7 +2284,7 @@ class _MessagesScreenState extends State<MessagesScreen>
             ),
           ),
 
-          if (widget.onViewStore != null) ...[
+          if (widget.onViewStore != null && !seller.isSupport) ...[
             SizedBox(width: mobile ? 5 : 10),
             SizedBox(
               height: 36,

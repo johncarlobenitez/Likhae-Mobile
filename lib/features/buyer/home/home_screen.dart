@@ -938,12 +938,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
     if (widget.recommendedProducts.isNotEmpty) {
       result = widget.recommendedProducts
           .where((BuyerHomeProduct product) => product.isVisibleInCatalog)
-          .take(6)
           .toList(growable: false);
     } else if (_recommendedSectionLoaded) {
       result = _loadedRecommendedProducts
           .where((BuyerHomeProduct product) => product.isVisibleInCatalog)
-          .take(6)
           .toList(growable: false);
     } else {
       final List<BuyerHomeProduct> source = widget.products.isNotEmpty
@@ -952,7 +950,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
       result = source
           .where((BuyerHomeProduct product) => product.isVisibleInCatalog)
           .skip(4)
-          .take(6)
           .toList(growable: false);
     }
     return _recommendedProductsCache = result;
@@ -1171,17 +1168,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
   Widget _buildMainContent() {
     final List<BuyerHomeProduct> featuredProducts = _featuredProducts;
     final List<BuyerHomeProduct> recommendedProducts = _recommendedProducts;
-    final List<BuyerHomeProduct> currentDealProducts = _dealProducts
-        .where(
-          (BuyerHomeProduct product) =>
-              (product.discountPercentage != null ||
-                  product.isFlashSaleUpcoming) &&
-              !product.sellerOnVacation &&
-              !product.isOutOfStock &&
-              !product.isFlashSaleExpired,
-        )
-        .take(4)
-        .toList(growable: false);
     final sections = <Widget>[
       if (_loadingProducts) const AppLoadingLine(),
       _buildHero(),
@@ -1216,33 +1202,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
         ),
       const SizedBox(height: 30),
       _buildDealsBanner(),
-      const SizedBox(height: 24),
-      _buildHeaderRow(
-        'Live seller discounts',
-        'Flash Sale',
-        'Shop available products at their current discounted variant prices.',
-        'Explore',
-        widget.onViewAllCategories ??
-            widget.onViewFlashDeals ??
-            widget.onShopDeals,
-      ),
-      const SizedBox(height: 12),
-      if (currentDealProducts.isNotEmpty)
-        _ProductGrid(
-          products: currentDealProducts,
-          isWishlisted: (product) => _wishlistIds.contains(product.id),
-          isWishlistLoading: (product) => _wishlistLoading.contains(product.id),
-          onProductSelected: widget.onProductSelected,
-          onSellerSelected: widget.onSellerSelected,
-          onWishlistProduct: _toggleWishlist,
-        )
-      else if (_loadingDeals)
-        const ProductGridSkeleton()
-      else
-        _buildHomeEmptyState(
-          title: 'No discounted products are available right now',
-          description: 'Check back later for current seller discounts.',
-        ),
       const SizedBox(height: 30),
       _buildHeaderRow(
         'For You',
@@ -1262,7 +1221,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           actionLabel: 'Explore Products',
           onAction: widget.onBrowseProducts,
         )
-      else
+      else ...<Widget>[
         _ProductGrid(
           products: recommendedProducts,
           isWishlisted: (product) => _wishlistIds.contains(product.id),
@@ -1271,6 +1230,23 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen>
           onSellerSelected: widget.onSellerSelected,
           onWishlistProduct: _toggleWishlist,
         ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Center(
+            child: Text(
+              'You\'ve reached the end of your recommendations.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppTheme.darkMuted
+                    : ShopColors.muted,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ),
+      ],
     ];
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 130),

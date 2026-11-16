@@ -210,15 +210,38 @@ class BuyerMobileService {
   static Future<List<CartItemData>> buyNowOffer({
     required int promotionId,
     required int sets,
-    int? rewardVariantId,
+    required int rewardVariantId,
+    int? qualifyingProductId,
+    int? qualifyingVariantId,
+    int qualifyingQuantity = 1,
+    int? rewardProductId,
+    int rewardQuantity = 1,
   }) async {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('buyer/checkout/buy-now/offers/$promotionId'),
       <String, dynamic>{
         'sets': sets,
-        if (rewardVariantId != null) 'reward_variant_id': rewardVariantId,
+        'reward_variant_id': rewardVariantId,
       },
     );
+    if (response.statusCode == 405) {
+      if (qualifyingProductId == null ||
+          qualifyingVariantId == null ||
+          rewardProductId == null) {
+        throw Exception(
+          'The offer is missing product details needed for checkout. Refresh the offer and try again.',
+        );
+      }
+      return _buyNowOfferThroughCart(
+        qualifyingProductId: qualifyingProductId,
+        qualifyingVariantId: qualifyingVariantId,
+        qualifyingQuantity: qualifyingQuantity * sets,
+        rewardProductId: rewardProductId,
+        rewardVariantId: rewardVariantId,
+        rewardQuantity: rewardQuantity * sets,
+      );
+    }
+
     final dynamic rows = _requirePayload(response)['data'];
     if (rows is! List) {
       throw const FormatException(
@@ -237,6 +260,69 @@ class BuyerMobileService {
     }
     _refreshNavigationBadges();
     return items;
+  }
+
+  static Future<List<CartItemData>> _buyNowOfferThroughCart({
+    required int qualifyingProductId,
+    required int qualifyingVariantId,
+    required int qualifyingQuantity,
+    required int rewardProductId,
+    required int rewardVariantId,
+    required int rewardQuantity,
+  }) async {
+    if (qualifyingQuantity < 1 ||
+        rewardQuantity < 1 ||
+        qualifyingQuantity > 999 ||
+        rewardQuantity > 999) {
+      throw Exception('The selected offer quantity exceeds the cart limit.');
+    }
+
+    final Set<int> offerVariantIds = <int>{
+      qualifyingVariantId,
+      rewardVariantId,
+    };
+    final List<CartItemData> cartBefore = await fetchCart();
+    if (cartBefore.any(
+      (CartItemData item) =>
+          item.productVariationId != null &&
+          offerVariantIds.contains(item.productVariationId),
+    )) {
+      throw Exception(
+        'An item in this offer is already in your cart. Remove it first to use Buy Now with the offer quantities.',
+      );
+    }
+
+    final List<CartItemData> added = <CartItemData>[];
+    try {
+      added.add(
+        await addCartItem(
+          productId: qualifyingProductId,
+          productVariantId: qualifyingVariantId,
+          quantity: qualifyingQuantity,
+        ),
+      );
+      added.add(
+        await addCartItem(
+          productId: rewardProductId,
+          productVariantId: rewardVariantId,
+          quantity: rewardQuantity,
+        ),
+      );
+      final Map<String, CartItemData> uniqueItems = <String, CartItemData>{
+        for (final CartItemData item in added) item.id: item,
+      };
+      return uniqueItems.values.toList(growable: false);
+    } catch (_) {
+      // Remove only cart rows confirmed as added by this request.
+      for (final CartItemData item in added.reversed) {
+        try {
+          await removeCartItem(item);
+        } catch (_) {
+          // Preserve the original request error if rollback is unavailable.
+        }
+      }
+      rethrow;
+    }
   }
 
   static Future<void> updateCartQuantity(
@@ -1470,7 +1556,8 @@ class BuyerMobileService {
                   products: orderProducts,
                 );
           return BuyerConversationData(
-            sellerId: (row['seller_id'] ?? '').toString(),
+            sellerId: (row['recipient_id'] ?? row['seller_id'] ?? '').toString(),
+            recipientAccountType: row['recipient_account_type']?.toString(),
             conversationId: (row['conversation_id'] ?? row['id'] ?? '')
                 .toString(),
             name: (row['seller_name'] ?? 'Seller').toString(),
@@ -1598,11 +1685,52 @@ class BuyerMobileService {
   }
 
   static Future<void> touchMessagePresence() async {
+    await _touchMessagePresence(null);
+  }
+
+  static Future<void> touchMessagePresenceFor(
+    BuyerConversationData? conversation,
+  ) async {
+    await _touchMessagePresence(
+      int.tryParse(conversation?.conversationId ?? ''),
+    );
+  }
+
+  static Future<void> _touchMessagePresence(int? conversationId) async {
     final Response<dynamic> response = await ApiClient.post(
       AppConfig.resolveApiUrl('buyer/messages/presence'),
-      <String, dynamic>{},
+      <String, dynamic>{
+        if (conversationId != null) 'conversation_id': conversationId,
+      },
     );
     _requirePayload(response);
+  }
+
+  static Stream<bool> watchConversationPresence(
+    BuyerConversationData conversation,
+  ) async* {
+    final String conversationId = conversation.conversationId.trim();
+    if (conversationId.isEmpty) {
+      throw const FormatException('Conversation identifier is missing.');
+    }
+
+    final RealtimeSubscription subscription = await LikhaeRealtimeService
+        .subscribe('conversations.$conversationId');
+    try {
+      await for (final RealtimeEvent event in subscription.events) {
+        if (event.name != 'conversation.presence.updated') continue;
+        if ((event.data['conversation_id'] ?? '').toString() !=
+            conversationId) {
+          continue;
+        }
+        if ((event.data['user_id'] ?? '').toString() != conversation.sellerId) {
+          continue;
+        }
+        yield parseApiBool(event.data['online'], defaultValue: false);
+      }
+    } finally {
+      await subscription.cancel();
+    }
   }
 
   static Future<BuyerConversationPresenceData> refreshConversationPresence(
@@ -1659,6 +1787,9 @@ class BuyerMobileService {
   }
 
   static String _messageSendEndpoint(BuyerConversationData conversation) {
+    if (conversation.conversationId.trim().isNotEmpty || conversation.isSupport) {
+      return 'buyer/messages';
+    }
     final int? orderId = int.tryParse(
       conversation.orderContext?.orderId.trim() ?? '',
     );
@@ -1674,6 +1805,13 @@ class BuyerMobileService {
   static Map<String, dynamic> _messageSendFields(
     BuyerConversationData conversation,
   ) {
+    final int? conversationId = int.tryParse(conversation.conversationId.trim());
+    if (conversationId != null || conversation.isSupport) {
+      return <String, dynamic>{
+        'recipient_id': int.tryParse(conversation.sellerId),
+        if (conversationId != null) 'conversation_id': conversationId,
+      };
+    }
     final int? orderId = int.tryParse(
       conversation.orderContext?.orderId.trim() ?? '',
     );

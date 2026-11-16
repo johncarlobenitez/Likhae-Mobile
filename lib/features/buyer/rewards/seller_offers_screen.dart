@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/config/app_config.dart';
 import '../../../services/buyer_mobile_service.dart';
+import '../../../services/product_service.dart';
 import '../../../shared/widgets/sized_network_image.dart';
 import '../../../services/workspace_mobile_service.dart';
 import '../../../shared/widgets/shop_ui.dart';
@@ -27,8 +28,177 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
   void _reload() =>
       setState(() => _future = WorkspaceMobileService.rows('buyer/offers'));
 
+  Map<String, dynamic>? _offerMap(dynamic value) => value is Map
+      ? Map<String, dynamic>.from(value)
+      : null;
+
+  int? _firstOfferId(Iterable<dynamic> values) {
+    for (final dynamic value in values) {
+      final int? id = int.tryParse(value?.toString() ?? '');
+      if (id != null && id > 0) return id;
+    }
+    return null;
+  }
+
+  int? _rewardVariantId(Map<String, dynamic> reward) {
+    final Map<String, dynamic>? variant =
+        _offerMap(reward['variant']) ?? _offerMap(reward['product_variant']);
+    return _firstOfferId(<dynamic>[
+      reward['product_variant_id'],
+      reward['variant_id'],
+      variant?['id'],
+      reward['id'],
+    ]);
+  }
+
+  List<Map<String, dynamic>> _offerRewards(Map<String, dynamic> offer) {
+    for (final String key in const <String>[
+      'rewards',
+      'reward_items',
+      'reward_variants',
+      'gifts',
+    ]) {
+      final List<Map<String, dynamic>> rows =
+          WorkspaceMobileService.maps(offer[key]);
+      if (rows.isNotEmpty) return rows;
+    }
+    return <Map<String, dynamic>>[];
+  }
+
+  Map<String, dynamic>? _previewItemForRole(
+    List<Map<String, dynamic>> items,
+    Set<String> roles,
+  ) {
+    for (final Map<String, dynamic> item in items) {
+      final String role = (item['role'] ?? '')
+          .toString()
+          .toUpperCase()
+          .replaceAll(RegExp(r'[^A-Z]'), '');
+      if (roles.contains(role)) return item;
+    }
+    return null;
+  }
+
+  String? _offerProductName(Iterable<Map<String, dynamic>?> items) {
+    for (final Map<String, dynamic>? item in items) {
+      if (item == null) continue;
+      final Map<String, dynamic>? product = _offerMap(item['product']);
+      final Map<String, dynamic>? variant =
+          _offerMap(item['variant']) ?? _offerMap(item['product_variant']);
+      final Map<String, dynamic>? variantProduct =
+          _offerMap(variant?['product']);
+      for (final dynamic value in <dynamic>[
+        item['product_name'],
+        product?['name'],
+        item['name'],
+        variant?['product_name'],
+        variantProduct?['name'],
+      ]) {
+        final String name = value?.toString().trim() ?? '';
+        if (name.isNotEmpty) return name;
+      }
+    }
+    return null;
+  }
+
+  String? _offerProductSlug(Iterable<Map<String, dynamic>?> items) {
+    for (final Map<String, dynamic>? item in items) {
+      if (item == null) continue;
+      final Map<String, dynamic>? product = _offerMap(item['product']);
+      final Map<String, dynamic>? variant =
+          _offerMap(item['variant']) ?? _offerMap(item['product_variant']);
+      final Map<String, dynamic>? variantProduct =
+          _offerMap(variant?['product']);
+      for (final dynamic value in <dynamic>[
+        item['product_slug'],
+        item['slug'],
+        product?['slug'],
+        variantProduct?['slug'],
+      ]) {
+        final String slug = value?.toString().trim() ?? '';
+        if (slug.isNotEmpty) return slug;
+      }
+    }
+    return null;
+  }
+
+  int? _offerProductId(
+    Iterable<Map<String, dynamic>?> items, {
+    int? variantId,
+    Iterable<dynamic> productIds = const <dynamic>[],
+  }) {
+    final int? directId = _firstOfferId(productIds);
+    if (directId != null) return directId;
+
+    for (final Map<String, dynamic>? item in items) {
+      if (item == null) continue;
+      final Map<String, dynamic>? product = _offerMap(item['product']);
+      final Map<String, dynamic>? variant =
+          _offerMap(item['variant']) ?? _offerMap(item['product_variant']);
+      final Map<String, dynamic>? variantProduct =
+          _offerMap(variant?['product']);
+      final int? productId = _firstOfferId(<dynamic>[
+        item['product_id'],
+        item['productId'],
+        item['parent_product_id'],
+        product?['id'],
+        product?['product_id'],
+        product?['productId'],
+        product?['db_id'],
+        variant?['product_id'],
+        variant?['productId'],
+        variantProduct?['id'],
+        variantProduct?['product_id'],
+        variantProduct?['productId'],
+        variantProduct?['db_id'],
+      ]);
+      if (productId != null) return productId;
+
+      // Some offer payloads expose a product row as the item itself, while
+      // others expose a variant row. Avoid treating the selected variant ID
+      // or a reward-row ID as a product ID when the payload is ambiguous.
+      final int? itemId = _firstOfferId(<dynamic>[item['id']]);
+      final bool hasVariantReference =
+          item['product_variant_id'] != null ||
+          item['variant_id'] != null ||
+          variant != null;
+      if (itemId != null && itemId != variantId && !hasVariantReference) {
+        return itemId;
+      }
+    }
+    return null;
+  }
+
   Future<void> _claim(Map<String, dynamic> offer) async {
-    final rewards = WorkspaceMobileService.maps(offer['rewards']);
+    final rewards = _offerRewards(offer);
+    final List<Map<String, dynamic>> previewItems =
+        WorkspaceMobileService.maps(offer['preview_items']);
+    final Map<String, dynamic>? previewQualifyingItem =
+        _previewItemForRole(previewItems, <String>{
+          'QUALIFYING',
+          'BUY',
+          'BUYITEM',
+          'BUYPRODUCT',
+          'PRODUCTTOBUY',
+          'ELIGIBLEPRODUCT',
+        }) ??
+        (previewItems.isNotEmpty &&
+                (previewItems.first['role'] ?? '')
+                        .toString()
+                        .toUpperCase() !=
+                    'REWARD'
+            ? previewItems.first
+            : null);
+    final Map<String, dynamic>? previewRewardItem =
+        _previewItemForRole(previewItems, <String>{
+          'REWARD',
+          'GIFT',
+          'REWARDITEM',
+          'REWARDPRODUCT',
+          'GIFTITEM',
+          'GIFTPRODUCT',
+        }) ??
+        (previewItems.length > 1 ? previewItems[1] : null);
     String? rewardVariantId;
     if (offer['type'] != 'BUNDLE') {
       if (rewards.isEmpty) {
@@ -38,12 +208,13 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
         return;
       }
       if (rewards.length == 1) {
-        rewardVariantId = '${rewards.first['id']}';
+        rewardVariantId = _rewardVariantId(rewards.first)?.toString();
       } else {
         rewardVariantId = await showDialog<String>(
           context: context,
           builder: (context) {
-            String selected = '${rewards.first['id']}';
+            String selected =
+                _rewardVariantId(rewards.first)?.toString() ?? '';
             return StatefulBuilder(
               builder: (context, setDialog) => AlertDialog(
                 title: const Text('Choose your reward variation'),
@@ -52,10 +223,13 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
                   isExpanded: true,
                   items: rewards
                       .map(
-                        (reward) => DropdownMenuItem<String>(
-                          value: '${reward['id']}',
-                          child: Text('${reward['name'] ?? 'Variation'}'),
-                        ),
+                          (reward) => DropdownMenuItem<String>(
+                                value:
+                                    _rewardVariantId(reward)?.toString() ?? '',
+                                child: Text(
+                                  '${reward['name'] ?? 'Variation'}',
+                                ),
+                              ),
                       )
                       .toList(),
                   onChanged: (value) =>
@@ -170,10 +344,160 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
           );
         }
       } else {
+        final int? selectedRewardVariantId = int.tryParse(
+          rewardVariantId ?? '',
+        );
+        if (selectedRewardVariantId == null) {
+          throw const FormatException(
+            'Choose an available reward variation before continuing.',
+          );
+        }
+
+        final Map<String, dynamic>? qualifyingItem =
+            _offerMap(offer['buy_item']) ??
+            _offerMap(offer['qualifying_item']) ??
+            _offerMap(offer['buy_variant']) ??
+            _offerMap(offer['product_to_buy']) ??
+            _offerMap(offer['eligible_product']) ??
+            previewQualifyingItem;
+        final Map<String, dynamic>? qualifyingProduct =
+            _offerMap(offer['buy_product']) ??
+            _offerMap(offer['qualifying_product']) ??
+            _offerMap(offer['product_to_buy']) ??
+            _offerMap(offer['eligible_product']) ??
+            _offerMap(offer['product']) ??
+            _offerMap(previewQualifyingItem?['product']) ??
+            _offerMap(qualifyingItem?['product']);
+        final Map<String, dynamic>? qualifyingVariant =
+            _offerMap(qualifyingItem?['variant']) ??
+            _offerMap(qualifyingItem?['product_variant']) ??
+            _offerMap(offer['buy_variant']) ??
+            _offerMap(offer['qualifying_variant']) ??
+            _offerMap(previewQualifyingItem?['variant']) ??
+            _offerMap(previewQualifyingItem?['product_variant']);
+        final int? qualifyingVariantId = _firstOfferId(<dynamic>[
+          offer['buy_variant_id'],
+          offer['buy_product_variant_id'],
+          offer['qualifying_variant_id'],
+          offer['qualifying_product_variant_id'],
+          qualifyingItem?['product_variant_id'],
+          qualifyingItem?['variant_id'],
+          qualifyingVariant?['id'],
+          qualifyingItem?['id'],
+          previewQualifyingItem?['product_variant_id'],
+          previewQualifyingItem?['variant_id'],
+          _offerMap(previewQualifyingItem?['variant'])?['id'],
+          _offerMap(previewQualifyingItem?['product_variant'])?['id'],
+        ]);
+        int? qualifyingProductId = _offerProductId(
+          <Map<String, dynamic>?>[
+            qualifyingProduct,
+            qualifyingItem,
+            qualifyingVariant,
+            _offerMap(qualifyingVariant?['product']),
+            previewQualifyingItem,
+          ],
+          variantId: qualifyingVariantId,
+          productIds: <dynamic>[
+            offer['buy_product_id'],
+            offer['qualifying_product_id'],
+            offer['product_id'],
+          ],
+        );
+        if (qualifyingProductId == null && qualifyingVariantId != null) {
+          qualifyingProductId = await ProductService.findProductIdForVariant(
+            qualifyingVariantId,
+            productName: _offerProductName(<Map<String, dynamic>?>[
+              qualifyingProduct,
+              qualifyingItem,
+              previewQualifyingItem,
+              qualifyingVariant,
+            ]),
+            slug: _offerProductSlug(<Map<String, dynamic>?>[
+              qualifyingProduct,
+              qualifyingItem,
+              previewQualifyingItem,
+              qualifyingVariant,
+            ]),
+          );
+        }
+
+        Map<String, dynamic>? selectedReward;
+        for (final Map<String, dynamic> reward in rewards) {
+          if (_rewardVariantId(reward) == selectedRewardVariantId) {
+            selectedReward = reward;
+            break;
+          }
+        }
+        final Map<String, dynamic> rewardItem =
+            selectedReward ?? rewards.first;
+        final Map<String, dynamic>? offerRewardItem =
+            _offerMap(offer['reward_item']);
+        final Map<String, dynamic>? offerGiftItem =
+            _offerMap(offer['gift_item']);
+        final Map<String, dynamic>? rewardProduct =
+            _offerMap(offer['reward_product']) ??
+            _offerMap(offer['gift_product']) ??
+            _offerMap(offerRewardItem?['product']) ??
+            _offerMap(offerGiftItem?['product']) ??
+            _offerMap(rewardItem['product']) ??
+            _offerMap(previewRewardItem?['product']);
+        final Map<String, dynamic>? rewardVariant =
+            _offerMap(rewardItem['variant']) ??
+            _offerMap(rewardItem['product_variant']) ??
+            _offerMap(offerRewardItem?['variant']) ??
+            _offerMap(offerGiftItem?['variant']) ??
+            _offerMap(offer['reward_variant']) ??
+            _offerMap(offer['gift_variant']) ??
+            _offerMap(previewRewardItem?['variant']) ??
+            _offerMap(previewRewardItem?['product_variant']);
+        int? rewardProductId = _offerProductId(
+          <Map<String, dynamic>?>[
+            rewardProduct,
+            rewardItem,
+            rewardVariant,
+            _offerMap(rewardVariant?['product']),
+            previewRewardItem,
+          ],
+          variantId: selectedRewardVariantId,
+          productIds: <dynamic>[
+            offer['reward_product_id'],
+            offer['gift_product_id'],
+          ],
+        );
+        if (rewardProductId == null) {
+          rewardProductId = await ProductService.findProductIdForVariant(
+            selectedRewardVariantId,
+            productName: _offerProductName(<Map<String, dynamic>?>[
+              rewardProduct,
+              rewardItem,
+              previewRewardItem,
+              rewardVariant,
+            ]),
+            slug: _offerProductSlug(<Map<String, dynamic>?>[
+              rewardProduct,
+              rewardItem,
+              previewRewardItem,
+              rewardVariant,
+            ]),
+          );
+        }
+
         final List<CartItemData> items = await BuyerMobileService.buyNowOffer(
           promotionId: int.parse(offerId),
           sets: sets,
-          rewardVariantId: int.tryParse(rewardVariantId ?? ''),
+          rewardVariantId: selectedRewardVariantId,
+          qualifyingProductId: qualifyingProductId,
+          qualifyingVariantId: qualifyingVariantId,
+          qualifyingQuantity: int.tryParse(
+                (offer['buy_quantity'] ?? 1).toString(),
+              ) ??
+              1,
+          rewardProductId: rewardProductId,
+          rewardQuantity: int.tryParse(
+                (offer['reward_quantity'] ?? 1).toString(),
+              ) ??
+              1,
         );
         if (!mounted) return;
         final Future<void> Function(List<CartItemData>)? onBuyNowItems =
@@ -900,10 +1224,14 @@ class _SellerOffersScreenState extends State<SellerOffersScreen> {
                       _busy
                           ? (isBundle ? 'Adding...' : 'Starting checkout...')
                           : canAdd
-                          ? 'Buy Now'
+                          ? (isBundle ? 'Add Bundle to Cart' : 'Buy Now')
                           : (maximum == 0
-                                ? 'Offer limit reached'
-                                : 'Reward unavailable'),
+                                ? (isBundle
+                                      ? 'Bundle limit reached'
+                                      : 'Offer limit reached')
+                                : (isBundle
+                                      ? 'Bundle unavailable'
+                                      : 'Reward unavailable')),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

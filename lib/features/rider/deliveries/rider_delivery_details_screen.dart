@@ -162,11 +162,14 @@ class _RiderDeliveryDetailsScreenState
 
       final DateTime capturedAt = DateTime.now();
       final position = await RiderProofWatermark.requireCurrentPosition();
+      final String? location =
+          await RiderProofWatermark.resolveLocation(position);
       final String stampedPath = await RiderProofWatermark.stamp(
         imagePath: image.path,
         riderName: riderName,
         capturedAt: capturedAt,
         position: position,
+        location: location,
       );
 
       if (!mounted) {

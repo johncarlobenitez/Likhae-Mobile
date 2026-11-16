@@ -1673,8 +1673,11 @@ final GoRouter appRouter = GoRouter(
                       messageStreamBuilder: AppConfig.apiEnabled
                           ? BuyerMobileService.watchMessages
                           : null,
-                      onPresenceHeartbeat: AppConfig.apiEnabled
-                          ? BuyerMobileService.touchMessagePresence
+                      presenceStreamBuilder: AppConfig.realtimeEnabled
+                          ? BuyerMobileService.watchConversationPresence
+                          : null,
+                      onConversationPresenceHeartbeat: AppConfig.apiEnabled
+                          ? BuyerMobileService.touchMessagePresenceFor
                           : null,
                       onRefreshConversationPresence: AppConfig.apiEnabled
                           ? BuyerMobileService.refreshConversationPresence
