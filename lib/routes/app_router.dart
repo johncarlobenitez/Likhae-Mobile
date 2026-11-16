@@ -1085,10 +1085,12 @@ Future<void> _routeAuthenticatedUser(
 
   if (mobileRoles.contains('rider') && !mobileRoles.contains('buyer')) {
     String? availabilityError;
+    RiderProfileData? availabilityProfile;
     if (AppConfig.apiEnabled) {
       try {
         final RiderProfileData profile =
             await RiderMobileService.fetchProfile();
+        availabilityProfile = profile;
         final String riderStatus = profile.status.trim().toLowerCase();
         if (profile.supportsAvailabilityStatus &&
             (riderStatus == 'active' || riderStatus == 'warned')) {
@@ -1103,7 +1105,10 @@ Future<void> _routeAuthenticatedUser(
       context,
     );
     context.go('/rider/dashboard');
-    if (availabilityError != null) {
+    // Login and session restore also serve inter-hub riders. Only local
+    // delivery riders need an automatic availability failure notification.
+    if (availabilityError != null &&
+        availabilityProfile?.isLocalBarangay == true) {
       messenger?.showSnackBar(
         SnackBar(
           content: Text(
